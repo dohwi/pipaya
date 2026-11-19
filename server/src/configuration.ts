@@ -7,7 +7,9 @@ import { openAICompletionsApi } from "@earendil-works/pi-ai/api/openai-completio
 import { openAIResponsesApi } from "@earendil-works/pi-ai/api/openai-responses.lazy";
 import { anthropicMessagesApi } from "@earendil-works/pi-ai/api/anthropic-messages.lazy";
 import { openrouterImagesApi } from "@earendil-works/pi-ai/api/openrouter-images.lazy";
-import { IMAGE_API } from "./image-generation.ts";
+import { ImageApiSchema, IMAGE_TIMEOUT_MS, requestImages, type ImageApi } from "./image-generation.ts";
+import { openAIImages } from "./openai-images.ts";
+import { sniffImage } from "./image-file.ts";
 import { type Config } from "./config.ts";
 import { badRequest, conflict, notFound } from "./errors.ts";
 import { builtinProvider, type ModelRegistry } from "./models.ts";
@@ -32,6 +34,7 @@ export const CustomProviderBody = Type.Object({
 		reasoning: Type.Boolean(),
 		vision: Type.Boolean(),
 		imageGeneration: Type.Optional(Type.Boolean({ description: "The model makes pictures instead of text. It never runs a chat: set it as the image model (PUT /image-model) and agents draw with the generate_image tool." })),
+		imageApi: Type.Optional(ImageApiSchema), // absent = resolve from the connection; independent of the chat API
 		icon: Type.Optional(Type.String({ minLength: 1, maxLength: 40, description: "Brand mark shown for this model (e.g. \"claude\", \"openai\"). Left out = picked automatically from the id." })),
 		disabled: Type.Optional(Type.Boolean({ description: "Switched off by the owner: kept in the connection (with its settings, so a refresh never brings it back) but hidden from every model picker and not offered to sessions." })),
 		fromUpstream: Type.Optional(Type.Boolean({ description: "The model came from the upstream's own model list, so its id is fixed (not editable)." })),
@@ -397,6 +400,7 @@ export class Configuration {
 		if (!input.name.trim()) throw badRequest("name must not be blank");
 		if (input.models.some((m) => m.icon?.startsWith("img:") && !this.images.has(m.icon))) throw badRequest("icon image not found: upload it first");
 		for (const m of input.models) {
+			if (m.imageApi && !m.imageGeneration) throw badRequest(`${m.id.trim()}: only an image model can have an image API`);
 			if (!m.defaultThinkingLevel) continue;
 			if (!m.reasoning || m.imageGeneration) throw badRequest(`${m.id.trim()}: only a reasoning model can have a default thinking level`);
 			if (!supportedLevelsFor(this.catalog, m).includes(m.defaultThinkingLevel)) throw badRequest(`${m.id.trim()}: the default thinking level must be one of ${supportedLevelsFor(this.catalog, m).join(", ")}`);
@@ -540,12 +544,18 @@ export class Configuration {
 		const start = Date.now();
 		if (!(await this.registry.models.checkAuth(selection.provider))) return { ok: false, durationMs: Date.now() - start, error: "API key is not configured" };
 		// Model inference, NOT just a health check. A small request may incur upstream charges.
+		const image = this.registry.isImageModel?.(model.provider, model.id);
 		const controller = new AbortController();
 		let timer: ReturnType<typeof setTimeout> | undefined;
 		try {
 			const timeout = new Promise<never>((_, reject) => {
-				timer = setTimeout(() => { controller.abort(); reject(new Error("timeout")); }, 30_000);
+				timer = setTimeout(() => { controller.abort(); reject(new Error("timeout")); }, image ? IMAGE_TIMEOUT_MS : 30_000);
 			});
+			if (image) {
+				const result = await Promise.race([requestImages(this.registry, model, "Draw one blue dot on white.", [], controller.signal), timeout]);
+				const ok = result.output.some((c) => c.type === "image" && sniffImage(Buffer.from(c.data, "base64")));
+				return { ok, durationMs: Date.now() - start, ...(ok ? {} : { error: "Invalid image response. Check the image API setting." }) };
+			}
 			const result = await Promise.race([
 				this.registry.models.completeSimple(model, { messages: [{ role: "user", content: "Reply with OK.", timestamp: Date.now() }] }, { signal: controller.signal, maxTokens: Math.min(32, model.maxTokens) }),
 				timeout,
@@ -556,7 +566,7 @@ export class Configuration {
 			}
 			return { ok: true, durationMs: Date.now() - start, text: result.content.filter((c) => c.type === "text").map((c) => c.text).join("").slice(0, 500) };
 		} catch {
-			return { ok: false, durationMs: Date.now() - start, error: controller.signal.aborted ? "Connection test timed out (30s)" : "Connection test failed. Check provider settings." };
+			return { ok: false, durationMs: Date.now() - start, error: controller.signal.aborted ? `Connection test timed out (${image ? IMAGE_TIMEOUT_MS / 1000 : 30}s)` : image ? "Image test failed. Check the image API and provider settings." : "Connection test failed. Check provider settings." };
 		} finally {
 			clearTimeout(timer);
 			controller.abort();
@@ -564,8 +574,9 @@ export class Configuration {
 	}
 
 	private buildProvider(p: CustomProvider) {
-		const models: (Model<CustomProvider["api"]> & { defaultThinkingLevel?: ThinkingLevel })[] = p.models.filter((m) => !m.disabled).map((m) => ({
+		const models: (Model<CustomProvider["api"]> & { defaultThinkingLevel?: ThinkingLevel; imageApi?: ImageApi })[] = p.models.filter((m) => !m.disabled).map((m) => ({
 			id: m.id, name: m.name ?? m.id, api: p.api, provider: p.id, baseUrl: p.baseUrl,
+			...(m.imageApi ? { imageApi: m.imageApi } : {}),
 			reasoning: m.imageGeneration ? false : m.reasoning, input: m.vision ? ["text", "image"] : ["text"],
 			// Strengths the owner listed win; otherwise they are looked up by name in the OpenRouter catalog, and unknown names keep the defaults.
 			...(m.reasoning && !m.imageGeneration ? thinkingMapFor(this.catalog, m) : {}),
@@ -575,7 +586,7 @@ export class Configuration {
 			cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
 		}));
 		return createProvider({
-			id: p.id, name: p.name, baseUrl: p.baseUrl, models, api: implementations[p.api](), images: { [IMAGE_API]: openrouterImagesApi() },
+			id: p.id, name: p.name, baseUrl: p.baseUrl, models, api: implementations[p.api](), images: { "openrouter-images": openrouterImagesApi(), "openai-images": openAIImages },
 			auth: { apiKey: {
 				name: `${p.name} API key`,
 				resolve: async ({ credential }) => {

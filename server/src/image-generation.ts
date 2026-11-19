@@ -21,11 +21,21 @@ import { safePath, type ToolDef } from "./tools.ts";
 
 /** Where generated pictures land, relative to the session's working directory. */
 export const GENERATED_DIR = ".pipaya/generated";
-/** The image API every image model of a connection is called through (chat completions with `modalities`). */
-export const IMAGE_API = "openrouter-images";
+export const ImageApiSchema = Type.Union([Type.Literal("openrouter-images"), Type.Literal("openai-images")]);
+export type ImageApi = Static<typeof ImageApiSchema>;
+
+/** Prefer an explicit setting, then the endpoint. A CLIProxyAPI connection can serve multiple image protocols. */
+export function resolveImageApi(baseUrl: string, provider: string, id: string, override?: ImageApi): ImageApi {
+	if (override) return override;
+	const host = new URL(baseUrl).hostname.toLowerCase();
+	if (host === "api.openai.com") return "openai-images";
+	if (host === "openrouter.ai") return "openrouter-images";
+	if (/^cli-?proxy(?:-?api)?$/.test(provider) && /^gpt-image(?:-|$)/i.test(id.split("/").at(-1) ?? "")) return "openai-images";
+	return "openrouter-images"; // preserve existing connections of unknown type
+}
 export const IMAGE_TOOL = "generate_image";
 const MAX_INPUT_IMAGES = 4;
-const TIMEOUT_MS = 180_000;
+export const IMAGE_TIMEOUT_MS = 180_000;
 const EXT: Record<string, string> = { "image/png": "png", "image/jpeg": "jpg", "image/webp": "webp", "image/gif": "gif" };
 
 export const ImageModelSchema = Type.Object(
@@ -73,8 +83,8 @@ export class ImageModelSettings {
 }
 
 /** The image-model view of a connection's model entry: same endpoint and key, called through the image API. */
-export function asImageModel(m: Model<Api>): ImageModel<string> {
-	return { type: "image", id: m.id, name: m.name, api: IMAGE_API, provider: m.provider, baseUrl: m.baseUrl, input: m.input, cost: m.cost, output: ["image", "text"], ...(m.headers ? { headers: m.headers } : {}) };
+export function asImageModel(m: Model<Api> & { imageApi?: ImageApi }): ImageModel<string> {
+	return { type: "image", id: m.id, name: m.name, api: m.imageApi ?? resolveImageApi(m.baseUrl, m.provider, m.id), provider: m.provider, baseUrl: m.baseUrl, input: m.input, cost: m.cost, output: ["image", "text"], ...(m.headers ? { headers: m.headers } : {}) };
 }
 
 export interface GeneratedImage {
@@ -82,6 +92,23 @@ export interface GeneratedImage {
 	path: string;
 	mimeType: string;
 	data: string;
+}
+
+/** Shared by the tool and the settings test; probing never writes to the working directory. */
+export async function requestImages(registry: ModelRegistry, model: Model<Api>, prompt: string, inputs: ImageContent[], signal?: AbortSignal) {
+	const input: ImagesInputContent[] = [{ type: "text", text: prompt }, ...inputs];
+	const timeout = AbortSignal.timeout(IMAGE_TIMEOUT_MS);
+	const requestSignal = signal ? AbortSignal.any([signal, timeout]) : timeout;
+	requestSignal.throwIfAborted();
+	const result = await registry.models.generateImages(asImageModel(model), { input }, { signal: requestSignal, maxRetries: 0 });
+	requestSignal.throwIfAborted();
+	if (result.stopReason === "aborted") throw new Error("aborted");
+	if (result.stopReason === "error") throw new Error(result.errorMessage ?? "image generation failed");
+	if (!result.output.some((c) => c.type === "image")) {
+		const note = result.output.flatMap((c) => c.type === "text" ? [c.text.trim()] : []).join(" ").trim();
+		throw new Error(note ? `the model returned no picture: ${note.slice(0, 300)}` : "the model returned no picture");
+	}
+	return result;
 }
 
 /** One request to the image model; the pictures are written under GENERATED_DIR in `cwd`. */
@@ -93,10 +120,7 @@ export async function generateImages(
 	inputs: ImageContent[],
 	signal?: AbortSignal,
 ): Promise<{ text: string; images: GeneratedImage[] }> {
-	const input: ImagesInputContent[] = [{ type: "text", text: prompt }, ...inputs];
-	const result = await registry.models.generateImages(asImageModel(model), { input }, { signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(TIMEOUT_MS)]) : AbortSignal.timeout(TIMEOUT_MS) });
-	if (result.stopReason === "aborted") throw new Error("aborted");
-	if (result.stopReason === "error") throw new Error(result.errorMessage ?? "image generation failed");
+	const result = await requestImages(registry, model, prompt, inputs, signal);
 	const texts: string[] = [];
 	const images: GeneratedImage[] = [];
 	for (const c of result.output) {
@@ -112,7 +136,6 @@ export async function generateImages(
 		await writeFile(abs, bytes);
 		images.push({ path, mimeType, data: c.data });
 	}
-	if (!images.length) throw new Error(texts.length ? `the model returned no picture: ${texts.join(" ").slice(0, 300)}` : "the model returned no picture");
 	return { text: texts.join("\n"), images };
 }
 

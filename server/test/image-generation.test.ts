@@ -1,12 +1,14 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { buildApp, type App } from "../src/app.ts";
+import { resolveImageApi } from "../src/image-generation.ts";
 import type { Config } from "../src/config.ts";
 import { ECHO_MODEL, ECHO_PNG, echoProviderBody, startEchoUpstream, type EchoUpstream } from "./support/openai-upstream.ts";
 
 // Image models never chat. With one set as the image model, agents get `generate_image`, which saves the picture.
+const gpt = "gpt-image-2.6-sunburst";
 const IMG = { id: "img-model", name: "Img", contextWindow: 65536, maxTokens: 32768, reasoning: false, vision: true, imageGeneration: true };
 
 let app: App;
@@ -91,5 +93,67 @@ describe("image models", () => {
 		expect((await api("PUT", "/image-model", { model: null })).status).toBe(200);
 		expect(await toolNames()).not.toContain("generate_image");
 		expect(existsSync(join(ws, ".pipaya", "generated"))).toBe(true);
+	});
+});
+
+
+describe("image API routing", () => {
+	test("prefer the explicit setting, then the endpoint; preserve unknown proxies", () => {
+		const proxy = "http://proxy.example/v1";
+		expect(resolveImageApi("https://api.openai.com/v1", "my-connection", "alias")).toBe("openai-images");
+		expect(resolveImageApi("https://openrouter.ai/api/v1", "cliproxy", gpt)).toBe("openrouter-images");
+		expect(resolveImageApi(proxy, "cliproxy", gpt)).toBe("openai-images");
+		expect(resolveImageApi(proxy, "cli-proxy-api", `codex/${gpt}`)).toBe("openai-images");
+		expect(resolveImageApi(proxy, "cliproxy", "gemini-image")).toBe("openrouter-images");
+		expect(resolveImageApi(proxy, "unknown", gpt)).toBe("openrouter-images");
+		expect(resolveImageApi(proxy, "cliproxy", gpt, "openrouter-images")).toBe("openrouter-images");
+	});
+
+	test("OpenAI Images via a mixed proxy: generate, edit with two files, test without writing, never retry", async () => {
+		const seen: { path: string; model: string; prompt: string; files?: string[] }[] = [];
+		let bad: "empty" | "invalid" | "rate" | undefined;
+		const images = Bun.serve({ hostname: "127.0.0.1", port: 0, async fetch(req) {
+			const path = new URL(req.url).pathname;
+			if (path.endsWith("/edits")) {
+				const form = await req.formData();
+				const files = await Promise.all(form.getAll("image[]").map(async (f) => f instanceof File && f.type === "image/png" ? Buffer.from(await f.arrayBuffer()).toString("base64") : "not a PNG file"));
+				seen.push({ path, model: String(form.get("model")), prompt: String(form.get("prompt")), files });
+			} else {
+				const body = await req.json() as { model: string; prompt: string };
+				seen.push({ path, model: body.model, prompt: body.prompt });
+			}
+			if (bad === "rate") return new Response("upstream diagnostic", { status: 429 });
+			return Response.json({ data: bad === "empty" ? [] : [{ b64_json: bad === "invalid" ? "bm90LWFuLWltYWdl" : ECHO_PNG }] });
+		} });
+		try {
+			const p = { ...echoProviderBody(`${images.url.origin}/proxy/v1`), models: [{ ...IMG, id: gpt }, { ...IMG, id: "art", imageApi: "openai-images" }] };
+			expect((await api("PUT", "/configuration/providers/cliproxy", p)).status).toBe(200);
+			const selection = { provider: "cliproxy", model: gpt };
+			expect((await api("PUT", "/image-model", { model: selection })).status).toBe(200);
+			const cwd = join(ws, "artwork"); mkdirSync(cwd);
+			const run = async (prompt: string, refs: string[] = []) => {
+				const id = (await api("POST", "/sessions", { cwd })).json.id;
+				expect((await api("POST", `/sessions/${id}/messages`, { text: `!generate_image ${JSON.stringify({ prompt, images: refs })}` })).status).toBe(202);
+				await idle(id);
+				return (await api("GET", `/sessions/${id}/messages`)).json.messages.map((m: any) => m.message).find((m: any) => m.role === "toolResult");
+			};
+			const generated = await run("draw");
+			expect(generated.isError).toBe(false);
+			const path = generated.details.paths[0];
+			expect(readFileSync(join(cwd, path)).toString("base64")).toBe(ECHO_PNG);
+			expect(seen).toEqual([{ path: "/proxy/v1/images/generations", model: gpt, prompt: "draw" }]);
+			const edited = await run("edit", [path, path]);
+			expect(edited.isError).toBe(false);
+			expect(readFileSync(join(cwd, edited.details.paths[0])).toString("base64")).toBe(ECHO_PNG);
+			expect(seen[1]).toEqual({ path: "/proxy/v1/images/edits", model: gpt, prompt: "edit", files: [ECHO_PNG, ECHO_PNG] });
+			expect((await api("POST", "/configuration/test", { ...selection, model: "art" })).json.ok).toBe(true);
+			expect(seen[2]).toMatchObject({ path: "/proxy/v1/images/generations", model: "art" });
+			for (const failure of ["empty", "invalid", "rate"] as const) {
+				bad = failure;
+				expect((await run("draw")).isError).toBe(true);
+			}
+			expect(seen.slice(3).map((r) => r.path)).toEqual(Array(3).fill("/proxy/v1/images/generations"));
+			expect(readdirSync(join(cwd, ".pipaya/generated"))).toHaveLength(2);
+		} finally { images.stop(true); }
 	});
 });

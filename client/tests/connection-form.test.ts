@@ -117,6 +117,14 @@ describe("image generation models", () => {
 		expect("out" in out && out.out[0]).toMatchObject({ imageGeneration: true, reasoning: false });
 		expect("out" in out && "thinkingLevels" in out.out[0]!).toBe(false);
 	});
+	test("the image API override round-trips, auto omits it, and text models never send it", () => {
+		const f = filled({ rows: [row({ imageGeneration: true, imageApi: "openai-images" }), row({ id: "auto", imageGeneration: true }), row({ id: "text", imageApi: "openrouter-images" })] });
+		const result = collectModels(f, true, none, false);
+		if (!("out" in result)) throw new Error("invalid fixture");
+		expect(result.out.map((m) => m.imageApi)).toEqual(["openai-images", undefined, undefined]);
+		const restored = formFromProvider({ ...f, models: result.out, configured: true, hasStoredKey: false });
+		expect(restored.rows[0]?.imageApi).toBe("openai-images");
+	});
 	test("a text model's payload has no flag", () => {
 		const out = collectModels(filled({ rows: [row()] }), true, none, true);
 		expect("out" in out && "imageGeneration" in out.out[0]!).toBe(false);
