@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { BAND_GAP, ROW_GAP, ROLE_STALE_MS, buildGraph, roleCardId, staleRoles, CARD_W_MAX, isMouseWheel, springStep, CARD_H, CARD_H_LIVE, edgeLength, edgePath, edgeTip, sparkPlan, fitGraph, fitView, focusCards, FIT_MIN, FIT_PAD, growthPlan, leavePlan, modelName, related, type DelegateRun, type GraphServer } from "../src/lib/graph";
+import { BAND_GAP, ROW_GAP, ROLE_STALE_MS, buildGraph, roleCardId, staleRoles, quietCards, CARD_W_MAX, isMouseWheel, springStep, CARD_H, CARD_H_LIVE, edgeLength, edgePath, edgeTip, sparkPlan, fitGraph, fitView, focusCards, FIT_MIN, FIT_PAD, growthPlan, leavePlan, modelName, related, type DelegateRun, type GraphServer } from "../src/lib/graph";
 import type { Activity } from "../src/lib/activity";
 import type { Session } from "../src/lib/types";
 
@@ -133,7 +133,26 @@ describe("buildGraph", () => {
 		expect([...g.cards.values()].some((c) => c.kind === "subagent")).toBe(false);
 	});
 
-	test("two servers: hubs are per server, one frame each, the second below the first", () => {
+	test("quietCards: idle chats, hubs with only idle chats and every card of an offline server step back", () => {
+		const states: Record<string, Activity> = { busy: "working", ask: "asking", done: "done", rest: "idle", kid: "idle" };
+		const g = buildGraph([
+			server("a", [session("busy"), session("ask", { model: "m2" }), session("done", { model: "m3" }), session("rest", { model: "m4" }), session("kid", { model: "m4", parentId: "rest" })], { states }),
+			server("off", [session("x")], { online: false, states: { x: "working" } }),
+		]);
+		const q = quietCards(g, 0);
+		// at rest: the idle chats and the model with nothing but idle chats under it
+		expect(["s:a/rest", "s:a/kid", "m:a/p/m4"].every((id) => q.has(id))).toBe(true);
+		// in use: what works, asks or has something new, the hubs above them and the online server
+		expect(["s:a/busy", "s:a/ask", "s:a/done", "m:a/p/m", "m:a/p/m2", "m:a/p/m3", "p:a/p", "v:a"].some((id) => q.has(id))).toBe(false);
+		// a role steps back when it runs nothing and only resting chats call it
+		const r = buildGraph([server("a", [session("busy"), session("rest")], { states, runs: [run("rest", "explore"), run("rest", "runner"), run("busy", "runner"), run("rest", "ui", { running: true, doneAt: null })] })]);
+		const rq = quietCards(r, 0);
+		expect([roleCardId("a", "explore", "p/m"), roleCardId("a", "runner", "p/m"), roleCardId("a", "ui", "p/m")].map((id) => rq.has(id))).toEqual([true, false, false]);
+		// an offline server's cards all step back, even a chat it last saw working
+		expect(["v:off", "p:off/p", "m:off/p/m", "s:off/x"].every((id) => q.has(id))).toBe(true);
+	});
+
+	test("two servers: hubs are per server, the second below the first with the gap for the hairline between them", () => {
 		const g = buildGraph([server("a", [session("s1")]), server("b", [session("s1")])]);
 		expect(g.cards.has("p:a/p") && g.cards.has("p:b/p")).toBe(true);
 		expect(g.bands.map((b) => b.server)).toEqual(["a", "b"]);

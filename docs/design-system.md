@@ -86,9 +86,13 @@ share one left and one right line. Never write a raw side padding in a dialog; u
   The graph view draws its own, larger name lines (a chat card's 14px name, a dialog row's 13px name) but the colour rule is the same: a
   chat's `@name` takes its state colour on the card, in the detail dialog's chat and call rows, and a running subagent card names its
   caller in `--info` on its live line. A subagent card is one role on one model (the same role on two models is two cards, stacked
-  together, the model used last on top), so the line from a chat says which model its subagent ran on. A role's card on a model it has
-  moved off (not running, last call over an hour ago, a newer card of the same role exists) steps back to 60% with its lines at 40%,
-  back to full while hovered or selected; its row in the dialogs adds when it was last used. A role's newest card never fades. A chat without a name shows its title in the body colour.
+  together, the model used last on top), so the line from a chat says which model its subagent ran on. 
+  What is at rest steps back, one rule for every card (`quietCards`): an idle chat (not working, not asking, nothing new), a
+  provider or model with only idle chats under it, a role that runs nothing and is called only by resting chats, a role's card on a
+  model it moved off (not running, last call over an hour ago, a newer card of the same role exists; its dialog row adds when it was
+  last used), and every card of an offline server. Such a card is at 60% and a line touching it at 40%; hovering or selecting it, or
+  a card it belongs with, brings it back. An online server card never fades. Two or more servers are split by a 1px `--border`
+  hairline in the 48px gap between them, not framed. A chat without a name shows its title in the body colour.
 - Audit: render at `device_scale_factor` 4-8 with `scripts/ui-ink.py`, find the painted pixels inside each pill and compare their centre with the box centre; flag anything over 0.5px. Differences up to 0.5px represent the physical half-pixel grid limit of an odd-pixel glyph in an even-content box.
 
 ## 2. Vertical rhythm
