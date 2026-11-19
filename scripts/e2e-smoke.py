@@ -177,7 +177,7 @@ def run_flows(a, out, client_url, api_base, token, api, console, work):
         ctx = browser.new_context(viewport={"width": 1280, "height": 800})
         ctx.set_default_timeout(TIMEOUT)
         ctx.add_init_script("if(!sessionStorage.__seeded){localStorage.setItem('pipaya.lang','ko');sessionStorage.__seeded=1}")
-        ctx.add_init_script("localStorage.setItem('pipaya.keys',JSON.stringify({skills:'Mod+B+S',workdir:'Alt+W'}))")
+        ctx.add_init_script("if (!localStorage.getItem('pipaya.keys')) localStorage.setItem('pipaya.keys',JSON.stringify({skills:'Mod+B+S',workdir:'Alt+W'}))")
         page = ctx.new_page()
         page.on("request", lambda r: requests.append(r.url))
         page.on("websocket", lambda w: requests.append(w.url))
@@ -249,6 +249,27 @@ def run_flows(a, out, client_url, api_base, token, api, console, work):
             page.keyboard.press("Control+f")
             expect(find).to_have_count(0)
             expect(composer()).to_be_focused()
+
+        def b_picker_shortcuts():
+            original = page.evaluate("localStorage.getItem('pipaya.keys')")
+            page.evaluate("v => localStorage.setItem('pipaya.keys', JSON.stringify({...JSON.parse(v), findChat:'Mod+ArrowUp', modelPicker:'Mod+ArrowDown'}))", original)
+            page.reload()
+            composer().focus()
+            page.keyboard.press("Control+ArrowUp")
+            palette = page.get_by_role("dialog", name="대화 찾기")
+            expect(palette.get_by_role("combobox")).to_be_focused()
+            page.keyboard.press("Control+ArrowUp")
+            expect(palette).to_have_count(0)
+            for from_list in [False, True]:
+                page.keyboard.press("Control+ArrowDown")
+                picker = page.get_by_role("dialog", name="모델 설정")
+                expect(picker.get_by_role("textbox")).to_be_focused()
+                if from_list:
+                    page.keyboard.press("ArrowDown")  # an unmodified arrow still navigates
+                    expect(picker.locator(".pk-opt:focus")).to_have_count(1)
+                page.keyboard.press("Control+ArrowDown")
+                expect(picker).to_have_count(0)
+            page.evaluate("v => localStorage.setItem('pipaya.keys', v)", original)
 
         def b2_draft_survives_reload():
             composer().fill("kept across a reload")
@@ -366,6 +387,7 @@ def run_flows(a, out, client_url, api_base, token, api, console, work):
             step("a. first screen -> connect", a_first_screen)
             step("b. send a message, see the echo", b_send)
             step("b1. view shortcuts open and close", b_shortcut_toggles)
+            step("b1a. rebound arrows close pickers from search or list", b_picker_shortcuts)
             step("b2. unsent input survives a reload", b2_draft_survives_reload)
             step("b3. attached picture and file survive a reload", b3_attachments_survive_reload)
             step("c. stream auth (ticket, no token in URLs)", c_stream_auth)

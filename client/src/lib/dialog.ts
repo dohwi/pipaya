@@ -7,8 +7,8 @@
  *
  * `modalLayer` is for `role="dialog"` panels (components/ui/Modal.svelte uses it).
  *
- * Listeners go through `on()` from svelte/events: it runs the delegated `onkeydown` handlers of the children first,
- * so stopping propagation here does not silence them (a plain addEventListener + stopPropagation would).
+ * The opener is matched in capture, before a focused list can consume it as navigation. Other keys go through
+ * `on()` from svelte/events so the delegated `onkeydown` handlers of the children still run first.
  */
 import { on } from "svelte/events";
 import { emptyRecording, isBareCombo, isModifierCode, recordKey, recordingCombo, tabComboYieldsFocus, type Recording } from "./keys";
@@ -226,10 +226,15 @@ export function modalLayer(node: HTMLElement, opts: LayerOpts) {
 	track(hist);
 	if (!node.hasAttribute("tabindex")) node.tabIndex = -1;
 
+	const onCapture = (e: KeyboardEvent) => {
+		if (stack[stack.length - 1] !== layer || e.defaultPrevented) return;
+		toggleLayer(e, layer);
+		if (e.defaultPrevented) e.stopPropagation(); // only the configured opener or a step of its chord
+	};
+	node.addEventListener("keydown", onCapture, true);
 	const onKey = (e: KeyboardEvent) => {
 		// A modal underneath (not portalled) only sees keys that bubbled out of the one on top: leave them alone.
 		if (stack[stack.length - 1] === layer) {
-			toggleLayer(e, layer);
 			if (!trapTab(e, node)) escapeLayer(e, layer);
 		}
 		e.stopPropagation(); // the app's shortcuts stay quiet while a modal has the keyboard
@@ -254,6 +259,7 @@ export function modalLayer(node: HTMLElement, opts: LayerOpts) {
 			hist.opts = next;
 		},
 		destroy() {
+			node.removeEventListener("keydown", onCapture, true);
 			offKey();
 			const i = stack.indexOf(layer);
 			if (i >= 0) stack.splice(i, 1);
