@@ -12,6 +12,7 @@ export interface Row {
 	vision: boolean;
 	/** Makes pictures instead of text */
 	imageGeneration: boolean;
+	imageApi?: CustomModel["imageApi"];
 	/** Chosen brand mark; undefined = automatic (from the id) */
 	icon?: string;
 	/** Switched off by the owner (hidden from the pickers) */
@@ -129,6 +130,7 @@ export function formFromProvider(p: CustomProvider): Form {
 			reasoning: m.reasoning,
 			vision: m.vision,
 			imageGeneration: m.imageGeneration === true,
+			imageApi: m.imageApi,
 			icon: m.icon,
 			fromUpstream: m.fromUpstream,
 			disabled: m.disabled,
@@ -207,7 +209,7 @@ export function collectModels(
 			maxTokens: max,
 			reasoning: r.reasoning && !r.imageGeneration,
 			vision: r.vision,
-			...(r.imageGeneration ? { imageGeneration: true } : {}),
+			...(r.imageGeneration ? { imageGeneration: true, ...(r.imageApi ? { imageApi: r.imageApi } : {}) } : {}),
 			...(r.icon ? { icon: r.icon } : {}),
 			...(r.reasoning && !r.imageGeneration && r.thinkingLevels.length ? { thinkingLevels: ALL_LEVELS.filter((l) => r.thinkingLevels.includes(l)) } : {}),
 			// A default outside the strengths this model offers would never be reachable, so it is dropped with them.

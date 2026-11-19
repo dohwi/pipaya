@@ -378,6 +378,8 @@ export interface CustomModel {
 	vision: boolean;
 	/** Makes pictures instead of text */
 	imageGeneration?: boolean;
+	/** Omitted = choose the image transport from the connection. */
+	imageApi?: "openai-images" | "openrouter-images";
 	/** Brand mark chosen for this model; absent = picked from the id */
 	icon?: string;
 	/** Switched off: hidden from the model pickers, kept here so a refresh does not add it back */

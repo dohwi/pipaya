@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { focusOnDesktop } from "../../lib/focus";
 	import Button from "../ui/Button.svelte";
+	import Segmented from "../ui/Segmented.svelte";
 	import { t, tc } from "../../lib/i18n";
 	import { ICON_LABEL } from "../../lib/brand";
 	import { isImageIcon } from "../../lib/model-icon-image";
@@ -124,6 +125,13 @@
 			<button type="button" class="cap tap" aria-pressed={r.imageGeneration} onclick={() => { r.imageGeneration = !r.imageGeneration; if (r.imageGeneration) r.reasoning = false; }}><Icon name="sparkles" /> {t("이미지 생성·편집")}</button>
 		</div>
 		<p class="hint note">{r.imageGeneration ? t("그림만 그리는 모델입니다. 에이전트 설정에서 이미지 모델로 고르세요.") : t("기본은 글로 대화하는 채팅 모델입니다. 켠 기능만 모델에 표시됩니다.")}</p>
+		{#if r.imageGeneration}
+			<div class="section-label">{t("이미지 API")}</div>
+			<Segmented label={t("이미지 API")} value={r.imageApi ?? "auto"}
+				options={[{ id: "auto", label: t("자동") }, { id: "openai-images", label: "OpenAI" }, { id: "openrouter-images", label: "OpenRouter" }] as const}
+				onchange={(v) => (r.imageApi = v === "auto" ? undefined : v)} />
+			<p class="hint note">{t("보통은 자동으로 두세요. 프록시에서 그림이 생성되지 않으면 지원하는 API를 고르세요.")}</p>
+		{/if}
 	</section>
 	{#if r.reasoning && !r.imageGeneration}
 		{@const shown = shownLevels(r, matched)}

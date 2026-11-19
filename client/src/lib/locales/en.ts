@@ -436,6 +436,8 @@ export const en: Record<string, string> = {
 	"에이전트가 이 모델로 그림을 그립니다. 아래 에이전트 도구에서 끌 수 있습니다.": "Agents draw with this model. You can turn it off under agent tools below.",
 	"이미지 생성 (generate_image)": "Generate images (generate_image)",
 	"이미지를 만드는 중…": "Creating your image…",
+	"이미지 API": "Image API",
+	"보통은 자동으로 두세요. 프록시에서 그림이 생성되지 않으면 지원하는 API를 고르세요.": "Leave this on Auto unless your proxy fails to generate images. Then choose the API it supports.",
 	"이미지 생성·편집": "Makes & edits images",
 	"글로 대화하고 도구를 쓸 수 있습니다": "Talks in text and can use tools",
 	"답하기 전에 깊이 생각합니다": "Thinks it through before answering",
