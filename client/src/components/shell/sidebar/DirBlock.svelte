@@ -256,8 +256,7 @@
 		white-space: nowrap;
 		font-size: var(--fs-sm);
 		font-weight: 600;
-		padding-bottom: 4px;
-		margin-bottom: -4px; /* descenders (g p y) overflow the line-height:1 box; widen the clip area without moving layout */
+		line-height: 20px; /* a whole-pixel line box centred by the row (rule 3): line-height 1 left a plain name's ink 1.5px below the folder glyph, and clipped its descenders */
 	}
 	/* a pinned row's mark (PinMark) is set into its icon's corner: the icon boxes are its hosts */
 	.dicon {
