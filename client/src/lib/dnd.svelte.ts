@@ -59,7 +59,7 @@ function scope(node: HTMLElement): { outer: HTMLElement; inner: HTMLElement } {
 	for (const el of chain) {
 		const box = document.createElement("div");
 		box.className = [...el.classList].join(" ");
-		Object.assign(box.style, { display: "block", position: "static", width: "auto", height: "auto", margin: "0", padding: "0", border: "0", background: "none", overflow: "visible", transform: "none", opacity: "1", boxShadow: "none" });
+		Object.assign(box.style, { display: "block", position: "static", width: "auto", height: "auto", margin: "0", padding: "0", border: "0", background: "none", overflow: "visible", transform: "none", translate: "none", scale: "none", rotate: "none", opacity: "1", boxShadow: "none" }); // a centred dialog (`translate: -50% -50%`) shifted the copy off the pointer
 		if (inner) inner.append(box);
 		else outer = box;
 		inner = box;
