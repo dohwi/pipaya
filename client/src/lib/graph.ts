@@ -580,16 +580,45 @@ function fitScale(g: Graph, w: number, h: number, pad = FIT_PAD) {
 	return Math.min(s.across, s.down);
 }
 
+/** The box around some of the cards, or null when none of them is on the graph. */
+function boxOf(g: Graph, ids: Iterable<string>) {
+	let [x0, y0, x1, y1] = [Infinity, Infinity, -Infinity, -Infinity];
+	for (const id of ids) {
+		const c = g.cards.get(id);
+		if (!c) continue;
+		x0 = Math.min(x0, c.x - c.w / 2); x1 = Math.max(x1, c.x + c.w / 2);
+		y0 = Math.min(y0, c.y - c.h / 2); y1 = Math.max(y1, c.y + c.h / 2);
+	}
+	return x0 === Infinity ? null : { x0, y0, w: x1 - x0, h: y1 - y0 };
+}
+
+/** The cards the view is fitted around when the whole graph does not fit: the chats at work or waiting for an answer. */
+export const focusCards = (g: Graph): string[] => [...g.cards.values()].filter((c) => c.kind === "session" && isLive(c.activity)).map((c) => c.id);
+
 /**
- * The zoom and offset that show the whole graph in a `w` × `h` view, centred. Too wide even at the floor, it starts at
- * the left (the servers) and pans for the rest; too tall, it stays centred on the middle.
+ * The zoom and offset that show the whole graph in a `w` × `h` view, centred. A way it does not fit even at the floor
+ * pans: there the `focus` cards (the chats at work) come into view, centred (their start first when they do not fit
+ * either), without pulling an end of the graph past its pad. With nothing to focus, too wide starts at the left (the
+ * servers) and too tall stays centred on the middle.
  */
-export function fitView(g: Graph, w: number, h: number, pad = FIT_PAD): { k: number; x: number; y: number } {
+export function fitView(g: Graph, w: number, h: number, pad = FIT_PAD, focus: Iterable<string> = []): { k: number; x: number; y: number } {
 	if (!g.cards.size) return { k: 1, x: pad.x, y: pad.y };
 	const b = bounds(g);
 	const k = Math.max(FIT_MIN, Math.min(1, fitScale(g, w, h, pad)));
-	const x = b.w * k <= w - pad.x * 2 ? w / 2 - (b.x0 + b.w / 2) * k : pad.x - b.x0 * k;
-	return { k, x, y: h / 2 - (b.y0 + b.h / 2) * k };
+	const f = boxOf(g, focus);
+	/** One axis: the view's size, the graph's start and length, the focus box's (if any), the pad. */
+	const axis = (size: number, b0: number, bl: number, f0: number | undefined, fl: number | undefined, p: number, plain: number) => {
+		if (bl * k <= size - p * 2) return size / 2 - (b0 + bl / 2) * k; // the whole graph fits this way: centred
+		if (f0 === undefined || fl === undefined) return plain;
+		const want = fl * k <= size - p * 2 ? size / 2 - (f0 + fl / 2) * k : p - f0 * k;
+		// the graph's far end stays at the pad or past it, its near end too
+		return Math.min(p - b0 * k, Math.max(size - p - (b0 + bl) * k, want));
+	};
+	return {
+		k,
+		x: axis(w, b.x0, b.w, f?.x0, f?.w, pad.x, pad.x - b.x0 * k),
+		y: axis(h, b.y0, b.h, f?.y0, f?.h, pad.y, h / 2 - (b.y0 + b.h / 2) * k),
+	};
 }
 
 /**

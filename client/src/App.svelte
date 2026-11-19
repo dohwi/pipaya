@@ -474,13 +474,15 @@
 				</div>
 			{/if}
 
-			<div class="stage">
+			<!-- under the graph view the stage lets go of its column, so the overlay hangs from main, under the graph's own header -->
+			<div class="stage" class:under-graph={app.graphOpen}>
 				<!-- One column for everything pinned to the top of the stage: notices first, the extension button below them, so they never overlap -->
 				<div class="overlay">
 					<DoneNotice />
 					<div class="extension-launcher">{@render launcher()}</div>
 				</div>
-				<div class="work">
+				<!-- hidden, not unmounted, under the graph: a narrow screen's dock (--z-dock) would cover the graph; its panel keeps its state -->
+				<div class="work" class:hidden={app.graphOpen}>
 					<div class="panes">
 						<!-- under the graph view nothing is drawn: its quick look holds the one live pane (one input, one set of
 						     window listeners); the chat comes back as it was when the graph closes -->
@@ -628,6 +630,15 @@
 		display: flex;
 		flex-direction: column;
 		background: var(--bg);
+	}
+	.stage.under-graph {
+		position: static;
+	}
+	.stage.under-graph .overlay {
+		top: calc(45px + var(--sat)); /* the graph view's header: 44px + its 1px hairline, under the safe area (GraphView .head) */
+	}
+	.work.hidden {
+		visibility: hidden;
 	}
 	/* the conversation area and the extension dock beside it */
 	.work {

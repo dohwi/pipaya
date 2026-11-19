@@ -15,15 +15,16 @@
 	function measure() {
 		const stage = document.querySelector<HTMLElement>(".stage");
 		if (!stage) return (box = null);
-		const r = stage.getBoundingClientRect();
-		// "done" strips occupy the top of the stage; ours go right below them
+		// the stage's overlay column: the top of the chat area, or under the graph view's header while that is open
+		const r = (stage.querySelector<HTMLElement>(".overlay") ?? stage).getBoundingClientRect();
+		// "done" strips occupy the top of that column; ours go right below them
 		const done = stage.querySelector<HTMLElement>(".overlay .stack")?.getBoundingClientRect();
 		box = { left: r.left, width: r.width, top: done ? done.bottom : r.top };
 	}
 
 	$effect(() => {
 		// re-attach when the layout around the stage changes shape
-		void [app.servers.length, app.feedback.notices.length, app.sidebar.collapsed, app.sidebar.open, viewport.narrow, app.activeGroup?.id];
+		void [app.servers.length, app.feedback.notices.length, app.sidebar.collapsed, app.sidebar.open, viewport.narrow, app.activeGroup?.id, app.graphOpen, app.net];
 		let ro: ResizeObserver | undefined;
 		let dead = false;
 		tick().then(() => {
