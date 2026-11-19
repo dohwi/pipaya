@@ -181,19 +181,19 @@
 					<dt>{t("상태")}</dt>
 					<dd class:bad={serverState !== "online" && serverState !== "checking"}>{STATE_TEXT[serverState]()}{#if link?.netError && serverState !== "online"}<span class="faint">{" · "}{link.netError}</span>{/if}</dd>
 					<dt>{t("주소")}</dt>
-					<dd class="mono">{saved?.baseUrl ?? card.host}</dd>
-					{#if link?.versions?.version}<dt>{t("서버 버전")}</dt><dd class="mono">v{link.versions.version}</dd>{/if}
-					{#if link?.workspace?.root}<dt>{t("기본 작업 폴더")}</dt><dd class="mono">{tilde(link.workspace.root, link.workspace.home)}</dd>{/if}
+					<dd><span class="mono">{saved?.baseUrl ?? card.host}</span></dd>
+					{#if link?.versions?.version}<dt>{t("서버 버전")}</dt><dd><span class="mono">v{link.versions.version}</span></dd>{/if}
+					{#if link?.workspace?.root}<dt>{t("기본 작업 폴더")}</dt><dd><span class="mono">{tilde(link.workspace.root, link.workspace.home)}</span></dd>{/if}
 					<dt>{t("대화")}</dt>
 					<dd>{t("대화 {n}개", { n: card.count })}{#if card.live}<span class="faint">{" · "}{t("작업 중")}</span>{/if}</dd>
 				{:else if card.kind === "provider"}
 					<dt>ID</dt>
-					<dd class="mono">{card.label}</dd>
+					<dd><span class="mono">{card.label}</span></dd>
 					<dt>{t("종류")}</dt>
 					<dd>{custom ? t("직접 추가한 연결") : t("내장")}</dd>
 					{#if custom}
 						<dt>{t("주소")}</dt>
-						<dd class="mono">{custom.baseUrl}</dd>
+						<dd><span class="mono">{custom.baseUrl}</span></dd>
 						<dt>{t("API 방식")}</dt>
 						<dd>{FORMAT[custom.api] ?? custom.api}</dd>
 						<dt>{t("API 키")}</dt>
@@ -201,19 +201,19 @@
 					{/if}
 					<!-- a connection the owner added says it with its key line above -->
 					{#if signIn && !custom}<dt>{t("인증")}</dt><dd class:bad={!providerInfo?.configured}>{signIn}</dd>{/if}
-					{#if providerInfo?.accountEmail}<dt>{t("계정")}</dt><dd class="mono">{providerInfo.accountEmail}</dd>{/if}
+					{#if providerInfo?.accountEmail}<dt>{t("계정")}</dt><dd><span class="mono">{providerInfo.accountEmail}</span></dd>{/if}
 					{#if link?.loaded}<dt>{t("모델")}</dt><dd>{t("모델 {n}개", { n: providerModels.length })}<span class="faint">{" · "}{t("대화에서 쓰는 모델 {n}개", { n: card.children.length })}</span></dd>{/if}
 					<dt>{t("대화")}</dt>
 					<dd>{t("대화 {n}개", { n: card.count })}</dd>
 				{:else if card.kind === "model"}
-					{#if card.name !== card.label}<dt>{t("모델 ID")}</dt><dd class="mono">{card.label}</dd>{/if}
+					{#if card.name !== card.label}<dt>{t("모델 ID")}</dt><dd><span class="mono">{card.label}</span></dd>{/if}
 					<dt>{t("프로바이더")}</dt>
 					<dd>{providerName(card.provider)}{#if providerName(card.provider) !== card.provider}<span class="faint mono">{" · "}{card.provider}</span>{/if}{#if card.brand}<span class="faint">{" · "}{BRAND_LABEL[card.brand]}</span>{/if}</dd>
 					{#if modelInfo}
 						<dt>{t("컨텍스트 창")}</dt>
-						<dd class="mono">{compact(modelInfo.contextWindow)}</dd>
+						<dd><span class="mono">{compact(modelInfo.contextWindow)}</span></dd>
 						<dt>{t("최대 출력")}</dt>
-						<dd class="mono">{compact(modelInfo.maxTokens)}</dd>
+						<dd><span class="mono">{compact(modelInfo.maxTokens)}</span></dd>
 						<dt>{t("추론")}</dt>
 						<dd>{#if modelInfo.thinkingLevels.length}<span class="mono">{modelInfo.thinkingLevels.join(" · ")}</span>{:else}{t("지원 안 함")}{/if}</dd>
 						<dt>{t("이미지 입력")}</dt>
@@ -232,11 +232,11 @@
 					{:else if def}
 						{#if def.description}<dt>{t("설명")}</dt><dd>{def.description}</dd>{/if}
 						<dt>{t("역할 파일")}</dt>
-						<dd class="mono">{tilde(def.file, link?.workspace?.home)}</dd>
+						<dd><span class="mono">{tilde(def.file, link?.workspace?.home)}</span></dd>
 						<dt>{t("도구")}</dt>
-						<dd class="mono">{def.tools.join(", ") || t("없음")}</dd>
+						<dd><span class="mono">{def.tools.join(", ") || t("없음")}</span></dd>
 						<dt>{t("최대 턴")}</dt>
-						<dd class="mono">{def.maxTurns}</dd>
+						<dd><span class="mono">{def.maxTurns}</span></dd>
 					{/if}
 					<dt>{t("모델")}</dt>
 					<dd>
@@ -252,8 +252,8 @@
 						{#if stats.running}<span class="run">{" · "}{t("실행 중 {n}", { n: stats.running })}</span>{/if}
 						{#if stats.failed}<span class="bad">{" · "}{t("실패 {n}", { n: stats.failed })}</span>{/if}
 					</dd>
-					{#if stats.avgMs !== null}<dt>{t("평균 소요")}</dt><dd class="mono">{duration(stats.avgMs)}</dd>{/if}
-					{#if stats.tokens}<dt>{t("토큰 합계")}</dt><dd class="mono">{compact(stats.tokens)}{#if stats.turns}<span class="faint">{" · "}{t("{n}턴", { n: stats.turns })}</span>{/if}</dd>{/if}
+					{#if stats.avgMs !== null}<dt>{t("평균 소요")}</dt><dd><span class="mono">{duration(stats.avgMs)}</span></dd>{/if}
+					{#if stats.tokens}<dt>{t("토큰 합계")}</dt><dd><span class="mono">{compact(stats.tokens)}{#if stats.turns}<span class="faint">{" · "}{t("{n}턴", { n: stats.turns })}</span>{/if}</span></dd>{/if}
 				{/if}
 			</dl>
 
@@ -343,6 +343,12 @@
 		min-width: 0;
 		overflow-wrap: anywhere;
 		color: var(--text);
+	}
+	/* A mono value sits in the label's line: JetBrains Mono's ascent is taller than Manrope's, so a dd set in mono put its
+	   baseline 1px above the label's (measured on ID, 주소, 버전, 컨텍스트 창). The dd keeps the body face, which sets the
+	   line, and the mono run inside it takes no line height of its own. */
+	.kv dd :global(.mono) {
+		line-height: 1;
 	}
 	.faint {
 		color: var(--text-faint);
