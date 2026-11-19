@@ -17,6 +17,8 @@
 	import AgentBadge from "../shell/AgentBadge.svelte";
 	import GraphQuick from "./GraphQuick.svelte";
 	import GraphDetail from "./GraphDetail.svelte";
+	import NavbarItems from "../extensions/NavbarItems.svelte";
+	import ExtensionMount from "../extensions/ExtensionMount.svelte";
 	import { released } from "../../lib/pointer";
 	import { modelDisplayName, modelIcon, providerDisplayName, splitModelRef } from "../../lib/model-name";
 
@@ -624,10 +626,14 @@
 <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
 <section class="graph" aria-label={t("그래프 뷰")} tabindex="0" onkeydown={key}>
 	<header class="head">
+		<!-- the app header's extension parts (Header.svelte drops them while this view covers it), so each mounts once -->
+		<ExtensionMount slot="header.start" />
 		<div class="ttl">
 			<span class="t">{t("그래프 뷰")}</span>
 			<span class="sub mono">{summary}</span>
 		</div>
+		<NavbarItems />
+		<ExtensionMount slot="header.end" />
 		<button class="close" onclick={() => app.toggleGraph(false)} aria-label={t("그래프 뷰 닫기")} title={t("그래프 뷰 닫기") + keyHint}><Icon name="x" /></button>
 	</header>
 
