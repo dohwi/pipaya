@@ -87,6 +87,7 @@ import type { Draft, PaletteSpec, Server } from "./store-model";
 import type { ThinkingLevel } from "./types";
 import type { SettingsProblem } from "./settings-problems";
 import { forgetDraft } from "./composer/saved-drafts";
+import { forgetAttachments } from "./composer/saved-attachments";
 
 const NO_DIRS: DirBlock[] = [];
 
@@ -2221,6 +2222,7 @@ class AppStore {
       const next = this.neighbourOf(id);
       await this.api.deleteSession(id);
       forgetDraft(id);
+      forgetAttachments(id);
       this.forgetInGroups(id);
       this.sessions = this.sessions.filter((x) => x.id !== id);
       if (this.activeId === id) this.leave(next);
