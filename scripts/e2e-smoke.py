@@ -14,7 +14,7 @@ Korean through localStorage `pipaya.lang`. Nothing waits with a fixed sleep: eve
 On failure: tmp/e2e/<step>.png and console.log in the output dir (CI: $E2E_OUT or tmp/e2e), exit code 1.
 The access token is never printed; it is only typed into the connect form and compared against request URLs.
 """
-import argparse, contextlib, json, os, pathlib, re, shutil, signal, socket, subprocess, sys, tempfile, time, urllib.request
+import argparse, base64, contextlib, json, os, pathlib, re, shutil, signal, socket, subprocess, sys, tempfile, time, urllib.request
 
 from playwright.sync_api import expect, sync_playwright
 
@@ -134,6 +134,9 @@ def main():
         api.call("PUT", "/configuration/providers/echo", ready["provider"])
         api.call("PUT", "/configuration/providers/dead", {"name": "Dead upstream", "baseUrl": DEAD_URL, "api": "openai-completions", "authRequired": False,
                                                           "models": [{"id": "dead-model", "name": "Dead", "contextWindow": 8192, "maxTokens": 1024, "reasoning": False, "vision": False}]})
+        # the same echo behind a model that can see pictures, so attached images go in inline (`#imageN`), not as files
+        api.call("PUT", "/configuration/providers/seer", {**ready["provider"], "name": "Seer upstream",
+                                                          "models": [{**ready["provider"]["models"][0], "id": "seer-model", "name": "Seer", "vision": True}]})
         api.default_model("echo", ready["model"])
         # client
         cport = free_port()
@@ -217,6 +220,38 @@ def run_flows(a, out, client_url, api_base, token, api, console, work):
             composer().fill("")
             expect(composer()).to_have_value("")
 
+        def b3_attachments_survive_reload():
+            png = work / "dot.png"
+            png.write_bytes(base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="))
+            note = work / "note.txt"
+            note.write_text("a note")
+            api.default_model("seer", "seer-model")
+            page.get_by_role("button", name="새 대화 또는 터미널").click()
+            page.get_by_role("menuitem").first.click()
+            expect(page.get_by_role("button", name=re.compile("Seer"))).to_be_visible()
+            page.mouse.move(700, 400)
+            expect(composer()).to_be_empty()
+            page.locator('input[type="file"]').set_input_files([str(png), str(note)])
+            thumb = page.get_by_role("button", name="dot.png 크게 보기")
+            chip = page.get_by_role("button", name="note.txt 미리보기")
+            expect(thumb).to_be_visible()
+            expect(chip).to_be_visible()
+            expect(composer()).to_have_value(re.compile(r"#image1"))
+            composer().press("End")
+            composer().type(" look")
+            page.reload()
+            expect(composer()).to_have_value(re.compile(r"#image1\s+look"))
+            expect(thumb).to_be_visible()
+            expect(page.get_by_role("img", name="dot.png")).to_have_js_property("naturalWidth", 1)
+            expect(chip).to_be_visible()
+            page.get_by_role("button", name="dot.png 제거").click()
+            page.get_by_role("button", name="note.txt 제거").click()
+            composer().fill("")
+            page.reload()
+            expect(page.get_by_role("button", name="dot.png 크게 보기")).to_have_count(0)
+            expect(page.get_by_role("button", name="note.txt 미리보기")).to_have_count(0)
+            expect(composer()).to_have_value("")
+
         def c_stream_auth():
             events = [u for u in requests if re.search(r"/events(\?|$)", u)]
             assert events, "the page never opened /events"
@@ -282,6 +317,7 @@ def run_flows(a, out, client_url, api_base, token, api, console, work):
             step("a. first screen -> connect", a_first_screen)
             step("b. send a message, see the echo", b_send)
             step("b2. unsent input survives a reload", b2_draft_survives_reload)
+            step("b3. attached picture and file survive a reload", b3_attachments_survive_reload)
             step("c. stream auth (ticket, no token in URLs)", c_stream_auth)
             step("d. model call fails -> retry notice -> stop", d_retry_notice)
             step("e. phone settings: list -> section -> back", e_phone_settings)

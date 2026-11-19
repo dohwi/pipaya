@@ -4,7 +4,8 @@
 	import type { FileDraft } from "../../lib/files";
 	/**
 	 * Unsent input per session ("" = new chat); outlives the component so switching sessions keeps what was typed. The
-	 * text and reply are also saved on this device (saved-drafts.ts) so they survive a restart; attachments are not.
+	 * text and reply (saved-drafts.ts, localStorage) and the attachments (saved-attachments.ts, IndexedDB) are also saved on
+	 * this device so they survive a restart.
 	 */
 	const drafts = new Map<string, { text: string; attachments: DraftAttachment[]; files: FileDraft[]; reply: { text: string; who?: string } | null }>();
 </script>
@@ -56,6 +57,7 @@
 	import { uniqueBy } from "../../lib/unique";
 	import { voice } from "../../lib/voice.svelte";
 	import { forgetDraft, loadDraft, saveDraft } from "../../lib/composer/saved-drafts";
+	import { attachmentsSignature, forgetAttachments, loadAttachments, saveAttachments } from "../../lib/composer/saved-attachments";
 
 	const domId = $props.id();
 	const menuListId = `${domId}-menu`;
@@ -137,9 +139,24 @@
 			document.removeEventListener("visibilitychange", hidden);
 		};
 	});
+	// Attachments are saved as soon as they change (they change rarely, and a picture is not re-typed after a crash).
+	/** What is stored for `draftKey`, as a signature: an unchanged set is not written again. */
+	let attachSaved = attachmentsSignature([], []);
+	/** The stored attachments of `draftKey` are still being read: saving now would erase them. */
+	let attachLoading = false;
+	function saveAttachmentsNow(sig = attachmentsSignature(attached.images, attached.files)) {
+		if (draftKey === undefined || attachLoading || sig === attachSaved) return;
+		attachSaved = sig;
+		void saveAttachments(draftKey ?? "", attached.images, attached.files);
+	}
+	$effect(() => {
+		const sig = attachmentsSignature(attached.images, attached.files);
+		untrack(() => saveAttachmentsNow(sig));
+	});
 	function stash() {
 		if (draftKey === undefined) return;
 		saveNow();
+		saveAttachmentsNow();
 		const k = draftKey ?? "";
 		if (text || attached.any || reply) drafts.set(k, { text, attachments: attached.images, files: attached.files, reply });
 		else drafts.delete(k);
@@ -149,10 +166,23 @@
 		untrack(() => {
 			stash();
 			draftKey = id;
-			const d = drafts.get(id ?? "") ?? loadDraft(id ?? "");
+			const kept = drafts.get(id ?? "");
+			const d = kept ?? loadDraft(id ?? "");
 			text = d?.text ?? "";
-			attached.load(d && "attachments" in d ? d.attachments : [], d && "files" in d ? d.files : []);
+			attached.load(kept?.attachments ?? [], kept?.files ?? []);
 			reply = d?.reply ?? null;
+			attachSaved = attachmentsSignature(attached.images, attached.files);
+			// Nothing in memory (the app was restarted): the attachments come back from storage, unless some were added meanwhile.
+			attachLoading = !kept;
+			if (!kept)
+				void loadAttachments(id ?? "").then((back) => {
+					if (draftKey !== id) return;
+					attachLoading = false;
+					if (back && !attached.any) {
+						attached.load(back.images, back.files);
+						attachSaved = attachmentsSignature(back.images, back.files);
+					} else saveAttachmentsNow();
+				});
 		});
 		if (pane.focused && !isTouch()) queueMicrotask(() => { if (shouldTakeFocus(document.activeElement)) ta?.focus(); });
 		return () => untrack(stash);
@@ -477,6 +507,7 @@
 	function clearSent(key: string | null) {
 		drafts.delete(key ?? "");
 		forgetDraft(key ?? "");
+		forgetAttachments(key ?? "");
 		if (pane.id !== key) return; // already moved to the new session, whose input was restored empty
 		text = "";
 		reply = null;
