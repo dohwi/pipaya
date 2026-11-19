@@ -76,21 +76,62 @@
 	};
 
 	let measure: HTMLDivElement | undefined = $state();
-	/** A card wider than its kind's width (a long model id): measured once per name on a hidden card with the real styles. */
+	/**
+	 * A card wider than its kind's width (a long model id, a long host with "연결 안 됨" after it): its name line and its
+	 * facts line, measured once per text on hidden copies with the real styles. A chat's lines are free text (its title):
+	 * they keep the kind's width and end in "…".
+	 */
 	const widthCache = new Map<string, number>();
 	function widthOf(c: Card): number {
 		if (!measure || c.kind === "session") return 0;
 		// a model's id is set in mono; a name the owner gave it in the body face, like the card draws it
 		const kind = c.kind === "model" && c.name === c.label ? "model-id" : c.kind;
-		const key = `${kind}|${c.name}`;
+		const facts = metaOf(c);
+		const key = `${kind}|${c.name}|${facts.parts.map((x) => `${x.mono ? "m" : ""}${x.text}`).join("\u0000")}|${facts.extra}`;
 		const hit = widthCache.get(key);
 		if (hit !== undefined) return hit;
 		const nm = measure.querySelector<HTMLElement>(`[data-kind="${kind}"]`);
-		if (!nm) return 0;
+		const meta = measure.querySelector<HTMLElement>(".meta");
+		if (!nm || !meta) return 0;
 		nm.textContent = c.name;
-		const w = Math.ceil(nm.getBoundingClientRect().width) + 24 + 12 + 32 + 2; // mark + gap + padding + border
+		meta.replaceChildren(...facts.parts.flatMap((p, i) => {
+			const s = document.createElement("span");
+			s.textContent = p.text;
+			if (p.mono) s.className = "mono";
+			if (p.bold) s.style.fontWeight = "600";
+			if (!i) return [s];
+			const dot = document.createElement("i");
+			dot.textContent = "·";
+			dot.style.margin = "0 8px"; // `.meta i`: a scoped rule does not reach elements made here
+			return [dot, s];
+		}));
+		// the name sits in the middle column, with the (empty) third column's 12px gap after it; the facts line spans both
+		const line = Math.max(nm.getBoundingClientRect().width + 12, meta.getBoundingClientRect().width + facts.extra);
+		const w = Math.ceil(line) + 24 + 12 + 32 + 2; // mark + gap + padding + border
 		widthCache.set(key, w);
 		return w;
+	}
+	/**
+	 * The facts line of a card as plain text, to measure it: the same parts the card shows, and the px its marks add
+	 * (a role's model logo and gap, the sparkle of a model the agent picked).
+	 */
+	function metaOf(c: Card): { parts: { text: string; mono?: boolean; bold?: boolean }[]; extra: number } {
+		const n = (text: string) => ({ text });
+		if (c.kind === "server") return { parts: [n(c.host ?? ""), c.online ? n(t("대화 {n}개", { n: c.count })) : { text: t("연결 안 됨"), bold: true }], extra: 0 };
+		if (c.kind === "provider") return { parts: [n(t("모델 {n}개", { n: c.children.length })), n(t("대화 {n}개", { n: c.count }))], extra: 0 };
+		if (c.kind === "model") return { parts: [n(modelSource(c)), n(t("대화 {n}개", { n: c.count }))], extra: 0 };
+		if (c.kind !== "subagent") return { parts: [], extra: 0 };
+		const m = c.models?.[0];
+		const more = c.models && c.models.length > 1 ? t("외 {n}", { n: c.models.length - 1 }) : "";
+		const parts = [
+			...(c.running ? [{ text: t("실행 중 {n}", { n: c.running }), bold: true }] : []),
+			...(m ? [{ text: m.name, mono: true }] : []), // `.mn` is always set in mono
+			...(more ? [n(more)] : []),
+			n(t("{n}회", { n: c.count })),
+			...(c.free ? [n(t("즉석"))] : []),
+		];
+		// the model's 14px logo + 4px gap, the 14px sparkle + 4px gap; "외 N" sits 4px after the name, not a dot's 17px
+		return { parts, extra: m ? 18 + (c.asked ? 18 : 0) + (more ? 4 - 17 : 0) : 0 };
 	}
 
 	/** The view's size: the layout wraps many chats into columns when that shows the graph larger in it. */
@@ -522,6 +563,8 @@
 		if (hour < 24) return t("{n}시간 전", { n: hour });
 		return t("{n}일 전", { n: Math.floor(hour / 24) });
 	}
+	/** What a model card says it comes from: its maker, else its connection's name. */
+	const modelSource = (c: Card) => (c.brand ? BRAND_LABEL[c.brand] : providerDisplayName(app.links[c.server]?.providers ?? [], c.provider)); // not `graph`: widths are measured while it is built
 	/** The mark the owner picked for a model on that server, if any. */
 	const iconOf = (server: string, provider: string | undefined, id: string) => modelIcon(app.links[server]?.models ?? [], provider, id);
 	const toolNow = (c: Card) => app.links[c.server]?.data.tool[c.session!.id];
@@ -646,21 +689,21 @@
 				>
 					{#if c.kind === "server"}
 						<span class="lead"><Icon name="server" /></span>
-						<span class="nm">{c.label}</span>
-						<span class="meta"><span>{c.host}</span><i>·</i>{#if c.online}<span>{t("대화 {n}개", { n: c.count })}</span>{:else}<em class="bad">{t("연결 안 됨")}</em>{/if}</span>
+						<span class="nm" title={c.label}>{c.label}</span>
+						<span class="meta"><span class="give" title={c.host}>{c.host}</span><i>·</i>{#if c.online}<span>{t("대화 {n}개", { n: c.count })}</span>{:else}<em class="bad">{t("연결 안 됨")}</em>{/if}</span>
 					{:else if c.kind === "provider"}
 						<span class="lead"><Icon name="plug" /></span>
-						<span class="nm" title={c.name !== c.label ? c.label : undefined}>{c.name}</span>
+						<span class="nm" title={c.name !== c.label ? `${c.name} · ${c.label}` : c.name}>{c.name}</span>
 						<span class="meta"><span>{t("모델 {n}개", { n: c.children.length })}</span><i>·</i><span>{t("대화 {n}개", { n: c.count })}</span></span>
 					{:else if c.kind === "model"}
 						<span class="lead"><ModelLogo conn={app.links[c.server]?.conn} icon={iconOf(c.server, c.provider, c.label)} provider={c.provider} model={c.label} size={24} colored /></span>
-						<span class="nm" class:mono={c.name === c.label} title={c.name !== c.label ? `${c.provider}/${c.label}` : undefined}>{c.name}</span>
-						<span class="meta"><span>{c.brand ? BRAND_LABEL[c.brand] : (graph.cards.get(c.parent ?? "")?.name ?? c.provider)}</span><i>·</i><span>{t("대화 {n}개", { n: c.count })}</span></span>
+						<span class="nm" class:mono={c.name === c.label} title={c.name !== c.label ? `${c.name} · ${c.provider}/${c.label}` : c.name}>{c.name}</span>
+						<span class="meta"><span class="give">{modelSource(c)}</span><i>·</i><span>{t("대화 {n}개", { n: c.count })}</span></span>
 					{:else if c.kind === "subagent"}
 						{@const m = c.models?.[0]}
 						{@const ref = m ? splitModelRef(m.model) : null}
 						<span class="lead"><Icon name="bot" /></span>
-						<span class="nm">{c.label}</span>
+						<span class="nm" title={c.label}>{c.label}</span>
 						<span class="meta">
 							{#if c.running}<em class="run">{t("실행 중 {n}", { n: c.running })}</em><i>·</i>{/if}
 							{#if m}
@@ -679,9 +722,9 @@
 						{@const tool = toolNow(c)}
 						{@const busy = c.activity === "working" || c.activity === "asking"}
 						<span class="lead"><AgentBadge id={s.id} server={c.server} state={c.activity} size={24} /></span>
-						<span class="nm">{s.name ? `@${s.name}` : sessionTitle(s.title)}</span>
+						<span class="nm" title={s.name ? `@${s.name}` : sessionTitle(s.title)}>{s.name ? `@${s.name}` : sessionTitle(s.title)}</span>
 						{#if !busy}<span class="when">{ago(s.updatedAt)}</span>{/if}
-						<span class="title">{sessionTitle(s.title)}</span>
+						<span class="title" title={sessionTitle(s.title)}>{sessionTitle(s.title)}</span>
 						{#if busy}
 							<span class="doing" class:ask={c.activity === "asking"} in:glowFade={{ delay: 120 }}>
 								{#if c.activity === "asking"}
@@ -718,6 +761,7 @@
 	<!-- hidden copies of the one-line names, to measure a long one -->
 	<div class="measure" bind:this={measure} aria-hidden="true">
 		{#each ["server", "provider", "model", "model-id", "subagent"] as k (k)}<span class="nm" class:mono={k === "model-id"} data-kind={k}></span>{/each}
+		<span class="meta"></span>
 	</div>
 </section>
 
@@ -1124,6 +1168,13 @@
 	.meta > * {
 		flex: none;
 	}
+	/* the long part of a facts line (a host, a maker or connection name) gives way to the state and the counts after it */
+	.meta > .give {
+		flex: 0 1 auto;
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
 	.meta i {
 		margin: 0 8px;
 		font-style: normal;
@@ -1315,8 +1366,10 @@
 		visibility: hidden;
 		pointer-events: none;
 	}
-	.measure .nm {
-		display: inline-block;
+	.measure .nm,
+	.measure .meta {
+		display: block;
+		width: max-content;
 		overflow: visible;
 	}
 	@media (prefers-reduced-motion: reduce) {

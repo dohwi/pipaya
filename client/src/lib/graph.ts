@@ -129,6 +129,8 @@ export interface Graph {
 /** Card sizes. Every card is two 20px lines in a 16px frame (72); a working chat adds its 40px activity line. */
 export const CARD_W: Record<CardKind, number> = { server: 208, provider: 184, model: 232, session: 272, subagent: 248 };
 export const CARD_H = 72;
+/** The widest a column grows for a long name or facts line; past it the name ends in "…" (the whole of it in the tooltip). */
+export const CARD_W_MAX = 360;
 export const CARD_H_LIVE = 112;
 export const COL_GAP = 64;
 export const ROW_GAP = 12;
@@ -295,10 +297,10 @@ function layout(cards: Map<string, Card>, servers: GraphServer[], delegates: Edg
 	});
 	for (const r of roles) r.col = maxCol + 1;
 
-	// one width per column, the widest card's (a long model id widens its column, up to 320)
+	// one width per column, the widest card's (a long model id widens its column, up to CARD_W_MAX)
 	const cols: { x: number; w: number }[] = [];
 	for (const c of cards.values()) {
-		const w = Math.min(320, Math.max(c.w, opts.widths?.(c) ?? 0));
+		const w = Math.min(CARD_W_MAX, Math.max(c.w, opts.widths?.(c) ?? 0));
 		cols[c.col] = { x: 0, w: Math.max(cols[c.col]?.w ?? 0, w) };
 	}
 	let x = 0;
