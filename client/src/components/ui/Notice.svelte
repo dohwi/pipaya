@@ -2,6 +2,7 @@
 	import type { Snippet } from "svelte";
 	import { collapseIn, collapseOut } from "../../lib/motion";
 	import Icon, { type IconName } from "./Icon.svelte";
+	import { t } from "../../lib/i18n";
 
 	/**
 	 * The one boxed message: an error, a warning, a success note, or a plain note.
@@ -11,7 +12,8 @@
 	 *  icon     leading icon: false hides it, a name replaces the default (alert for danger/warn, check for ok, none for info)
 	 *  role     overrides the default (alert for danger, status for ok, note otherwise)
 	 *  animated slide open/closed when it appears or goes away (for notices that come and go inside a form)
-	 *  action   optional trailing control, e.g. a "retry" button
+	 *  action   optional trailing control (a link-style button)
+ *  onretry  shorthand for the common action: a "다시 시도" button that calls it (ignored when `action` is given)
 	 *  raised   for a notice standing on a tinted settings group: a solid tone-tinted base, a 1px ring of its own colour and a
 	 *           soft shadow, so it reads as a box lifted off the card instead of a stripe painted inside it
 	 */
@@ -25,6 +27,7 @@
 		raised = false,
 		children,
 		action,
+		onretry,
 	}: {
 		tone?: "danger" | "warn" | "ok" | "info";
 		size?: "md" | "sm";
@@ -35,6 +38,7 @@
 		raised?: boolean;
 		children: Snippet;
 		action?: Snippet;
+		onretry?: () => void;
 	} = $props();
 
 	const iconName = $derived<IconName | null>(
@@ -55,7 +59,7 @@
 >
 	{#if iconName}<Icon name={iconName} />{/if}
 	<div class="text">{@render children()}</div>
-	{#if action}<span class="action">{@render action()}</span>{/if}
+	{#if action}<span class="action">{@render action()}</span>{:else if onretry}<span class="action"><button type="button" onclick={onretry}>{t("다시 시도")}</button></span>{/if}
 </div>
 
 <style>

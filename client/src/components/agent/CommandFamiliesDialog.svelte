@@ -61,7 +61,7 @@
 			how={t("에이전트가 고르는 것이 아니라 사용자가 부르는 것이고, 실행은 서버가 합니다.")}
 		/>
 		{#if error}
-			<Notice tone="warn">{error}{#snippet action()}<button onclick={() => refresh++}>{t("다시 시도")}</button>{/snippet}</Notice>
+			<Notice tone="warn" onretry={() => refresh++}>{error}</Notice>
 		{/if}
 		{#if !data && loading}
 			<EmptyState loading />

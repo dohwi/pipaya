@@ -237,7 +237,7 @@
 		margin-left: 4px;
 		font-size: var(--fs-2xs);
 		font-weight: 600;
-		line-height: 16px; /* whole-pixel line box, centred on the name like .who */
+		line-height: 16px; /* whole-pixel line box, centred on the name like the handle (ui/Handle) */
 		white-space: nowrap;
 	}
 	.sstat.offline {

@@ -193,7 +193,7 @@
 
 	<DialogBody gap busy={loading}>
 		{#if error}
-			<Notice tone="warn">{error}{#snippet action()}<button onclick={() => refresh++}>{t("다시 시도")}</button>{/snippet}</Notice>
+			<Notice tone="warn" onretry={() => refresh++}>{error}</Notice>
 		{/if}
 		{#if !data && loading}
 			<EmptyState loading />

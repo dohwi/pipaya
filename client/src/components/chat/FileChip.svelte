@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { t } from "../../lib/i18n";
 	import { extOf, sizeLabel } from "../../lib/files";
-	import Icon from "../ui/Icon.svelte";
+	import RemoveBadge from "./RemoveBadge.svelte";
 
 	/** A file as a small card: a thumbnail (images) or the extension, the name and the size. A press opens the preview. */
 	let { name, size, preview, onopen, onremove }: { name: string; size?: number; preview?: string; onopen?: () => void; onremove?: () => void } = $props();
@@ -20,7 +20,7 @@
 		</span>
 	</button>
 	{#if onremove}
-		<button type="button" class="rm" onclick={() => onremove?.()} aria-label={t("{name} 제거", { name })}><Icon name="x" /></button>
+		<RemoveBadge label={t("{name} 제거", { name })} onclick={() => onremove?.()} />
 	{/if}
 </span>
 
@@ -82,22 +82,5 @@
 	.sz {
 		font-size: var(--fs-xs);
 		color: var(--text-faint);
-	}
-	.rm {
-		position: absolute;
-		top: -6px;
-		right: -6px;
-		width: 22px;
-		height: 22px;
-		border-radius: var(--radius);
-		display: grid;
-		place-items: center;
-		background: var(--text);
-		color: var(--bg);
-	}
-	.rm :global(svg) {
-		width: 12px;
-		height: 12px;
-		stroke-width: 2.6;
 	}
 </style>
