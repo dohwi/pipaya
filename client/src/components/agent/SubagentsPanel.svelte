@@ -19,6 +19,7 @@
 	import { t } from "../../lib/i18n";
 	import { reflow, rowIn, rowOut } from "../../lib/motion";
 	import { app } from "../../lib/store.svelte";
+	import { modelRefName } from "../../lib/model-name";
 	import type { ModelInfo, SubagentInfo, SubagentList, ThinkingLevel } from "../../lib/types";
 
 	/**
@@ -221,7 +222,7 @@
 									<ConfirmButton size="sm" danger confirmLabel={t("정말 삭제")} onconfirm={() => remove(r)} disabled={busy}>{t("삭제")}</ConfirmButton>
 								{/snippet}
 								{#if r.description}<p class="desc">{r.description}</p>{/if}
-								<p class="meta mono">{r.model ?? t("호출한 대화의 모델")}{r.thinking ? ` · ${r.thinking}` : ""} · {t("도구 {n}개", { n: r.tools.length })} · {t("최대 {n}회", { n: r.maxTurns })}</p>
+								<p class="meta mono" title={r.model && modelRefName(models, r.model) !== r.model ? r.model : undefined}>{r.model ? modelRefName(models, r.model) : t("호출한 대화의 모델")}{r.thinking ? ` · ${r.thinking}` : ""} · {t("도구 {n}개", { n: r.tools.length })} · {t("최대 {n}회", { n: r.maxTurns })}</p>
 							</ListItem>
 						</li>
 					{:else}

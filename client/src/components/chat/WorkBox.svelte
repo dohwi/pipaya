@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { modelRefName } from "../../lib/model-name";
 	import { t } from "../../lib/i18n";
 	import { collapseIn, collapseOut, easeEnter, easeExit, fadeIn, fadeOut, ms } from "../../lib/motion";
 	import Icon from "../ui/Icon.svelte";
@@ -136,11 +137,7 @@
 			.flatMap((s, i) => (s.kind === "tool" && isImageTool(s.name) && runs[i]?.state === "done" ? [runs[i]!] : []))
 			.map((r) => (typeof r.details?.model === "string" ? (r.details.model as string) : ""))
 			.find(Boolean);
-		if (!ref) return null;
-		const cut = ref.indexOf("/");
-		const provider = cut < 0 ? "" : ref.slice(0, cut);
-		const id = cut < 0 ? ref : ref.slice(cut + 1);
-		return app.models.find((m) => m.provider === provider && m.id === id)?.name ?? id;
+		return ref ? modelRefName(app.models, ref) : null;
 	});
 	const awaitingCall = $derived(awaitingIdx >= 0 ? (steps[awaitingIdx] as Extract<Step, { kind: "tool" }>) : null);
 	/** The question the waiting call asks the user (ctx.ask); it is answered right here. */

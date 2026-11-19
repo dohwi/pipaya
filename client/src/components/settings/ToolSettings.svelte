@@ -136,8 +136,8 @@
 		{#if d.policy === "allowlist"}
 			{#each modelList as m (`${m.provider}/${m.id}`)}
 				{@const key = `${m.provider}/${m.id}`}
-				<SettingRow label={m.name || m.id} hint={key}>
-					<Switch checked={d.models.includes(key)} label={key} onchange={(on) => toggleModel(key, on)} />
+				<SettingRow label={m.name.trim() || m.id} hint={key}>
+					<Switch checked={d.models.includes(key)} label={m.name.trim() || key} onchange={(on) => toggleModel(key, on)} />
 				</SettingRow>
 			{/each}
 			{#each d.models.filter((k) => !modelList.some((m) => `${m.provider}/${m.id}` === k)) as key (key)}

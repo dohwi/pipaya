@@ -8,7 +8,8 @@
 	import { agoText } from "../../lib/tab-overview";
 	import { BRAND_LABEL } from "../../lib/brand";
 	import { connectionState } from "../../lib/sidebar-model";
-	import { modelName, type Card, type Graph } from "../../lib/graph";
+	import type { Card, Graph } from "../../lib/graph";
+	import { modelDisplayName, modelIcon, providerDisplayName, splitModelRef } from "../../lib/model-name";
 	import { callState, roleStats, under, type CallState } from "../../lib/graph-detail";
 	import { graphRuns } from "../../lib/graph-runs.svelte";
 	import { activityOf } from "../../lib/activity";
@@ -106,12 +107,16 @@
 	};
 
 	// ---- header ----
-	const title = $derived(card?.label ?? "");
+	const title = $derived(card?.name ?? "");
+	/** A model's provider by the connection's name, a model or a call's model by the name the owner gave it. */
+	const providerName = (id: string | undefined) => providerDisplayName(link?.providers ?? [], id);
+	const refName = (ref: string) => { const r = splitModelRef(ref); return modelDisplayName(link?.models ?? [], r.provider, r.id); };
+	const iconOf = (provider: string | undefined, id: string) => modelIcon(link?.models ?? [], provider, id);
 	const sub = $derived.by(() => {
 		if (!card) return "";
 		if (card.kind === "server") return card.host ?? "";
 		if (card.kind === "provider") return serverName;
-		if (card.kind === "model") return [card.provider, serverName].join(" · ");
+		if (card.kind === "model") return [providerName(card.provider), serverName].join(" · ");
 		return [t("서브에이전트"), serverName].join(" · ");
 	});
 
@@ -146,10 +151,10 @@
 	<li>
 		<button class="row" onclick={() => onpick(c.id)}>
 			<span class="mark">
-				{#if c.kind === "model"}<ModelLogo conn={link?.conn} provider={c.provider} model={c.label} size={20} colored />
+				{#if c.kind === "model"}<ModelLogo conn={link?.conn} icon={iconOf(c.provider, c.label)} provider={c.provider} model={c.label} size={20} colored />
 				{:else}<Icon name={c.kind === "provider" ? "plug" : "bot"} />{/if}
 			</span>
-			<span class="nm" class:mono={c.kind === "model"}>{c.label}</span>
+			<span class="nm" class:mono={c.kind === "model" && c.name === c.label}>{c.name}</span>
 			<span class="end">{end}</span>
 			<span class="chev"><Icon name="chevron-right" /></span>
 		</button>
@@ -160,7 +165,7 @@
 	<Modal {onclose} label={title} {title} {sub} subMono={card.kind === "server"} width="l" maxHeight="720px" quick>
 		{#snippet headerLead()}
 			<span class="hl" class:ok={card.kind === "server" && serverState === "online"} class:bad={card.kind === "server" && serverState !== "online" && serverState !== "checking"}>
-				{#if card.kind === "model"}<ModelLogo conn={link?.conn} provider={card.provider} model={card.label} size={24} colored />
+				{#if card.kind === "model"}<ModelLogo conn={link?.conn} icon={iconOf(card.provider, card.label)} provider={card.provider} model={card.label} size={24} colored />
 				{:else}<Icon name={card.kind === "server" ? "server" : card.kind === "provider" ? "plug" : "bot"} />{/if}
 			</span>
 		{/snippet}
@@ -176,7 +181,6 @@
 					<dt>{t("대화")}</dt>
 					<dd>{t("대화 {n}개", { n: card.count })}{#if card.live}<span class="faint">{" · "}{t("작업 중")}</span>{/if}</dd>
 				{:else if card.kind === "provider"}
-					{#if providerInfo && providerInfo.name !== providerInfo.id}<dt>{t("이름")}</dt><dd>{providerInfo.name}</dd>{/if}
 					<dt>ID</dt>
 					<dd class="mono">{card.label}</dd>
 					{#if signIn}<dt>{t("인증")}</dt><dd class:bad={!providerInfo?.configured}>{signIn}</dd>{/if}
@@ -185,9 +189,9 @@
 					<dt>{t("대화")}</dt>
 					<dd>{t("대화 {n}개", { n: card.count })}</dd>
 				{:else if card.kind === "model"}
-					{#if modelInfo && modelInfo.name !== modelInfo.id}<dt>{t("이름")}</dt><dd>{modelInfo.name}</dd>{/if}
+					{#if card.name !== card.label}<dt>{t("모델 ID")}</dt><dd class="mono">{card.label}</dd>{/if}
 					<dt>{t("프로바이더")}</dt>
-					<dd><span class="mono">{card.provider}</span>{#if card.brand}<span class="faint">{" · "}{BRAND_LABEL[card.brand]}</span>{/if}</dd>
+					<dd>{providerName(card.provider)}{#if providerName(card.provider) !== card.provider}<span class="faint mono">{" · "}{card.provider}</span>{/if}{#if card.brand}<span class="faint">{" · "}{BRAND_LABEL[card.brand]}</span>{/if}</dd>
 					{#if modelInfo}
 						<dt>{t("컨텍스트 창")}</dt>
 						<dd class="mono">{compact(modelInfo.contextWindow)}</dd>
@@ -220,7 +224,8 @@
 					<dt>{t("모델")}</dt>
 					<dd>
 						{#each card.models ?? [] as m (m.model)}
-							<span class="model"><ModelLogo conn={link?.conn} provider={m.model.split("/")[0]} model={modelName(m.model)} size={16} colored /><span class="mono">{m.model}</span><span class="faint">{t("{n}회", { n: m.n })}</span></span>
+							{@const ref = splitModelRef(m.model)}
+							<span class="model" title={m.name !== ref.id ? m.model : undefined}><ModelLogo conn={link?.conn} icon={iconOf(ref.provider, ref.id)} provider={ref.provider} model={ref.id} size={16} colored /><span class="mn" class:mono={m.name === ref.id}>{m.name}</span><span class="faint">{t("{n}회", { n: m.n })}</span></span>
 						{/each}
 						{#if card.asked}<span class="faint">{t("에이전트가 모델을 직접 골랐습니다 ({n}회)", { n: card.asked })}</span>{/if}
 					</dd>
@@ -264,7 +269,7 @@
 								<button class="row" onclick={() => onpeek(card.server, r.sessionId)} title={t("빠른 보기")}>
 									<span class="mark"><AgentBadge id={r.sessionId} server={card.server} state={link ? activityOf(link.data, r.sessionId) : "idle"} size={20} /></span>
 									<span class="nm">{chatName(card.server, r.sessionId)}</span>
-									<span class="sub mono">{modelName(r.model)}</span>
+									<span class="sub" class:mono={refName(r.model) === splitModelRef(r.model).id}>{refName(r.model)}</span>
 									<span class="end">
 										<span class="st {st}">{CALL_TEXT[st]()}</span>
 										{#if r.doneAt !== null && !r.running}<i>·</i><span class="mono">{duration(Math.max(0, r.doneAt - r.at))}</span>{/if}
@@ -335,7 +340,7 @@
 		gap: 8px;
 		min-width: 0;
 	}
-	.model .mono {
+	.model .mn {
 		min-width: 0;
 		overflow: hidden;
 		text-overflow: ellipsis;

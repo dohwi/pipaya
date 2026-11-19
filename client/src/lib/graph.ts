@@ -36,13 +36,19 @@ export interface GraphServer {
 	activity: (id: string) => Activity;
 	queued: (id: string) => number;
 	runs: DelegateRun[] | null;
+	/** What the app calls a model (its display name from the connection settings) and a connection; the id when left out. */
+	modelName?: (provider: string, id: string) => string;
+	providerName?: (id: string) => string;
 }
 
 export type CardKind = "server" | "provider" | "model" | "session" | "subagent";
 
 /** A role's models, newest first: the model it ran on lately leads, the rest are "외 N". */
 export interface RoleModel {
+	/** `provider/model`, as the call recorded it. */
 	model: string;
+	/** What the app calls it (its display name), else the bare id. */
+	name: string;
 	brand: Brand | null;
 	n: number;
 	last: number;
@@ -52,7 +58,10 @@ export interface Card {
 	id: string;
 	kind: CardKind;
 	server: string;
+	/** What identifies it on its server: the server's name, the provider or model id, the role's name. */
 	label: string;
+	/** What it reads as: a provider's or model's display name (the label when it has none). */
+	name: string;
 	/** Chats under this card (a server, provider or model), or calls of this role (a subagent). */
 	count: number;
 	parent: string | null;
@@ -152,8 +161,8 @@ export interface LayoutOpts {
 
 export function buildGraph(servers: GraphServer[], opts: LayoutOpts = {}): Graph {
 	const cards = new Map<string, Card>();
-	const add = (c: Omit<Card, "children" | "col" | "x" | "y" | "live"> & Partial<Card>) => {
-		const card: Card = { children: [], col: 0, x: 0, y: 0, live: false, ...c };
+	const add = (c: Omit<Card, "children" | "col" | "x" | "y" | "live" | "name"> & Partial<Card>) => {
+		const card: Card = { children: [], col: 0, x: 0, y: 0, live: false, name: c.label, ...c };
 		cards.set(card.id, card);
 		return card;
 	};
@@ -162,14 +171,15 @@ export function buildGraph(servers: GraphServer[], opts: LayoutOpts = {}): Graph
 
 	for (const v of servers) {
 		const vid = `v:${v.id}`;
+		const nameOf = (provider: string, id: string) => v.modelName?.(provider, id) || id;
 		add({ id: vid, kind: "server", server: v.id, label: v.name, count: 0, parent: null, w: CARD_W.server, h: CARD_H, host: v.host, online: v.online });
 		const open = v.sessions.filter((s) => !s.closed);
 		const ids = new Set(open.map((s) => s.id));
 		for (const s of open) {
 			// provider and model cards are per server: one provider name on two servers is two connections
 			const pid = `p:${v.id}/${s.provider}`, mid = `m:${v.id}/${s.provider}/${s.model}`;
-			if (!cards.has(pid)) { add({ id: pid, kind: "provider", server: v.id, label: s.provider, count: 0, parent: vid, w: CARD_W.provider, h: CARD_H }); link(vid, pid); }
-			if (!cards.has(mid)) { add({ id: mid, kind: "model", server: v.id, label: s.model, count: 0, parent: pid, w: CARD_W.model, h: CARD_H, provider: s.provider, brand: brandOf(s.provider, s.model) }); link(pid, mid); }
+			if (!cards.has(pid)) { add({ id: pid, kind: "provider", server: v.id, label: s.provider, name: v.providerName?.(s.provider) || s.provider, count: 0, parent: vid, w: CARD_W.provider, h: CARD_H }); link(vid, pid); }
+			if (!cards.has(mid)) { add({ id: mid, kind: "model", server: v.id, label: s.model, name: nameOf(s.provider, s.model), count: 0, parent: pid, w: CARD_W.model, h: CARD_H, provider: s.provider, brand: brandOf(s.provider, s.model) }); link(pid, mid); }
 			const activity = v.activity(s.id);
 			add({
 				id: `s:${v.id}/${s.id}`, kind: "session", server: v.id, label: s.name ? `@${s.name}` : s.title, count: 1, parent: null,
@@ -195,7 +205,10 @@ export function buildGraph(servers: GraphServer[], opts: LayoutOpts = {}): Graph
 			role.free = role.free! && r.free;
 			const m = role.models!.find((x) => x.model === r.model);
 			if (m) { m.n++; m.last = Math.max(m.last, r.at); }
-			else role.models!.push({ model: r.model, brand: brandOf(r.model.split("/")[0], modelName(r.model)), n: 1, last: r.at });
+			else {
+				const provider = r.model.includes("/") ? r.model.slice(0, r.model.indexOf("/")) : "";
+				role.models!.push({ model: r.model, name: nameOf(provider, modelName(r.model)), brand: brandOf(provider, modelName(r.model)), n: 1, last: r.at });
+			}
 			const k = `${from}|${rid}`;
 			const e = delegateEdges.get(k) ?? { id: `d:${k}`, kind: "delegate" as const, from, to: rid, weight: 0, live: false };
 			e.weight++;
@@ -218,7 +231,7 @@ function layout(cards: Map<string, Card>, servers: GraphServer[], delegates: Edg
 	const order = (a: string, b: string) => {
 		const x = get(a), y = get(b);
 		if (x.kind === "session" && y.kind === "session") return RANK[x.activity!] - RANK[y.activity!] || y.session!.updatedAt - x.session!.updatedAt;
-		return y.count - x.count || x.label.localeCompare(y.label);
+		return y.count - x.count || x.name.localeCompare(y.name);
 	};
 	let cursor = 0, maxCol = 0;
 	const maxLanes = Math.max(1, Math.floor(opts.lanes ?? 1));

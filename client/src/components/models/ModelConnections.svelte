@@ -15,6 +15,7 @@
 	import ImageModelSection from "./ImageModelSection.svelte";
 	import ProviderAccounts from "./ProviderAccounts.svelte";
 	import ConnectModal from "../server/ConnectModal.svelte";
+	import { modelDisplayName } from "../../lib/model-name";
 	import type {
 		ConfigurationInfo,
 		ConnectionResult,
@@ -261,7 +262,7 @@
 				<strong>{t("설정 문제 {n}", { n: problems.length })}</strong>
 				<ul class="problems">
 					{#each problems as p (p.role)}
-						<li><button type="button" class="jump" onclick={() => goto(p.role)}>{t(PROBLEM_ROLE_LABEL[p.role])}: {p.model.provider}/{p.model.model} — {p.kind === "no-key" ? t("연결에 키가 없음") : t("모델을 찾을 수 없음")}</button></li>
+						<li><button type="button" class="jump" onclick={() => goto(p.role)}>{t(PROBLEM_ROLE_LABEL[p.role])}: {modelDisplayName(models, p.model.provider, p.model.model)} — {p.kind === "no-key" ? t("연결에 키가 없음") : t("모델을 찾을 수 없음")}</button></li>
 					{/each}
 				</ul>
 			</Notice>
@@ -325,7 +326,7 @@
 				{:else if shownModel && !shownInfo}
 					<span class="bad">{t("이 모델을 찾을 수 없어 새 대화를 시작하지 못합니다. 연결이나 모델이 바뀌었는지 확인하고 다른 모델을 고르세요.")}</span>
 				{:else if !saved}
-					{t("서버 기본값을 씁니다.")}{#if cfg.effectiveDefaults} ({cfg.effectiveDefaults.provider}/{cfg.effectiveDefaults.model}){/if}
+					{t("서버 기본값을 씁니다.")}{#if cfg.effectiveDefaults} ({modelDisplayName(models, cfg.effectiveDefaults.provider, cfg.effectiveDefaults.model)}){/if}
 				{:else if shownInfo && !shownInfo.reasoning}
 					{t("이 모델은 추론을 지원하지 않아 추론 강도는 쓰이지 않습니다.")}
 				{:else if saved.thinkingLevel}
