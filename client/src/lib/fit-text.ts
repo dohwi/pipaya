@@ -57,7 +57,8 @@ export function marquee(node: HTMLElement, _text: string) {
 		const mq = node.querySelector<HTMLElement>(".mq");
 		if (!mq) return;
 		// measured idle (inline, clipped): the text overflows its box only when it really does not fit
-		const over = node.scrollWidth > node.clientWidth + 1;
+		// (or the whole text waits unseen beside a shortened one: the graph's ids, `.cut` + an absolute `.track`)
+		const over = node.scrollWidth > node.clientWidth + 1 || mq.offsetWidth > node.clientWidth + 1;
 		const duration = over ? `${Math.max(6, (mq.offsetWidth + 32) / 40)}s` : "";
 		return () => {
 			if (over) {
@@ -107,6 +108,8 @@ export function middle(node: HTMLElement, text: string) {
 	};
 	const ro = new ResizeObserver(() => schedule(node, () => fit()));
 	ro.observe(node);
+	// a box sized by its own text (a host in a facts line) does not grow back by itself: watch the line it sits in too
+	if (node.parentElement) ro.observe(node.parentElement);
 	fit();
 	return {
 		update(next: string) {
