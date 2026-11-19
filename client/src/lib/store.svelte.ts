@@ -359,7 +359,7 @@ class AppStore {
    * connection); `Settings` maps them to the sections they became, so a stored or linked value still lands somewhere.
    */
   settingsTab = $state<SettingsTabId | "servers" | "agent">("general");
-  /** The server whose detail page the settings window opens on (`"new"` for the add form), or null for the list. */
+  /** The server whose sections the settings window opens on (`"new"` for the add form), or null for the open server. */
   settingsServer = $state<string | "new" | null>(null);
   /** True when a section was asked for (not a plain open): on a phone it opens straight on that section instead of the list. */
   settingsDirect = false;
@@ -370,7 +370,7 @@ class AppStore {
     this.settingsDirect = tab !== undefined;
     tab ??= "general";
     this.settingsTab = tab;
-    this.settingsServer = tab === "servers" ? server : null;
+    this.settingsServer = server;
     this.settingsOpen = true;
   }
   /** Opens the scheduled-tasks page with a new-task form for this conversation. */
