@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { BAND_GAP, buildGraph, isMouseWheel, springStep, CARD_H, CARD_H_LIVE, edgeLength, edgePath, edgeTip, sparkPlan, fitGraph, fitView, FIT_MIN, FIT_PAD, growthPlan, leavePlan, modelName, related, type DelegateRun, type GraphServer } from "../src/lib/graph";
+import { BAND_GAP, buildGraph, CARD_W_MAX, isMouseWheel, springStep, CARD_H, CARD_H_LIVE, edgeLength, edgePath, edgeTip, sparkPlan, fitGraph, fitView, FIT_MIN, FIT_PAD, growthPlan, leavePlan, modelName, related, type DelegateRun, type GraphServer } from "../src/lib/graph";
 import type { Activity } from "../src/lib/activity";
 import type { Session } from "../src/lib/types";
 
@@ -113,12 +113,12 @@ describe("buildGraph", () => {
 		expect(g.bands[1]!.y0 - g.bands[0]!.y1).toBe(BAND_GAP);
 	});
 
-	test("one width per column: a measured long name widens its whole column, up to 320", () => {
+	test("one width per column: a measured long name widens its whole column, up to CARD_W_MAX", () => {
 		const g = buildGraph([server("a", [session("s1", { model: "a-very-long-model-id" }), session("s2")])], { widths: (c) => (c.label.length > 10 ? 300 : 0) });
 		expect(g.cards.get("m:a/p/a-very-long-model-id")!.w).toBe(300);
 		expect(g.cards.get("m:a/p/m")!.w).toBe(300);
 		const wide = buildGraph([server("a", [session("s1")])], { widths: () => 999 });
-		expect(wide.cards.get("v:a")!.w).toBe(320);
+		expect(wide.cards.get("v:a")!.w).toBe(CARD_W_MAX);
 	});
 
 	test("a pinned card stays where it was put", () => {
