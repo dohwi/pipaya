@@ -271,10 +271,13 @@
 		opacity: 0.6;
 		transition: opacity var(--motion-fast) var(--ease-std), color var(--motion-fast) var(--ease-std), background-color var(--motion-fast) var(--ease-std);
 	}
-	.del:hover {
-		opacity: 1;
-		background: var(--bg-hover, rgba(255, 255, 255, 0.08));
-		color: var(--danger);
+	/* hover only with a real pointer: a tap left the delete glyph red and lit on a phone (sticky :hover) */
+	@media (hover: hover) {
+		.del:hover {
+			opacity: 1;
+			background: var(--bg-hover, rgba(255, 255, 255, 0.08));
+			color: var(--danger);
+		}
 	}
 	.branch {
 		flex: none;

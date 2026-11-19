@@ -8,11 +8,13 @@
 	 * The toast strips themselves, shared by the global strip (Toasts: under the header, above dialogs) and a pane's own
 	 * (SessionToasts: on top of that pane). Each one slides in, counts down on its close button, and the rest close the gap.
 	 */
-	let { toasts, compact = false }: { toasts: Toast[]; compact?: boolean } = $props();
+	let { toasts, compact = false, from = "top" }: { toasts: Toast[]; compact?: boolean; from?: "top" | "bottom" } = $props();
+	/** strips slide in from the edge they hang on: down from under the header, up from the bottom edge */
+	const dy = $derived(from === "bottom" ? 10 : -10);
 </script>
 
 {#each toasts as t (t.id)}
-	<div class="strip {t.tone}" class:compact role={t.tone === "error" ? "alert" : "status"} in:surfaceIn={{ y: -10 }} out:surfaceOut={{ y: -10 }} animate:reflow>
+	<div class="strip {t.tone}" class:compact role={t.tone === "error" ? "alert" : "status"} in:surfaceIn={{ y: dy }} out:surfaceOut={{ y: dy }} animate:reflow>
 		<span class="msg">{t.text}</span>
 		{#if t.action}
 			{@const act = t.action}

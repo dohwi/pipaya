@@ -112,9 +112,11 @@
 		opacity: 0.55;
 		box-shadow: inset 0 0 0 1px var(--border);
 	}
-	.mic.blocked:hover {
-		opacity: 0.85;
-		color: var(--text-dim);
-		background: var(--bg-hover);
+	@media (hover: hover) {
+		.mic.blocked:hover {
+			opacity: 0.85;
+			color: var(--text-dim);
+			background: var(--bg-hover);
+		}
 	}
 </style>
