@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { BAND_GAP, buildGraph, CARD_W_MAX, isMouseWheel, springStep, CARD_H, CARD_H_LIVE, edgeLength, edgePath, edgeTip, sparkPlan, fitGraph, fitView, FIT_MIN, FIT_PAD, growthPlan, leavePlan, modelName, related, type DelegateRun, type GraphServer } from "../src/lib/graph";
+import { BAND_GAP, buildGraph, CARD_W_MAX, isMouseWheel, springStep, CARD_H, CARD_H_LIVE, edgeLength, edgePath, edgeTip, sparkPlan, fitGraph, fitView, focusCards, FIT_MIN, FIT_PAD, growthPlan, leavePlan, modelName, related, type DelegateRun, type GraphServer } from "../src/lib/graph";
 import type { Activity } from "../src/lib/activity";
 import type { Session } from "../src/lib/types";
 
@@ -175,6 +175,31 @@ describe("helpers", () => {
 		// too wide even at the floor: it starts at the left, the servers first
 		expect(fitView(g, 300, 300).x).toBe(FIT_PAD.x);
 		expect(fitView(buildGraph([]), 800, 600)).toEqual({ k: 1, x: FIT_PAD.x, y: FIT_PAD.y });
+	});
+	test("fitView: a graph that does not fit opens on the chats at work, never past its own ends", () => {
+		const many = Array.from({ length: 40 }, (_, i) => session(`s${i}`));
+		const g = buildGraph([server("a", many, { states: { s30: "working", s31: "asking" } })]);
+		const focus = focusCards(g);
+		expect(focus.sort()).toEqual(["s:a/s30", "s:a/s31"].sort());
+		const w = 800, h = 600;
+		const v = fitView(g, w, h, FIT_PAD, focus);
+		expect(v.k).toBe(FIT_MIN);
+		// both working chats are on screen, their middle on the view's middle (down) or as near as the graph's ends allow
+		for (const id of focus) {
+			const c = g.cards.get(id)!;
+			expect(v.y + (c.y - c.h / 2) * v.k).toBeGreaterThanOrEqual(0);
+			expect(v.y + (c.y + c.h / 2) * v.k).toBeLessThanOrEqual(h);
+			expect(v.x + (c.x - c.w / 2) * v.k).toBeGreaterThanOrEqual(0);
+			expect(v.x + (c.x + c.w / 2) * v.k).toBeLessThanOrEqual(w);
+		}
+		// nothing at work: as before (centred on the middle down, the servers first across)
+		expect(fitView(g, w, h, FIT_PAD, [])).toEqual(fitView(g, w, h));
+		// the first chat at work: the graph's top stays at the pad, not pulled down past it
+		const top = buildGraph([server("a", many, { states: { s0: "working" } })]);
+		expect(fitView(top, w, h, FIT_PAD, focusCards(top)).y).toBeCloseTo(FIT_PAD.y - Math.min(...[...top.cards.values()].map((c) => c.y - c.h / 2)) * FIT_MIN, 5);
+		// a graph that fits keeps the whole of it centred, whatever is at work
+		const small = buildGraph([server("a", [session("s1"), session("s2")], { states: { s2: "working" } })]);
+		expect(fitView(small, 4000, 3000, FIT_PAD, focusCards(small))).toEqual(fitView(small, 4000, 3000));
 	});
 	test("edgeTip: where a call's chevron sits and which way it points", () => {
 		const a = { x: 0, y: 0, w: 100 } as never, b = { x: 300, y: 50, w: 100 } as never;

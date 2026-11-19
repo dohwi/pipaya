@@ -11,7 +11,7 @@
 	import { formatCombo, isMac } from "../../lib/keys";
 	import { toolSummary } from "../../lib/tools";
 	import { graphRuns } from "../../lib/graph-runs.svelte";
-	import { isMouseWheel, edgeLength, edgePath, edgeTip, sparkPlan, fitGraph, fitView, growthPlan, leavePlan, related, springStep, type Card, type Edge, type Graph, type GraphServer } from "../../lib/graph";
+	import { isMouseWheel, edgeLength, edgePath, edgeTip, sparkPlan, fitGraph, fitView, focusCards, growthPlan, leavePlan, related, springStep, type Card, type Edge, type Graph, type GraphServer } from "../../lib/graph";
 	import Icon from "../ui/Icon.svelte";
 	import ModelLogo from "../models/ModelLogo.svelte";
 	import AgentBadge from "../shell/AgentBadge.svelte";
@@ -197,7 +197,8 @@
 	};
 	function fit() {
 		if (!viewEl) return;
-		const to = fitView(graph, viewEl.clientWidth, viewEl.clientHeight); // FIT_PAD keeps the floating bar clear
+		// FIT_PAD keeps the floating bar clear; a graph larger than the view opens on the chats at work
+		const to = fitView(graph, viewEl.clientWidth, viewEl.clientHeight, undefined, focusCards(graph));
 		// the first fit places the view; later ones (the graph grew, F, the button) glide there
 		if (!fitted || !motion) view = to;
 		else {
