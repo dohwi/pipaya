@@ -7,6 +7,8 @@
 	import { tabPanes, type Tab } from "../../lib/nav";
 	import { agoText, gridNext, previewOfItems, previewOfStored, shortPath, type Preview } from "../../lib/tab-overview";
 	import { reflow, rowOut } from "../../lib/motion";
+	import { drag, dragSource, dropTarget, type Point } from "../../lib/dnd.svelte";
+	import { hintOnce } from "../../lib/touch-hints";
 	import Modal from "../ui/Modal.svelte";
 	import EmptyState from "../ui/EmptyState.svelte";
 	import IconButton from "../ui/IconButton.svelte";
@@ -18,6 +20,8 @@
 	/**
 	 * The folder's tabs as a grid of cards, like a mobile browser's tab switcher: a full-screen sheet on a phone, a large
 	 * dialog elsewhere. A card opens its tab (and closes this), its X closes the tab (a group has none, as on the strip).
+	 * Cards are put in order as on the strip: pick one up (hold it on touch, drag it with a mouse) and let it go before
+	 * or after another, or move the focused one with Shift and the arrows.
 	 */
 	let { onclose }: { onclose: () => void } = $props();
 
@@ -78,6 +82,44 @@
 		if (x.kind === "terminal") void app.closeTerminal(x.id);
 		else void app.close(x.id);
 	}
+	/* ---- order: the strip's own order (`sidebar.moveTab`), so the strip and the sidebar follow ---- */
+	const ids = $derived(tabs.map((x) => x.id));
+	/** A pinned tab leads the list, so a tab cannot cross that border (the list would sort it straight back). */
+	const pinned = (id: string) => !!app.serverId && app.sidebar.isTabPinned(app.serverId, id);
+	function move(id: string, target: string, after: boolean): boolean {
+		const serverId = app.serverId;
+		if (!serverId || id === target || !ids.includes(id) || !ids.includes(target) || pinned(id) !== pinned(target)) return false;
+		app.sidebar.moveTab(serverId, ids, id, target, after);
+		return true;
+	}
+	let slot = $state<{ id: string; after: boolean } | null>(null);
+	/** Cards run left to right in rows: the half of the card the pointer is over says which side it lands on. */
+	const sideOf = (pt: Point, id: string) => {
+		const r = grid?.querySelector(`[data-card="${CSS.escape(id)}"]`)?.getBoundingClientRect();
+		return !!r && pt.x > r.left + r.width / 2;
+	};
+	const cardTarget = (x: Tab) => ({
+		accepts: (id: string) => ids.includes(id) && pinned(id) === pinned(x.id),
+		hover: (pt: Point | null) => {
+			if (!pt) {
+				if (slot?.id === x.id) slot = null;
+				return;
+			}
+			const after = sideOf(pt, x.id);
+			// over the carried card, or right beside it, is where it already is: no line
+			const i = drag.id ? ids.indexOf(drag.id) : -1;
+			const j = ids.indexOf(x.id);
+			slot = i < 0 || i === j || (after ? j === i - 1 : j === i + 1) ? null : { id: x.id, after };
+		},
+		drop: (id: string, pt: Point) => {
+			slot = null;
+			if (move(id, x.id, sideOf(pt, x.id))) focusId = id;
+		},
+	});
+	$effect(() => {
+		if (untrack(() => tabs.length) > 1) hintOnce("tab-overview-reorder", t("카드를 길게 누른 채 끌면 탭 순서를 바꿀 수 있습니다"));
+	});
+
 	const closeLabel = (x: Tab) => (x.kind === "terminal" ? t("터미널 닫기 (셸 종료)") : t("닫기 (/resume 으로 다시 열기)"));
 	const workdir = $derived(path === app.workspace?.root ? "." : path);
 	function newChat() {
@@ -94,10 +136,20 @@
 		return Math.max(1, cols);
 	}
 	function keys(e: KeyboardEvent) {
-		if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+		if (e.altKey || e.ctrlKey || e.metaKey) return;
 		const cards = Array.from(grid?.querySelectorAll<HTMLElement>(".card") ?? []);
 		const i = cards.indexOf((e.target as HTMLElement).closest(".card") as HTMLElement);
 		if (i < 0) return;
+		if (e.shiftKey) {
+			// Shift + an arrow, Home or End: the focused card moves there, and keeps focus
+			const to = e.target === cards[i] ? gridNext(e.key, i, cards.length, columns()) : null;
+			const x = tabs[i];
+			const y = to == null ? undefined : tabs[to];
+			if (!x || !y) return;
+			e.preventDefault();
+			if (move(x.id, y.id, to! > i)) queueMicrotask(() => grid?.querySelector<HTMLElement>(`[data-card="${CSS.escape(x.id)}"]`)?.focus());
+			return;
+		}
 		if ((e.key === "Enter" || e.key === " ") && e.target === cards[i]) {
 			e.preventDefault();
 			cards[i]!.click();
@@ -126,7 +178,8 @@
 	}
 </script>
 
-<Modal {onclose} {title} {sub} subMono label={t("탭 {n}개 모두 보기", { n: tabs.length })} width="1040px" maxHeight="760px" full {titleExtra} {headerActions}>
+<!-- Esc while a card is in the air puts it back (the dialog takes the key before the drag's own listener could) -->
+<Modal {onclose} onescape={() => (drag.id ? drag.end(false) : onclose())} {title} {sub} subMono label={t("탭 {n}개 모두 보기", { n: tabs.length })} width="1040px" maxHeight="760px" full {titleExtra} {headerActions}>
 	<div class="body">
 		{#if tabs.length}
 			<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
@@ -135,19 +188,21 @@
 					{@const on = x.id === activeTab}
 					{@const st = stateOf(x)}
 					{@const p = x.kind === "session" ? previewOf(x.id) : null}
-					<li class="cell" animate:reflow out:rowOut>
+					<li class="cell" class:before={slot?.id === x.id && !slot.after} class:after={slot?.id === x.id && slot.after} animate:reflow out:rowOut use:dropTarget={cardTarget(x)}>
 						<!-- Enter / Space / Delete and the arrows are handled once for the whole grid (`keys` on the list) -->
 						<!-- svelte-ignore a11y_click_events_have_key_events -->
 						<div
 							class="card"
 							class:on
+							class:carried={drag.id === x.id}
 							data-card={x.id}
 							role="button"
 							tabindex="0"
 							aria-current={on ? "page" : undefined}
-							aria-keyshortcuts={x.kind !== "group" ? "Delete" : undefined}
+							aria-keyshortcuts={x.kind !== "group" ? "Delete Shift+ArrowLeft Shift+ArrowRight" : "Shift+ArrowLeft Shift+ArrowRight"}
 							aria-label="{titleOf(x)}{st !== 'idle' ? ` · ${ACTIVITY_LABEL[st]}` : ''}"
 							use:focusCurrent={x.id === current}
+							use:dragSource={{ id: x.id }}
 							onclick={() => open(x)}
 							onfocus={() => (focusId = x.id)}
 						>
@@ -161,7 +216,7 @@
 								{/if}
 								<span class="t">{titleOf(x)}</span>
 								{#if x.kind !== "group"}
-									<button class="x tap" tabindex="-1" onclick={(e) => (e.stopPropagation(), close(x))} aria-label={closeLabel(x)} title={closeLabel(x)}><Icon name="x" /></button>
+									<button class="x tap" tabindex="-1" onpointerdown={(e) => e.stopPropagation()} onclick={(e) => (e.stopPropagation(), close(x))} aria-label={closeLabel(x)} title={closeLabel(x)}><Icon name="x" /></button>
 								{/if}
 							</div>
 							<!-- the sheet under the title band: what the tab holds, then its facts -->
@@ -229,9 +284,10 @@
 	}
 	/* 2 columns on a phone, 3 on a tablet, 4 in a wide dialog: the card is never narrower than ~150px */
 	.grid {
+		--gap: 12px;
 		display: grid;
 		grid-template-columns: repeat(4, minmax(0, 1fr));
-		gap: 12px;
+		gap: var(--gap);
 		margin: 0;
 		padding: 0;
 		list-style: none;
@@ -243,12 +299,31 @@
 	}
 	@media (max-width: 640px) {
 		.grid {
+			--gap: 8px;
 			grid-template-columns: repeat(2, minmax(0, 1fr));
-			gap: 8px;
 		}
 	}
 	.cell {
+		position: relative; /* hosts the drop line */
 		min-width: 0;
+	}
+	/* where a carried card would land: a 2px accent line down the middle of the gap before / after the card */
+	.cell.before::before,
+	.cell.after::after {
+		content: "";
+		position: absolute;
+		top: 0;
+		bottom: 0;
+		width: 2px;
+		border-radius: 1px;
+		background: var(--accent);
+		pointer-events: none;
+	}
+	.cell.before::before {
+		left: calc(var(--gap) / -2 - 1px); /* centred in the gap: half of it, less half the line */
+	}
+	.cell.after::after {
+		right: calc(var(--gap) / -2 - 1px); /* as above */
 	}
 	/* A browser's tab card: a title band in the tab strip's tone over a sheet in the page's, a hairline between them. Both
 	   are 12px inside the card's border on every side (DESIGN rule 4): band 12 + 20 + 12, sheet 12 + preview 54 + 8 + facts
@@ -268,6 +343,10 @@
 		transition:
 			border-color var(--motion-fast) var(--ease-std),
 			box-shadow var(--motion-fast) var(--ease-std);
+	}
+	/* the card in the air: its place stays, faded, until it is let go */
+	.card.carried {
+		opacity: 0.45;
 	}
 	@media (hover: hover) {
 		.card:hover {

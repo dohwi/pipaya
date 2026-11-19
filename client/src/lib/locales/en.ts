@@ -664,6 +664,7 @@ export const en: Record<string, string> = {
 	"탭 {n}개 모두 보기": "Show all {n} {n#tab|tabs}",
 	"아직 메시지가 없습니다": "No messages yet",
 	"이 폴더에 열린 탭이 없습니다": "No open tabs in this folder",
+	"카드를 길게 누른 채 끌면 탭 순서를 바꿀 수 있습니다": "Hold a card and drag it to reorder your tabs",
 	"터미널 닫기 (셸 종료)": "Close terminal (ends the shell)",
 	"터미널이 닫혔습니다": "The terminal was closed",
 	"이 서버는 터미널이 꺼져 있습니다 (PIPAYA_TERMINAL=0)": "Terminals are turned off on this server (PIPAYA_TERMINAL=0)",
