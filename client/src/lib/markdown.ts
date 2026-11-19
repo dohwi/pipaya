@@ -93,6 +93,9 @@ const cache = new Map<string, string>();
 /** True when `html` holds a code block drawn plain while its grammar loads (see `onHighlightReady`). */
 export const awaitsHighlight = (html: string): boolean => html.includes("data-hl-wait");
 
+/** How many times the parser ran (a test reads it to check that streaming renders each settled block once). */
+export const parseRuns = { n: 0 };
+
 export function renderMarkdown(src: string, opts: { cache?: boolean } = {}): string {
 	// The code-block header is translated, so the cache is per language (and reading it re-renders on a switch).
 	const key = `${getLang()}\u0000${src}`;
@@ -101,6 +104,7 @@ export function renderMarkdown(src: string, opts: { cache?: boolean } = {}): str
 	// Streaming produces a new prefix every frame; caching those would evict the finished messages the cache is for.
 	const store = opts.cache ?? true;
 	waited = false;
+	parseRuns.n++;
 	const html = groupPictures(DOMPurify.sanitize(md.parse(src, { async: false }) as string, {
 		ADD_ATTR: ["data-copy", "data-ext", "data-img-src", "data-alt", "data-file", "data-wd-src", "data-kind", "data-hl-wait"],
 		FORBID_TAGS: ["style", "form", "input", "iframe", "object", "embed", "img", "picture", "source", "video", "audio", "link", "meta"],
@@ -128,28 +132,49 @@ export function renderStreaming(full: string): string {
 	return renderHead(src.slice(0, cut)) + renderTail(src.slice(cut));
 }
 
-/** The settled head of the last frame: it only changes when a new block starts, so most frames skip lexing it again. */
-let lastHead: { lang: string; src: string; html: string } | null = null;
+/** A settled head drawn in a recent frame, block by block. */
+type Head = { lang: string; src: string; html: string; blocks: { raw: string; html: string }[] };
+/** The heads of the last few frames, newest first: one per answer streaming at the same time (split panes). */
+const recentHeads: Head[] = [];
+const RECENT_HEADS = 4;
 
+/**
+ * The settled part of a streaming answer. It changes only when a new block starts; then the blocks it shares with a recent
+ * frame's head are taken from that head, so a long answer renders only its new blocks. (`blockCache` alone could not do
+ * this: once an answer has more blocks than the cache holds, each new block evicted the first, every lookup missed in
+ * turn, and the whole answer was rendered again: 150-290ms frames past about 400 blocks.)
+ */
 function renderHead(src: string): string {
 	const lang = getLang();
-	if (lastHead && lastHead.src === src && lastHead.lang === lang) return lastHead.html;
+	let near: Head | undefined;
+	for (const h of recentHeads) {
+		if (h.lang !== lang) continue;
+		if (h.src === src) return h.html;
+		if (src.startsWith(h.src) && (!near || h.src.length > near.src.length)) near = h;
+	}
+	const blocks: Head["blocks"] = [];
 	let head = "";
 	let done = true;
-	for (const raw of blocksOf(src)) {
-		const key = `${lang}\u0000${raw}`;
-		let html = blockCache.get(key);
+	blocksOf(src).forEach((raw, i) => {
+		const same = near?.blocks[i];
+		let html = same?.raw === raw ? same.html : blockCache.get(`${lang}\u0000${raw}`);
 		if (html === undefined) {
 			html = renderMarkdown(raw, { cache: false });
 			if (!awaitsHighlight(html)) {
 				if (blockCache.size > 400) blockCache.delete(blockCache.keys().next().value!);
-				blockCache.set(key, html);
+				blockCache.set(`${lang}\u0000${raw}`, html);
 			} else done = false;
 		}
+		blocks.push({ raw, html });
 		head += html;
+	});
+	// a block still waiting for its grammar is drawn again in colour once it is there, so a head holding one is not kept
+	if (done) {
+		const i = recentHeads.indexOf(near!);
+		if (i >= 0) recentHeads.splice(i, 1); // the head this one grew from is not needed again
+		recentHeads.unshift({ lang, src, html: head, blocks });
+		recentHeads.length = Math.min(recentHeads.length, RECENT_HEADS);
 	}
-	// a block still waiting for its grammar is drawn again in colour once it is there, so it is not kept
-	lastHead = done ? { lang, src, html: head } : null;
 	return head;
 }
 

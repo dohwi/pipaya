@@ -4,7 +4,7 @@ import { Window } from "happy-dom";
 // DOMPurify needs a window when the module loads.
 const dom = new Window();
 Object.assign(globalThis, { window: dom, document: dom.document });
-const { awaitsHighlight, renderMarkdown, renderStreaming } = await import("../src/lib/markdown");
+const { awaitsHighlight, parseRuns, renderMarkdown, renderStreaming } = await import("../src/lib/markdown");
 const { onHighlightReady } = await import("../src/lib/code-highlight");
 
 const ready = () => new Promise<void>((resolve) => { const off = onHighlightReady(() => { off(); resolve(); }); });
@@ -63,6 +63,28 @@ describe("code blocks in answers", () => {
 		expect(seen.at(-1)).toContain("<strong>bold</strong>");
 		expect(seen.at(-1)).toContain("<td>2</td>");
 		expect(seen.at(-1)).toContain("Next para");
+	});
+
+	test("a long answer with more blocks than the block cache holds renders each new block once, not the whole answer", () => {
+		// 450 headings: more than the 400-entry block cache. Each frame that starts a new block used to evict the
+		// first block, then miss on every lookup in turn and parse all of them again (150-290ms frames in a browser).
+		const n = 450;
+		let src = "";
+		for (let i = 0; i < n - 10; i++) src += `## b${i}\n\n`;
+		renderStreaming(`${src}tail`);
+		const before = parseRuns.n;
+		let last = "";
+		for (let i = n - 10; i < n; i++) {
+			src += `## b${i}\n\n`;
+			last = renderStreaming(`${src}tail`);
+		}
+		// per frame: the one new settled block and the tail; a full re-render would be ~450 per frame
+		expect(parseRuns.n - before).toBeLessThanOrEqual(20);
+		// and the result is the answer rendered from scratch
+		const settled = last;
+		renderStreaming("reset\n\nother");
+		expect(renderStreaming(`${src}tail`)).toBe(settled);
+		expect(settled).toContain(`b${n - 1}`);
 	});
 
 	test("a code block waiting for its grammar in the settled part is drawn in colour once it arrives", async () => {
