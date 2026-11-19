@@ -60,16 +60,18 @@
 	const chatGroups = $derived(splitLive(chats));
 	const providers = $derived(card?.kind === "server" ? under(graph, card.id, "provider") : []);
 	const models = $derived(card?.kind === "provider" ? under(graph, card.id, "model") : []);
-	/** The roles that ran on this model, with how many of their calls did. */
+	/** The subagent cards that ran on this model. */
 	const modelRoles = $derived.by(() => {
 		if (card?.kind !== "model") return [];
 		const ref = `${card.provider}/${card.label}`;
-		return [...graph.cards.values()].flatMap((c) => {
-			const m = c.kind === "subagent" && c.server === card.server ? c.models?.find((x) => x.model === ref) : undefined;
-			return m ? [{ c, n: m.n }] : [];
-		});
+		return [...graph.cards.values()].filter((c) => c.kind === "subagent" && c.server === card.server && c.model?.model === ref);
 	});
-	const roles = $derived(card?.kind === "server" ? [...graph.cards.values()].filter((c) => c.kind === "subagent" && c.server === card.server) : []);
+	/** The same role's cards on other models, the one used last first. */
+	const siblings = $derived(
+		card?.kind === "subagent" ? [...graph.cards.values()].filter((c) => c.kind === "subagent" && c.server === card.server && c.label === card.label && c.id !== card.id).sort((a, b) => b.last! - a.last!) : [],
+	);
+	// one row per role and model, a role's models together (the one used last first)
+	const roles = $derived(card?.kind === "server" ? [...graph.cards.values()].filter((c) => c.kind === "subagent" && c.server === card.server).sort((a, b) => a.label.localeCompare(b.label) || b.last! - a.last!) : []);
 
 	const STATE_TEXT = { online: () => t("연결됨"), offline: () => t("연결 안 됨"), unauthorized: () => t("토큰 거부됨"), incompatible: () => t("앱 업데이트 필요"), checking: () => t("확인 중") };
 	const serverState = $derived(connectionState(link?.net ?? "connecting"));
@@ -91,13 +93,15 @@
 
 	const modelInfo = $derived(card?.kind === "model" ? link?.models.find((m) => m.provider === card.provider && m.id === card.label) : undefined);
 
-	// a role's calls, counted like its card (calls from open chats), and its file (read from the folder of the chat that
-	// called it last: a project's role files win over the global ones)
+	// the calls of this card (its role on its model), counted like the card (calls from open chats), and its file (read from
+	// the folder of the chat that called it last: a project's role files win over the global ones)
 	const stats = $derived.by(() => {
 		if (card?.kind !== "subagent") return null;
-		const server = card.server;
-		return roleStats(graphRuns.runs[server] ?? [], card.label, (sid) => graph.cards.has(`s:${server}/${sid}`));
+		const server = card.server, model = card.model?.model;
+		return roleStats((graphRuns.runs[server] ?? []).filter((r) => r.model === model), card.label, (sid) => graph.cards.has(`s:${server}/${sid}`));
 	});
+	/** Calls of the role on every model, when it ran on more than this one. */
+	const roleTotal = $derived(siblings.length ? siblings.reduce((n, c) => n + c.count, card?.count ?? 0) : 0);
 	const callerCwd = $derived(stats?.callers[0] ? link?.sessionById.get(stats.callers[0].sessionId)?.cwd : undefined);
 	let role = $state<{ key: string; def: SubagentInfo | null } | null>(null);
 	const roleKey = $derived(card?.kind === "subagent" && !card.free ? `${card.server}|${callerCwd ?? ""}|${card.label}` : "");
@@ -134,7 +138,7 @@
 		if (card.kind === "server") return card.host ?? "";
 		if (card.kind === "provider") return serverName;
 		if (card.kind === "model") return [providerName(card.provider), serverName].join(" · ");
-		return [t("서브에이전트"), serverName].join(" · ");
+		return [t("서브에이전트"), card.model?.name, serverName].filter(Boolean).join(" · ");
 	});
 
 	// ---- footer ----
@@ -197,6 +201,11 @@
 				{:else}<Icon name={c.kind === "provider" ? "plug" : "bot"} />{/if}
 			</span>
 			<span class="nm" class:mono={c.kind === "model" && c.name === c.label}>{c.name}</span>
+			{#if c.kind === "subagent" && c.model}
+				{@const ref = splitModelRef(c.model.model)}
+				<!-- a role card is one role on one model: the row says which -->
+				<span class="sub model" title={c.model.model}><ModelLogo conn={link?.conn} icon={iconOf(ref.provider, ref.id)} provider={ref.provider} model={ref.id} size={16} colored /><span class="mn" class:mono={c.model.name === ref.id}>{c.model.name}</span></span>
+			{/if}
 			<span class="end">{end}</span>
 			<span class="chev"><Icon name="chevron-right" /></span>
 		</button>
@@ -279,17 +288,19 @@
 							{:else}{t("호출한 대화의 모델")}{/if}
 						</dd>
 					{/if}
-					<dt>{t("실행한 모델")}</dt>
-					<dd>
-						{#each card.models ?? [] as m (m.model)}
-							{@const ref = splitModelRef(m.model)}
-							<span class="model" title={m.name !== ref.id ? m.model : undefined}><ModelLogo conn={link?.conn} icon={iconOf(ref.provider, ref.id)} provider={ref.provider} model={ref.id} size={16} colored /><span class="mn" class:mono={m.name === ref.id}>{m.name}</span><span class="faint">{t("{n}회", { n: m.n })}</span></span>
-						{/each}
-						{#if card.asked}<span class="faint">{t("에이전트가 모델을 직접 골랐습니다 ({n}회)", { n: card.asked })}</span>{/if}
-					</dd>
+					{#if card.model}
+						{@const m = card.model}
+						{@const ref = splitModelRef(m.model)}
+						<dt>{t("실행한 모델")}</dt>
+						<dd>
+							<span class="model" title={m.name !== ref.id ? m.model : undefined}><ModelLogo conn={link?.conn} icon={iconOf(ref.provider, ref.id)} provider={ref.provider} model={ref.id} size={16} colored /><span class="mn" class:mono={m.name === ref.id}>{m.name}</span></span>
+							{#if card.asked}<span class="faint">{t("에이전트가 모델을 직접 골랐습니다 ({n}회)", { n: card.asked })}</span>{/if}
+						</dd>
+					{/if}
 					<dt>{t("호출")}</dt>
 					<dd>
 						{t("{n}회", { n: stats.calls })}
+						{#if roleTotal}<span class="faint">{" · "}{t("역할 전체 {n}회", { n: roleTotal })}</span>{/if}
 						{#if stats.running}<span class="run">{" · "}{t("실행 중 {n}", { n: stats.running })}</span>{/if}
 						{#if stats.failed}<span class="bad">{" · "}{t("실패 {n}", { n: stats.failed })}</span>{/if}
 					</dd>
@@ -310,7 +321,7 @@
 			{/if}
 			{#if modelRoles.length}
 				<ListGroup title={t("서브에이전트")} count={String(modelRoles.length)}>
-					<ul class="list">{#each modelRoles as x (x.c.id)}{@render cardRow(x.c, t("{n}회", { n: x.n }))}{/each}</ul>
+					<ul class="list">{#each modelRoles as c (c.id)}{@render cardRow(c, t("{n}회", { n: c.count }))}{/each}</ul>
 				</ListGroup>
 			{/if}
 			{#if roles.length}
@@ -326,6 +337,11 @@
 			{#if chatGroups.rest.length}
 				<ListGroup title={chatGroups.live.length ? t("최근") : t("대화")} count={String(chatGroups.rest.length)}>
 					<ul class="list">{#each chatGroups.rest as c (c.id)}{@render chatRow(c)}{/each}</ul>
+				</ListGroup>
+			{/if}
+			{#if siblings.length}
+				<ListGroup title={t("다른 모델")} count={String(siblings.length)}>
+					<ul class="list">{#each siblings as c (c.id)}{@render cardRow(c, t("{n}회", { n: c.count }))}{/each}</ul>
 				</ListGroup>
 			{/if}
 			{#if stats?.active.length}
