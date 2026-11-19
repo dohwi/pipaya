@@ -9,6 +9,7 @@
 	import { duration } from "../../lib/format";
 	import { isImageTool, toolIcon, toolLabel, toolSummary } from "../../lib/tools";
 	import { workIcon, workSummary } from "../../lib/work-summary";
+	import { peekLines } from "../../lib/peek-lines";
 	import PaintingCanvas from "./PaintingCanvas.svelte";
 	import type { Step, ToolRun } from "../../lib/types";
 
@@ -80,14 +81,8 @@
 	/** Natural height of the preview text. The window follows it, up to PEEK_LINES lines, so a short output stays short. */
 	let peekH = $state(0);
 	const peekWin = $derived(Math.min(peekH, PEEK_LINES * LINE_H));
-	const tail = (text: string) =>
-		text
-			.replace(/\u001b\[[0-9;?]*[A-Za-z]/g, "")
-			.split(/\r?\n/)
-			.map((l) => l.trimEnd())
-			.filter((l) => l.trim())
-			.slice(-PEEK_LINES * 3) // long lines wrap, so keep more than fit; the box clips the top
-			.map((l) => (l.length > 400 ? `${l.slice(0, 399)}…` : l));
+	// long lines wrap, so keep more than fit; the box clips the top
+	const tail = (text: string) => peekLines(text, PEEK_LINES * 3);
 	const text = (v: unknown) => (typeof v === "string" ? v : "");
 	const peekIdx = $derived(cur >= 0 ? cur : steps.length - 1);
 	const peek = $derived.by((): { lines: string[]; kind: "out" | "src" | "think" } => {

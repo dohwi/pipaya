@@ -125,20 +125,32 @@ export function renderStreaming(full: string): string {
 	const src = hideMarkerTail(hideFenceTail(full));
 	const cut = streamSplit(src);
 	if (!cut) return renderTail(src);
+	return renderHead(src.slice(0, cut)) + renderTail(src.slice(cut));
+}
+
+/** The settled head of the last frame: it only changes when a new block starts, so most frames skip lexing it again. */
+let lastHead: { lang: string; src: string; html: string } | null = null;
+
+function renderHead(src: string): string {
+	const lang = getLang();
+	if (lastHead && lastHead.src === src && lastHead.lang === lang) return lastHead.html;
 	let head = "";
-	for (const raw of blocksOf(src.slice(0, cut))) {
-		const key = `${getLang()}\u0000${raw}`;
+	let done = true;
+	for (const raw of blocksOf(src)) {
+		const key = `${lang}\u0000${raw}`;
 		let html = blockCache.get(key);
 		if (html === undefined) {
 			html = renderMarkdown(raw, { cache: false });
 			if (!awaitsHighlight(html)) {
 				if (blockCache.size > 400) blockCache.delete(blockCache.keys().next().value!);
 				blockCache.set(key, html);
-			}
+			} else done = false;
 		}
 		head += html;
 	}
-	return head + renderTail(src.slice(cut));
+	// a block still waiting for its grammar is drawn again in colour once it is there, so it is not kept
+	lastHead = done ? { lang, src, html: head } : null;
+	return head;
 }
 
 /** The block still being written: plain code, so a growing code block costs no highlighting pass per frame. */
