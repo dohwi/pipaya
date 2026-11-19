@@ -74,7 +74,8 @@
 
 <header class:group={!!group} data-part="header">
 	<div class="capsule">
-		<ExtensionMount slot="header.start" />
+		<!-- the extension parts of the bar move to the graph view's header while it covers this one (GraphView .head) -->
+		{#if !app.graphOpen}<ExtensionMount slot="header.start" />{/if}
 		<button class="tool menu" onclick={() => (app.sidebar.open = true)} aria-label={t("사이드바 열기")} title={t("사이드바 열기") + hint}>
 			<Icon name="sidebar" />
 		</button>
@@ -114,8 +115,10 @@
 
 		</ExtensionPart>
 
-		<NavbarItems />
-		<ExtensionMount slot="header.end" />
+		{#if !app.graphOpen}
+			<NavbarItems />
+			<ExtensionMount slot="header.end" />
+		{/if}
 		<!-- a phone only: "+" and the tab count, the cluster the tab strip carries at its right end on wider screens -->
 		{#if app.serverId && app.net !== "idle"}<span class="tabs"><TabControls place="header" /></span>{/if}
 
