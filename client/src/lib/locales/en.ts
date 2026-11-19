@@ -1586,6 +1586,11 @@ export const en: Record<string, string> = {
 	"새 대화는 추론 강도 {level}로 시작합니다.": "New chats start at reasoning effort {level}.",
 	"추론 강도를 지정하지 않아 새 대화는 이 기기의 마지막 설정으로 시작합니다.": "No effort set, so new chats start with this device's last setting.",
 	"작업을 종료하고 닫을까요?": "Stop the work and close?",
+	"작업 중인 대화를 닫을까요?": "Close a conversation that is still working?",
+	"답을 기다리는 대화를 닫을까요?": "Close a conversation that is waiting for your answer?",
+	"‘{name}’의 작업이 중단됩니다. 기록은 남아 /resume 으로 다시 열 수 있습니다.": "“{name}” will stop. Its history stays and /resume reopens it.",
+	"계속 두기": "Keep open",
+	"중단하고 닫기": "Stop and close",
 	"종료하고 닫기": "Stop and close",
 	"진행 중인 작업 {n}개가 종료되면서 창이 닫힙니다.": "{n#task is|tasks are} running. Stopping {n#it|them} will close the window.",
 	/* ---- server-extension bridge, shortcuts, dialogs ---- */

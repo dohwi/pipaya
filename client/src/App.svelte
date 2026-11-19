@@ -30,6 +30,7 @@
 	import ExtensionDock from "./components/extensions/ExtensionDock.svelte";
 	import ExtensionFloating from "./components/extensions/ExtensionFloating.svelte";
 	import CloseConfirm from "./components/shell/CloseConfirm.svelte";
+	import SessionCloseConfirm from "./components/shell/SessionCloseConfirm.svelte";
 	import { guardWindowClose } from "./lib/window-close";
 	import { createAttention } from "./lib/attention";
 	import { summarize } from "./lib/activity";
@@ -553,6 +554,7 @@
 {#if app.servers.length}<ExtensionFloating />{/if}
 <ExtensionApproval />
 <ExtensionDialog />
+<SessionCloseConfirm />
 <CloseConfirm />
 
 <style>

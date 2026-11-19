@@ -36,6 +36,8 @@ import { IdleExtensionStores } from "./idle-extension-stores.svelte";
 import { ServerExtensionFeed } from "./server-extension-feed.svelte";
 import type { PairingLink } from "./pairing";
 import { CloseGuard } from "./close-guard.svelte";
+import { SessionCloseGuard } from "./session-close-guard.svelte";
+import { sessionTitle } from "./session-title";
 import { PairingFlow } from "./pairing-flow.svelte";
 import { getLang, LocalizedError, onLangChange, setRemotePacks, t } from "./i18n";
 import { queuedShown } from "./queue";
@@ -538,6 +540,13 @@ class AppStore {
   get closeConfirm() { return this.closing.confirm; }
   /** Resolves true when the window may close now (nothing running, or the user confirmed and the work was stopped). */
   requestClose(): Promise<boolean> { return this.closing.request(); }
+
+  /** Closing one conversation that is still at work (running, compacting or asking): the confirmation. */
+  private readonly sessionClosing = new SessionCloseGuard(
+    (id) => ((this.awaiting[id] ?? 0) > 0 ? "asking" : this.running[id] || this.chatOf(id)?.compacting ? "working" : null),
+    (id) => sessionTitle(this.session(id)?.title),
+  );
+  get sessionCloseConfirm() { return this.sessionClosing.ask; }
 
   get runningHere(): boolean {
     return !!this.chat?.running;
@@ -1493,7 +1502,7 @@ class AppStore {
     if (cur && !this.groupOf(cur.id) && this.chats[cur.id]?.items.length === 0) {
       // An empty session made by "new chat" moves to the new folder: start one there and close the empty one.
       void this.startChat().then(() => {
-        if (this.activeId !== cur.id) void this.close(cur.id);
+        if (this.activeId !== cur.id) void this.close(cur.id, true);
       });
     } else this.newChat();
     return true;
@@ -1501,9 +1510,13 @@ class AppStore {
 
   /* ---------- close / resume ---------- */
 
-  /** Hide a session from the sidebar (stopping any run). Its history stays on the server; /resume reopens it. */
-  async close(id: string) {
+  /**
+   * Hide a session from the sidebar (stopping any run). Its history stays on the server; /resume reopens it.
+   * A session still at work asks first (`sessionCloseConfirm`); `force` skips that, for a close the user did not ask for.
+   */
+  async close(id: string, force = false) {
     if (!this.api) return;
+    if (!force && !(await this.sessionClosing.request(id))) return;
     const next = this.neighbourOf(id);
     try {
       await this.api.patchSession(id, { closed: true });
