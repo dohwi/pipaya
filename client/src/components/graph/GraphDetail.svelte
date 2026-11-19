@@ -8,7 +8,7 @@
 	import { agoText } from "../../lib/tab-overview";
 	import { BRAND_LABEL } from "../../lib/brand";
 	import { connectionState } from "../../lib/sidebar-model";
-	import type { Card, DelegateRun, Graph } from "../../lib/graph";
+	import { ROLE_STALE_MS, type Card, type DelegateRun, type Graph } from "../../lib/graph";
 	import { modelDisplayName, modelIcon, providerDisplayName, splitModelRef } from "../../lib/model-name";
 	import { callState, roleStats, settingsTarget, splitLive, under, type CallState } from "../../lib/graph-detail";
 	import { graphRuns } from "../../lib/graph-runs.svelte";
@@ -100,6 +100,8 @@
 		const server = card.server, model = card.model?.model;
 		return roleStats((graphRuns.runs[server] ?? []).filter((r) => r.model === model), card.label, (sid) => graph.cards.has(`s:${server}/${sid}`));
 	});
+	/** A role card's row end: its calls, and when it was last used if that was a while ago (a model the role moved off). */
+	const roleEnd = (c: Card) => (c.last && now - c.last > ROLE_STALE_MS ? `${t("{n}회", { n: c.count })} · ${ago(c.last)}` : t("{n}회", { n: c.count }));
 	/** Calls of the role on every model, when it ran on more than this one. */
 	const roleTotal = $derived(siblings.length ? siblings.reduce((n, c) => n + c.count, card?.count ?? 0) : 0);
 	const callerCwd = $derived(stats?.callers[0] ? link?.sessionById.get(stats.callers[0].sessionId)?.cwd : undefined);
@@ -326,7 +328,7 @@
 			{/if}
 			{#if roles.length}
 				<ListGroup title={t("서브에이전트")} count={String(roles.length)}>
-					<ul class="list">{#each roles as c (c.id)}{@render cardRow(c, t("{n}회", { n: c.count }))}{/each}</ul>
+					<ul class="list">{#each roles as c (c.id)}{@render cardRow(c, roleEnd(c))}{/each}</ul>
 				</ListGroup>
 			{/if}
 			{#if chatGroups.live.length}
@@ -341,7 +343,7 @@
 			{/if}
 			{#if siblings.length}
 				<ListGroup title={t("다른 모델")} count={String(siblings.length)}>
-					<ul class="list">{#each siblings as c (c.id)}{@render cardRow(c, t("{n}회", { n: c.count }))}{/each}</ul>
+					<ul class="list">{#each siblings as c (c.id)}{@render cardRow(c, roleEnd(c))}{/each}</ul>
 				</ListGroup>
 			{/if}
 			{#if stats?.active.length}

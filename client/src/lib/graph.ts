@@ -571,6 +571,27 @@ export function leavePlan(
 	return { cards, edges: lines };
 }
 
+/** How long a role's card on a model it no longer uses stays at full strength after its last call. */
+export const ROLE_STALE_MS = 60 * 60_000;
+
+/**
+ * The subagent cards that step back: a role's card on a model it has moved off. Not running, last called over
+ * `ROLE_STALE_MS` ago, and the same role has a card used more recently. A role's newest card never fades, so a role
+ * that is simply idle keeps its card as it is.
+ */
+export function staleRoles(g: Graph, now: number): Set<string> {
+	const newest = new Map<string, number>();
+	const key = (c: Card) => `${c.server}\u0000${c.label}`;
+	for (const c of g.cards.values()) if (c.kind === "subagent") newest.set(key(c), Math.max(newest.get(key(c)) ?? 0, c.last ?? 0));
+	const out = new Set<string>();
+	for (const c of g.cards.values()) {
+		if (c.kind !== "subagent" || c.running) continue;
+		const last = c.last ?? 0;
+		if (last < newest.get(key(c))! && now - last > ROLE_STALE_MS) out.add(c.id);
+	}
+	return out;
+}
+
 /** The cards a pointer on `id` is about: its line up to the server, everything below it, and both ends of its delegate edges. */
 export function related(g: Graph, id: string): Set<string> {
 	const out = new Set<string>([id]);
