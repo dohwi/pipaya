@@ -349,8 +349,8 @@
 	@media (hover: hover) {
 		.focused .t:global([data-over]) {
 			text-overflow: clip;
-			-webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 14px), transparent);
-			mask-image: linear-gradient(90deg, #000 calc(100% - 14px), transparent);
+			-webkit-mask-image: var(--mq-mask);
+			mask-image: var(--mq-mask);
 		}
 		.focused .t:global([data-over]) .track {
 			display: flex;
