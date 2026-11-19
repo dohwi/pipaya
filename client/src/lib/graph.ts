@@ -122,7 +122,7 @@ export interface Edge {
 	live: boolean;
 }
 
-/** A frame behind one server's cards (drawn only with two or more servers). */
+/** The rows one server's cards take (with two or more servers a hairline runs in the gap between two of them). */
 export interface Band {
 	server: string;
 	y0: number;
@@ -151,9 +151,8 @@ export const CARD_W_MAX = 400;
 export const CARD_H_LIVE = 112;
 export const COL_GAP = 64;
 export const ROW_GAP = 12;
-/** Between two servers' frames: 24 inside each frame + 24 between them. */
-export const BAND_GAP = 72;
-export const BAND_PAD = 24;
+/** Between two servers' cards: 24 above the hairline that splits them, 24 below. */
+export const BAND_GAP = 48;
 /** A card with this many chats or more may wrap them into columns (at least 3 rows each, up to `lanes`). */
 export const WRAP_MIN = 6;
 const WRAP_ROWS = 3;
@@ -592,6 +591,33 @@ export function staleRoles(g: Graph, now: number): Set<string> {
 	return out;
 }
 
+/**
+ * The cards that step back, so what is at work (or wants the user) reads first. One rule for every kind:
+ *  - a chat at rest (idle: not working, not asking, nothing new to look at)
+ *  - a provider or model whose chats are all at rest
+ *  - a role's card with no call running and only resting chats calling it, or on a model it moved off (`staleRoles`)
+ *  - everything of a server that is offline, the server card too
+ * A server that is online stays (it is the root its lines hang from).
+ */
+export function quietCards(g: Graph, now: number): Set<string> {
+	const out = staleRoles(g, now);
+	const down = new Set([...g.cards.values()].filter((c) => c.kind === "server" && !c.online).map((c) => c.server));
+	const resting = (c: Card): boolean => {
+		if (c.kind === "session") return c.activity === "idle" && c.children.every((k) => resting(g.cards.get(k)!));
+		return c.children.length > 0 && c.children.every((k) => resting(g.cards.get(k)!));
+	};
+	for (const c of g.cards.values()) {
+		if (down.has(c.server)) out.add(c.id);
+		else if (c.kind === "session" ? c.activity === "idle" : (c.kind === "provider" || c.kind === "model") && resting(c)) out.add(c.id);
+	}
+	for (const c of g.cards.values()) {
+		if (c.kind !== "subagent" || c.running) continue;
+		const callers = g.edges.filter((e) => e.kind === "delegate" && e.to === c.id).map((e) => e.from);
+		if (callers.every((id) => out.has(id))) out.add(c.id);
+	}
+	return out;
+}
+
 /** The cards a pointer on `id` is about: its line up to the server, everything below it, and both ends of its delegate edges. */
 export function related(g: Graph, id: string): Set<string> {
 	const out = new Set<string>([id]);
@@ -610,15 +636,14 @@ export const FIT_PAD = { x: 32, y: 56 };
 /** The fitted zoom: never above 100%, never below 50% (names stay legible; zoom in for the rest). */
 export const FIT_MIN = 0.5;
 
-/** What the cards take up, with the server frames around them when there are two or more. */
+/** What the cards take up (the hairlines between servers lie inside it). */
 function bounds(g: Graph) {
 	let [x0, y0, x1, y1] = [Infinity, Infinity, -Infinity, -Infinity];
 	for (const c of g.cards.values()) {
 		x0 = Math.min(x0, c.x - c.w / 2); x1 = Math.max(x1, c.x + c.w / 2);
 		y0 = Math.min(y0, c.y - c.h / 2); y1 = Math.max(y1, c.y + c.h / 2);
 	}
-	const m = g.bands.length > 1 ? BAND_PAD : 0;
-	return { x0: x0 - m, y0: y0 - m, w: x1 - x0 + m * 2, h: y1 - y0 + m * 2 };
+	return { x0, y0, w: x1 - x0, h: y1 - y0 };
 }
 /** How much of 100% the whole graph fits a `w` × `h` view at, across and down (above 1: room to spare). */
 function fitScales(g: Graph, w: number, h: number, pad = FIT_PAD) {

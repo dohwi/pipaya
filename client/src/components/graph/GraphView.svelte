@@ -11,7 +11,7 @@
 	import { formatCombo, isMac } from "../../lib/keys";
 	import { toolSummary } from "../../lib/tools";
 	import { graphRuns } from "../../lib/graph-runs.svelte";
-	import { isMouseWheel, edgeLength, edgePath, edgeTip, sparkPlan, fitGraph, fitView, focusCards, growthPlan, leavePlan, related, springStep, staleRoles, type Card, type Edge, type Graph, type GraphServer } from "../../lib/graph";
+	import { isMouseWheel, edgeLength, edgePath, edgeTip, sparkPlan, fitGraph, fitView, focusCards, growthPlan, leavePlan, quietCards, related, springStep, type Card, type Edge, type Graph, type GraphServer } from "../../lib/graph";
 	import Icon from "../ui/Icon.svelte";
 	import ModelLogo from "../models/ModelLogo.svelte";
 	import AgentBadge from "../shell/AgentBadge.svelte";
@@ -583,9 +583,9 @@
 		const id = setInterval(() => (now = Date.now()), 30_000);
 		return () => clearInterval(id);
 	});
-	/** A role's cards on models it has moved off step back (with their lines), unless the pointer is on them or their callers. */
-	const stale = $derived(staleRoles(graph, now));
-	const faded = (id: string) => stale.has(id) && !focus?.has(id) && selected !== id;
+	/** Cards at rest step back with the lines into them (`quietCards`), unless the pointer is on them or what they belong to. */
+	const quiet = $derived(quietCards(graph, now));
+	const faded = (id: string) => quiet.has(id) && !focus?.has(id) && selected !== id;
 	function ago(at: number): string {
 		const sec = Math.max(0, Math.round((now - at) / 1000));
 		if (sec < 60) return t("방금");
@@ -656,8 +656,9 @@
 	>
 		<div class="world" style:transform="translate({Math.round(view.x)}px, {Math.round(view.y)}px) scale({view.k})">
 			{#if graph.bands.length > 1}
-				{#each graph.bands as b (b.server)}
-					<div class="band" class:down={!b.online} style:top="{b.y0 - 24}px" style:height="{b.y1 - b.y0 + 48}px" style:width="{graph.width + 48}px"></div>
+				<!-- two or more servers: a hairline in the gap between one server's cards and the next (no frames behind them) -->
+				{#each graph.bands.slice(1) as b, i (b.server)}
+					<div class="split" style:top="{(graph.bands[i]!.y1 + b.y0) / 2}px" style:width="{graph.width}px"></div>
 				{/each}
 			{/if}
 			<svg class="edges" aria-hidden="true">
@@ -676,7 +677,7 @@
 						{@const call = e.kind === "delegate"}
 						{@const d = edgePath(a, b, r, call ? "curve" : "elbow")}
 						{@const full = r >= 1 && !ghost}
-						<g class="e-{e.kind}" class:live={e.live && !ghost} class:dim={!on} class:hot={!!focus && on} class:stale={on && faded(e.to)}>
+						<g class="e-{e.kind}" class:live={e.live && !ghost} class:dim={!on} class:hot={!!focus && on} class:quiet={on && (faded(e.from) || faded(e.to))}>
 							{#if e.live && full}<path class="halo" {d} filter="url(#gv-glow)" transition:glowFade />{/if}
 							<path class="base" {d} style:stroke-width={call && !e.live ? 1.25 + Math.min(2, Math.log2(e.weight) * 0.5) : undefined} />
 							{#if call && full}
@@ -718,7 +719,7 @@
 					class:working={!ghost && ((c.kind === "session" && c.activity === "working") || (c.kind === "subagent" && !!c.running))}
 					class:asking={!ghost && c.kind === "session" && c.activity === "asking"}
 					class:dim={!!focus && !focus.has(c.id)}
-					class:stale={!ghost && faded(c.id)}
+					class:quiet={!ghost && faded(c.id)}
 					class:sel={selected === c.id}
 					class:dragging={dragging === c.id}
 					class:ghost
@@ -924,22 +925,15 @@
 		top: 0;
 		transform-origin: 0 0;
 	}
-	.band {
+	.split {
 		position: absolute;
-		left: -24px;
-		border: 1px solid var(--border);
-		border-radius: var(--radius-panel);
-		background: color-mix(in srgb, var(--text) 2%, transparent);
+		left: 0;
+		height: 1px;
+		background: var(--border);
 		pointer-events: none;
-	}
-	.band {
 		transition:
 			top var(--motion-slow) var(--ease-std),
-			height var(--motion-slow) var(--ease-std),
 			width var(--motion-slow) var(--ease-std);
-	}
-	.band.down {
-		border-style: dashed;
 	}
 	.empty {
 		position: absolute;
@@ -1062,8 +1056,8 @@
 	.edges g.dim {
 		opacity: 0.12;
 	}
-	.edges g.stale {
-		opacity: 0.4; /* the line to a faded role card steps back with it */
+	.edges g.quiet {
+		opacity: 0.4; /* a line with a card at rest on either end steps back with it */
 	}
 	.edges g.dim .halo {
 		animation-play-state: paused;
@@ -1180,13 +1174,10 @@
 	.card.dim.arriving {
 		opacity: calc(0.45 * var(--in));
 	}
-	/* a role's card on a model it has moved off: quieter than the cards in use, still readable, full again on hover */
-	.card.stale:not(.dim) {
+	/* at rest (an idle chat, a hub with only idle chats, a role's old model, an offline server's cards): quieter than what is at
+	   work, still readable, full again while the pointer is on it or what it belongs to */
+	.card.quiet:not(.dim) {
 		opacity: 0.6;
-	}
-	.card.stale:not(.dim) .lead,
-	.card.stale:not(.dim) .nm {
-		color: var(--text-dim);
 	}
 	.card.ghost {
 		pointer-events: none;
@@ -1514,7 +1505,7 @@
 	@media (prefers-reduced-motion: reduce) {
 		.edges path,
 		.edges g,
-		.band,
+		.split,
 		.card {
 			transition: none;
 		}
