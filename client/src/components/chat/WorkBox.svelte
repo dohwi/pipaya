@@ -239,14 +239,6 @@
 {/snippet}
 
 <style>
-	.sr-only {
-		position: absolute;
-		width: 1px;
-		height: 1px;
-		overflow: hidden;
-		clip-path: inset(50%);
-		white-space: nowrap;
-	}
 	/* No card: the work sits in the text column as one quiet line, the way a footnote would */
 	.work {
 		margin: 8px 0;
