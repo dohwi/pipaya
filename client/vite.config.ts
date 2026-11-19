@@ -1,11 +1,12 @@
 import { defineConfig } from "vite";
 import { svelte } from "@sveltejs/vite-plugin-svelte";
+import { eachGuard } from "./scripts/each-guard-plugin";
 
 // Tauri sets TAURI_DEV_HOST when running on a physical mobile device.
 const host = process.env.TAURI_DEV_HOST;
 
 export default defineConfig({
-	plugins: [svelte()],
+	plugins: [svelte(), eachGuard()], // a repeated each key is reported, not a crash (src/lib/each-guard.ts)
 	clearScreen: false,
 	envPrefix: ["VITE_", "TAURI_ENV_*"],
 	server: {
