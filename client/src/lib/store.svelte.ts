@@ -493,6 +493,8 @@ class AppStore {
 
   /** Every pane on screen, terminals included (toasts land in whichever of them they are about). */
   get shownIds(): string[] {
+    // under the graph view no pane is drawn but the quick look's (which shows the active chat once it is open there)
+    if (this.graphOpen) return this.graphPeek && this.graphPeek.session === this.activeId && this.graphPeek.server === this.serverId ? [this.activeId] : [];
     const g = this.activeGroup;
     const out = new Set<string>(this.activeId ? [this.activeId] : []);
     if (g && !viewport.narrow) for (const id of panesOf(g.layout)) if (this.shows(id)) out.add(id);
