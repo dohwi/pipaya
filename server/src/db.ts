@@ -259,6 +259,8 @@ export const MIGRATIONS: (string | ((db: Database) => void))[] = [
 	`DROP INDEX IF EXISTS sessions_updated; DROP INDEX IF EXISTS sessions_closed;
 	 CREATE INDEX sessions_updated ON sessions(updated_at DESC, id DESC);
 	 CREATE INDEX sessions_closed ON sessions(closed, updated_at DESC, id DESC);`,
+	// A null service tier preserves the existing provider default; a tier is explicitly selected.
+	(db) => addColumn(db, "sessions", "service_tier", "TEXT"),
 ];
 
 export function openDb(path: string): Database {

@@ -119,6 +119,7 @@
 	const saved = $derived(cfg?.defaults ?? null);
 	/** The model the chooser shows: the saved default, else the one new chats really get (the startup default), if any. */
 	const shownModel = $derived(saved ?? cfg?.effectiveDefaults ?? null);
+	const tierApi = $derived(server ? new Api({ baseUrl: server.baseUrl, token: server.token }) : null);
 	const shownThinking = $derived<ThinkingLevel | null>(saved?.thinkingLevel ?? null);
 	const shownInfo = $derived(shownModel ? models.find((m) => m.provider === shownModel.provider && m.id === shownModel.model) : undefined);
 
@@ -308,6 +309,8 @@
 				providers={providerList}
 				value={shownModel}
 				level={shownThinking}
+				tier={saved?.serviceTier}
+				{tierApi}
 				favs={serverId === app.serverId ? app.favModels : []}
 				onfav={serverId === app.serverId ? (p, id) => app.toggleFavModel(p, id) : undefined}
 				allowUnset

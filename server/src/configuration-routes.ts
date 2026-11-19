@@ -1,9 +1,9 @@
 import type { FastifyInstance } from "fastify";
 import { Configuration, ConfigurationResult, CustomProviderBody, CustomProviderPublic, ToolsBody, ToolsInfo, DelegatePolicy, DefaultsBody, DefaultsResult, DiscoverBody, DiscoverResult, ConnectionResult, Selection, WorkdirBody, WorkdirInfo } from "./configuration.ts";
-import { IdParams, Ok, errors } from "./schemas.ts";
+import { IdParams, Ok, Tier, errors } from "./schemas.ts";
 import type { TypeBoxProvider } from "./typebox-provider.ts";
 import type { EventBus } from "./events.ts";
-import { badRequest, notFound } from "./errors.ts";
+import { badRequest, HttpError, notFound } from "./errors.ts";
 import { MAX_ICON_BYTES } from "./model-icons.ts";
 import Type from "typebox";
 import { homedir } from "node:os";
@@ -119,6 +119,13 @@ export function registerConfigurationRoutes(server: FastifyInstance, config: Con
 			return { models: config.catalog.list(), ...config.catalogState() };
 		},
 	});
+	app.get("/configuration/catalog/tiers", {
+		schema: { querystring: Type.Object({ model: Type.String({ minLength: 1, maxLength: 200 }) }), response: { 200: Type.Object({ tiers: Type.Array(Tier) }), ...errors(401, 502) } },
+		handler: async (req) => {
+			try { return { tiers: await config.catalog.serviceTiers(req.query.model) }; }
+			catch { throw new HttpError(502, "catalog_unavailable", "OpenRouter endpoint information unavailable"); }
+		},
+	});
 	app.post("/configuration/icons", {
 		schema: {
 			description: "Upload an image (PNG, JPEG or WebP, up to 256 KB) to use as a model icon. Returns the value to put in a model's `icon`.",
@@ -179,9 +186,9 @@ export function registerConfigurationRoutes(server: FastifyInstance, config: Con
 		},
 	});
 	app.put("/configuration/defaults", {
-		schema: { body: DefaultsBody, response: { 200: DefaultsResult, ...errors(400, 401) } },
+		schema: { body: DefaultsBody, response: { 200: DefaultsResult, ...errors(400, 401, 502) } },
 		handler: async (req) => {
-			const defaults = config.setDefaults(req.body);
+			const defaults = await config.setDefaults(req.body);
 			bus.publish(null, "configuration_updated", { scope: "defaults", ...defaults });
 			return defaults;
 		},

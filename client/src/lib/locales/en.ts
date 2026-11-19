@@ -5,6 +5,11 @@
  * `node scripts/extract-i18n.cjs` lists keys that are used but missing here, and keys that are here but unused.
  */
 export const en: Record<string, string> = {
+	"응답 속도": "Response speed",
+	"연결 기본값": "Connection default",
+	"Fast와 Ultrafast는 추가 요금이 발생할 수 있습니다.": "Fast and Ultrafast may cost extra.",
+	"OpenRouter 응답 등급: {tiers} (참고용)": "OpenRouter service tiers: {tiers} (reference only)",
+	"응답 등급을 확인하지 못했습니다.": "Could not check service tiers.",
 	/* ---- first run and empty conversation ---- */
 	"pipaya 서버에 연결해 대화를 시작합니다. 서버는 에이전트가 실제로 일하는 컴퓨터에서 돌아갑니다.": "Connect to a pipaya server to start. The server runs on the computer where the agent does its work.",
 	"이 컴퓨터에서 시작": "Start on this computer",

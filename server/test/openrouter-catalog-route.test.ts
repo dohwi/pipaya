@@ -30,6 +30,7 @@ beforeAll(async () => {
 		async fetch(req) {
 			const path = new URL(req.url).pathname;
 			if (path === "/api/v1/images/models") return Response.json({ data: [] });
+			if (path === "/api/v1/models/anthropic/claude-fable-5.2/endpoints") return Response.json({ data: { endpoints: [{ service_tier: null }, { service_tier: "priority" }] } });
 			if (path !== "/api/v1/models") return new Response("not found", { status: 404 });
 			return Response.json({
 				data: [{
@@ -90,4 +91,29 @@ test("a model registered by name takes its limits and strengths from the live li
 	expect(saved.statusCode).toBe(200);
 	const model = saved.json().models[0];
 	expect(model.thinkingSource).toEqual({ kind: "catalog", catalogId: "anthropic/claude-fable-5.2", levels: ["low", "medium", "high", "xhigh", "max"] });
+});
+
+test("only direct OpenRouter chats can save advertised tiers; default, reset and model switches survive reload", async () => {
+	const call = async (method: "POST" | "PUT" | "PATCH", url: string, payload: object) => app.server.inject({ method, url, headers: auth, payload });
+	const id = "anthropic/claude-fable-5.2";
+	const base = { name: "Router", api: "openai-completions", authRequired: false, models: [{ id, contextWindow: 10000, maxTokens: 200, reasoning: true, vision: false }] };
+	const router = { provider: "tier-router", model: id };
+	const proxy = { provider: "tier-proxy", model: id };
+	await get("/configuration/catalog");
+	expect(await get(`/configuration/catalog/tiers?model=${id}`)).toEqual({ tiers: ["priority"] });
+	for (const [provider, baseUrl] of [[router.provider, "https://openrouter.ai/api/v1"], [proxy.provider, "http://127.0.0.1:9/v1"]] as const) {
+		expect((await call("PUT", `/configuration/providers/${provider}`, { ...base, baseUrl })).statusCode).toBe(200);
+	}
+	expect((await call("PUT", "/configuration/defaults", { ...router, serviceTier: "priority", thinkingLevel: "high" })).statusCode).toBe(200);
+	const session = (await call("POST", "/sessions", {})).json();
+	expect(session).toMatchObject({ ...router, serviceTier: "priority", thinkingLevel: "high" });
+	const path = `/sessions/${session.id}`;
+	expect((await call("PATCH", path, { serviceTier: "ultrafast" })).statusCode).toBe(400);
+	expect((await get(path)).serviceTier).toBe("priority");
+	expect((await call("PATCH", path, { serviceTier: null })).json().serviceTier).toBeNull();
+	expect((await call("PATCH", path, { serviceTier: "priority" })).json().serviceTier).toBe("priority");
+	expect((await call("PATCH", path, proxy)).json().serviceTier).toBeNull();
+	expect((await call("PATCH", path, { serviceTier: "priority" })).statusCode).toBe(400);
+	expect((await call("PUT", "/configuration/defaults", { ...proxy, serviceTier: "priority" })).statusCode).toBe(400);
+	expect((await get(path)).serviceTier).toBeNull();
 });

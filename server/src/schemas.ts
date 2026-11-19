@@ -1,8 +1,11 @@
 import Type, { type TSchema } from "typebox";
+import { SERVICE_TIERS } from "./openrouter-catalog.ts";
 import { THINKING_LEVELS } from "./store.ts";
 
 // ── Shared building blocks ──────────────────────────────────────────────────
 
+export const Tier = Type.Union(SERVICE_TIERS.map(t => Type.Literal(t)));
+export const OptionalTier = Type.Optional(Type.Union([Tier, Type.Null()]));
 export const Thinking = Type.Union(THINKING_LEVELS.map((l) => Type.Literal(l)));
 export const PromptMode = Type.Union([Type.Literal("prompt"), Type.Literal("steer"), Type.Literal("follow_up")], {
 	description: "prompt: start a run (session must be idle). steer: inject into the active run. follow_up: queue for after the active run.",
@@ -45,6 +48,7 @@ const sessionFields = {
 	provider: Type.String(),
 	model: Type.String(),
 	thinkingLevel: Thinking,
+	serviceTier: OptionalTier,
 	systemPrompt: Type.String(),
 	tools: Type.Array(Type.String()),
 	parentId: Nullable(Type.String()),
@@ -177,6 +181,7 @@ export const CreateSessionBody = Type.Object({
 	provider: Type.Optional(Type.String()),
 	model: Type.Optional(Type.String()),
 	thinkingLevel: Type.Optional(Thinking),
+	serviceTier: OptionalTier,
 	systemPrompt: Type.Optional(Type.String({ maxLength: 100_000 })),
 	tools: Type.Optional(Type.Array(Type.String(), { description: "Defaults to all tools. See GET /tools." })),
 });
@@ -187,6 +192,7 @@ export const PatchSessionBody = Type.Object({
 	provider: Type.Optional(Type.String()),
 	model: Type.Optional(Type.String()),
 	thinkingLevel: Type.Optional(Thinking),
+	serviceTier: OptionalTier,
 	systemPrompt: Type.Optional(Type.String({ maxLength: 100_000, description: "Only before the first message (else 409)" })),
 	tools: Type.Optional(Type.Array(Type.String(), { description: "Only before the first message (else 409)" })),
 	closed: Type.Optional(Type.Boolean({ description: "true closes the session (aborting any run); false resumes it" })),
@@ -308,6 +314,7 @@ export const ModelInfo = Type.Object({
 	name: Type.String(),
 	api: Type.String(),
 	reasoning: Type.Boolean(),
+	openRouterTiers: Type.Optional(Type.Boolean()),
 	thinkingLevels: Type.Array(Thinking, { description: "Reasoning strengths this model accepts, weakest first; empty without reasoning" }),
 	contextWindow: Type.Number(),
 	maxTokens: Type.Number(),
