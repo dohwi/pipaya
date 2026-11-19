@@ -1942,6 +1942,8 @@ export const en: Record<string, string> = {
 	"토큰 합계": "Total tokens",
 	"{n}턴": "{n} {n#turn|turns}",
 	"최근 호출": "Recent calls",
+	"최근": "Recent",
+	"실행한 모델": "Ran on",
 	"종류": "Kind",
 	"직접 추가한 연결": "Added by you",
 	"내장": "Built-in",

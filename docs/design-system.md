@@ -83,6 +83,9 @@ share one left and one right line. Never write a raw side padding in a dialog; u
   It also carries the activity colour (`working` `--info`, `asking` `--warn`, `done` `--ok`, `failed` `--danger`, idle `--text-faint`) in
   all four places, so a running conversation reads blue in the tab bar exactly as in the sidebar row; a group chip shows its own state even
   while its group is not the open tab.
+  The graph view draws its own, larger name lines (a chat card's 14px name, a dialog row's 13px name) but the colour rule is the same: a
+  chat's `@name` takes its state colour on the card, in the detail dialog's chat and call rows, and a running subagent card names its
+  caller in `--info` on its live line (with the model it runs on). A chat without a name shows its title in the body colour.
 - Audit: render at `device_scale_factor` 4-8 with `scripts/ui-ink.py`, find the painted pixels inside each pill and compare their centre with the box centre; flag anything over 0.5px. Differences up to 0.5px represent the physical half-pixel grid limit of an odd-pixel glyph in an even-content box.
 
 ## 2. Vertical rhythm
