@@ -145,8 +145,8 @@ When you add an icon or a button to a sidebar row: pick the column it belongs to
   Containers step up (10 → 12 → 16) so nested corners stay concentric.
 - Type: `--fs-2xs` 11 … `--fs-2xl` 20. Inputs are at least `--fs-lg` 16 on iOS (smaller zooms the page).
 - Dialog widths: `--modal-w-s/m/l/xl` = 420 / 480 / 560 / 720, with `--modal-gutter` 24 to the screen edge.
-- Stacking: page layers `--z-popover` 20, `--z-dock` 25, `--z-droplayer` 30, `--z-notice` 40, `--z-drawer-scrim` / `--z-drawer` 49 / 50, `--z-dropzone` 55;
-  dialogs `--z-scrim-1..5` / `--z-modal-1..5`; above them `--z-toast` 100, `--z-dropdown` 110, `--z-lightbox` 120, `--z-tooltip` 130.
+- Stacking: page layers `--z-popover` 20, `--z-dock` 25, `--z-droplayer` 30, `--z-notice` 40 (a pane's own toasts), `--z-drawer-scrim` / `--z-drawer` 49 / 50, `--z-dropzone` 55;
+  dialogs `--z-scrim-1..5` / `--z-modal-1..5`; above them `--z-toast` 100 (the global toast strip), `--z-dropdown` 110, `--z-lightbox` 120, `--z-tooltip` 130.
   Anything that crosses components uses a token; a raw 0-9 stays inside one component (`ui-lint` flags anything higher without a comment).
 
 ### Loading skeletons

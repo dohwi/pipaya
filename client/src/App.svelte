@@ -409,6 +409,22 @@
 	onblur={resetKeyboard}
 />
 
+<!-- The connection strip: in the column above the stage, or (the graph view covers that) first in the stage's overlay under the graph's header -->
+{#snippet netBanner()}
+	{#if app.net !== "online"}
+		<div class="banner" class:bad={app.net === "offline" || app.net === "unauthorized"} in:fadeIn out:fadeOut>
+			{#if app.net === "connecting"}
+				<span class="spinner"></span> {t("연결하는 중…")}
+			{:else if app.net === "unauthorized"}
+				<Icon name="key" /> {t("서버가 토큰을 거부했습니다.")}
+				<button class="link" onclick={() => app.openSettings("servers", app.serverId)}>{t("토큰 수정")}</button>
+			{:else}
+				{#if retrying}<span class="spinner"></span>{:else}<Icon name="wifi-off" />{/if} {t("서버에 다시 연결하는 중…")}
+				{#if !retrying}<button class="link" onclick={retryNow}>{t("다시 연결하기")}</button>{/if}
+			{/if}
+		</div>
+	{/if}
+{/snippet}
 {#snippet launcher()}<ExtensionPanels />{/snippet}
 
 {#if app.servers.length === 0}
@@ -460,24 +476,13 @@
 			<Header />
 			<TabBar />
 
-			{#if app.net !== "online"}
-				<div class="banner" class:bad={app.net === "offline" || app.net === "unauthorized"} in:fadeIn out:fadeOut>
-					{#if app.net === "connecting"}
-						<span class="spinner"></span> {t("연결하는 중…")}
-					{:else if app.net === "unauthorized"}
-						<Icon name="key" /> {t("서버가 토큰을 거부했습니다.")}
-						<button class="link" onclick={() => app.openSettings("servers", app.serverId)}>{t("토큰 수정")}</button>
-					{:else}
-						{#if retrying}<span class="spinner"></span>{:else}<Icon name="wifi-off" />{/if} {t("서버에 다시 연결하는 중…")}
-						{#if !retrying}<button class="link" onclick={retryNow}>{t("다시 연결하기")}</button>{/if}
-					{/if}
-				</div>
-			{/if}
+			{#if !app.graphOpen}{@render netBanner()}{/if}
 
 			<!-- under the graph view the stage lets go of its column, so the overlay hangs from main, under the graph's own header -->
 			<div class="stage" class:under-graph={app.graphOpen}>
 				<!-- One column for everything pinned to the top of the stage: notices first, the extension button below them, so they never overlap -->
 				<div class="overlay">
+					{#if app.graphOpen}{@render netBanner()}{/if}
 					<DoneNotice />
 					<div class="extension-launcher">{@render launcher()}</div>
 				</div>
@@ -636,6 +641,10 @@
 	}
 	.stage.under-graph .overlay {
 		top: calc(45px + var(--sat)); /* the graph view's header: 44px + its 1px hairline, under the safe area (GraphView .head) */
+	}
+	/* the connection strip in the overlay column: it takes taps like the strips below it */
+	.overlay .banner {
+		pointer-events: auto;
 	}
 	.work.hidden {
 		visibility: hidden;

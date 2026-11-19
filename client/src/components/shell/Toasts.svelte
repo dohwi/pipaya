@@ -17,9 +17,9 @@
 		if (!stage) return (box = null);
 		// the stage's overlay column: the top of the chat area, or under the graph view's header while that is open
 		const r = (stage.querySelector<HTMLElement>(".overlay") ?? stage).getBoundingClientRect();
-		// "done" strips occupy the top of that column; ours go right below them
-		const done = stage.querySelector<HTMLElement>(".overlay .stack")?.getBoundingClientRect();
-		box = { left: r.left, width: r.width, top: done ? done.bottom : r.top };
+		// the strips at the top of that column (the connection strip under the graph, "done" notices): ours go right below them
+		const above = [...stage.querySelectorAll<HTMLElement>(".overlay > .banner, .overlay > .stack")].map((e) => e.getBoundingClientRect().bottom);
+		box = { left: r.left, width: r.width, top: Math.max(r.top, ...above) };
 	}
 
 	$effect(() => {
@@ -33,8 +33,7 @@
 			ro = new ResizeObserver(measure);
 			const stage = document.querySelector(".stage");
 			if (stage) ro.observe(stage);
-			const done = stage?.querySelector(".overlay .stack");
-			if (done) ro.observe(done);
+			for (const e of stage?.querySelectorAll(".overlay > .banner, .overlay > .stack") ?? []) ro.observe(e);
 		});
 		return () => {
 			dead = true;
@@ -61,7 +60,7 @@
 <style>
 	.toasts {
 		position: fixed;
-		z-index: var(--z-notice);
+		z-index: var(--z-toast); /* above every dialog: a toast raised from inside one (Settings, a graph quick look) is seen */
 		left: 0;
 		right: 0;
 		top: var(--sat);
