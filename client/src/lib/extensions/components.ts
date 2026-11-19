@@ -21,6 +21,7 @@ import * as reactivity from "svelte/reactivity";
 import * as events from "svelte/events";
 import * as attachments from "svelte/attachments";
 import type { ExtensionPackage } from "./schema";
+import { each_in } from "../each-guard";
 
 /** What a component may import. `pipaya` is the app's kit (see kit.ts); `./Name.svelte` is another component of the same package. */
 const SVELTE: Record<string, unknown> = {
@@ -87,6 +88,9 @@ export function loadComponents(pkg: ExtensionPackage, kit: Record<string, unknow
 		try { bodies.set(name, compileComponent(owner, name, source)); }
 		catch (e) { throw new Error(`${name}.svelte: ${e instanceof Error ? e.message : String(e)}`.slice(0, 500)); }
 	}
+	// The runtime with `each` guarded like the app's own components (each-guard.ts): a list with a repeated key shows its
+	// first item and is reported with the extension's id, instead of taking the app down.
+	const runtime = { ...(internal as Record<string, unknown>), each: (...args: Parameters<typeof each_in> extends [string, ...infer R] ? R : never) => each_in(`extension ${owner}`, ...args) };
 	const modules = new Map<string, Record<string, unknown>>();
 	const evaluate = (name: string): Record<string, unknown> => {
 		const done = modules.get(name);
@@ -99,6 +103,7 @@ export function loadComponents(pkg: ExtensionPackage, kit: Record<string, unknow
 	};
 	const require = (from: string): unknown => {
 		if (from === "pipaya") return kit;
+		if (from === "svelte/internal/client") return runtime;
 		if (Object.hasOwn(SVELTE, from)) return SVELTE[from];
 		const sibling = /^\.\/([A-Z][A-Za-z0-9]*)\.svelte$/.exec(from)?.[1];
 		if (sibling && bodies.has(sibling)) return evaluate(sibling);
