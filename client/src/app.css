@@ -149,9 +149,9 @@
 	--z-droplayer: 30; /* a pane's own "drop here" layer */
 	--z-drawer-scrim: 49; /* the sidebar drawer's scrim (narrow screens) */
 	--z-drawer: 50; /* the sidebar drawer itself */
-	--z-notice: 40; /* toast strips: above the page, behind every dialog and its scrim */
+	--z-notice: 40; /* a pane's own toast strips: above the page, behind every dialog and its scrim */
 	--z-dropzone: 55; /* "drop files here" over the page: above the strips, below any dialog */
-	--z-toast: 100;
+	--z-toast: 100; /* the global toast strip (and the chord hint): above every dialog, so a toast raised from inside one is seen */
 	--z-dropdown: 110; /* a Select list: above every dialog it can sit in, below the lightbox */
 	--z-lightbox: 120;
 	--z-tooltip: 130; /* hover cards lifted to <body>: above everything, they never take input focus */
