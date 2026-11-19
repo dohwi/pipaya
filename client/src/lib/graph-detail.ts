@@ -3,6 +3,9 @@
  * the server's delegate calls; `GraphDetail.svelte` only draws it.
  */
 import type { Card, CardKind, DelegateRun, Graph } from "./graph";
+import type { SettingsFocus } from "./settings-focus";
+import type { SettingsTabId } from "./settings-search";
+import type { CustomProvider, ProviderInfo } from "./types";
 
 /** The cards of `kind` under `id`, in the order the graph shows them (its columns are sorted by urgency, then size). */
 export function under(g: Graph, id: string, kind: CardKind): Card[] {
@@ -62,4 +65,39 @@ export function roleStats(runs: DelegateRun[], role: string, open: (sessionId: s
 		callers: [...callers.values()].sort((a, b) => b.last - a.last),
 		recent: [...mine].sort((a, b) => b.at - a.at).slice(0, limit),
 	};
+}
+
+/** What the detail dialog's "설정 열기" opens for a card: the section, and the row in it to bring into view. */
+export interface SettingsTarget {
+	tab: SettingsTabId;
+	focus: SettingsFocus | null;
+}
+
+/**
+ * The settings place of a card. A server opens its "정보"; a provider its row under "모델" (a connection the owner added,
+ * or a built-in one with a stored sign-in; one signed in from the server's environment has none, so the list); a model
+ * the row in its connection's model list (only added connections list their models: else the connection's row); a role
+ * its row under "에이전트 도구" (only global roles are listed there: a project role lands on the list, a made-up one on
+ * the delegate settings that allow it).
+ */
+export function settingsTarget(
+	card: Pick<Card, "kind" | "label" | "provider" | "free">,
+	ctx: { custom?: Pick<CustomProvider, "id" | "models">; builtin?: Pick<ProviderInfo, "storedCredential"> | null; roleScope?: "global" | "project" | null },
+): SettingsTarget {
+	const hasRow = (id: string) => ctx.custom?.id === id || Boolean(ctx.builtin?.storedCredential);
+	switch (card.kind) {
+		case "server":
+		case "session":
+			return { tab: "info", focus: null };
+		case "provider":
+			return { tab: "models", focus: hasRow(card.label) ? { kind: "provider", provider: card.label } : { kind: "connections" } };
+		case "model": {
+			const provider = card.provider ?? "";
+			if (ctx.custom?.id === provider && ctx.custom.models.some((m) => m.id === card.label)) return { tab: "models", focus: { kind: "model", provider, model: card.label } };
+			return { tab: "models", focus: hasRow(provider) ? { kind: "provider", provider } : { kind: "connections" } };
+		}
+		case "subagent":
+			if (card.free) return { tab: "tools", focus: { kind: "delegate" } };
+			return { tab: "tools", focus: ctx.roleScope === "project" ? { kind: "roles" } : { kind: "role", name: card.label } };
+	}
 }

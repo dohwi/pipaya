@@ -16,6 +16,7 @@
 	import ProviderAccounts from "./ProviderAccounts.svelte";
 	import ConnectModal from "../server/ConnectModal.svelte";
 	import { modelDisplayName } from "../../lib/model-name";
+	import { flash } from "../../lib/settings-focus";
 	import type {
 		ConfigurationInfo,
 		ConnectionResult,
@@ -34,14 +35,10 @@
 	const sections: Record<Exclude<ProblemRole, "default"> | ProblemRole, HTMLElement | undefined> = $state({ default: undefined, compaction: undefined, system: undefined });
 	function goto(role: ProblemRole) {
 		const el = sections[role];
-		if (!el) return;
-		el.scrollIntoView({ block: "center" });
-		// Outline the section for a moment so the eye lands on it after the jump.
-		el.classList.remove("flash");
-		void el.offsetWidth; // restart the transition when the same row is picked twice
-		el.classList.add("flash");
-		setTimeout(() => el.classList.remove("flash"), 1600);
+		if (el) flash(el);
 	}
+	/** Opened on one of a connection's models (the graph view): that connection's model list starts folded open. */
+	const openModelsOf = $derived(app.settingsFocus?.kind === "model" ? app.settingsFocus.provider : null);
 
 	let cfg = $state<ConfigurationInfo | null>(null);
 	let models = $state<ModelInfo[]>([]);
@@ -267,7 +264,7 @@
 				</ul>
 			</Notice>
 		{/if}
-		<section class="set-group" bind:this={sections.default}>
+		<section class="set-group" bind:this={sections.default} data-focus="connections">
 			<div class="section-label">{t("연결")}</div>
 			<ProviderAccounts {serverId} refresh={accountsTick} onchange={() => void load(serverId)} />
 			{#if cfg.providers.length}
@@ -280,6 +277,7 @@
 								{busy}
 								{tests}
 								keying={keyFor === p.id}
+								openModels={openModelsOf === p.id}
 								bind:keyValue
 								refreshing={refreshingId === p.id}
 								anyRefreshing={refreshingId !== null}
@@ -386,16 +384,6 @@
 	}
 	.bad {
 		color: var(--danger);
-	}
-	:global(.flash) {
-		outline: 2px solid var(--accent);
-		outline-offset: 2px;
-		border-radius: var(--radius);
-		animation: flashOut 1600ms var(--ease, ease) forwards;
-	}
-	@keyframes flashOut {
-		0%, 55% { outline-color: var(--accent); }
-		100% { outline-color: transparent; }
 	}
 	.problems {
 		margin: 4px 0 0;

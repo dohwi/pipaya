@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { untrack } from "svelte";
 	import SearchField from "../ui/SearchField.svelte";
 	import { fadeIn, paneIn } from "../../lib/motion";
 	import { ACTIONS, formatCombo } from "../../lib/keys";
@@ -25,6 +26,7 @@
 	import { backLayer } from "../../lib/dialog";
 	import { viewport } from "../../lib/viewport.svelte";
 	import { phoneBack, phoneStart, touchOnly } from "../../lib/settings-phone";
+	import { afterMotion, flash, watchTarget } from "../../lib/settings-focus";
 
 	// App.svelte mounts this only while open, so the tab requested at open time is read once.
 	// svelte-ignore state_referenced_locally
@@ -50,7 +52,31 @@
 	let marketFor = $state<string | null>(null);
 	/** A client extension to download and preview for install as soon as the device tab opens (set from the clip of a server extension whose client half is missing). */
 	let installFor = $state<string | null>(null);
+	/**
+	 * Opened on one row (the graph view's "설정 열기"): once its section has loaded the row, scroll to it and outline it.
+	 * Moving to another section or server first drops the jump. The request is cleared when it is done (the model list
+	 * reads it to fold its connection open).
+	 */
+	let layout = $state<HTMLElement>();
+	let stopFocus: (() => void) | null = null;
+	const dropFocus = () => {
+		stopFocus?.();
+		stopFocus = null;
+		app.settingsFocus = null;
+	};
+	$effect(() => {
+		const root = layout;
+		const f = untrack(() => app.settingsFocus);
+		if (!root || !f) return;
+		stopFocus = watchTarget(root, f, (el) => {
+			stopFocus = null;
+			if (el) void afterMotion(root).then(() => el.isConnected && flash(el));
+			app.settingsFocus = null;
+		});
+		return dropFocus;
+	});
 	function go(next: TabId) {
+		if (next !== tab) dropFocus();
 		extId = null;
 		if (next === tab) return;
 		dir = tabs.findIndex((x) => x.id === next) > tabs.findIndex((x) => x.id === tab) ? 1 : -1;
@@ -65,6 +91,7 @@
 	// svelte-ignore state_referenced_locally
 	let sid = $state<string | null>(app.settingsServer && app.settingsServer !== "new" ? app.settingsServer : app.serverId);
 	function showServer(id: string) {
+		if (id !== sid) dropFocus();
 		sid = id; // the section stays: a common one keeps showing, a server one now shows for this server
 	}
 	/** Update state is only known for the open server: a newer server build, or server and app out of step. */
@@ -144,7 +171,7 @@
 
 	{/if}
 
-	<div class="layout" class:phone={viewport.phone}>
+	<div class="layout" class:phone={viewport.phone} bind:this={layout}>
 		{#if !detailPhone && !(listing && words.length)}
 		<SettingsNav bind:tab bind:extId bind:dir bind:installFor serverName={server ? app.serverLabel(server) : ""} {server} {serverOnline} phone={viewport.phone} {touch} onopen={() => (step = "detail")} />
 		{/if}

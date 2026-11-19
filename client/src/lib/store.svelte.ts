@@ -51,6 +51,7 @@ import { Preferences } from "./prefs.svelte";
 import { ServerPrefs, serverPrefKeys } from "./server-prefs.svelte";
 import { announces, Feedback, type Toast } from "./feedback.svelte";
 import type { SettingsTabId } from "./settings-search";
+import type { SettingsFocus } from "./settings-focus";
 import { SidebarState, reorder } from "./sidebar.svelte";
 import { ScheduleBook } from "./schedule-book.svelte";
 import { isTerminalId, type TerminalInfo, type TerminalSupport } from "./terminal";
@@ -365,10 +366,14 @@ class AppStore {
   settingsServer = $state<string | "new" | null>(null);
   /** True when a section was asked for (not a plain open): on a phone it opens straight on that section instead of the list. */
   settingsDirect = false;
+  /** One row to bring into view once the section opens (handed over once: the section that shows it clears it). */
+  settingsFocus = $state<SettingsFocus | null>(null);
   openSettings(
     tab?: SettingsTabId | "servers" | "agent",
     server: string | "new" | null = null,
+    focus: SettingsFocus | null = null,
   ) {
+    this.settingsFocus = focus;
     this.settingsDirect = tab !== undefined;
     tab ??= "general";
     this.settingsTab = tab;

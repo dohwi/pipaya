@@ -858,6 +858,20 @@ kbd {
 	line-height: 20px; /* whole-pixel line box (the body's 1.55 gave 20.15), like .lbl above a field */
 	color: var(--text);
 }
+/* A settings row or block that was jumped to (a problem's link, the graph view's "설정 열기"): outlined for a moment so the
+   eye lands on it. Keeps the element's own corner. A row inside a clipping list (a connection card in `.plist`) is outlined inside its border. */
+.flash {
+	outline: 2px solid var(--accent);
+	outline-offset: 2px;
+	animation: flash-out 1600ms var(--ease, ease) forwards;
+}
+.plist .prov.flash {
+	outline-offset: -2px; /* the connection list clips its cards (overflow: hidden): drawn inside, or it is cut off */
+}
+@keyframes flash-out {
+	0%, 55% { outline-color: var(--accent); }
+	100% { outline-color: transparent; }
+}
 /* Heading of a settings block ("Language", "Export", "Default model"): one style for every section label. */
 .section-label {
 	margin: 0;

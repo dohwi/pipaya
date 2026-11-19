@@ -125,7 +125,7 @@
 
 {#if shown?.tools?.delegate && shown.tools.toggleable.includes("delegate")}
 	{@const d = shown.tools.delegate}
-	<section class="set-group">
+	<section class="set-group" data-focus="delegate">
 		<div class="section-label">{t("서브에이전트 위임 (delegate)")}</div>
 		<SettingRow label={t("서브에이전트 역할")} hint={roleHint[d.roles]}>
 			<Segmented size="sm" full={false} label={t("서브에이전트 역할 선택")} value={d.roles} options={roleModes} onchange={(id) => saveDelegate({ roles: id })} />

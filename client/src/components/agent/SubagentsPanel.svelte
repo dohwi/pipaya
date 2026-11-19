@@ -131,7 +131,7 @@
 </script>
 
 <!-- the list and the form are two pages of different heights: centre the dialog again on each switch -->
-<section class:set-group={!bare} class:bare use:recentreOn={form !== null}>
+<section class:set-group={!bare} class:bare use:recentreOn={form !== null} data-focus="roles">
 	{#if !bare}<div class="section-label">{t("서브에이전트 역할")}</div>{/if}
 	<ExtrasIntro
 		what={t("에이전트가 delegate 도구로 일을 맡길 수 있는 서브에이전트입니다. 각자 모델, 도구, 지침을 따로 가집니다.")}
@@ -210,7 +210,7 @@
 			<ListGroup title={scopeText(g.scope)} count={t("{on}/{total}개 사용", { on: g.items.filter((r) => r.enabled).length, total: g.items.length })} path={g.path}>
 				<ul class="list">
 					{#each g.items as r (`${r.scope}/${r.name}`)}
-						<li animate:reflow in:rowIn out:rowOut>
+						<li animate:reflow in:rowIn out:rowOut data-role={r.name}>
 							<ListItem off={!r.enabled || r.overridden}>
 								{#snippet lead()}<Switch checked={r.enabled} disabled={busy} onchange={(on) => toggle(r, on)} label={r.name} />{/snippet}
 								{#snippet title()}
@@ -245,6 +245,7 @@
 	section:not(.bare) > :global(.intro) { margin-bottom: 8px; }
 	.groups { display: flex; flex-direction: column; gap: var(--dlg-gap); }
 	.list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+	.list > li { border-radius: var(--radius); } /* the ListItem card's corner, so a jump's outline (.flash) follows it */
 	.form { display: flex; flex-direction: column; gap: var(--dlg-gap); }
 	.ftitle { display: flex; align-items: center; gap: 8px; min-height: 22px; }
 	.ftitle .name { font-size: var(--fs-sm); line-height: 20px; font-weight: 600; overflow-wrap: anywhere; }

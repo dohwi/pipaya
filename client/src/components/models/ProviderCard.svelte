@@ -37,6 +37,7 @@
 		onrefresh,
 		onedit,
 		onremove,
+		openModels = false,
 	}: {
 		p: CustomProvider;
 		conn: { baseUrl: string; token: string } | null;
@@ -55,14 +56,21 @@
 		onrefresh: () => void;
 		onedit: () => void;
 		onremove: () => void;
+		/** Start with the model list folded open (the settings were opened on one of its models). */
+		openModels?: boolean;
 	} = $props();
+	// svelte-ignore state_referenced_locally
+	let modelsOpen = $state(openModels);
+	$effect(() => {
+		if (openModels) modelsOpen = true;
+	});
 
 	/** Working models first, then the ones the upstream no longer lists, then the switched-off ones (each keeps its own order). */
 	const rank = (m: CustomProvider["models"][number]) => (m.disabled ? 2 : m.unavailable ? 1 : 0);
 	const ordered = $derived([...p.models].sort((a, b) => rank(a) - rank(b)));
 </script>
 
-<div class="prov" class:off={!p.models.length}>
+<div class="prov" class:off={!p.models.length} data-provider={p.id}>
 	<div class="phead">
 		<div class="pname">
 			<span class="ptitle">{p.name}</span>
@@ -78,12 +86,12 @@
 			<Button size="sm" disabled={busy} onclick={onedit}><Icon name="plus" /> {t("모델 추가")}</Button>
 		</div>
 	{:else}
-	<Accordion variant="text">
+	<Accordion variant="text" bind:open={modelsOpen}>
 	{#snippet head()}{t("모델 {n}개", { n: p.models.filter((m) => !m.disabled).length })}{#if p.models.some((m) => m.disabled)}<span class="gone off">{t("꺼짐 {n}개", { n: p.models.filter((m) => m.disabled).length })}</span>{/if}{#if p.models.some((m) => m.unavailable)}<span class="gone">{t("사용 불가 {n}개", { n: p.models.filter((m) => m.unavailable).length })}</span>{/if}{/snippet}
 	<ul class="mlist">
 		{#each ordered as m (m.id)}
 			{@const probe = tests[`${p.id}\u0000${m.id}`]}
-			<li class:unavail={m.unavailable} class:disabled={m.disabled}>
+			<li class:unavail={m.unavailable} class:disabled={m.disabled} data-model="{p.id}/{m.id}">
 				<span class="mlogo"><ModelLogo {conn} icon={m.icon} provider={p.id} model={m.id} size={16} /></span>
 				<span class="minfo">
 					<span class="mid mono">{m.name ?? m.id}</span>
