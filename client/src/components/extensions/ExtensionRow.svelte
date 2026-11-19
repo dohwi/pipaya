@@ -58,16 +58,16 @@
 </article>
 
 <style>
-	.card { display: flex; flex-direction: column; gap: 8px; min-width: 0; padding: 12px 12px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg-elev); }
+	.card { display: flex; flex-direction: column; gap: 8px; min-width: 0; padding: 12px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg-elev); }
 	.card.dim .line { opacity: 0.55; }
 	.line { display: flex; align-items: center; gap: 8px; }
-	.expand { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; padding: 4px 4px; border-radius: var(--radius-sm); text-align: left; color: var(--text); }
+	.expand { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; padding: 4px; margin: -4px; /* 4px of room for the hover and focus ring, taken back: the name and the arrow sit on the card's 12px line */ border-radius: var(--radius-sm); text-align: left; color: var(--text); }
 	.expand:hover .ename { text-decoration: underline; text-underline-offset: 3px; }
 	.expand:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-	.who { display: flex; flex-direction: column; min-width: 0; line-height: 1.35; flex: 1; }
+	.who { display: flex; flex-direction: column; min-width: 0; flex: 1; }
 	.top { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 8px; min-width: 0; }
-	.ename { font-size: var(--fs-md); font-weight: 600; overflow-wrap: anywhere; }
-	.brief { font-size: var(--fs-xs); color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+	.ename { font-size: var(--fs-md); line-height: 20px; /* whole-pixel line boxes (rule 3): 1.35 left the card 61.1px tall */ font-weight: 600; overflow-wrap: anywhere; }
+	.brief { font-size: var(--fs-xs); line-height: 16px; color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 	.chev { flex: none; display: inline-flex; color: var(--text-faint); transition: transform var(--motion-fast) var(--ease-exit); }
 	.chev :global(svg) { width: 16px; height: 16px; stroke-width: 2; }
 </style>
