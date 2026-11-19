@@ -64,6 +64,10 @@
 	const STATE_TEXT = { online: () => t("연결됨"), offline: () => t("연결 안 됨"), unauthorized: () => t("토큰 거부됨"), incompatible: () => t("앱 업데이트 필요"), checking: () => t("확인 중") };
 	const serverState = $derived(connectionState(link?.net ?? "connecting"));
 
+	/** A connection the owner added: its address, API format and key (built-in providers have none of these). */
+	const custom = $derived(card?.kind === "provider" ? link?.customProviders.find((p) => p.id === card.label) : undefined);
+	const FORMAT: Record<string, string> = { "openai-completions": "OpenAI Chat Completions", "openai-responses": "OpenAI Responses", "anthropic-messages": "Anthropic Messages" };
+	const keyText = $derived(!custom ? "" : custom.hasStoredKey ? t("저장됨") : custom.authRequired ? t("필요하지만 저장 안 됨") : t("필요 없음"));
 	const providerInfo = $derived(card?.kind === "provider" ? link?.providers.find((p) => p.id === card.label) : undefined);
 	const providerModels = $derived(card?.kind === "provider" ? (link?.models ?? []).filter((m) => m.provider === card.label && m.available) : []);
 	const signIn = $derived.by(() => {
@@ -128,9 +132,11 @@
 		onclose();
 		app.openSettings(settingsTab, server);
 	}
+	/** The server's address, or a connection's endpoint. */
 	async function copyAddress() {
-		if (!saved) return;
-		const ok = await copyText(saved.baseUrl);
+		const url = card?.kind === "provider" ? custom?.baseUrl : saved?.baseUrl;
+		if (!url) return;
+		const ok = await copyText(url);
 		app.toast(ok ? t("주소를 복사했습니다") : t("복사하지 못했습니다"), ok ? "ok" : "error");
 	}
 </script>
@@ -183,7 +189,18 @@
 				{:else if card.kind === "provider"}
 					<dt>ID</dt>
 					<dd class="mono">{card.label}</dd>
-					{#if signIn}<dt>{t("인증")}</dt><dd class:bad={!providerInfo?.configured}>{signIn}</dd>{/if}
+					<dt>{t("종류")}</dt>
+					<dd>{custom ? t("직접 추가한 연결") : t("내장")}</dd>
+					{#if custom}
+						<dt>{t("주소")}</dt>
+						<dd class="mono">{custom.baseUrl}</dd>
+						<dt>{t("API 방식")}</dt>
+						<dd>{FORMAT[custom.api] ?? custom.api}</dd>
+						<dt>{t("API 키")}</dt>
+						<dd class:bad={custom.authRequired && !custom.hasStoredKey}>{keyText}</dd>
+					{/if}
+					<!-- a connection the owner added says it with its key line above -->
+					{#if signIn && !custom}<dt>{t("인증")}</dt><dd class:bad={!providerInfo?.configured}>{signIn}</dd>{/if}
 					{#if providerInfo?.accountEmail}<dt>{t("계정")}</dt><dd class="mono">{providerInfo.accountEmail}</dd>{/if}
 					{#if link?.loaded}<dt>{t("모델")}</dt><dd>{t("모델 {n}개", { n: providerModels.length })}<span class="faint">{" · "}{t("대화에서 쓰는 모델 {n}개", { n: card.children.length })}</span></dd>{/if}
 					<dt>{t("대화")}</dt>
@@ -284,7 +301,7 @@
 		</DialogBody>
 		<DialogFooter rule safe>
 			{#snippet start()}
-				{#if card.kind === "server" && saved}<Button size="sm" onclick={copyAddress}><Icon name="copy" />{t("주소 복사")}</Button>{/if}
+				{#if (card.kind === "server" && saved) || custom}<Button size="sm" onclick={copyAddress}><Icon name="copy" />{t("주소 복사")}</Button>{/if}
 			{/snippet}
 			<Button size="sm" onclick={openSettings}><Icon name="settings" />{t("설정 열기")}</Button>
 		</DialogFooter>
@@ -307,16 +324,18 @@
 		color: var(--danger);
 	}
 
-	/* key-value facts (not the global mono `.facts`): a label column and its value, whole-pixel 20px lines, 8px between rows */
+	/* key-value facts (not the global mono `.facts`): a label column as wide as its longest label (a fixed 112px left a
+	   short "ID" 90px from its value), the values on one line after it; whole-pixel 20px lines, 8px between rows */
 	.kv {
 		display: grid;
-		grid-template-columns: 112px minmax(0, 1fr);
-		gap: 8px 16px;
+		grid-template-columns: max-content minmax(0, 1fr);
+		gap: 8px 24px;
 		margin: 0;
 		font-size: var(--fs-sm);
 		line-height: 20px;
 	}
 	.kv dt {
+		white-space: nowrap;
 		color: var(--text-faint);
 	}
 	.kv dd {
@@ -441,8 +460,7 @@
 	}
 	@media (max-width: 640px) {
 		.kv {
-			grid-template-columns: 96px minmax(0, 1fr);
-			gap: 8px 12px;
+			gap: 8px 16px;
 		}
 	}
 </style>
