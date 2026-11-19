@@ -1944,6 +1944,8 @@ export const en: Record<string, string> = {
 	"최근 호출": "Recent calls",
 	"최근": "Recent",
 	"실행한 모델": "Ran on",
+	"다른 모델": "Other models",
+	"역할 전체 {n}회": "{n}× for the role",
 	"종류": "Kind",
 	"직접 추가한 연결": "Added by you",
 	"내장": "Built-in",

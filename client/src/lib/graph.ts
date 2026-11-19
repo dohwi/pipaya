@@ -1,7 +1,8 @@
 /**
  * The graph view's model: every saved server's open chats, as columns of cards joined by lines.
  *
- *   server → provider → model → chat (→ chats it branched or started) → subagent roles it delegated to
+ *   server → provider → model → chat (→ chats it branched or started) → subagent roles it delegated to, one card per
+ *   role and model (the same role run on two models is two cards, side by side)
  *
  * Pure (no Svelte, no DOM): `buildGraph` turns what the client already keeps per server (its sessions and activity, the
  * server's `GET /delegates`) into cards with a column and a centre; `GraphView.svelte` only draws and moves them.
@@ -43,27 +44,24 @@ export interface GraphServer {
 
 export type CardKind = "server" | "provider" | "model" | "session" | "subagent";
 
-/** One call of a role still running: who made it and on what model (a running subagent card says it on its live line). */
+/** One call of a role still running: who made it (a running subagent card says it on its live line). */
 export interface RoleCall {
 	sessionId: string;
 	/** The caller as the app names it: `@name`, else its title. */
 	who: string;
-	/** `provider/model`, and what the app calls it. */
-	model: string;
-	name: string;
 	at: number;
 }
 
-/** A role's models, newest first: the model it ran on lately leads, the rest are "외 N". */
+/** The model a subagent card runs on: `provider/model` as the calls recorded it, and what the app calls it. */
 export interface RoleModel {
-	/** `provider/model`, as the call recorded it. */
 	model: string;
-	/** What the app calls it (its display name), else the bare id. */
+	/** Its display name, else the bare id. */
 	name: string;
 	brand: Brand | null;
-	n: number;
-	last: number;
 }
+
+/** A subagent card's id: one per server, role and model. */
+export const roleCardId = (server: string, role: string, model: string) => `r:${server}/${role}@${model}`;
 
 export interface Card {
 	id: string;
@@ -93,12 +91,15 @@ export interface Card {
 	session?: Session;
 	activity?: Activity;
 	queued?: number;
-	models?: RoleModel[];
+	/** The model a subagent card's calls ran on. */
+	model?: RoleModel;
 	running?: number;
 	/** A role's running calls, the newest first. */
 	calls?: RoleCall[];
 	/** Calls where the agent named the model itself. */
 	asked?: number;
+	/** A subagent card's latest call (unix ms): of one role's cards the model used last sits on top. */
+	last?: number;
 	/** No role file: a name the agent made up (role policy "any"). */
 	free?: boolean;
 	/** A chat in a wrapped block (many chats under one card): which of its columns, 0 the first. */
@@ -217,23 +218,21 @@ export function buildGraph(servers: GraphServer[], opts: LayoutOpts = {}): Graph
 		for (const r of v.runs ?? []) {
 			const from = `s:${v.id}/${r.sessionId}`;
 			if (!cards.has(from)) continue; // a closed chat's calls are not on the map
-			// one card per role per server: role files and the delegate policy belong to a server
-			const rid = `r:${v.id}/${r.role}`;
-			const role = cards.get(rid) ?? add({ id: rid, kind: "subagent", server: v.id, label: r.role, count: 0, parent: null, w: CARD_W.subagent, h: CARD_H, models: [], running: 0, calls: [], asked: 0, free: true });
-			role.count++;
+			// one card per role and model per server (role files and the delegate policy belong to a server), so the line from
+			// a chat says which model its subagent ran on
+			const rid = roleCardId(v.id, r.role, r.model);
 			const provider = r.model.includes("/") ? r.model.slice(0, r.model.indexOf("/")) : "";
+			const model = { model: r.model, name: nameOf(provider, modelName(r.model)), brand: brandOf(provider, modelName(r.model)) };
+			const role = cards.get(rid) ?? add({ id: rid, kind: "subagent", server: v.id, label: r.role, count: 0, parent: null, w: CARD_W.subagent, h: CARD_H, model, running: 0, calls: [], asked: 0, free: true, last: 0 });
+			role.count++;
+			role.last = Math.max(role.last!, r.at);
 			if (r.running) {
 				role.running!++;
 				const s = byId.get(r.sessionId)!;
-				role.calls!.push({ sessionId: r.sessionId, who: s.name ? `@${s.name}` : s.title, model: r.model, name: nameOf(provider, modelName(r.model)), at: r.at });
+				role.calls!.push({ sessionId: r.sessionId, who: s.name ? `@${s.name}` : s.title, at: r.at });
 			}
 			if (r.asked) role.asked!++;
 			role.free = role.free! && r.free;
-			const m = role.models!.find((x) => x.model === r.model);
-			if (m) { m.n++; m.last = Math.max(m.last, r.at); }
-			else {
-				role.models!.push({ model: r.model, name: nameOf(provider, modelName(r.model)), brand: brandOf(provider, modelName(r.model)), n: 1, last: r.at });
-			}
 			const k = `${from}|${rid}`;
 			const e = delegateEdges.get(k) ?? { id: `d:${k}`, kind: "delegate" as const, from, to: rid, weight: 0, live: false };
 			e.weight++;
@@ -243,7 +242,6 @@ export function buildGraph(servers: GraphServer[], opts: LayoutOpts = {}): Graph
 	}
 	for (const c of cards.values()) {
 		if (c.kind !== "subagent") continue;
-		c.models!.sort((a, b) => b.last - a.last);
 		c.calls!.sort((a, b) => b.at - a.at);
 		if (c.running) c.h = CARD_H_LIVE;
 	}
@@ -312,15 +310,23 @@ function layout(cards: Map<string, Card>, servers: GraphServer[], delegates: Edg
 		const top = cursor;
 		count(root.id);
 		place(root.id, 0);
-		// a server's subagents sit beside the chats that call them, in call order, without overlapping
-		const mine = roles.filter((r) => r.server === v.id);
-		for (const r of mine) {
-			const ys = delegates.filter((e) => e.to === r.id).map((e) => get(e.from).y);
-			r.y = Math.max(top + r.h / 2, ys.reduce((a, b) => a + b, 0) / ys.length);
+		// a server's subagents sit beside the chats that call them, without overlapping: one role's cards (one per model) in
+		// one run, the model used last on top, the roles in the order of their callers
+		const groups = new Map<string, Card[]>();
+		for (const r of roles) if (r.server === v.id) groups.set(r.label, [...(groups.get(r.label) ?? []), r]);
+		const runs = [...groups.values()].map((g) => {
+			const ys = g.flatMap((r) => delegates.filter((e) => e.to === r.id).map((e) => get(e.from).y));
+			return { cards: g.sort((a, b) => b.last! - a.last! || a.id.localeCompare(b.id)), y: ys.reduce((a, b) => a + b, 0) / ys.length };
+		});
+		runs.sort((a, b) => a.y - b.y || a.cards[0]!.label.localeCompare(b.cards[0]!.label));
+		let below = top; // the bottom of the cards placed so far, plus the gap
+		for (const g of runs) {
+			const tall = g.cards.reduce((n, r) => n + r.h, 0) + ROW_GAP * (g.cards.length - 1);
+			let y = Math.max(below, g.y - tall / 2);
+			for (const r of g.cards) { r.y = y + r.h / 2; y += r.h + ROW_GAP; }
+			below = y;
 		}
-		mine.sort((a, b) => a.y - b.y || a.label.localeCompare(b.label));
-		for (let k = 1; k < mine.length; k++) mine[k]!.y = Math.max(mine[k]!.y, mine[k - 1]!.y + mine[k - 1]!.h / 2 + mine[k]!.h / 2 + ROW_GAP);
-		if (mine.length) cursor = Math.max(cursor, mine[mine.length - 1]!.y + mine[mine.length - 1]!.h / 2 + ROW_GAP);
+		if (runs.length) cursor = Math.max(cursor, below);
 		bands.push({ server: v.id, y0: top, y1: cursor - ROW_GAP, online: v.online });
 	});
 	for (const r of roles) r.col = maxCol + 1;
