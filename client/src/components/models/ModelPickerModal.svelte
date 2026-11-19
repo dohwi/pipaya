@@ -107,16 +107,16 @@
 	const tipOf = (m: ModelInfo) => `${capsOf(m).map((c) => t(c.label)).join(" · ")}\n${limits(m)}`;
 	const same = (m: ModelInfo) => !!sel && sel.provider === m.provider && sel.model === m.id;
 	const selectedTier = $derived(sel?.provider === value?.provider && sel?.model === value?.model ? tier : null);
-	function apply(speed = selectedTier) {
+	function apply(speed = selectedTier, inherit = false) {
 		if (!sel) return onpick(null);
-		onpick({ provider: sel.provider, model: sel.model, ...(tierApi && (info?.openRouterTiers || tier) ? { serviceTier: info?.openRouterTiers ? speed : null } : {}), ...(shownLvl && reasoning ? { thinkingLevel: shownLvl } : {}) });
+		onpick({ provider: sel.provider, model: sel.model, ...(!inherit && tierApi && (info?.openRouterTiers || tier) ? { serviceTier: info?.openRouterTiers ? speed : null } : {}), ...(shownLvl && reasoning ? { thinkingLevel: shownLvl } : {}) });
 	}
 	function choose(m: ModelInfo) {
 		if (!m.configured || m.available === false || same(m)) return;
 		sel = { provider: m.provider, model: m.id };
 		// A model that names its own starting strength starts there; one that does not keeps the choice made here.
 		if (m.defaultThinkingLevel) lvl = null;
-		apply();
+		apply(m.defaultServiceTier ?? null, allowUnset);
 	}
 	function unset() {
 		if (!sel) return;

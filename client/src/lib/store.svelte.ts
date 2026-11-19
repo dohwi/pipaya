@@ -820,6 +820,7 @@ class AppStore {
     this.attachToken++;
     // The extension host reads the open server's list once at launch (init); only a later switch has to swap it.
     const changing = this.openedFor !== null && this.openedFor !== id;
+    if (changing) this.draft = readDraft(); // Never carry an explicit tier to a different server.
     this.serverId = id;
     this.openedFor = id;
     write(K.currentServer, id);
@@ -1037,7 +1038,7 @@ class AppStore {
     // A model and its starting strength travel together: a model that names one keeps it unless a level comes with the patch.
     if (patch.thinkingLevel === undefined && (patch.provider !== undefined || patch.model !== undefined))
       next.thinkingLevel = this.modelDefaultLevel(next.provider, next.model) ?? next.thinkingLevel;
-    if (patch.serviceTier === undefined && (next.provider !== this.draft.provider || next.model !== this.draft.model)) next.serviceTier = null;
+    if (patch.serviceTier === undefined && (next.provider !== this.draft.provider || next.model !== this.draft.model)) next.serviceTier = this.models.find(m => m.provider === next.provider && m.id === next.model)?.defaultServiceTier ?? null;
     this.draft = next;
     write(K.draft, this.draft);
   }
@@ -1259,6 +1260,9 @@ class AppStore {
       this.models.some((m) => m.provider === now.provider && m.id === now.model && m.configured && m.available !== false)
     ) {
       this.updateDraft(draftFromDefault(now));
+    }
+    if (!now && before && this.draft.provider === before.provider && this.draft.model === before.model) {
+      this.updateDraft({ serviceTier: this.models.find(m => m.provider === before.provider && m.id === before.model)?.defaultServiceTier ?? null });
     }
     this.ensureDraftModel();
   }
@@ -1653,10 +1657,18 @@ class AppStore {
       /* ignore */
     }
     this.sidebar.open = false;
+    this.resetNewChatDraft();
+  }
+
+  private resetNewChatDraft() {
     // A new chat starts from the server default, not from a model picked in an earlier new chat.
     const d = this.serverDefault;
     if (d && this.models.some((m) => m.provider === d.provider && m.id === d.model && m.configured && m.available !== false))
       this.updateDraft(draftFromDefault(d));
+    else {
+      this.ensureDraftModel();
+      this.updateDraft({ serviceTier: this.models.find(m => m.provider === this.draft.provider && m.id === this.draft.model)?.defaultServiceTier ?? null });
+    }
   }
 
   /**
@@ -1666,6 +1678,7 @@ class AppStore {
    * empty one is already open.
    */
   async startChat(): Promise<void> {
+    this.resetNewChatDraft();
     const api = this.api;
     const d = this.draft;
     if (!api || !d.model) return this.newChat();
@@ -1687,21 +1700,23 @@ class AppStore {
 
   /**
    * `/new` (and the new-chat shortcut): start another conversation beside the open one, which stays where it is (in the
-   * sidebar and, in a group, in its pane). The newcomer starts in the focused session's working directory and with its
-   * model settings. Without an open chat this is a plain `startChat`.
+   * sidebar and, in a group, in its pane). The newcomer starts in the focused session's working directory and with the
+   * new-chat defaults. Without an open chat this is a plain `startChat`.
    */
   async newChatInPane(): Promise<void> {
     const api = this.api;
     const from = this.session(this.activeId);
     if (!api || !from) return this.startChat();
+    this.resetNewChatDraft();
+    const d = this.draft;
     let made: Session;
     try {
       made = await api.createSession({
         cwd: from.cwd,
-        provider: from.provider,
-        model: from.model,
-        thinkingLevel: from.thinkingLevel,
-        serviceTier: from.serviceTier,
+        provider: d.provider,
+        model: d.model,
+        thinkingLevel: d.thinkingLevel,
+        serviceTier: d.serviceTier,
       });
     } catch (e) {
       return this.fail(e, t("새 대화를 만들지 못했습니다"));

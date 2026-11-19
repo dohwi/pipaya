@@ -1,10 +1,9 @@
 import Type, { type TSchema } from "typebox";
-import { SERVICE_TIERS } from "./openrouter-catalog.ts";
 import { THINKING_LEVELS } from "./store.ts";
 
 // ── Shared building blocks ──────────────────────────────────────────────────
 
-export const Tier = Type.Union(SERVICE_TIERS.map(t => Type.Literal(t)));
+export const Tier = Type.Union([Type.Literal("default"), Type.Literal("flex"), Type.Literal("priority"), Type.Literal("ultrafast")]);
 export const OptionalTier = Type.Optional(Type.Union([Tier, Type.Null()]));
 export const Thinking = Type.Union(THINKING_LEVELS.map((l) => Type.Literal(l)));
 export const PromptMode = Type.Union([Type.Literal("prompt"), Type.Literal("steer"), Type.Literal("follow_up")], {
@@ -322,6 +321,7 @@ export const ModelInfo = Type.Object({
 	imageGeneration: Type.Boolean({ description: "Makes pictures instead of text. It cannot run a chat (409 image_model_not_chat); set it as the image model (GET/PUT /image-model) and agents draw with the generate_image tool" }),
 	icon: Type.Optional(Type.String({ description: "Brand mark chosen for this model in its connection settings" })),
 	defaultThinkingLevel: Type.Optional(Thinking),
+	defaultServiceTier: Type.Optional(Tier),
 	configured: Type.Boolean({ description: "A usable credential exists for this model's provider" }),
 	available: Type.Boolean({ description: "false = the connection's own model list no longer contains this model" }),
 });

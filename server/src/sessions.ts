@@ -12,7 +12,7 @@ import { mentionedSkills, readSkillText, skillCallHint, skillsPrompt, type Skill
 import { badRequest, conflict, HttpError, notFound } from "./errors.ts";
 import { filesNote, saveUploads } from "./file-routes.ts";
 import type { EventBus } from "./events.ts";
-import { checkServiceTier, withServiceTier, modelDefaultLevel, reasoningOption, type ModelRegistry } from "./models.ts";
+import { checkServiceTier, withServiceTier, modelDefaultTier, modelDefaultLevel, reasoningOption, type ModelRegistry } from "./models.ts";
 import { contextTokens, pickCut, SUMMARY_MAX_TOKENS, SUMMARY_SYSTEM, summaryMessage, summaryRequest, thresholdFor, type CompactionSettings } from "./compaction.ts";
 import { type DelegateCall, type SessionPatch, type SessionRecord, type SessionStore, type ThinkingLevel } from "./store.ts";
 import type { McpManager } from "./mcp.ts";
@@ -285,7 +285,9 @@ export class SessionManager {
 		const cwd = this.resolveCwd(input.cwd);
 		const now = Date.now();
 		const saved = this.registry.defaultSelection?.();
-		const serviceTier = input.serviceTier !== undefined ? input.serviceTier : saved?.provider === provider && saved.model === model ? saved.serviceTier : undefined;
+		// null means “use OpenRouter settings”; it must not fall through to a paid default.
+		const initialTier = saved?.provider === provider && saved.model === model ? saved.serviceTier : undefined;
+		const serviceTier = input.serviceTier !== undefined ? input.serviceTier : initialTier !== undefined ? initialTier : modelDefaultTier(this.registry.models.getModel(provider, model));
 		if (serviceTier) await checkServiceTier(this.registry, provider, model, serviceTier);
 		const record: SessionRecord = {
 			serviceTier: serviceTier ?? null,

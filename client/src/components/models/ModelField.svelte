@@ -1,7 +1,8 @@
 <script lang="ts">
 	import { modelDisplayName } from "../../lib/model-name";
 	import type { Api } from "../../lib/api";
-	import { tierLabel, type ServiceTier } from "../../lib/types";
+	import type { ServiceTier } from "../../lib/types";
+	import { tierLabel } from "../../lib/service-tier";
 	import { t } from "../../lib/i18n";
 	import ModelLogo from "./ModelLogo.svelte";
 	import Icon from "../ui/Icon.svelte";

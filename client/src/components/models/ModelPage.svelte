@@ -21,6 +21,7 @@
 	let {
 		r = $bindable(),
 		providerId,
+		router,
 		connection,
 		catalogLoaded,
 		matched,
@@ -31,6 +32,7 @@
 	}: {
 		r: Row;
 		providerId: string;
+		router: boolean;
 		connection: Api["connection"] | undefined;
 		catalogLoaded: boolean;
 		/** The OpenRouter model `r` is matched to; null = manual */
@@ -107,7 +109,7 @@
 			{:else if !hit && r.catalogId === undefined && r.id.trim() && !r.imageGeneration}
 				<p class="hint note src bad"><Icon name="alert" /> {t("OpenRouter에서 자동으로 찾지 못했습니다. 모델을 직접 고르거나 아래 값을 입력하세요.")}</p>
 			{/if}
-			{#if hit && !r.imageGeneration && catalogApi}
+			{#if !router && hit && !r.imageGeneration && catalogApi}
 				{#key hit.id}<TierOptions api={catalogApi} model={hit.id} />{/key}
 			{/if}
 		{/if}
@@ -182,6 +184,11 @@
 				{/each}
 			</div>
 			<p class="hint note">{r.defaultThinkingLevel ? t("이 모델로 새 대화를 시작하면 {level}로 시작합니다.", { level: r.defaultThinkingLevel }) : t("자동이면 이 기기의 지난 강도로 시작합니다.")}</p>
+		</section>
+	{/if}
+	{#if router && !r.imageGeneration && r.id.trim() && catalogApi}
+		<section class="fsec set-group">
+			<TierOptions api={catalogApi} model={r.id.trim()} label={t("새 대화 기본 속도")} value={r.defaultServiceTier ?? null} onchange={v => (r.defaultServiceTier = v ?? undefined)} />
 		</section>
 	{/if}
 	{#if !r.imageGeneration}

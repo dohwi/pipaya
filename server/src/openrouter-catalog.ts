@@ -4,8 +4,8 @@ import { getSupportedThinkingLevels, type Model } from "@earendil-works/pi-ai";
 import { OPENROUTER_IMAGE_MODELS, OPENROUTER_MODELS } from "@earendil-works/pi-ai/providers/openrouter.models";
 import { THINKING_LEVELS, type ThinkingLevel } from "./store.ts";
 
-export const SERVICE_TIERS = ["flex", "priority", "ultrafast"] as const;
-export type ServiceTier = (typeof SERVICE_TIERS)[number];
+const ENDPOINT_TIERS = ["flex", "priority", "ultrafast"] as const;
+export type ServiceTier = "default" | (typeof ENDPOINT_TIERS)[number];
 
 type LevelMap = NonNullable<Model<any>["thinkingLevelMap"]>;
 
@@ -319,7 +319,7 @@ export class OpenRouterCatalog {
 			if (text.length > MAX_BODY_BYTES) throw new Error("OpenRouter endpoints too large");
 			const rows: unknown = JSON.parse(text)?.data?.endpoints;
 			if (!Array.isArray(rows)) throw new Error("Invalid OpenRouter endpoints");
-			const tiers = SERVICE_TIERS.filter(tier => rows.some(e => e?.service_tier === tier));
+			const tiers = ENDPOINT_TIERS.filter(tier => rows.some(e => e?.service_tier === tier));
 			this.tierCache.set(id, { at: this.now(), tiers });
 			return tiers;
 		};
