@@ -662,6 +662,8 @@ export const en: Record<string, string> = {
 	"탭 접기": "Hide tabs",
 	/* ---- tab overview ---- */
 	"탭 {n}개 모두 보기": "Show all {n} {n#tab|tabs}",
+	"탭 모두 보기": "Show all tabs",
+	"열린 탭을 한 화면에 모아 보고 고르거나 닫습니다": "See every open tab on one screen to pick or close them",
 	"아직 메시지가 없습니다": "No messages yet",
 	"이 폴더에 열린 탭이 없습니다": "No open tabs in this folder",
 	"카드를 길게 누른 채 끌면 탭 순서를 바꿀 수 있습니다": "Hold a card and drag it to reorder your tabs",

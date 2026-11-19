@@ -55,6 +55,7 @@ export type ActionId =
   | "cancelQueue"
   | "settings"
   | "openGraph"
+  | "tabOverview"
   | "toggleTheme"
   | "zoomIn"
   | "zoomOut"
@@ -135,6 +136,12 @@ const BASE: Omit<ActionDef, "group">[] = [
     label: msg("다음 탭으로 이동"),
     hint: msg("탭 바에서 오른쪽 탭으로"),
     default: "Alt+ArrowRight",
+  },
+  {
+    id: "tabOverview",
+    label: msg("탭 모두 보기"),
+    hint: msg("열린 탭을 한 화면에 모아 보고 고르거나 닫습니다"),
+    default: "Mod+Shift+Backslash",
   },
   {
     id: "lastSession",
@@ -352,6 +359,7 @@ const GROUP: Partial<Record<ActionId, ActionDef["group"]>> = {
   nextWorkspace: "nav",
   prevTab: "nav",
   nextTab: "nav",
+  tabOverview: "nav",
   lastSession: "nav",
   nextAttention: "nav",
   findChat: "nav",

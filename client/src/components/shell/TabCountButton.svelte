@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { t } from "../../lib/i18n";
+	import { formatCombo } from "../../lib/keys";
 	import { tabCountText } from "../../lib/tab-overview";
 	import { app } from "../../lib/store.svelte";
 
@@ -10,6 +11,7 @@
 	 */
 	let { count, place = "bar" }: { count: number; place?: "bar" | "header" } = $props();
 	const label = $derived(t("탭 {n}개 모두 보기", { n: count }));
+	const tip = $derived(app.prefs.bindings.tabOverview ? `${label} (${formatCombo(app.prefs.bindings.tabOverview)})` : label);
 </script>
 
 <button
@@ -19,7 +21,7 @@
 	aria-label={label}
 	aria-haspopup="dialog"
 	aria-expanded={app.tabOverview}
-	title={label}
+	title={tip}
 	data-part="tab-count"
 >
 	<span class="box mono" class:wide={count > 99}>{tabCountText(count)}</span>

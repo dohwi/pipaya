@@ -199,6 +199,11 @@ const RUN: Record<ActionId, () => void | Promise<void>> = {
   nextWorkspace: () => stepWorkspace(1),
   prevTab: () => stepTab(-1),
   nextTab: () => stepTab(1),
+  tabOverview: () => {
+    // Only where the tab-count button shows: a server, and a folder with at least one tab.
+    if (app.tabOverview) app.tabOverview = false;
+    else if (app.serverId && app.tabDir?.tabs.length) app.tabOverview = true;
+  },
   lastSession,
   nextAttention,
   findChat: () => void findChat(),
