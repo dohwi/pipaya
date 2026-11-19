@@ -5,8 +5,7 @@
  *  - keys typed inside a modal never reach the app's global shortcuts (switch / delete session…);
  *  - focus moves into the modal on open and returns to whatever opened it on close.
  *
- * `modalLayer` is for `role="dialog"` panels (components/ui/Modal.svelte uses it); `nativeModal` is the same for a
- * component whose root is a native `<dialog>` that lives as long as the component.
+ * `modalLayer` is for `role="dialog"` panels (components/ui/Modal.svelte uses it).
  *
  * Listeners go through `on()` from svelte/events: it runs the delegated `onkeydown` handlers of the children first,
  * so stopping propagation here does not silence them (a plain addEventListener + stopPropagation would).
@@ -123,7 +122,7 @@ export function handleBack(): boolean {
 const FOCUSABLE =
 	'a[href], button:not(:disabled), input:not(:disabled):not([type="hidden"]), select:not(:disabled), textarea:not(:disabled), summary, [tabindex]:not([tabindex="-1"]), [contenteditable="true"]';
 
-export function focusables(root: HTMLElement): HTMLElement[] {
+function focusables(root: HTMLElement): HTMLElement[] {
 	// tabIndex < 0: a control the keyboard reaches some other way (a card's X): Tab skips it, so the trap must too, or the
 	// wrap waits on an element Tab never lands on and focus slips out of the modal first
 	return [...root.querySelectorAll<HTMLElement>(FOCUSABLE)].filter((el) => el.tabIndex >= 0 && el.getClientRects().length > 0 && !el.closest("[inert]"));
@@ -221,49 +220,6 @@ export function modalLayer(node: HTMLElement, opts: LayerOpts) {
 			const top = topLayer();
 			const back = opener?.isConnected && (!top || top.contains(opener)) ? opener : top;
 			if (back && (document.activeElement === document.body || node.contains(document.activeElement))) back.focus({ preventScroll: true });
-		},
-	};
-}
-
-/**
- * A component-lifetime native `<dialog>`: opens modally on mount, closes and gives focus back on destroy, dismisses on a
- * press that both starts and ends on the backdrop (a text selection dragged outside is not a dismissal), keeps Tab
- * inside, and keeps the app's shortcuts quiet. Esc arrives as the dialog's own `cancel` event (`oncancel`).
- */
-export function nativeModal(dialog: HTMLDialogElement, opts: { onclose: () => void }) {
-	let current = opts;
-	const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-	dialog.showModal();
-	const back: Back = { opts: { onclose: () => current.onclose() }, entry: false };
-	track(back);
-
-	const outside = (e: MouseEvent) => {
-		if (e.target !== dialog) return false;
-		const r = dialog.getBoundingClientRect();
-		return e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom;
-	};
-	let downOutside = false;
-	const onDown = (e: MouseEvent) => (downOutside = outside(e));
-	const onClick = (e: MouseEvent) => {
-		const dismiss = downOutside && outside(e);
-		downOutside = false;
-		if (dismiss) current.onclose();
-	};
-	const onKey = (e: KeyboardEvent) => {
-		e.stopPropagation();
-		trapTab(e, dialog);
-	};
-	const offs = [on(dialog, "mousedown", onDown), on(dialog, "click", onClick), on(dialog, "keydown", onKey)];
-
-	return {
-		update(next: { onclose: () => void }) {
-			current = next;
-		},
-		destroy() {
-			for (const off of offs) off();
-			untrack(back);
-			dialog.close();
-			if (opener?.isConnected) opener.focus();
 		},
 	};
 }
