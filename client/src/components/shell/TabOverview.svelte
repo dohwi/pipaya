@@ -8,6 +8,7 @@
 	import { agoText, gridNext, previewOfItems, previewOfStored, shortPath, type Preview } from "../../lib/tab-overview";
 	import { reflow, rowOut } from "../../lib/motion";
 	import Modal from "../ui/Modal.svelte";
+	import EmptyState from "../ui/EmptyState.svelte";
 	import IconButton from "../ui/IconButton.svelte";
 	import Icon from "../ui/Icon.svelte";
 	import Pin from "../ui/Pin.svelte";
@@ -196,7 +197,7 @@
 				{/each}
 			</ul>
 		{:else}
-			<p class="empty">{t("이 폴더에 열린 탭이 없습니다")}</p>
+			<EmptyState tone="plain" as="p">{t("이 폴더에 열린 탭이 없습니다")}</EmptyState>
 		{/if}
 	</div>
 </Modal>
@@ -431,13 +432,5 @@
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
-	}
-	.empty {
-		margin: 0;
-		padding: 24px 12px;
-		text-align: center;
-		color: var(--text-faint);
-		font-size: var(--fs-sm);
-		line-height: 20px;
 	}
 </style>

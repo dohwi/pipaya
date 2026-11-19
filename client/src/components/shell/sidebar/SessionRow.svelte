@@ -9,6 +9,7 @@
 	import type { Session } from "../../../lib/types";
 	import { app } from "../../../lib/store.svelte";
 	import { shortDateTime } from "../../../lib/format";
+	import Handle from "../../ui/Handle.svelte";
 	import Icon from "../../ui/Icon.svelte";
 	import PinMark from "../../ui/PinMark.svelte";
 	import AgentBadge from "../AgentBadge.svelte";
@@ -31,7 +32,7 @@
 
 {#snippet body(pinned: boolean)}
 	<span class="lead"><AgentBadge id={x.id} server={n.server.id} state={st} size={16} />{#if pinned}<PinMark />{/if}</span>
-	{#if label}<span class="who mono {st}">{label.text}</span>{/if}
+	{#if label}<Handle text={label.text} state={st} />{/if}
 	<RowTitle text={sessionTitle(x.title)} />
 	{#if parent}<span class="from mono"><Icon name="fork" /><span class="fn">{parent.text}</span></span>{/if}
 	{#if sched.count}<span class="clock" role="img" aria-label={schedTip} title={schedTip}><Icon name="clock" /></span>{/if}
@@ -56,14 +57,6 @@
 		height: 13px;
 		stroke-width: 2;
 	}
-	/* label of a pane in a split tab: kept in view while the pane scrolls */
-	.who {
-		flex: none;
-		font-size: var(--fs-2xs);
-		font-weight: 600;
-		color: var(--text-faint);
-		line-height: 16px; /* whole-pixel line box centred by the row: the handle's ink centre lands on the title's (centre line, not baseline) */
-	}
 	/* the parent mark (fork icon + "@parent", like "forked from") after the title: gives way to it only when the row is narrow (the title shrinks first) */
 	.from {
 		flex: 0 1 auto;
@@ -74,7 +67,7 @@
 		max-width: 96px; /* a long parent name never takes the title's room */
 		font-size: var(--fs-2xs);
 		color: var(--text-faint);
-		line-height: 16px; /* whole-pixel line box, centred on the title's like .who */
+		line-height: 16px; /* whole-pixel line box, centred on the title's like the handle (ui/Handle) */
 	}
 	.from :global(svg) {
 		width: 12px;
@@ -87,9 +80,4 @@
 		white-space: nowrap;
 		text-overflow: ellipsis;
 	}
-	/* the handle takes the state colour with the badge (as in the tab bar and the pane header): the name is the bigger mark, so a glance at the list finds who is working, asking or failed */
-	.who.working { color: var(--info); }
-	.who.asking { color: var(--warn); }
-	.who.done { color: var(--ok); }
-	.who.failed { color: var(--danger); }
 </style>

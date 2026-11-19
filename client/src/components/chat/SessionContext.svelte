@@ -75,13 +75,21 @@
 	);
 </script>
 
+<!-- one row header for every foldable source (AGENTS.md files, the base prompt, tools, system texts) -->
+{#snippet foldHead(key: string, name: string, meta: string, mono: boolean, when?: string)}
+	<button class="fold" onclick={() => (opened[key] = !opened[key])} aria-expanded={!!opened[key]}>
+		<span class="label"><span class="source-name" class:mono>{name}</span><span class="meta">{meta}</span>{#if when}<span class="when-line">{when}</span>{/if}</span>
+		<span class="chev" class:open={opened[key]}><Icon name="chevron-right" /></span>
+	</button>
+{/snippet}
+
 <Modal {onclose} title={t("적용된 컨텍스트")} sub={subText} width="xl" maxHeight="720px" safeArea portal>
 	{#snippet headerActions()}
 		<IconButton icon="retry" label={t("새로고침")} tip onclick={() => refresh++} disabled={loading} />
 	{/snippet}
 	<DialogBody busy={loading}>
 			{#if error}
-				<div class="gap"><Notice tone="warn">{error}{#snippet action()}<button onclick={() => refresh++}>{t("다시 시도")}</button>{/snippet}</Notice></div>
+				<div class="gap"><Notice tone="warn" onretry={() => refresh++}>{error}</Notice></div>
 			{/if}
 			{#if !data && loading}
 				<EmptyState loading />
@@ -102,10 +110,7 @@
 					{#each data.instructions as instruction, i (instruction.path)}
 						{#if inPart(instruction)}
 						<div class="source">
-							<button class="fold" onclick={() => (opened[instruction.path] = !opened[instruction.path])} aria-expanded={!!opened[instruction.path]}>
-								<span class="label"><span class="source-name mono">{i + 1}. {instruction.path}</span><span class="meta">{t(scope[instruction.scope])} · {bytes(instruction.bytes)}</span></span>
-								<span class="chev" class:open={opened[instruction.path]}><Icon name="chevron-right" /></span>
-							</button>
+							{@render foldHead(instruction.path, `${i + 1}. ${instruction.path}`, `${t(scope[instruction.scope])} · ${bytes(instruction.bytes)}`, true)}
 							{#if opened[instruction.path]}<pre in:collapseIn out:collapseOut>{instruction.content}</pre>{/if}
 						</div>
 						{/if}
@@ -118,10 +123,7 @@
 					<h2 class="part">{t("시스템 정의")}</h2>
 				<section class="group">
 					<div class="source">
-						<button class="fold" onclick={() => (opened.base = !opened.base)} aria-expanded={!!opened.base}>
-							<span class="label"><span class="source-name">{t("기본 프롬프트")}</span><span class="meta">{t("{n}개", { n: 1 + (data.skillsPrompt ? 1 : 0) })} · {t("읽기 전용")} · {bytes(baseBytes)}</span></span>
-							<span class="chev" class:open={opened.base}><Icon name="chevron-right" /></span>
-						</button>
+						{@render foldHead("base", t("기본 프롬프트"), `${t("{n}개", { n: 1 + (data.skillsPrompt ? 1 : 0) })} · ${t("읽기 전용")} · ${bytes(baseBytes)}`, false)}
 						{#if opened.base}
 							<div class="inner" in:collapseIn out:collapseOut>
 								{#each [
@@ -130,10 +132,7 @@
 								] as block (block.key)}
 									{#if block.text}
 										<div class="source">
-											<button class="fold" onclick={() => (opened[block.key] = !opened[block.key])} aria-expanded={!!opened[block.key]}>
-												<span class="label"><span class="source-name">{block.name}</span><span class="meta">{block.meta} · {bytes(encoder.encode(block.text).length)}</span></span>
-												<span class="chev" class:open={opened[block.key]}><Icon name="chevron-right" /></span>
-											</button>
+											{@render foldHead(block.key, block.name, `${block.meta} · ${bytes(encoder.encode(block.text).length)}`, false)}
 											{#if opened[block.key]}<pre in:collapseIn out:collapseOut>{block.text}</pre>{/if}
 										</div>
 									{/if}
@@ -144,19 +143,13 @@
 				</section>
 				<section class="group">
 					<div class="source">
-						<button class="fold" onclick={() => (opened.tools = !opened.tools)} aria-expanded={!!opened.tools}>
-							<span class="label"><span class="source-name">{t("도구")}</span><span class="meta">{t("{n}개", { n: activeTools.length })} · {bytes(toolTotal)}</span></span>
-							<span class="chev" class:open={opened.tools}><Icon name="chevron-right" /></span>
-						</button>
+						{@render foldHead("tools", t("도구"), `${t("{n}개", { n: activeTools.length })} · ${bytes(toolTotal)}`, false)}
 						{#if opened.tools}
 							<div class="inner" in:collapseIn out:collapseOut>
 								<p class="note">{t("모델이 매 요청마다 받는 도구 정의입니다. 이 대화에 적용된 도구만 보입니다.")}</p>
 								{#each activeTools as tool (tool.name)}
 									<div class="source">
-										<button class="fold" onclick={() => (opened[`tool:${tool.name}`] = !opened[`tool:${tool.name}`])} aria-expanded={!!opened[`tool:${tool.name}`]}>
-											<span class="label"><span class="source-name mono">{tool.name}</span><span class="meta">{t(source[tool.source])} · {bytes(tool.bytes)}</span></span>
-											<span class="chev" class:open={opened[`tool:${tool.name}`]}><Icon name="chevron-right" /></span>
-										</button>
+										{@render foldHead(`tool:${tool.name}`, tool.name, `${t(source[tool.source])} · ${bytes(tool.bytes)}`, true)}
 										{#if opened[`tool:${tool.name}`]}<pre in:collapseIn out:collapseOut>{toolText(tool)}</pre>{/if}
 									</div>
 								{:else}
@@ -168,10 +161,7 @@
 				</section>
 				<section class="group">
 					<div class="source">
-						<button class="fold" onclick={() => (opened.prompts = !opened.prompts)} aria-expanded={!!opened.prompts}>
-							<span class="label"><span class="source-name">{t("시스템이 추가하는 문구")}</span><span class="meta">{t("{n}개", { n: shownPrompts.length })} · {t("읽기 전용")}</span></span>
-							<span class="chev" class:open={opened.prompts}><Icon name="chevron-right" /></span>
-						</button>
+						{@render foldHead("prompts", t("시스템이 추가하는 문구"), `${t("{n}개", { n: shownPrompts.length })} · ${t("읽기 전용")}`, false)}
 						{#if opened.prompts}
 							<div class="inner" in:collapseIn out:collapseOut>
 								{#each promptGroups as g (g.delivery)}
@@ -180,10 +170,7 @@
 										<p class="note">{t(g.name)} — {t(g.hint)}</p>
 										{#each list as p (p.id)}
 											<div class="source">
-												<button class="fold" onclick={() => (opened[`prompt:${p.id}`] = !opened[`prompt:${p.id}`])} aria-expanded={!!opened[`prompt:${p.id}`]}>
-													<span class="label"><span class="source-name">{p.title}</span><span class="meta">{t(kindName[p.kind])} · {bytes(p.bytes)}</span><span class="when-line">{p.when}</span></span>
-													<span class="chev" class:open={opened[`prompt:${p.id}`]}><Icon name="chevron-right" /></span>
-												</button>
+												{@render foldHead(`prompt:${p.id}`, p.title, `${t(kindName[p.kind])} · ${bytes(p.bytes)}`, false, p.when)}
 												{#if opened[`prompt:${p.id}`]}<pre in:collapseIn out:collapseOut>{p.text}</pre>{/if}
 											</div>
 										{/each}

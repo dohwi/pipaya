@@ -4,6 +4,7 @@
 	import { extensions } from "../../lib/extensions/host.svelte";
 	import { t } from "../../lib/i18n";
 	import { schedule, unschedule } from "../../lib/frame";
+	import Handle from "../ui/Handle.svelte";
 	import Icon from "../ui/Icon.svelte";
 	import SessionStrip from "./SessionStrip.svelte";
 	import AgentBadge from "./AgentBadge.svelte";
@@ -258,7 +259,7 @@
 						}}
 					/>
 				{:else}
-					{#if who}<span class="who mono {st}">{who.text}</span>{/if}<span class="t">{titleOf(x)}</span>{#if parentOf(x)}{@const pl = parentOf(x)!}<span class="from mono" title={pl.title}><Icon name="fork" /><span class="fn">{pl.text}</span></span>{/if}
+					{#if who}<Handle text={who.text} state={st} />{/if}<span class="t">{titleOf(x)}</span>{#if parentOf(x)}{@const pl = parentOf(x)!}<span class="from mono" title={pl.title}><Icon name="fork" /><span class="fn">{pl.text}</span></span>{/if}
 				{/if}
 				{#if x.kind === "group"}<span class="n mono">{x.members.length}</span>{/if}
 				{#if x.kind !== "group"}<button class="x tap" onpointerdown={(e) => e.stopPropagation()} onclick={(e) => (e.stopPropagation(), close(x))} aria-label={closeLabel(x)} title={closeLabel(x)}><Icon name="x" /></button>{/if}
@@ -546,28 +547,6 @@
 		pointer-events: none;
 	}
 
-	/* the `@name` other sessions call this one by, before its title: the same small dim handle the sidebar row and the
-	   split tab's title bar carry (11px on a 16px line box, so it centres on the tab like the title does). It takes the
-	   same activity colour as the sidebar's handle, so a working conversation reads blue in both places. */
-	.who {
-		flex: none;
-		font-size: var(--fs-2xs);
-		font-weight: 600;
-		color: var(--text-faint);
-		line-height: 16px;
-	}
-	.who.working {
-		color: var(--info);
-	}
-	.who.asking {
-		color: var(--warn);
-	}
-	.who.done {
-		color: var(--ok);
-	}
-	.who.failed {
-		color: var(--danger);
-	}
 	/* the parent mark (fork icon + "@parent", like "forked from"): who made this conversation, after its title and quieter than its own handle */
 	.from {
 		flex: none;
@@ -576,7 +555,7 @@
 		gap: 4px;
 		font-size: var(--fs-2xs);
 		color: var(--text-faint);
-		line-height: 16px; /* whole-pixel line box, centred on the title's like .who */
+		line-height: 16px; /* whole-pixel line box, centred on the title's like the handle (ui/Handle) */
 	}
 	.from :global(svg) {
 		width: 12px;

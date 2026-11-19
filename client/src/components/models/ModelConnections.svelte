@@ -253,7 +253,7 @@
 	{#if loading && !cfg}
 		<p class="hint note">{t("불러오는 중…")}</p>
 	{:else if loadError}
-		<Notice tone="danger">{loadError}{#snippet action()}<button type="button" onclick={() => load(serverId)}>{t("다시 시도")}</button>{/snippet}</Notice>
+		<Notice tone="danger" onretry={() => load(serverId)}>{loadError}</Notice>
 	{:else if cfg}
 		{#if actionError}<Notice tone="danger" role="alert">{actionError}</Notice>{/if}
 		{#if problems.length}

@@ -203,7 +203,6 @@
 	.check input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; box-shadow: none; }
 	.invalid input:not([type="checkbox"]), textarea[aria-invalid="true"] { border-color: var(--danger); }
 	input:disabled, textarea:disabled { opacity: 0.6; }
-	.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 	.advanced { margin-top: 4px; }
 	.body { gap: 8px; }
 </style>

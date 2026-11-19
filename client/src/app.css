@@ -824,6 +824,16 @@ kbd {
 	color: var(--lv);
 }
 
+/* Read by a screen reader, never drawn (a "(필수)" after a required field's star, a live status line). */
+.sr-only {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	overflow: hidden;
+	clip-path: inset(50%);
+	white-space: nowrap;
+}
+
 .mono {
 	font-family: var(--mono);
 	/* JetBrains Mono ligatures merge "//" into one glyph, which looks like a dropped slash in URLs */
