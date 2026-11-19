@@ -38,6 +38,7 @@ import type { CatalogInfo, CompactionSettings, CompactionSettingsInfo, DefaultMo
 } from "./types";
 import { msg, t } from "./i18n";
 import type { RepoInfo } from "./projects";
+import { uniqueBy } from "./unique";
 import { PROTOCOL_HEADER, PROTOCOL_QUERY, PROTOCOL_VERSION, type ServerUpdateStatus, type ServerVersions } from "./protocol";
 
 export class ApiError extends Error {
@@ -232,8 +233,11 @@ export class Api {
 		this.req<{ ok: boolean }>("DELETE", `/extensions/${encodeURIComponent(id)}`, undefined, signal);
 
 	/* ---------- extensions that run inside the server (server/src/extensions) ---------- */
-	serverExtensions = (signal?: AbortSignal) =>
+	private serverExtensionsRaw = (signal?: AbortSignal) =>
 		this.req<{ extensions: { name: string; tools: string[]; commands: { name: string; description?: string; args?: string }[]; commandFamilies: { prefix: string; label?: string }[]; methods: string[]; routes?: { methods: string[]; path: string; public: boolean }[]; providers: string[]; flags: { name: string; description?: string; type: string; value?: boolean | string }[]; events: string[]; companion?: string; title?: string; version?: string; description?: string; descriptions?: Record<string, string>; translations?: Record<string, Record<string, string>>; settings?: unknown[]; settingsId: string; panel?: unknown; ui?: { components: string[]; mounts: { slot: string; component: string; order?: number }[]; replaces: Record<string, string> }; clientPackage?: boolean; error?: string }[]; commands: { name: string; description?: string; args?: string; extension: string }[] }>("GET", "/server-extensions", undefined, signal);
+	/** One entry per name: an older server lists an extension kept in both of its folders twice, which broke keyed lists. */
+	serverExtensions = (signal?: AbortSignal) =>
+		this.serverExtensionsRaw(signal).then((r) => ({ ...r, extensions: uniqueBy(r.extensions, (e) => e.name) }));
 	callServerExtension = (extension: string, method: string, params: unknown, sessionId: string | null, signal?: AbortSignal) =>
 		this.req<{ result: unknown }>("POST", `/server-extensions/${encodeURIComponent(extension)}/methods/${encodeURIComponent(method)}${sessionId ? `?sessionId=${encodeURIComponent(sessionId)}` : ""}`, params ?? {}, signal).then((r) => r.result);
 	/** The Svelte sources a server extension carries for its own settings page (`pipaya.components`); unvalidated, run only after the user agreed. */
