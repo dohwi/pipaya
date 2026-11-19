@@ -8,6 +8,7 @@
 	import { Api, errorText } from "../../lib/api";
 	import { app } from "../../lib/store.svelte";
 	import { tilde } from "../../lib/format";
+	import { tailKeepLast } from "../../lib/fit-text";
 	import type { Session } from "../../lib/types";
 	import Badge from "../ui/Badge.svelte";
 	import Icon from "../ui/Icon.svelte";
@@ -191,7 +192,7 @@
 						<button class="fold" onclick={() => (folded[g.cwd] = !folded[g.cwd])} aria-expanded={!folded[g.cwd]}>
 							<Icon name={folded[g.cwd] ? "chevron-right" : "chevron-down"} />
 							<Icon name="folder" />
-							<span class="mono path" title={g.cwd}>{label(g.cwd)}</span>
+							<span class="mono path" title={g.cwd} use:tailKeepLast={label(g.cwd)}></span>
 							<span class="n">{g.list.length}</span>
 						</button>
 						{#if nIn(g.list)}
@@ -280,6 +281,7 @@
 		color: var(--text-dim);
 	}
 	.path {
+		flex: 1; /* the path takes the row, so every folder's count ends on one right line, whatever the path's length */
 		min-width: 0;
 		overflow: hidden;
 		text-overflow: ellipsis;

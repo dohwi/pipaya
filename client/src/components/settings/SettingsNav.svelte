@@ -301,7 +301,7 @@
 	.nav .item::after {
 		content: "";
 		position: absolute;
-		/* trunk centre = icon centre: nav 8 + button 12 + glyph 19/2 = 29.5; rows start at 44, so the 1.5px line's left edge is 44 - 15.25 = 28.75 */
+		/* trunk centre = icon centre: button 12 + glyph 19/2 = 21.5 into the nav's content; rows start at 36, so the 1.5px line's left edge is 36 - 15.25 = 20.75 */
 		left: -15.25px;
 		pointer-events: none;
 	}
@@ -403,7 +403,7 @@
 		flex-direction: column;
 		gap: 4px;
 		align-self: stretch;
-		padding: 12px 8px;
+		padding: 12px; /* 12 + the rows' 12 + the dialog's 1px border = 25: the icons and group labels start on the title's and search field's line */
 		border-right: 1px solid var(--border);
 		overflow-y: auto;
 		scroll-padding-block: 8px;

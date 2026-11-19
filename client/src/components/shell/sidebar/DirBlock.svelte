@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { collapseIn, collapseOut } from "../../../lib/motion";
-	import { tail } from "../../../lib/fit-text";
+	import { tail, tailKeepLast } from "../../../lib/fit-text";
 	import { t } from "../../../lib/i18n";
 	import { ACTIVITY_LABEL, ACTIVITY_TONE, mostUrgent } from "../../../lib/activity";
 	import { tabPanes } from "../../../lib/nav";
@@ -89,7 +89,8 @@
 						}}
 					/>
 				{:else if branch && !app.sidebar.dirName(n.server.id, d.path)}
-					<span class="dname mono" title={branch.name}>{branch.name}</span>
+					<!-- a path inside the worktree keeps its last folder (`…/alpha`): the end is what tells sibling folders apart -->
+					<span class="dname mono" title={branch.name} use:tailKeepLast={branch.name}></span>
 					{#if branch.sub}<span class="dparent mono" use:tail={branch.sub}></span>{/if}
 				{:else}
 					<span class="dname" title={label}>{label}</span>

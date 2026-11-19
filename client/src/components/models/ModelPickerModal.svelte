@@ -278,6 +278,7 @@
 		gap: 4px;
 		height: var(--control-h-sm);
 		padding: 0 8px;
+		margin-left: -8px; /* the glyph, not the button, on the footer's 16px gutter (rule 5): the title and the search field start there too */
 		border-radius: var(--radius-control);
 		color: var(--text-dim);
 		font-size: var(--fs-sm);
