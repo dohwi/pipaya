@@ -25,6 +25,7 @@ import {
   tabComboYieldsFocus,
   type ActionId,
 } from "./keys";
+import { topLayer } from "./dialog";
 import { renameNow } from "./rename-places";
 import { chord } from "./chord.svelte";
 import { extensions } from "./extensions/host.svelte";
@@ -323,7 +324,7 @@ function armPrefixAction(id: ActionId) {
     if (!chord.prefix) return;
     chord.prefix = null;
     clearHeldKeys();
-    if (!app.prefs.recordingKey) runAction(id);
+    if (!app.prefs.recordingKey && !topLayer()) runAction(id);
   }, PREFIX_WAIT_MS);
 }
 
@@ -334,7 +335,7 @@ function armPrefixAction(id: ActionId) {
  */
 export function onShortcutCapture(e: KeyboardEvent) {
   const prefix = chord.prefix;
-  if (!prefix || app.prefs.recordingKey || e.isComposing) return;
+  if (!prefix || topLayer() || app.prefs.recordingKey || e.isComposing) return;
   if (MODIFIER_CODE.test(e.code)) return;
   e.preventDefault();
   e.stopPropagation();
@@ -360,6 +361,8 @@ export function onShortcutCapture(e: KeyboardEvent) {
 /** Window-level key handler: runs the action bound to the keys held right now. */
 export function onShortcut(e: KeyboardEvent) {
   if (e.defaultPrevented || app.prefs.recordingKey) return;
+  // Focus can land on the body outside the top panel. Its shortcuts still belong to the modal layer.
+  if (topLayer()) return;
   // A focused terminal gets its keys (Ctrl+B, Esc, Alt+N...): only Mod+Shift/Alt shortcuts and F-keys reach the app.
   const fromTerminal = inTerminal(e);
   if (fromTerminal && !appTakesKey(e, app.prefs.bindings, app.prefs.terminal.appKeysFirst)) return;

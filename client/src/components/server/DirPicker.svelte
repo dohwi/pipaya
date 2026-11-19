@@ -126,7 +126,7 @@
 </script>
 
 <!-- opened over the server dialog (layer 2) when it picks the default folder -->
-<Modal {onclose} title={mode === "default" ? t("기본 작업 폴더") : t("작업 폴더 선택")} width="l" layer={3} safeArea>
+<Modal closeShortcut={mode === "chat" ? "workdir" : undefined} {onclose} title={mode === "default" ? t("기본 작업 폴더") : t("작업 폴더 선택")} width="l" layer={3} safeArea>
 
 	<form
 		class="path"

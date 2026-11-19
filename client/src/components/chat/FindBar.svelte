@@ -75,13 +75,14 @@
 		bar?.closest(".pane")?.querySelector<HTMLTextAreaElement>("textarea")?.focus();
 	}
 
-	// Ctrl+F: the focused pane opens its bar (or refocuses it).
+	// Ctrl+F: the focused pane opens or closes its bar.
 	let seen = untrack(() => app.findTick);
 	$effect(() => {
 		const n = app.findTick;
 		if (n === seen) return;
 		seen = n;
 		if (!untrack(() => focused)) return;
+		if (untrack(() => open)) return close();
 		open = true;
 		void tick().then(() => {
 			input?.focus();

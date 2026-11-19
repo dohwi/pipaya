@@ -3,6 +3,8 @@
 	import type { Snippet } from "svelte";
 	import { fadeIn, fadeOut, modalIn, modalOut, modalQuickIn } from "../../lib/motion";
 	import { RECENTRE, modalLayer, portal as lift } from "../../lib/dialog";
+	import { app } from "../../lib/store.svelte";
+	import type { ActionId } from "../../lib/keys";
 	import ModalHeader from "./ModalHeader.svelte";
 
 	/**
@@ -18,6 +20,7 @@
 	let {
 		onclose,
 		onescape,
+		closeShortcut,
 		label,
 		labelledby,
 		describedby,
@@ -48,6 +51,7 @@
 		children,
 	}: {
 		onclose: () => void;
+		closeShortcut?: ActionId;
 		/** Esc when it should do less than closing (step back from a sub-page); defaults to `onclose` */
 		onescape?: () => void;
 		label?: string;
@@ -218,7 +222,7 @@
 		style:--modal-max-h={maxHeight}
 		style:--modal-gut={gutter}
 		use:whole
-		use:modalLayer={{ onclose: onescape ?? onclose, dismissible, opener }}
+		use:modalLayer={{ onclose: onescape ?? onclose, onshortcutclose: onclose, closeBinding: closeShortcut && !app.prefs.recordingKey ? app.prefs.bindings[closeShortcut] : undefined, dismissible, opener }}
 		in:enter|global
 		out:modalOut|global
 	>

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import type { ActionId } from "../../lib/keys";
 	import Button from "./Button.svelte";
 	import DialogFooter from "./DialogFooter.svelte";
 	import Icon from "./Icon.svelte";
@@ -17,6 +18,7 @@
 	 */
 	let {
 		title,
+		closeShortcut,
 		onclose,
 		query = $bindable(""),
 		placeholder,
@@ -28,6 +30,7 @@
 		footerStart,
 	}: {
 		title: string;
+		closeShortcut?: ActionId;
 		onclose: () => void;
 		query?: string;
 		placeholder?: string;
@@ -74,7 +77,7 @@
 	}
 </script>
 
-<Modal {onclose} {title} compact {width} {layer} elevated portal>
+<Modal {closeShortcut} {onclose} {title} compact {width} {layer} elevated portal>
 	<div class="pk-body">
 		<div class="pk-search-wrap">
 			<Icon name="search" />

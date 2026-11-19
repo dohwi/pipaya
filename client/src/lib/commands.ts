@@ -93,6 +93,7 @@ export async function findChat() {
 	const all = await app.listAll();
 	all.sort((a, b) => b.updatedAt - a.updatedAt);
 	app.palette = {
+		closeShortcut: "findChat",
 		title: t("대화 찾기"),
 		empty: msg("대화가 없습니다"),
 		items: sessionRows(all, { current: app.activeId ?? undefined, showClosed: true }),
@@ -163,8 +164,8 @@ async function fork(arg: string) {
 	};
 }
 
-function pickList<T extends string>(title: string, items: { id: T; title: string; sub?: string; current?: boolean }[], apply: (id: T) => void) {
-	app.palette = { title, empty: msg("선택할 항목이 없습니다"), items, onpick: (it) => apply(it.id as T) };
+function pickList<T extends string>(title: string, items: { id: T; title: string; sub?: string; current?: boolean }[], apply: (id: T) => void, closeShortcut?: "workdir") {
+	app.palette = { title, closeShortcut, empty: msg("선택할 항목이 없습니다"), items, onpick: (it) => apply(it.id as T) };
 }
 
 const DEFINITIONS: SlashCommand[] = [
@@ -232,7 +233,7 @@ const DEFINITIONS: SlashCommand[] = [
 				seen.add(w.path);
 				items.push({ id: w.path, title: w.path, sub: t("활성 {active} · 닫힘 {closed}", { active: w.active, closed: w.closed }), current: w.path === app.workdir });
 			}
-			pickList(t("작업 폴더"), items, (id) => void app.changeWorkdir(id));
+			pickList(t("작업 폴더"), items, (id) => void app.changeWorkdir(id), "workdir");
 		},
 	},
 	{

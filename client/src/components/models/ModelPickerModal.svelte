@@ -1,4 +1,5 @@
 <script lang="ts">
+	import type { ActionId } from "../../lib/keys";
 	import { t } from "../../lib/i18n";
 	import { slidingIndicator } from "../../lib/sliding-indicator";
 	import { collapseIn, collapseOut } from "../../lib/motion";
@@ -31,6 +32,7 @@
 		onfav,
 		onmanage,
 		conn = null,
+		closeShortcut,
 		onclose,
 	}: {
 		models: ModelInfo[];
@@ -46,6 +48,7 @@
 		onfav?: (provider: string, id: string) => void;
 		onmanage?: () => void;
 		conn?: { baseUrl: string; token: string } | null;
+		closeShortcut?: ActionId;
 		onclose: () => void;
 	} = $props();
 
@@ -136,7 +139,7 @@
 {/snippet}
 
 <!-- opened from the composer (over the page) or from settings: the top layer works for both -->
-<PickerModal title={title ?? t("모델 설정")} {onclose} bind:query={filter} placeholder={t("모델 검색")}>
+<PickerModal {closeShortcut} title={title ?? t("모델 설정")} {onclose} bind:query={filter} placeholder={t("모델 검색")}>
 	{#snippet list()}
 		{#if allowUnset}
 			<PickerOption selected={!sel} onclick={unset}>

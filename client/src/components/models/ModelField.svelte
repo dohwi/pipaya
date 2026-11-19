@@ -79,6 +79,7 @@
 
 {#if open}
 	<ModelPickerModal
+		closeShortcut={variant === "inline" ? "modelPicker" : undefined}
 		{models}
 		{providers}
 		{value}
