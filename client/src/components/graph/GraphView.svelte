@@ -613,8 +613,8 @@
 	const keyHint = $derived(app.prefs.bindings.openGraph ? ` (${formatCombo(app.prefs.bindings.openGraph)})` : "");
 </script>
 
-<!-- One line of a card that may not fit: idle it ends in "…" (an id: loses its middle, `.cut`); while the card is hovered
-     or selected, one that does not fit flows by and loops back to its start (`marquee` measures it, CSS moves it). -->
+<!-- One line of a card that may not fit: idle it ends in "…" (an id: loses its middle, `.cut`); while the card is hovered,
+     one that does not fit flows by and loops back to its start (`marquee` measures it, CSS moves it). -->
 {#snippet flow(text: string, mid = false)}
 	{#if mid}<span class="cut" use:middle={text}></span>{/if}<span class="track" aria-hidden={mid ? "true" : undefined}><span class="mq">{text}</span><span class="dup" aria-hidden="true">{text}</span></span>
 {/snippet}
@@ -1398,7 +1398,7 @@
 		color: var(--text-dim);
 	}
 
-	/* ---- a line that does not fit: "…" idle, flowing by while its card is hovered or selected ---- */
+	/* ---- a line that does not fit: "…" idle, flowing by while its card is hovered ---- */
 	.fl .track {
 		display: inline;
 	}
@@ -1420,19 +1420,16 @@
 		top: 0;
 		visibility: hidden;
 	}
-	@media (prefers-reduced-motion: no-preference) {
-		.card:hover .fl:global([data-over]),
-		.card.sel .fl:global([data-over]) {
+	@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+		.card:hover .fl:global([data-over]) {
 			text-overflow: clip;
 			-webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 14px), transparent);
 			mask-image: linear-gradient(90deg, #000 calc(100% - 14px), transparent);
 		}
-		.card:hover .fl:global([data-over]) .cut,
-		.card.sel .fl:global([data-over]) .cut {
+		.card:hover .fl:global([data-over]) .cut {
 			display: none;
 		}
-		.card:hover .fl:global([data-over]) .track,
-		.card.sel .fl:global([data-over]) .track {
+		.card:hover .fl:global([data-over]) .track {
 			position: static;
 			display: flex;
 			width: max-content;
@@ -1441,9 +1438,7 @@
 			animation: graph-mq var(--mq-d, 8s) linear 400ms infinite;
 		}
 		.card:hover .fl:global([data-over]) .mq,
-		.card:hover .fl:global([data-over]) .dup,
-		.card.sel .fl:global([data-over]) .mq,
-		.card.sel .fl:global([data-over]) .dup {
+		.card:hover .fl:global([data-over]) .dup {
 			display: block;
 			flex: none;
 			padding-right: 32px;
