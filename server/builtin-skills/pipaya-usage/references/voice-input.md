@@ -13,7 +13,7 @@ is stored on the server and never sent back; the screen only says whether one is
 | Use voice input | the on/off switch |
 | Server address | the transcription server's origin, e.g. `https://api.openai.com` (no path) |
 | Path | the request path; empty means `/v1/audio/transcriptions`. Gateways often mount it elsewhere (`/v0/management/audio/transcriptions`) |
-| Model | e.g. `whisper-1`, `voxtral-mini-latest`; empty sends no model |
+| Model | e.g. `gpt-transcribe` (OpenAI's recommendation), `whisper-1`; empty sends no model |
 | Language | optional hint (`ko`); empty lets the server decide. `gpt-transcribe` is sent `languages[]` instead |
 | API key | written once, never shown again; saving it empty removes it |
 
