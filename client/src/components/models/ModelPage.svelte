@@ -348,8 +348,8 @@
 		font-weight: 600;
 	}
 	/* the strengths this model offers, as a ladder from off to max: one quiet rail, seven nodes, each node a toggle.
-	   off = a hollow ring on the rail, on = the ring filled in the level's colour with a soft halo and the name in that
-	   colour. The rail is never coloured between nodes: a filled span would read as a range slider to drag.
+	   off = a hollow ring on the rail, on = the ring filled in the level's colour (no halo: the fill and the coloured
+	   name already say "on") and the name in that colour. The rail is never coloured between nodes: a filled span would read as a range slider to drag.
 	   Seven equal columns on every width (390px phone: 46px each, "minimal" in 12px fits), so nothing wraps or scrolls. */
 	.ladder {
 		position: relative;
@@ -390,7 +390,7 @@
 		border-radius: 50%;
 		border: 2px solid var(--border-strong);
 		background: var(--bg);
-		transition: background var(--motion-fast) var(--ease-std), border-color var(--motion-fast) var(--ease-std), box-shadow var(--motion-fast) var(--ease-std), transform var(--motion-fast) var(--ease-std);
+		transition: background var(--motion-fast) var(--ease-std), border-color var(--motion-fast) var(--ease-std), transform var(--motion-fast) var(--ease-std);
 	}
 	/* the name may run a few px past its column (a 360px phone: "medium" 44px in a 41.7px column); its neighbours'
 	   names are short enough that they never meet, so it is never cut */
@@ -421,7 +421,6 @@
 	.step[aria-pressed="true"] .node {
 		background: var(--lv);
 		border-color: var(--lv);
-		box-shadow: 0 0 0 4px var(--lv-soft);
 	}
 	/* starting strength: one row of the offered strengths; scrolls sideways when a phone is too narrow for them */
 	.dseg {
