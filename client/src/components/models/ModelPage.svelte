@@ -144,19 +144,18 @@
 		{@const shown = shownLevels(r, matched)}
 		<section class="fsec set-group">
 			<div class="section-label">{t("선택 가능한 추론 강도")}</div>
-			<div class="caps" role="group" aria-label={t("선택 가능한 추론 강도")}>
+			<div class="seg lvseg" role="group" aria-label={t("선택 가능한 추론 강도")}>
 				{#each ALL_LEVELS as l (l)}
 					<button
 						type="button"
-						class="cap lv tap"
+						class="tap"
 						data-level={l}
 						aria-pressed={shown.includes(l)}
 						disabled={isLastLevel(r, matched, l)}
 						title={isLastLevel(r, matched, l) ? t("하나는 남겨 두어야 합니다") : undefined}
 						onclick={() => toggleLevel(r, matched, l)}
 					>
-						<span class="dot"></span>
-						<span>{l}</span>
+						{l}
 					</button>
 				{/each}
 			</div>
@@ -346,48 +345,33 @@
 		color: var(--text);
 		font-weight: 600;
 	}
-	/* the strengths this model offers: on = its own colour with a filled dot, off = faded with a hollow one.
-	   The dot is the same 8px box either way, so switching a chip never changes its width (no re-wrapping). */
-	.cap.lv {
-		gap: 8px; /* was 6: the 8px dot and its label on the 4px scale */
+	/* the strengths this model offers: the same box as the starting-strength row below, but several cells can be on.
+	   on = the level's own tint and ring (the look of the row's chosen cell), off = plain faint text. Seven equal cells in
+	   one row; a phone splits them 4 + 3 instead of scrolling, so every strength stays in view. */
+	.lvseg {
+		display: grid;
+		grid-template-columns: repeat(7, minmax(0, 1fr));
+		width: 100%;
 	}
-	.cap.lv .dot {
-		flex: none;
-		width: 8px;
-		height: 8px;
-		box-sizing: border-box;
-		border-radius: 50%;
-		border: 1.5px solid var(--lv);
-		background: transparent;
-		transition: background var(--motion-fast) var(--ease-std), opacity var(--motion-fast) var(--ease-std);
-	}
-	/* off: a plain grey chip; the level's colour shows only once it is on, so the off row reads as one quiet set
-	   instead of a scatter of faint coloured rings */
-	.cap.lv:not([aria-pressed="true"]) {
-		background: transparent;
-		border-style: dashed;
-		border-color: var(--border-strong);
+	.lvseg button {
+		padding: 0 4px;
+		white-space: nowrap;
+		font-size: var(--fs-sm);
 		color: var(--text-faint);
 		font-weight: 450;
-	}
-	.cap.lv:not([aria-pressed="true"]) .dot {
-		border-color: currentColor;
-		opacity: 0.6;
+		transition: background var(--motion-fast) var(--ease-std), color var(--motion-fast) var(--ease-std), box-shadow var(--motion-fast) var(--ease-std);
 	}
 	@media (hover: hover) {
-		.cap.lv:not([aria-pressed="true"]):hover {
+		.lvseg button[aria-pressed="false"]:hover {
 			background: var(--bg-hover);
 			color: var(--text-dim);
 		}
 	}
-	.cap.lv[aria-pressed="true"] {
+	.lvseg button[aria-pressed="true"] {
 		background: var(--lv-soft);
-		border-color: color-mix(in srgb, var(--lv) 45%, transparent);
 		color: var(--lv);
+		box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--lv) 45%, transparent);
 		font-weight: 600;
-	}
-	.cap.lv[aria-pressed="true"] .dot {
-		background: var(--lv);
 	}
 	/* starting strength: one row of the offered strengths; scrolls sideways when a phone is too narrow for them */
 	.dseg {
@@ -429,12 +413,17 @@
 		box-shadow: none;
 	}
 	@media (max-width: 640px) {
-		.dseg button {
+		.dseg button,
+		.lvseg button {
 			font-size: var(--fs-xs);
+		}
+		.lvseg {
+			grid-template-columns: repeat(4, minmax(0, 1fr));
 		}
 	}
 	/* the last strength of a matched model: it stays on, so it neither hovers nor reads as clickable */
-	.cap.lv:disabled {
+	.lvseg button:disabled {
+		opacity: 1; /* not the shared .seg dim: this cell is on and stays on */
 		cursor: default;
 		pointer-events: none;
 	}
