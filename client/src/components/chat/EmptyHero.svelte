@@ -15,7 +15,7 @@
 		for (const b of bursts) {
 			if (seen.has(b.id)) continue;
 			seen.add(b.id);
-			const delay = Math.round(arrival(b.reach, Math.hypot(b.x - w / 2, b.y - h / 2)));
+			const delay = Math.round(arrival(b.reach, Math.hypot(b.x - w / 2, b.y - h / 2), b.dur));
 			glows.push({ id: b.id, delay });
 			setTimeout(() => {
 				glows = glows.filter((g) => g.id !== b.id);
