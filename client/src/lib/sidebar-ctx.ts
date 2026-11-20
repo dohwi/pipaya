@@ -83,7 +83,10 @@ export interface SidebarCtx {
 	tabHover(n: SidebarNode, d: DirBlock, x: Tab): (pt: { x: number; y: number } | null) => void;
 	tabDropAt(n: SidebarNode, d: DirBlock, x: Tab): (id: string, pt: { x: number; y: number }) => Promise<void>;
 	hover(key: string): (pt: unknown) => void;
-	dropOnDir(id: string): void;
+	/** Something let go on folder `path`: a split-tab pane steps out of its group; a lone conversation moves to work there */
+	dropOnDir(n: SidebarNode, path: string): (id: string) => void;
+	/** Whether `id` may be dropped on folder `path` (see dropOnDir) */
+	acceptsOnDir(n: SidebarNode, path: string): (id: string) => boolean;
 	/** Dragging a folder / server header (a Svelte action) */
 	dirSource: (node: HTMLElement, opts: DirSrc) => { update: (next: DirSrc) => DirSrc; destroy(): void };
 	/** Labels */

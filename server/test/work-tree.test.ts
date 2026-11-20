@@ -4,8 +4,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { buildApp, type App } from "../src/app.ts";
 import { openDb } from "../src/db.ts";
+import { worktreesOf } from "../src/git-info.ts";
 import { SessionStore } from "../src/store.ts";
-import { cdTarget, nextActiveDir, touchedDir } from "../src/work-tree.ts";
+import { cdTarget, movedNote, resolveMove, stayHint, touchedDir, workTargets } from "../src/work-tree.ts";
 import { ECHO_MODEL, echoProviderBody, startEchoUpstream, type EchoUpstream } from "./support/openai-upstream.ts";
 
 let dir: string;
@@ -14,6 +15,17 @@ let wt: string;
 let other: string;
 let plain: string;
 
+/** A worktree of `main` at `path` on `branch`, laid out the way git writes it (`.git` file, gitdir, commondir, HEAD). */
+function addWorktree(path: string, branch: string): void {
+	const meta = join(main, ".git/worktrees", path.split("/").pop()!);
+	mkdirSync(meta, { recursive: true });
+	mkdirSync(path, { recursive: true });
+	writeFileSync(join(path, ".git"), `gitdir: ${meta}\n`);
+	writeFileSync(join(meta, "HEAD"), `ref: refs/heads/${branch}\n`);
+	writeFileSync(join(meta, "commondir"), "../..\n");
+	writeFileSync(join(meta, "gitdir"), `${join(path, ".git")}\n`);
+}
+
 /** A main checkout on `main`, a worktree of it on `feat/x`, another repository and a plain folder. */
 beforeAll(() => {
 	dir = realpathSync(mkdtempSync(join(tmpdir(), "pipaya-wt-")));
@@ -21,13 +33,11 @@ beforeAll(() => {
 	wt = join(dir, "app-x");
 	other = join(dir, "other");
 	plain = join(dir, "notes");
-	mkdirSync(join(main, ".git/worktrees/app-x"), { recursive: true });
+	mkdirSync(join(main, ".git"), { recursive: true });
 	mkdirSync(join(main, "client/src"), { recursive: true });
 	writeFileSync(join(main, ".git/HEAD"), "ref: refs/heads/main\n");
+	addWorktree(wt, "feat/x");
 	mkdirSync(join(wt, "server/src"), { recursive: true });
-	writeFileSync(join(wt, ".git"), `gitdir: ${join(main, ".git/worktrees/app-x")}\n`);
-	writeFileSync(join(main, ".git/worktrees/app-x/HEAD"), "ref: refs/heads/feat/x\n");
-	writeFileSync(join(main, ".git/worktrees/app-x/commondir"), "../..\n");
 	mkdirSync(join(other, ".git"), { recursive: true });
 	writeFileSync(join(other, ".git/HEAD"), "ref: refs/heads/main\n");
 	mkdirSync(plain);
@@ -41,16 +51,8 @@ describe("cdTarget", () => {
 		expect(cdTarget("git status\ncd '../app-x'", "/w/app", "/h")).toBe("/w/app-x");
 		expect(cdTarget("cd ~/w/app-x", "/w/app", "/h")).toBe("/h/w/app-x");
 	});
-	test("making a worktree counts as moving into it", () => {
-		expect(cdTarget("git worktree add -b feat/x ../app-x origin/main", "/w/app", "/h")).toBe("/w/app-x");
-		expect(cdTarget("git fetch -q && git worktree add -q -B fix/y --reason 'r' /w/app-y", "/w/app", "/h")).toBe("/w/app-y");
-		expect(cdTarget("git -C /w/app worktree add ../app-z", "/tmp", "/h")).toBe("/w/app-z");
-		// a cd after it wins, and a worktree made from inside another folder is resolved there
-		expect(cdTarget("git worktree add ../app-x && cd ../app-x/server", "/w/app", "/h")).toBe("/w/app-x/server");
-		expect(cdTarget("git worktree list && git worktree remove ../app-x", "/w/app", "/h")).toBeNull();
-		expect(cdTarget("git worktree add $WT", "/w/app", "/h")).toBeNull();
-	});
-	test("a command without a readable cd says nothing", () => {
+	test("a command without a readable cd says nothing; making a worktree is not moving into it", () => {
+		expect(cdTarget("git worktree add -b feat/x ../app-x origin/main", "/w/app", "/h")).toBeNull();
 		expect(cdTarget("(cd ../app-x && bun install)", "/w/app", "/h")).toBeNull();
 		expect(cdTarget("cd $WT", "/w/app", "/h")).toBeNull();
 		expect(cdTarget("cd - && ls", "/w/app", "/h")).toBeNull();
@@ -68,29 +70,40 @@ describe("touchedDir", () => {
 	});
 });
 
-describe("nextActiveDir", () => {
-	test("moving into a worktree of the same repository names that worktree's top", () => {
-		expect(nextActiveDir(main, null, join(wt, "server/src"))).toBe(wt);
-		// a file written into a folder that does not exist yet still belongs to the worktree
-		expect(nextActiveDir(main, null, join(wt, "new/deep"))).toBe(wt);
+describe("working trees", () => {
+	test("worktreesOf lists the main checkout first, then each worktree still on disk", () => {
+		mkdirSync(join(main, ".git/worktrees/pruned"), { recursive: true });
+		writeFileSync(join(main, ".git/worktrees/pruned/gitdir"), `${join(dir, "pruned/.git")}\n`);
+		expect(worktreesOf(main)).toEqual([{ path: main, branch: "main" }, { path: wt, branch: "feat/x" }]);
 	});
-	test("coming back to its own working tree clears it", () => {
-		expect(nextActiveDir(main, wt, join(main, "client"))).toBeNull();
+	test("workTargets puts the session's own working tree first, from either side", () => {
+		expect(workTargets(main)).toEqual([{ path: main, branch: "main", home: true }, { path: wt, branch: "feat/x", home: false }]);
+		expect(workTargets(join(wt, "server")).map((t) => [t.path, t.home])).toEqual([[wt, true], [main, false]]);
+		expect(workTargets(main, (d) => d === main)).toHaveLength(1);
+		expect(workTargets(plain)).toEqual([]);
 	});
-	test("another repository, a plain folder, or nothing to go on leaves it as it was", () => {
-		expect(nextActiveDir(main, wt, other)).toBe(wt);
-		expect(nextActiveDir(main, wt, plain)).toBe(wt);
-		expect(nextActiveDir(main, wt, null)).toBe(wt);
-		expect(nextActiveDir(plain, null, wt)).toBeNull();
+	test("resolveMove names the other working tree's top, null for its own, and refuses anything else", () => {
+		expect(resolveMove(main, join(wt, "server/src"))).toBe(wt);
+		expect(resolveMove(main, join(main, "client"))).toBeNull();
+		expect(resolveMove(wt, main)).toBe(main);
+		expect(() => resolveMove(main, other)).toThrow(/not a working tree of this session's repository.*app-x \(feat\/x\)/);
+		expect(() => resolveMove(main, plain)).toThrow(/not a working tree/);
+		expect(() => resolveMove(main, join(dir, "nowhere"))).toThrow(/is not a folder/);
+		expect(() => resolveMove(plain, main)).toThrow(/not in a git repository/);
+		expect(() => resolveMove(main, wt, () => false)).toThrow(/outside the workspace/);
 	});
-	test("a worktree outside what is allowed is not followed", () => {
-		expect(nextActiveDir(main, null, wt, () => false)).toBeNull();
+	test("stayHint speaks only of another working tree of the same repository", () => {
+		expect(stayHint(main, main, join(wt, "server"))).toContain(`call workdir (action move, path ${wt})`);
+		expect(stayHint(main, wt, join(wt, "server"))).toBeNull(); // already there
+		expect(stayHint(main, main, join(main, "client"))).toBeNull();
+		expect(stayHint(main, main, other)).toBeNull();
+		expect(stayHint(main, main, null)).toBeNull();
 	});
-	test("a worktree removed since is let go", () => {
-		expect(nextActiveDir(main, join(dir, "gone"), null)).toBeNull();
-	});
-	test("a session made in a worktree follows its agent back to the main checkout", () => {
-		expect(nextActiveDir(wt, null, main)).toBe(main);
+	test("movedNote says who moved it and how to get back", () => {
+		expect(movedNote(main, main, wt, "agent")).toContain(`moved from ${main} to ${wt} (branch feat/x)`);
+		expect(movedNote(main, main, wt, "user")).toStartWith("[pipaya] The user moved this session");
+		expect(movedNote(main, wt, null, "agent")).not.toContain("workdir back");
+		expect(movedNote(main, join(dir, "gone"), null, "gone")).toContain("no longer exists");
 	});
 });
 
@@ -106,13 +119,13 @@ describe("SessionStore.setActiveDir", () => {
 	});
 });
 
-describe("a session's agent moving into a worktree", () => {
+describe("moving a session between working trees", () => {
 	const TOKEN = "work-tree-test-token-0123456789ab";
 	let app: App;
 	let upstream: EchoUpstream;
 	let base = "";
 	const api = async (method: string, path: string, body?: unknown) => {
-		const res = await fetch(base + path, { method, headers: { authorization: `Bearer ${TOKEN}`, ...(body ? { "content-type": "application/json" } : {}) }, body: body ? JSON.stringify(body) : undefined });
+		const res = await fetch(base + path, { method, headers: { authorization: `Bearer ${TOKEN}`, ...(body !== undefined ? { "content-type": "application/json" } : {}) }, body: body !== undefined ? JSON.stringify(body) : undefined });
 		const text = await res.text();
 		return { status: res.status, json: text ? JSON.parse(text) : undefined };
 	};
@@ -124,6 +137,11 @@ describe("a session's agent moving into a worktree", () => {
 		}
 		throw new Error("session never went idle");
 	};
+	const messages = async (id: string) => (await api("GET", `/sessions/${id}/messages`)).json.messages as { message: { role: string; content: { type: string; text?: string }[] } }[];
+	const texts = (m: { message: { content: { type: string; text?: string }[] } }) => m.message.content.map((c) => c.text ?? "").join("\n");
+	const lastToolText = async (id: string) => texts((await messages(id)).filter((m) => m.message.role === "toolResult").at(-1)!);
+	const activeDir = async (id: string) => (await api("GET", `/sessions/${id}`)).json.activeDir ?? null;
+
 	beforeAll(async () => {
 		upstream = startEchoUpstream();
 		app = await buildApp({ host: "0.0.0.0", port: 0, dataDir: dir, dbPath: join(dir, "api.db"), token: TOKEN, workspaceRoot: dir, logLevel: "silent" }, { strictResponses: true, extensionDirs: [] });
@@ -137,52 +155,68 @@ describe("a session's agent moving into a worktree", () => {
 		upstream.stop();
 	});
 
-	const lastToolText = async (id: string) => {
-		const { json } = await api("GET", `/sessions/${id}/messages`);
-		const results = (json.messages as { message: { role: string; content: { type: string; text?: string }[] } }[]).filter((m) => m.message.role === "toolResult");
-		return results.at(-1)!.message.content.map((c) => c.text ?? "").join("\n");
-	};
-
-	test("the agent works in the worktree it moved into, is told so, and comes back to its own", async () => {
+	test("working in another worktree without moving only earns a hint, once per run", async () => {
 		const { json: s } = await api("POST", "/sessions", { cwd: main });
-		expect(s.activeDir ?? null).toBeNull();
 		await run(s.id, "!bash cd ../app-x && pwd");
-		expect((await api("GET", `/sessions/${s.id}`)).json.activeDir).toBe(wt);
-		expect(await lastToolText(s.id)).toContain(`now works in the git worktree ${wt} (branch feat/x)`);
-		// the next call starts there: no cd needed, and relative paths resolve against it
+		expect(await activeDir(s.id)).toBeNull();
+		expect(await lastToolText(s.id)).toContain(`call workdir (action move, path ${wt})`);
+	});
+
+	test("the agent moves with workdir: its tools start there, and back brings it home", async () => {
+		const { json: s } = await api("POST", "/sessions", { cwd: main });
+		await run(s.id, '!workdir {"action":"show"}');
+		expect(await lastToolText(s.id)).toContain(`- ${wt} (feat/x)`);
+		await run(s.id, '!workdir {"action":"move","path":"../app-x"}');
+		expect(await activeDir(s.id)).toBe(wt);
+		expect(await lastToolText(s.id)).toContain(`moved from ${main} to ${wt} (branch feat/x)`);
 		await run(s.id, "!bash pwd");
 		expect(await lastToolText(s.id)).toStartWith(wt);
 		await run(s.id, '!write {"path":"note.md","content":"hi"}');
 		expect(await Bun.file(join(wt, "note.md")).text()).toBe("hi");
-		// the file preview finds it from the session's relative path
 		const res = await fetch(`${base}/sessions/${s.id}/files?path=note.md`, { headers: { authorization: `Bearer ${TOKEN}` } });
 		expect(await res.text()).toBe("hi");
-		// a fork goes on where its history left off
 		const { json: fork } = await api("POST", `/sessions/${s.id}/fork`, {});
 		expect(fork.activeDir).toBe(wt);
-		// a command that fails before it gets there moves nothing
-		await run(s.id, "!bash cd ../nowhere && pwd");
-		expect((await api("GET", `/sessions/${s.id}`)).json.activeDir).toBe(wt);
-		await run(s.id, `!bash cd ${main} && pwd`);
-		expect((await api("GET", `/sessions/${s.id}`)).json.activeDir).toBeNull();
-		expect(await lastToolText(s.id)).toContain(`works in ${main} (branch main) again`);
+		await run(s.id, `!workdir {"action":"move","path":"${other}"}`);
+		expect(await lastToolText(s.id)).toContain("not a working tree of this session's repository");
+		expect(await activeDir(s.id)).toBe(wt);
+		await run(s.id, '!workdir {"action":"back"}');
+		expect(await activeDir(s.id)).toBeNull();
 		await run(s.id, "!bash pwd");
 		expect(await lastToolText(s.id)).toStartWith(main);
 	});
 
-	test("a worktree removed under the session sends it home before its next call", async () => {
-		const gone = join(dir, "app-gone");
-		mkdirSync(gone);
-		writeFileSync(join(gone, ".git"), `gitdir: ${join(main, ".git/worktrees/app-gone")}\n`);
-		mkdirSync(join(main, ".git/worktrees/app-gone"), { recursive: true });
-		writeFileSync(join(main, ".git/worktrees/app-gone/HEAD"), "ref: refs/heads/feat/gone\n");
-		writeFileSync(join(main, ".git/worktrees/app-gone/commondir"), "../..\n");
+	test("the user moves a session with PATCH workDir, and its agent hears of it with the next message", async () => {
 		const { json: s } = await api("POST", "/sessions", { cwd: main });
-		await run(s.id, "!bash cd ../app-gone");
-		expect((await api("GET", `/sessions/${s.id}`)).json.activeDir).toBe(gone);
-		rmSync(gone, { recursive: true, force: true });
+		expect((await api("GET", `/sessions/${s.id}/workdirs`)).json.workdirs).toEqual([
+			{ path: main, branch: "main", home: true, current: true },
+			{ path: wt, branch: "feat/x", home: false, current: false },
+		]);
+		expect((await api("PATCH", `/sessions/${s.id}`, { workDir: other })).status).toBe(400);
+		const moved = await api("PATCH", `/sessions/${s.id}`, { workDir: wt });
+		expect(moved.status).toBe(200);
+		expect(moved.json.activeDir).toBe(wt);
+		await run(s.id, "hello"); // (the echo model would read the note into a !bash command)
+		const all = await messages(s.id);
+		expect(texts(all.find((m) => m.message.role === "user")!)).toContain("The user moved this session");
 		await run(s.id, "!bash pwd");
-		expect((await api("GET", `/sessions/${s.id}`)).json.activeDir).toBeNull();
+		expect(texts((await messages(s.id)).filter((m) => m.message.role === "user").at(-1)!)).not.toContain("moved"); // told once
+		expect(await lastToolText(s.id)).toStartWith(wt);
+		expect((await api("PATCH", `/sessions/${s.id}`, { workDir: null })).json.activeDir ?? null).toBeNull();
+		// other fields still go through the same PATCH
+		expect((await api("PATCH", `/sessions/${s.id}`, { title: "renamed", workDir: wt })).json).toMatchObject({ title: "renamed", activeDir: wt });
+	});
+
+	test("a worktree removed under the session sends it home, and the agent is told", async () => {
+		const gone = join(dir, "app-gone");
+		addWorktree(gone, "feat/gone");
+		const { json: s } = await api("POST", "/sessions", { cwd: main });
+		await run(s.id, `!workdir {"action":"move","path":"${gone}"}`);
+		expect(await activeDir(s.id)).toBe(gone);
+		await run(s.id, `!bash rm -rf ${gone}`);
+		expect(await activeDir(s.id)).toBeNull();
+		expect(await lastToolText(s.id)).toContain(`${gone} no longer exists`);
+		await run(s.id, "!bash pwd");
 		expect(await lastToolText(s.id)).toStartWith(main);
 	});
 });
