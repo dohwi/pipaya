@@ -26,6 +26,8 @@
 	/** The live waves, bindable so the owner can follow them (the empty-state mark turns colour as a wave passes). */
 	let { bursts = $bindable([]) }: { bursts?: Burst[] } = $props();
 	let host: HTMLDivElement | undefined = $state();
+	/** Same box as `host`, but above the page: the gauge must not slip under the mark or the start actions. */
+	let over: HTMLDivElement | undefined = $state();
 	let seq = 0;
 	const RING = 220; // px: width of the lit band
 	const SLOP = 10; // px: moving further than this before the gauge shows is a swipe or a scroll, not a press
@@ -51,21 +53,25 @@
 	/** Inside a pane the backdrop reaches the pane's bottom edge (under the input and the stats line), not just the message area. */
 	$effect(() => {
 		const el = host;
+		const top = over;
 		const pane = el?.closest<HTMLElement>(".pane");
 		const body = el?.parentElement;
-		if (!el || !pane || !body) return;
+		if (!el || !top || !pane || !body) return;
 		el.style.zIndex = "-1"; // behind the input and the stats line, which the grid now runs under
 		// fixed, so the scrolling .empty cannot clip it; placed from the pane's rect (body top .. pane bottom)
 		el.style.position = "fixed";
+		top.style.position = "fixed";
 		// reads and writes of all panes are batched per frame (see lib/frame.ts)
 		const key = {};
 		const fit = () => {
 			const p = pane.getBoundingClientRect();
 			const t = body.getBoundingClientRect().top;
 			return () => {
-				el.style.inset = `${t}px auto auto ${p.left}px`;
-				el.style.width = `${p.width}px`;
-				el.style.height = `${Math.max(0, p.bottom - t)}px`;
+				for (const n of [el, top]) {
+					n.style.inset = `${t}px auto auto ${p.left}px`;
+					n.style.width = `${p.width}px`;
+					n.style.height = `${Math.max(0, p.bottom - t)}px`;
+				}
 			};
 		};
 		fit()();
@@ -222,6 +228,8 @@
 			style="--cx:{b.x}px;--cy:{b.y}px;--r:{b.r.toFixed(1)}px;opacity:{b.a.toFixed(3)}"
 		></div>
 	{/each}
+</div>
+<div class="backdrop over" bind:this={over} aria-hidden="true">
 	{#if charge?.shown}
 		<!-- the charge gauge: a ring that fills clockwise while the press is held (CSS animation, CHARGE ms) -->
 		<svg class="gauge" class:full={charge.full} style="--cx:{charge.x}px;--cy:{charge.y}px;--charge:{CHARGE}ms" viewBox="0 0 48 48">
@@ -240,6 +248,10 @@
 		--mx: 50%;
 		--my: 38%;
 		--lit: 0;
+	}
+	/* the gauge layer: over the mark, the start actions and the input (inside the pane's isolated stack) */
+	.over {
+		z-index: 1;
 	}
 	.grid,
 	.lit {
