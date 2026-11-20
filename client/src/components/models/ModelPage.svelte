@@ -144,19 +144,20 @@
 		{@const shown = shownLevels(r, matched)}
 		<section class="fsec set-group">
 			<div class="section-label">{t("선택 가능한 추론 강도")}</div>
-			<div class="seg lvseg" role="group" aria-label={t("선택 가능한 추론 강도")}>
+			<div class="ladder" role="group" aria-label={t("선택 가능한 추론 강도")}>
+				<span class="rail" aria-hidden="true"></span>
 				{#each ALL_LEVELS as l (l)}
 					<button
 						type="button"
-						class="tap"
+						class="step tap"
 						data-level={l}
 						aria-pressed={shown.includes(l)}
 						disabled={isLastLevel(r, matched, l)}
 						title={isLastLevel(r, matched, l) ? t("하나는 남겨 두어야 합니다") : undefined}
 						onclick={() => toggleLevel(r, matched, l)}
 					>
-						<span class="box" aria-hidden="true"><Icon name="check" /></span>
-						<span>{l}</span>
+						<span class="node" aria-hidden="true"></span>
+						<span class="name">{l}</span>
 					</button>
 				{/each}
 			</div>
@@ -346,69 +347,81 @@
 		color: var(--text);
 		font-weight: 600;
 	}
-	/* the strengths this model offers: the same box as the starting-strength row below, but each cell is a toggle, so
-	   it carries a checkbox: off = an empty 16px square, on = the square filled in the level's colour with a check and
-	   the cell tinted like the row's chosen cell. Four equal columns (7 = 4 + 3) leave the box and the longest label
-	   ("minimal") room on every width; nothing scrolls, every strength stays in view. */
-	.lvseg {
+	/* the strengths this model offers, as a ladder from off to max: one quiet rail, seven nodes, each node a toggle.
+	   off = a hollow ring on the rail, on = the ring filled in the level's colour with a soft halo and the name in that
+	   colour. The rail is never coloured between nodes: a filled span would read as a range slider to drag.
+	   Seven equal columns on every width (390px phone: 46px each, "minimal" in 12px fits), so nothing wraps or scrolls. */
+	.ladder {
+		position: relative;
 		display: grid;
-		grid-template-columns: repeat(4, minmax(0, 1fr));
-		width: 100%;
+		grid-template-columns: repeat(7, minmax(0, 1fr));
+		padding: 12px 4px 8px;
+		background: var(--bg);
+		border: 1px solid var(--border);
+		border-radius: var(--radius);
 	}
-	.lvseg button {
+	/* from the first node's centre to the last one's: half a column in from each side of the 4px padding */
+	.rail {
+		position: absolute;
+		left: calc(4px + (100% - 8px) / 14);
+		right: calc(4px + (100% - 8px) / 14);
+		top: 23px; /* 12 padding + 4 node inset + 8 (half the 16px node) - 1 (half the 2px rail) */
+		height: 2px;
+		border-radius: 1px;
+		background: var(--border-strong);
+	}
+	.step {
 		display: flex;
+		flex-direction: column;
 		align-items: center;
-		justify-content: center;
-		gap: 8px;
-		padding: 0 8px;
-		white-space: nowrap;
-		line-height: 20px;
-		font-size: var(--fs-sm);
-		color: var(--text-dim);
-		font-weight: 450;
-		transition: background var(--motion-fast) var(--ease-std), color var(--motion-fast) var(--ease-std), box-shadow var(--motion-fast) var(--ease-std);
+		gap: 4px;
+		min-width: 0;
+		padding: 4px 0;
+		background: none;
+		border: 0;
+		border-radius: var(--radius-control);
+		color: var(--text-faint);
 	}
-	.lvseg .box {
-		flex: none;
-		display: grid;
-		place-items: center;
+	.node {
+		position: relative; /* above the rail */
 		width: 16px;
 		height: 16px;
 		box-sizing: border-box;
-		border: 1.5px solid var(--border-strong);
-		border-radius: 4px;
+		border-radius: 50%;
+		border: 2px solid var(--border-strong);
 		background: var(--bg);
-		color: #fff;
-		transition: background var(--motion-fast) var(--ease-std), border-color var(--motion-fast) var(--ease-std);
+		transition: background var(--motion-fast) var(--ease-std), border-color var(--motion-fast) var(--ease-std), box-shadow var(--motion-fast) var(--ease-std), transform var(--motion-fast) var(--ease-std);
 	}
-	.lvseg .box :global(svg) {
-		width: 12px;
-		height: 12px;
-		stroke-width: 3;
-		opacity: 0;
-		transition: opacity var(--motion-fast) var(--ease-std);
+	/* the name may run a few px past its column (a 360px phone: "medium" 44px in a 41.7px column); its neighbours'
+	   names are short enough that they never meet, so it is never cut */
+	.name {
+		white-space: nowrap;
+		line-height: 20px;
+		font-size: var(--fs-sm);
+		font-weight: 500;
+		transition: color var(--motion-fast) var(--ease-std);
 	}
 	@media (hover: hover) {
-		.lvseg button[aria-pressed="false"]:hover {
-			background: var(--bg-hover);
+		.step:hover {
 			color: var(--text);
 		}
-		.lvseg button[aria-pressed="false"]:hover .box {
-			border-color: var(--text-faint);
+		.step:hover .node {
+			transform: scale(1.15);
+		}
+		.step[aria-pressed="false"]:hover .node {
+			border-color: var(--lv);
 		}
 	}
-	.lvseg button[aria-pressed="true"] {
-		background: var(--lv-soft);
+	.step[aria-pressed="true"] {
 		color: var(--lv);
-		box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--lv) 45%, transparent);
-		font-weight: 600;
 	}
-	.lvseg button[aria-pressed="true"] .box {
+	.step[aria-pressed="true"] .name {
+		font-weight: 650;
+	}
+	.step[aria-pressed="true"] .node {
 		background: var(--lv);
 		border-color: var(--lv);
-	}
-	.lvseg button[aria-pressed="true"] .box :global(svg) {
-		opacity: 1;
+		box-shadow: 0 0 0 4px var(--lv-soft);
 	}
 	/* starting strength: one row of the offered strengths; scrolls sideways when a phone is too narrow for them */
 	.dseg {
@@ -451,17 +464,26 @@
 	}
 	@media (max-width: 640px) {
 		.dseg button,
-		.lvseg button {
+		.ladder .name {
 			font-size: var(--fs-xs);
 		}
-		/* a 360px phone left "medium" 0px inside its cell with the 8px gap */
-		.lvseg button {
-			gap: 4px;
+	}
+	/* a 360px phone gives each column 40px: "minimal" and "medium" in 12px crowded their neighbours. 11px and no side
+	   padding (columns 41.7px) keep a gap between every pair of names; the rail's ends follow the padding. */
+	@media (max-width: 380px) {
+		.ladder {
+			padding-inline: 0;
+		}
+		.rail {
+			left: calc(100% / 14);
+			right: calc(100% / 14);
+		}
+		.ladder .name {
+			font-size: var(--fs-2xs);
 		}
 	}
 	/* the last strength of a matched model: it stays on, so it neither hovers nor reads as clickable */
-	.lvseg button:disabled {
-		opacity: 1; /* not the shared .seg dim: this cell is on and stays on */
+	.step:disabled {
 		cursor: default;
 		pointer-events: none;
 	}
