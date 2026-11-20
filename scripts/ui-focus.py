@@ -251,7 +251,7 @@ with sync_playwright() as p:
                     print(f"{size} {name}: not reached ({str(e).splitlines()[0][:80]}; expected {expected})")
                     ctx.close()
                     continue
-                seen, found, checked, first = set(), 0, 0, None
+                seen, found, checked = set(), 0, 0
                 # the keyboard took the page over: the first press makes later focus :focus-visible
                 for i in range(a.max_tabs):
                     pg.keyboard.press("Tab")
@@ -268,12 +268,8 @@ with sync_playwright() as p:
                     if not r or "skip" in r:
                         continue
                     key = r["id"]
-                    if key == first:
-                        break  # came round to the start
-                    if first is None:
-                        first = key
                     if key in seen:
-                        continue
+                        break  # completed the cycle, even if the first node was replaced by async list data
                     seen.add(key)
                     checked += 1
                     if r["cuts"]:
