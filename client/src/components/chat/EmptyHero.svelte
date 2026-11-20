@@ -2,6 +2,9 @@
 	import Backdrop, { arrival, type Burst } from "../ui/Backdrop.svelte";
 	import PipayaMark from "../ui/PipayaMark.svelte";
 	import StartActions from "./StartActions.svelte";
+	import ExtensionPart from "../extensions/ExtensionPart.svelte";
+
+	let { paneId }: { paneId: string } = $props();
 
 	const GLOW = 1500; // ms: from the wave reaching the mark until it has fully faded again (see @keyframes glow)
 	let bursts: Burst[] = $state([]);
@@ -27,14 +30,15 @@
 
 <Backdrop bind:bursts />
 <div class="hello" bind:clientWidth={w} bind:clientHeight={h}>
-	<div class="face" aria-hidden="true">
-	<div class="base"><PipayaMark size={72} /></div>
+	<div class="face" data-logo-frame aria-hidden="true">
+	<div class="base"><PipayaMark tone="watermark" size={72} /></div>
 	<!-- the colour mark: rises softly as the wave reaches it, stays a while, then fades out -->
 	{#each glows as g (g.id)}
-		<div class="tint" style="animation-delay:{g.delay}ms"><PipayaMark color size={72} /></div>
+		<div class="tint" style="animation-delay:{g.delay}ms"><PipayaMark tone="color" size={72} /></div>
 	{/each}
 	</div>
-	<StartActions />
+	<!-- an extension may replace what is under the mark (`pane.empty`), never the mark itself (lib/pipaya-logo.ts) -->
+	<div class="under"><ExtensionPart part="pane.empty" props={{ paneId }}><StartActions /></ExtensionPart></div>
 </div>
 
 <style>
@@ -53,6 +57,11 @@
 	.face {
 		display: grid;
 	}
+	/* what an extension draws under the mark (pane.empty) can be clicked; the wave layer around it lets clicks through */
+	.under {
+		display: contents;
+		pointer-events: auto;
+	}
 	/* a phone on its side: the mark would push the start actions out of the short area above the composer (Welcome.svelte) */
 	@media (max-height: 480px) {
 		.face {
@@ -61,10 +70,6 @@
 	}
 	.face > * {
 		grid-area: 1 / 1;
-	}
-	.base {
-		/* solid colour (the old 35% fade of --text-faint, pre-mixed): the grid lines must not show through the mark */
-		color: color-mix(in srgb, var(--text-faint) 35%, var(--bg));
 	}
 	.tint {
 		opacity: 0;

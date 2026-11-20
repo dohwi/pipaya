@@ -1366,8 +1366,8 @@ describe("trusted UI (ui-style / ui-components)", () => {
 	test("the stylesheet gets the package's design files inlined; components get them as ext.assets", async () => {
 		const png = "data:image/png;base64,iVBORw0KGgo=";
 		const { host } = newHost();
-		await activate(host, ui("example.skin", { assets: { "logo.png": png }, styles: `[data-part='sidebar.brand']{background:asset("logo.png")}` }));
-		expect(styleEls[0]!.textContent).toBe(`[data-part='sidebar.brand']{background:url("${png}")}`);
+		await activate(host, ui("example.skin", { assets: { "logo.png": png }, styles: `[data-part='header']{background:asset("logo.png")}` }));
+		expect(styleEls[0]!.textContent).toBe(`[data-part='header']{background:url("${png}")}`);
 	});
 	test("mounts are grouped per slot and follow the extension's state", async () => {
 		const { host } = newHost();
@@ -1393,6 +1393,13 @@ describe("trusted UI (ui-style / ui-components)", () => {
 		expect(host.find(id).state).toBe("error");
 		expect(host.mountsIn("header.end")).toEqual([]);
 		expect(styleEls.every(e => e.removed)).toBe(true);
+	});
+	test("a package that replaces the logo's old part starts, but the logo is never replaced", async () => {
+		const { host } = newHost();
+		const { id } = await activate(host, pkg("example.brand", ["ui-components"], { components: { B: "<p/>" }, replaces: { "sidebar.brand": "B", "composer.send": "B" } }));
+		expect(host.find(id).state).toBe("active");
+		expect(host.replacementFor("sidebar.brand")).toBeUndefined();
+		expect(host.replacementFor("composer.send")?.owner).toBe(id);
 	});
 	test("the slot and part of an extension's own page are only for the owners the page names", async () => {
 		const { host } = newHost();

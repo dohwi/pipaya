@@ -1,7 +1,6 @@
 <script lang="ts">
 	import ExtensionMount from "../extensions/ExtensionMount.svelte";
 	import ExtensionPanels from "../extensions/ExtensionPanels.svelte";
-	import ExtensionPart from "../extensions/ExtensionPart.svelte";
 	import { untrack } from "svelte";
 	import { schedule, unschedule } from "../../lib/frame";
 	import { ms } from "../../lib/motion";
@@ -441,11 +440,10 @@
 
 
 <aside class="side" data-part="sidebar">
-	<div class="brandrow" data-part="sidebar.brand">
-		<ExtensionPart part="sidebar.brand">
-		<PipayaMark color size={26} />
+	<!-- the logo is the app's own: no extension part or style hook here (lib/pipaya-logo.ts) -->
+	<div class="brandrow" data-logo-frame>
+		<PipayaMark tone="color" size={26} />
 		<Wordmark size={16} />
-		</ExtensionPart>
 		<IconButton icon="sidebar" label={t("사이드바 접기")} title={t("사이드바 접기") + hint} class="foldbtn" onclick={() => app.sidebar.toggleCollapsed()} />
 	</div>
 	<ExtensionMount slot="sidebar.top" />

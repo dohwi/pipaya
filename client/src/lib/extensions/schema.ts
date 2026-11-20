@@ -34,9 +34,15 @@ export type UIPart = (typeof UI_PARTS)[number];
  * `pipaya.companion`) may fill them, so no extension can replace another's page.
  */
 export const OWNED_PAGE_NAMES: ReadonlySet<string> = Object.freeze(new Set<string>(["extension.page.top", "extension.settings"]));
+/**
+ * Names that held the pipaya logo. The logo cannot be changed by an extension (lib/pipaya-logo.ts), so these are kept only
+ * so that packages written before still install: a `replaces` entry for `sidebar.brand` is accepted and never drawn, and
+ * the `sidebar.brand` style hook is gone from the app (a rule for it matches nothing).
+ */
+export const LOGO_PARTS: ReadonlySet<string> = Object.freeze(new Set<string>(["sidebar.brand"]));
 /** `data-part` names the app puts on its main elements: the stable selectors for `ui-style` CSS. */
 export const STYLE_PARTS = Object.freeze([
-	"app", "sidebar", "sidebar.brand", "sidebar.bottom", "header", "header.title", "pane", "messages", "message.user", "message.user.bubble", "message.assistant",
+	"app", "sidebar", "sidebar.bottom", "header", "header.title", "pane", "messages", "message.user", "message.user.bubble", "message.assistant",
 	"composer", "composer.box", "composer.bar", "composer.recording", "statusline",
 	"rail", "tabbar", "toasts", "palette", "tool", "welcome", "sessions", "modal", "dock", "floating",
 ] as const);

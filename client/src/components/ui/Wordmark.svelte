@@ -1,20 +1,12 @@
 <script lang="ts">
+	/**
+	 * The "pipaya" wordmark: `size` px tall, drawn from the glyph outlines of JetBrains Mono 600 (logo/build_wordmark.py)
+	 * in a closed shadow root, so no theme font, colour or extension style can change it (lib/pipaya-logo.ts).
+	 */
+	import { logo, wordmarkMarkup } from "../../lib/pipaya-logo";
+	import { app } from "../../lib/store.svelte";
+
 	let { size = 14 }: { size?: number } = $props();
 </script>
 
-<span class="wm" style="font-size:{size}px"><span class="a">pipaya</span></span>
-
-<style>
-	.wm {
-		display: inline-flex;
-		align-items: baseline;
-		font-family: var(--mono);
-		font-weight: 600;
-		letter-spacing: -0.045em;
-		line-height: 1;
-		white-space: nowrap;
-	}
-	.a {
-		color: var(--text);
-	}
-</style>
+<span data-pipaya-logo {@attach logo((dark) => wordmarkMarkup({ size, dark }), () => app.prefs.resolvedDark)}></span>

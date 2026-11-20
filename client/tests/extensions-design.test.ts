@@ -29,7 +29,7 @@ describe("theme tokens beyond colors", () => {
 
 describe("assets", () => {
 	test("images and fonts travel with a ui-style or ui-components package", () => {
-		const out = parsePackage({ manifest: manifest(["ui-style"]), assets: { "logo.png": PNG, "brand.woff2": WOFF2 }, styles: `@font-face{font-family:B;src:asset("brand.woff2")} [data-part="sidebar.brand"]{background:asset('logo.png')}` });
+		const out = parsePackage({ manifest: manifest(["ui-style"]), assets: { "logo.png": PNG, "brand.woff2": WOFF2 }, styles: `@font-face{font-family:B;src:asset("brand.woff2")} [data-part="header"]{background:asset('logo.png')}` });
 		expect(out.assets).toEqual({ "logo.png": PNG, "brand.woff2": WOFF2 });
 		expect(parsePackage({ manifest: manifest(["ui-components"]), assets: { "a.png": PNG }, components: { A: "<p/>" } }).assets).toEqual({ "a.png": PNG });
 	});
@@ -71,6 +71,7 @@ describe("style hooks", () => {
 
 test("the design-pack example installs", () => {
 	const pkg = parsePackage(JSON.parse(readFileSync("examples/extensions/design-pack.json", "utf8")));
-	expect(Object.keys(pkg.assets ?? {})).toEqual(["logo.svg"]);
+	expect(Object.keys(pkg.assets ?? {})).toEqual(["sun.svg"]);
+	expect(pkg.styles).not.toMatch(/sidebar\.brand|pipaya-logo|logo-frame/);
 	expect(inlineAssets(pkg.styles!, pkg.assets)).toContain('url("data:image/svg+xml;base64,');
 });

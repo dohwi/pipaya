@@ -3,6 +3,7 @@
 	import { t } from "../../lib/i18n";
 	import PipayaMark from "../ui/PipayaMark.svelte";
 	import Backdrop, { arrival, type Burst } from "../ui/Backdrop.svelte";
+	import ExtensionPart from "../extensions/ExtensionPart.svelte";
 
 	const GLOW = 1500; // ms, matches @keyframes glow
 	let bursts: Burst[] = $state([]);
@@ -33,18 +34,21 @@
 
 <Backdrop bind:bursts />
 <div class="welcome" data-part="welcome">
-	<div class="face" aria-hidden="true" bind:this={face}>
-		<div class="base"><PipayaMark size={72} /></div>
+	<div class="face" data-logo-frame aria-hidden="true" bind:this={face}>
+		<div class="base"><PipayaMark tone="watermark" size={72} /></div>
 		{#each glows as g (g.id)}
-			<div class="tint" style="animation-delay:{g.delay}ms"><PipayaMark color size={72} /></div>
+			<div class="tint" style="animation-delay:{g.delay}ms"><PipayaMark tone="color" size={72} /></div>
 		{/each}
 	</div>
-	<div class="copy">
-		<h1>{t("무엇을 함께 작업할까요?")}</h1>
-		<p class="sub">{t("파일을 읽고, 수정하고, 명령을 실행합니다.")}</p>
-	</div>
+	<!-- an extension may replace what is under the mark (`pane.welcome`), never the mark itself (lib/pipaya-logo.ts) -->
+	<ExtensionPart part="pane.welcome">
+		<div class="copy">
+			<h1>{t("무엇을 함께 작업할까요?")}</h1>
+			<p class="sub">{t("파일을 읽고, 수정하고, 명령을 실행합니다.")}</p>
+		</div>
 
-	<StartActions />
+		<StartActions />
+	</ExtensionPart>
 </div>
 
 <style>
@@ -77,10 +81,6 @@
 	}
 	.face > * {
 		grid-area: 1 / 1;
-	}
-	.base {
-		/* solid colour (the old 35% fade of --text-faint, pre-mixed): the grid lines must not show through the mark */
-		color: color-mix(in srgb, var(--text-faint) 35%, var(--bg));
 	}
 	.tint {
 		opacity: 0;

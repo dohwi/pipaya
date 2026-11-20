@@ -4,7 +4,7 @@
     "name": "Sunset design pack",
     "version": "1.0.0",
     "sdkVersion": 1,
-    "description": "A whole look in one package: tokens, a stylesheet and its own logo file.",
+    "description": "A whole look in one package: tokens, a stylesheet and its own image file.",
     "permissions": [
       "ui-style"
     ]
@@ -40,7 +40,7 @@
     }
   },
   "assets": {
-    "logo.svg": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMjAgMjQiPjxyZWN0IHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgcng9IjYiIGZpbGw9IiNmZjdhNTkiLz48dGV4dCB4PSIzMiIgeT0iMTgiIGZvbnQtZmFtaWx5PSJHZW9yZ2lhLHNlcmlmIiBmb250LXNpemU9IjE3IiBmaWxsPSIjZmY3YTU5Ij5TdW5zZXQ8L3RleHQ+PC9zdmc+"
+    "sun.svg": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PGNpcmNsZSBjeD0iMTIiIGN5PSIxMiIgcj0iMTAiIGZpbGw9IiNmZjdhNTkiLz48L3N2Zz4="
   },
-  "styles": "[data-part=\"sidebar.brand\"] { background: asset(\"logo.svg\") no-repeat 16px center / auto 22px; }\n[data-part=\"sidebar.brand\"] > :not(button) { visibility: hidden; }\n[data-part=\"header\"] { background: linear-gradient(90deg, var(--accent-soft), transparent 60%); }\n[data-part=\"composer.box\"] { border-color: var(--accent); }\n"
+  "styles": "[data-part=\"header\"] { background: linear-gradient(90deg, var(--accent-soft), transparent 60%); }\n[data-part=\"header.title\"] { padding-left: 24px; background: asset(\"sun.svg\") no-repeat left center / 16px; }\n[data-part=\"composer.box\"] { border-color: var(--accent); }\n"
 }
