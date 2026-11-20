@@ -47,7 +47,8 @@
 	/** A server other than the open one whose editor is not ready yet (its list is still being read) */
 	const pendingStore = $derived(!!serverId && serverId !== app.serverId && !store);
 	// Re-run when the open server changes: the one just left now needs its own editor, the one just opened has the host.
-	$effect(() => { void app.serverId; if (serverId) void app.attachExtensionStore(serverId); });
+	// Also when the connection arrives: without one attach does nothing, and the pane would wait for its list forever.
+	$effect(() => { void app.serverId; if (serverId && app.links[serverId]?.api) void app.attachExtensionStore(serverId); });
 	// While another server's list is still being read, show nothing rather than the open server's list.
 	const rows = $derived((void app.extensionStoreTick, pendingStore ? [] : src.list()));
 	const list = $derived(rows);
