@@ -137,11 +137,12 @@ CHECK = r"""() => {
   const ow = parseFloat(cs.outlineWidth) || 0;
   if (cs.outlineStyle !== 'none' && ow > 0) { grow = ow + (parseFloat(cs.outlineOffset) || 0); how = 'outline'; }
   else {
-    // a ring drawn as a box-shadow: the largest spread of an outer shadow without blur
+    // A zero-blur shadow can be an outer halo or an inset ring (no growth).
     for (const part of cs.boxShadow.split(/,(?![^(]*\))/)) {
-      if (/inset/.test(part)) continue;
       const nums = (part.match(/-?[\d.]+px/g) || []).map(parseFloat);
-      if (nums.length >= 4 && nums[0] === 0 && nums[1] === 0 && nums[2] === 0) { grow = Math.max(grow, nums[3]); how = 'shadow'; }
+      if (nums.length >= 4 && nums[0] === 0 && nums[1] === 0 && nums[2] === 0 && nums[3] > 0) {
+        grow = Math.max(grow, /inset/.test(part) ? 0 : nums[3]); how = 'shadow';
+      }
     }
   }
   if (how === 'none') return {skip: 'no ring'};
@@ -165,7 +166,8 @@ CHECK = r"""() => {
     if (cy) { if (box.t - ring.t >= 0.5) sides.top = box.t - ring.t; if (ring.b - box.b >= 0.5) sides.bottom = ring.b - box.b; }
     // a scroll box that has the element scrolled partly out of view is the reader's doing, not a layout bug
     const scrolledAway = (sides.top && el.getBoundingClientRect().top < box.t) || (sides.bottom && el.getBoundingClientRect().bottom > box.b);
-    if (Object.keys(sides).length && !scrolledAway)
+    if (scrolledAway && /auto|scroll/.test(pcs.overflowY)) { delete sides.top; delete sides.bottom; }
+    if (Object.keys(sides).length)
       cuts.push({by: describe(p), sides: Object.fromEntries(Object.entries(sides).map(([k, v]) => [k, Math.round(v * 10) / 10]))});
   }
   const vw = innerWidth, vh = innerHeight, off = {};
@@ -199,12 +201,14 @@ def reach(pg, steps):
             pg.locator(selector).fill(value)
         elif s.startswith("status:"):
             button = pg.locator(f'.statusline button[aria-label^="{s[7:]}"]')
+            button.first.wait_for(state="attached", timeout=6000)
             if not button.first.is_visible():
                 pg.locator('.morebtn:visible').first.click(timeout=2500)
             button.first.click(timeout=2500)
         elif s.startswith("open:"):
             drawer(pg)
             row = pg.locator('.side button.open').filter(has_text=s[5:]).first
+            pg.locator('.dirblock[data-block$="/alpha"]').first.wait_for(timeout=6000)
             if not row.is_visible():
                 pg.locator('.dirblock[data-block$="/alpha"] > .dir .dirfold[aria-expanded="false"]').first.click(timeout=3500)
             row.click(timeout=6000)

@@ -455,6 +455,9 @@
 	.src.bad {
 		color: var(--danger);
 	}
+	.grid2 .field:focus {
+		box-shadow: inset 0 0 0 3px var(--accent-soft); /* the model limits can land flush with the scrolling form footer */
+	}
 	.grid2 {
 		display: grid;
 		grid-template-columns: 1fr 1fr;
