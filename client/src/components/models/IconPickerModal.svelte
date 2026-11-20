@@ -59,7 +59,7 @@
 		<div class="grid" role="group" aria-label={t("아이콘")}>
 			{#if showAuto}
 				<button type="button" class="pk-opt cell" aria-pressed={!value} title={t("자동")} onclick={() => onpick(undefined)}>
-					<ModelLogo {provider} {model} size={26} /><span>{t("자동")}</span>
+					<ModelLogo {provider} {model} size={26} colored /><span>{t("자동")}</span>
 				</button>
 			{/if}
 			{#each hits as k (k)}
