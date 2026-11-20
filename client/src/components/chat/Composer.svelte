@@ -743,8 +743,9 @@
 
 <div class="wrap" data-part="composer">
 	<ExtensionMount slot="composer.top" />
-	{#if whereShown && app.net === "online"}
-		<WhereChip path={wherePath} onclick={() => (app.dirPicker = true)} />
+	<!-- kept while (re)connecting, only disabled: dropping it pushed the composer down and back up on every app open -->
+	{#if whereShown}
+		<WhereChip path={wherePath} disabled={app.net !== "online"} onclick={() => (app.dirPicker = true)} />
 	{/if}
 	<div class="extension-widgets"><ExtensionPanels placement="composer" /></div>
 	{#if chat?.retrying}<RetryNotice retrying={chat.retrying} />{/if}

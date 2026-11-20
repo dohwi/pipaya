@@ -152,8 +152,19 @@ export function paneIn(_node: Element, { x = 0 }: { x?: number } = {}) {
 
 /* ---------- collapse: accordion-like open/close of a block ---------- */
 import { slide } from "svelte/transition";
-export const collapseIn = (node: Element) => slide(node, { duration: ms("normal"), easing: easeEnter });
-export const collapseOut = (node: Element) => slide(node, { duration: ms("fast"), easing: easeExit });
+/**
+ * `slide` clips with `overflow: hidden`, which makes the block a formatting context: the first row's top margin stops
+ * collapsing with the header's, so the rows sat 4px lower while sliding and jumped up when it ended (the sidebar's
+ * folders twitched on every open). `overflow: clip` clips the same way without a formatting context, so the margins
+ * collapse during the slide just as after it. A webview without `clip` keeps `hidden` (the old behaviour).
+ */
+export function clipSlide(node: Element, opts: { duration: number; easing: (t: number) => number }) {
+	const base = slide(node, opts);
+	const css = base.css;
+	return css ? { ...base, css: (t: number, u: number) => css(t, u).replace("overflow: hidden;", "overflow: hidden; overflow: clip;") } : base;
+}
+export const collapseIn = (node: Element) => clipSlide(node, { duration: ms("normal"), easing: easeEnter });
+export const collapseOut = (node: Element) => clipSlide(node, { duration: ms("fast"), easing: easeExit });
 
 /* ---------- modals: centred dialog on desktop, bottom sheet on phones ---------- */
 function sheet(node: Element, dir: "in" | "out") {
