@@ -1,6 +1,8 @@
 <script lang="ts">
 	import ExtensionMount from "./components/extensions/ExtensionMount.svelte";
 	import { onMount, untrack } from "svelte";
+	import { installFocusRescue } from "./lib/focus-rescue";
+	import { isTouch } from "./lib/format";
 	import { backLayer, handleBack } from "./lib/dialog";
 	import { BackTrail } from "./lib/back-trail";
 	import { OVERLAY_SELECTOR } from "./lib/keys";
@@ -108,6 +110,18 @@
 	});
 
 	onMount(() => guardWindowClose(() => app.requestClose()));
+	// Focus that would fall to <body> when what held it goes away (a menu, a rename field, the folding sidebar) goes back
+	// to where it was before, else to the open pane's input (lib/focus-rescue). Not on touch: that would pop the keyboard.
+	onMount(() =>
+		installFocusRescue(
+			document,
+			() => {
+				const pane = (app.activeId && document.querySelector(`[data-pane="${CSS.escape(app.activeId)}"]`)) || document.querySelector("[data-part=pane]");
+				return pane?.querySelector<HTMLElement>("textarea[data-composer], .xterm-helper-textarea") ?? null;
+			},
+			() => !isTouch(),
+		)
+	);
 	// Cold markdown code is what the first reply stalls on (lib/markdown.ts): warm it once the first paint is done.
 	onMount(() => {
 		const run = () => {
