@@ -155,7 +155,8 @@
 						title={isLastLevel(r, matched, l) ? t("하나는 남겨 두어야 합니다") : undefined}
 						onclick={() => toggleLevel(r, matched, l)}
 					>
-						{l}
+						<span class="box" aria-hidden="true"><Icon name="check" /></span>
+						<span>{l}</span>
 					</button>
 				{/each}
 			</div>
@@ -345,26 +346,55 @@
 		color: var(--text);
 		font-weight: 600;
 	}
-	/* the strengths this model offers: the same box as the starting-strength row below, but several cells can be on.
-	   on = the level's own tint and ring (the look of the row's chosen cell), off = plain faint text. Seven equal cells in
-	   one row; a phone splits them 4 + 3 instead of scrolling, so every strength stays in view. */
+	/* the strengths this model offers: the same box as the starting-strength row below, but each cell is a toggle, so
+	   it carries a checkbox: off = an empty 16px square, on = the square filled in the level's colour with a check and
+	   the cell tinted like the row's chosen cell. Four equal columns (7 = 4 + 3) leave the box and the longest label
+	   ("minimal") room on every width; nothing scrolls, every strength stays in view. */
 	.lvseg {
 		display: grid;
-		grid-template-columns: repeat(7, minmax(0, 1fr));
+		grid-template-columns: repeat(4, minmax(0, 1fr));
 		width: 100%;
 	}
 	.lvseg button {
-		padding: 0 4px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: 8px;
+		padding: 0 8px;
 		white-space: nowrap;
+		line-height: 20px;
 		font-size: var(--fs-sm);
-		color: var(--text-faint);
+		color: var(--text-dim);
 		font-weight: 450;
 		transition: background var(--motion-fast) var(--ease-std), color var(--motion-fast) var(--ease-std), box-shadow var(--motion-fast) var(--ease-std);
+	}
+	.lvseg .box {
+		flex: none;
+		display: grid;
+		place-items: center;
+		width: 16px;
+		height: 16px;
+		box-sizing: border-box;
+		border: 1.5px solid var(--border-strong);
+		border-radius: 4px;
+		background: var(--bg);
+		color: #fff;
+		transition: background var(--motion-fast) var(--ease-std), border-color var(--motion-fast) var(--ease-std);
+	}
+	.lvseg .box :global(svg) {
+		width: 12px;
+		height: 12px;
+		stroke-width: 3;
+		opacity: 0;
+		transition: opacity var(--motion-fast) var(--ease-std);
 	}
 	@media (hover: hover) {
 		.lvseg button[aria-pressed="false"]:hover {
 			background: var(--bg-hover);
-			color: var(--text-dim);
+			color: var(--text);
+		}
+		.lvseg button[aria-pressed="false"]:hover .box {
+			border-color: var(--text-faint);
 		}
 	}
 	.lvseg button[aria-pressed="true"] {
@@ -372,6 +402,13 @@
 		color: var(--lv);
 		box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--lv) 45%, transparent);
 		font-weight: 600;
+	}
+	.lvseg button[aria-pressed="true"] .box {
+		background: var(--lv);
+		border-color: var(--lv);
+	}
+	.lvseg button[aria-pressed="true"] .box :global(svg) {
+		opacity: 1;
 	}
 	/* starting strength: one row of the offered strengths; scrolls sideways when a phone is too narrow for them */
 	.dseg {
@@ -417,8 +454,9 @@
 		.lvseg button {
 			font-size: var(--fs-xs);
 		}
-		.lvseg {
-			grid-template-columns: repeat(4, minmax(0, 1fr));
+		/* a 360px phone left "medium" 0px inside its cell with the 8px gap */
+		.lvseg button {
+			gap: 4px;
 		}
 	}
 	/* the last strength of a matched model: it stays on, so it neither hovers nor reads as clickable */
