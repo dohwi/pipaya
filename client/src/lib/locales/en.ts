@@ -1304,6 +1304,8 @@ export const en: Record<string, string> = {
 	"이 클라이언트는 클립보드를 지원하지 않습니다": "This client has no clipboard access",
 	"클립보드에 복사하지 못했습니다": "Could not copy to the clipboard",
 	"브라우저 저장 공간이 부족합니다": "The browser is out of storage space",
+	"이 브라우저에서는 확장 스타일을 적용할 수 없습니다": "This browser cannot apply extension styles",
+	"pipaya 로고를 가리는 스타일이라 껐습니다": "Turned off: its styles cover the pipaya logo",
 	"링크 열기·복사는 10초에 최대 5번입니다": "At most 5 links or copies per 10 seconds",
 	"격리된 환경에서 실행되지만 서버 API를 사용자 권한으로 호출해 대화를 읽고 설정을 바꿀 수 있습니다. 신뢰하는 패키지만 켜세요.": "It runs isolated, but it calls the server API with your rights and can read conversations and change settings. Only enable packages you trust.",
 	"인터넷 접근: 확장 코드가 인터넷의 http(s) 주소 어디로든 요청을 보내고 응답을 읽습니다. 확장이 받은 데이터를 외부로 보낼 수 있습니다. 앱의 쿠키와 서버 토큰은 함께 보내지 않습니다. 이 컴퓨터·LAN·Tailscale 주소는 따로 허용해야 합니다.": "Internet access: the extension's code sends requests to any http(s) address and reads the answers. It can send data it received elsewhere. The app's cookies and server token are never sent along. Addresses on this computer, the LAN and Tailscale need a separate permission.",

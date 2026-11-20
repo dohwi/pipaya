@@ -72,8 +72,8 @@
 <div class="screen">
 	<Backdrop />
 	<div class="card">
-		<div class="logo"><PipayaMark size={52} /></div>
-		<h1><Wordmark size={34} /></h1>
+		<div class="logo" data-logo-frame><PipayaMark tone="solid" size={52} /></div>
+		<h1 data-logo-frame><Wordmark size={34} /></h1>
 		<p class="sub">{t("pipaya 서버에 연결해 대화를 시작합니다. 서버는 에이전트가 실제로 일하는 컴퓨터에서 돌아갑니다.")}</p>
 		<div class="ways">
 			{#if ways.includes("local")}

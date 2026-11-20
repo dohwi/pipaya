@@ -6,6 +6,7 @@ pi agent + papaya. 파파야 나무 줄기가 얼굴이고, 잎 5장과 열매 2
 logo/
 ├─ index.html   미리보기 (표정 8종 · 깜빡임 · 다크/라이트 · 앱 아이콘 타일)
 ├─ build.py     svg/ 생성기 (기하의 기준)
+├─ build_wordmark.py  앱 워드마크 윤곽선 생성기 (JetBrains Mono 600 → client/src/lib/wordmark-path.ts)
 └─ svg/
    ├─ pipaya.svg · pipaya-light.svg          투톤 (다크/라이트 배경용)
    ├─ pipaya-mono.svg                        단색, currentColor
@@ -49,3 +50,7 @@ python3 scripts/make-icons.py               # OS별 아이콘 세트 (데스크�
 
 `PipayaMark.svelte`과 문서 사이트의 `public/img/`(별도 `wiki` 저장소)는 `build_mark.py` 값을 바꿨을 때 직접 맞춘다.
 `build.py`(표정 시안), `build_papaya.py`, `build_small.py`는 이전 시안 생성기 (`svg/papaya/`, `svg/small/`, `papaya.html`, `small.html`).
+
+## 앱 안의 로고
+
+앱은 마크와 워드마크를 확장이 바꿀 수 없게 그린다(`client/src/lib/pipaya-logo.ts`). 워드마크는 폰트가 아니라 윤곽선이라, 폰트나 글자 간격을 바꾸면 `python3 logo/build_wordmark.py`로 다시 만든다.

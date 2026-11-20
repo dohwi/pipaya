@@ -2,7 +2,6 @@
 	import { sessionTitle } from "../../lib/session-title";
 	import { RENAME_KEY } from "../../lib/keys";
 	import ExtensionMount from "../extensions/ExtensionMount.svelte";
-	import ExtensionPart from "../extensions/ExtensionPart.svelte";
 	import { extensions } from "../../lib/extensions/host.svelte";
 	import { peerLabel } from "../../lib/peers";
 	import { workDir } from "../../lib/nav";
@@ -190,7 +189,7 @@
 		{#if id}<SessionToasts {id} />{/if}
 		{#if id && chat && chat.ready && !chat.loadError && chat.items.length === 0}
 			<!-- centred in the conversation area (everything above the input), for new and empty sessions alike -->
-			<ExtensionPart part="pane.empty" props={{ paneId: id }}><EmptyHero /></ExtensionPart>
+			<EmptyHero paneId={id} />
 		{/if}
 		{#if shown.chat}
 			{#key shown.chat.id}
@@ -201,7 +200,7 @@
 			<FindBar paneId={id} {focused} />
 		{:else if !id}
 			<div class="empty">
-				<ExtensionPart part="pane.welcome"><Welcome /></ExtensionPart>
+				<Welcome />
 			</div>
 		{/if}
 	</div>

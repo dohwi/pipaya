@@ -11,10 +11,11 @@ import { JsonTransport } from "./transport";
 import { NetClient } from "./net";
 import { NAVBAR_LIMITS, NAVBAR_NODE_TYPES, navbarId, parseNavbarItem, type NavbarItem, type NavbarItemSpec } from "./navbar";
 import { Api, normalizeUrl, type Connection } from "../api";
-import { describeSettingErrors, fillSettingDefaults, OWNED_PAGE_NAMES, parsePackage, resolveSettings, type ExtensionPackage, type Permission, type UIPart, type UISlot } from "./schema";
+import { describeSettingErrors, fillSettingDefaults, LOGO_PARTS, OWNED_PAGE_NAMES, parsePackage, resolveSettings, type ExtensionPackage, type Permission, type UIPart, type UISlot } from "./schema";
 import { adoptServerValue, PendingWrites, sharedSettings, splitSettings, WriteClock, keepUnowned, writableKeys, type StoredExtensionSettings } from "./settings-store";
 import type { Component } from "svelte";
-import { inlineAssets, raiseSpecificity } from "./style";
+import { inlineAssets, prepareSheet } from "./style";
+import { coveredPoints, onLogoMount, repaintLogos } from "../pipaya-logo";
 import { ExtensionRuntime } from "./runtime";
 import { PANEL_PLACEMENTS, parsePanelLayout, parsePanelSpec, parseView, validateUIEvent, type UIPanelPlacement, type UIPanelSpec, type UINode, type UIEvent, type UITone } from "./ui";
 
@@ -345,6 +346,7 @@ export class ExtensionHost {
     this.adapter = adapter;
     if (this.initialized) return;
     this.initialized = true;
+    if (typeof document !== "undefined") onLogoMount(() => this.checkLogoCover());
     this.loadList();
     void this.boot();
   }
@@ -791,7 +793,11 @@ export class ExtensionHost {
       const el = document.createElement("style");
       el.dataset.extension = id; el.textContent = inlineAssets(pkg.styles, pkg.assets);
       document.head.append(el); this.styleEls.set(id, el);
-      try { raiseSpecificity(el.sheet); } catch { /* an engine without CSSOM rule editing: the sheet still works, at its written specificity */ }
+      // Raised above the app's rules and kept off the pipaya logo. An engine that cannot edit the rules gets no sheet at all:
+      // unguarded, it could reach the logo.
+      try { prepareSheet(el.sheet); } catch { el.remove(); this.styleEls.delete(id); this.log(id, t("이 브라우저에서는 확장 스타일을 적용할 수 없습니다")); }
+      repaintLogos();
+      this.checkLogoCover();
     }
     if (!pkg.components || !pkg.manifest.permissions.includes("ui-components")) return;
     const [{ loadComponents }, { kit }] = await Promise.all([import("./components"), import("./kit")]);
@@ -833,6 +839,8 @@ export class ExtensionHost {
   replacementFor(part: UIPart, owners?: readonly string[]): { owner: string; component: Component<any> } | undefined {
     // The part that draws an extension's own settings is only for the extension whose page it is; nobody else can replace it.
     if (OWNED_PAGE_NAMES.has(part) && !owners) return undefined;
+    // The logo is the app's own: nobody replaces it.
+    if (LOGO_PARTS.has(part)) return undefined;
     return this.replacements.find(r => r.part === part && (!owners || owners.includes(r.owner)) && this.activeOwner(r.owner));
   }
   private failure(id: string, error: string) {
@@ -878,7 +886,7 @@ export class ExtensionHost {
     this.shortcuts = this.shortcuts.filter(s => s.owner !== id);
     this.toolRenderers = this.toolRenderers.filter(r => r.owner !== id);
     this.slots = this.slots.filter(s => s.owner !== id);
-    this.styleEls.get(id)?.remove(); this.styleEls.delete(id);
+    if (this.styleEls.has(id)) { this.styleEls.get(id)!.remove(); this.styleEls.delete(id); repaintLogos(); }
     this.mounted = this.mounted.filter(m => m.owner !== id);
     this.replacements = this.replacements.filter(r => r.owner !== id);
     if (Object.hasOwn(this.componentSets, id)) { const { [id]: _gone, ...rest } = this.componentSets; this.componentSets = rest; }
@@ -980,15 +988,35 @@ export class ExtensionHost {
     const pending = [id, ...[...this.unsynced].filter(other => other !== id && this.installed.some(e => e.package.manifest.id === other))];
     return Promise.all(pending.map(other => this.push(other))).then(() => {});
   }
+  /**
+   * An extension stylesheet must not lay anything over the pipaya logo (an element moved or a pseudo element placed on
+   * top of it; the rest is kept out by `prepareSheet`). Compared with the same page without that sheet, so the app's own
+   * layers (an open dialog, a menu) never count. Checked when a sheet starts and whenever a logo appears; an extension
+   * that covers the logo is stopped like one that failed.
+   */
+  private checkLogoCover() {
+    if (!this.styleEls.size || typeof document === "undefined") return;
+    for (const [id, el] of [...this.styleEls]) {
+      const sheet = el.sheet;
+      if (!sheet) continue;
+      const withSheet = coveredPoints();
+      if (!withSheet.size) return; // nothing over any logo, with every sheet on
+      sheet.disabled = true;
+      const without = coveredPoints();
+      sheet.disabled = false;
+      if ([...withSheet].some(p => !without.has(p))) this.failure(id, t("pipaya 로고를 가리는 스타일이라 껐습니다"));
+    }
+  }
   applyThemes() {
     if (typeof document === "undefined") return;
     for (const key of this.themes) document.documentElement.style.removeProperty(key);
     this.themes.clear();
-    if (this.safeMode) return;
+    if (this.safeMode) { repaintLogos(); return; }
     for (const e of this.installed) if (e.state === "active") {
       const tokens = this.adapter?.dark() ? e.package.theme?.dark : e.package.theme?.light;
       for (const [key, value] of Object.entries(tokens ?? {})) { document.documentElement.style.setProperty(key, value); this.themes.add(key); }
     }
+    repaintLogos(); // the logo's colours follow what is behind it
   }
   log(owner: string, text: string) { this.logs = [...this.logs.slice(-99), { owner, text: text.slice(0, 1000), at: Date.now() }]; }
   private require(id: string, permission: Permission) {
