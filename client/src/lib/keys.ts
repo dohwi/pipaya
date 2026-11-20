@@ -14,6 +14,8 @@ export type ActionId =
   | "newChat"
   | "clearChat"
   | "closeSession"
+  | "prevRow"
+  | "nextRow"
   | "prevWorkspace"
   | "nextWorkspace"
   | "prevTab"
@@ -112,6 +114,18 @@ const BASE: Omit<ActionDef, "group">[] = [
     label: msg("현재 대화 닫기"),
     hint: msg("탭을 닫습니다. 기록은 남아 다시 열 수 있습니다"),
     default: "Mod+D",
+  },
+  {
+    id: "prevRow",
+    label: msg("사이드바 위 줄로 이동"),
+    hint: msg("사이드바에서 한 줄 위 탭을 엽니다. 접힌 작업 폴더는 한 줄로 치고 첫 탭을 엽니다"),
+    default: "Mod+Alt+Shift+BracketLeft",
+  },
+  {
+    id: "nextRow",
+    label: msg("사이드바 아래 줄로 이동"),
+    hint: msg("사이드바에서 한 줄 아래 탭을 엽니다. 접힌 작업 폴더는 한 줄로 치고 첫 탭을 엽니다"),
+    default: "Mod+Alt+Shift+BracketRight",
   },
   {
     id: "prevWorkspace",
@@ -355,6 +369,8 @@ const BASE: Omit<ActionDef, "group">[] = [
 ];
 
 const GROUP: Partial<Record<ActionId, ActionDef["group"]>> = {
+  prevRow: "nav",
+  nextRow: "nav",
   prevWorkspace: "nav",
   nextWorkspace: "nav",
   prevTab: "nav",

@@ -1627,7 +1627,7 @@ class AppStore {
         await this.saveLayout(g.id, replaceSession(g.layout, from, id));
         void this.refreshGroups();
       }
-      await this.openMade(id);
+      await this.openSession(id, true);
       return true;
     } catch (e) {
       this.fail(e, t("다시 열지 못했습니다"));
@@ -1698,7 +1698,7 @@ class AppStore {
         serviceTier: d.serviceTier,
       });
       if (!this.sessions.some((x) => x.id === s.id)) this.sessions.unshift(s);
-      await this.openMade(s.id);
+      await this.openSession(s.id, true);
     } catch (e) {
       this.fail(e, t("새 대화를 만들지 못했습니다"));
     }
@@ -1728,7 +1728,7 @@ class AppStore {
       return this.fail(e, t("새 대화를 만들지 못했습니다"));
     }
     if (!this.sessions.some((x) => x.id === made.id)) this.sessions.unshift(made);
-    await this.openMade(made.id);
+    await this.openSession(made.id, true);
   }
 
   /**
@@ -1785,17 +1785,6 @@ class AppStore {
     const project = path ? this.blocksByServer[sid]?.find((b) => b.kind === "project" && b.dirs.some((d) => d.path === path)) : undefined;
     if (project?.kind === "project") this.sidebar.reveal(projectKey(sid, project.root));
     this.sidebar.reveal(sid);
-  }
-
-  /**
-   * Show a conversation or terminal that was just made (new chat, terminal, fork, resume): unlike opening an existing
-   * one, it also undoes a hand fold of its own folder, so the new row is listed instead of hiding under the fold.
-   */
-  private async openMade(id: string, force = true): Promise<void> {
-    const sid = this.serverId;
-    const path = tabOf(this.dirs, id)?.dir.path ?? this.session(id)?.cwd ?? this.terminal(id)?.cwd;
-    if (sid && path) this.sidebar.unshut(dirKey(sid, path));
-    await this.openSession(id, force);
   }
 
   /**
@@ -1991,7 +1980,7 @@ class AppStore {
         if (!fresh.ready) throw new Error(fresh.loadError || t("불러오지 못했습니다"));
         fresh.addOptimisticUser(text, images, files.map((f) => ({ path: "", name: f.name, size: f.size, mimeType: f.mimeType })));
         this.chats = { ...this.chats, [s.id]: fresh };
-        await this.openMade(s.id, false);
+        await this.openSession(s.id);
         to = s.id;
         seeded = true;
       }
@@ -2474,7 +2463,7 @@ class AppStore {
     }
     if (!this.terminals.some((x) => x.id === made.id)) this.terminals.push(made);
     if (beside) await this.dropSession(made.id, beside.target, beside.zone, beside.focus ?? true);
-    else await this.openMade(made.id, false);
+    else await this.openSession(made.id);
     return made;
   }
 
@@ -2620,7 +2609,7 @@ class AppStore {
         if (panesOf(g.layout).length < MAX_PANES) await this.dropSession(s.id, id, "right");
         else this.toast(t("그룹에는 대화를 최대 {n}개까지 넣을 수 있습니다", { n: MAX_PANES }), "error");
       }
-      await this.openMade(s.id);
+      await this.openSession(s.id, true);
       this.toast(t("새 대화로 분기했습니다"), "ok", s.id);
       return true;
     } catch (e) {
