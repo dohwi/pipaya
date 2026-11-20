@@ -5,6 +5,7 @@
 	import ExtensionPart from "../extensions/ExtensionPart.svelte";
 	import { extensions } from "../../lib/extensions/host.svelte";
 	import { peerLabel } from "../../lib/peers";
+	import { workDir } from "../../lib/nav";
 	import { t } from "../../lib/i18n";
 	import Icon from "../ui/Icon.svelte";
 	import AgentBadge from "./AgentBadge.svelte";
@@ -153,7 +154,7 @@
 				{:else}
 				{#snippet label()}{#if tag}<span class="who mono {state}" title={session?.name ? t("이 대화의 이름. 다른 대화에서 @{name}(으)로 부를 수 있습니다", { name: session.name }) : tag.title}>{tag.text}</span>{/if}{session ? sessionTitle(session.title) : t("대화")}{/snippet}
 				<span class="t" use:marquee={`${tag?.text ?? ""}${session ? sessionTitle(session.title) : ""}`}><span class="track"><span class="mq">{@render label()}</span><span class="dup" aria-hidden="true">{@render label()}</span></span></span>
-				{#if session}<span class="cwd mono" title={session.cwd}>{session.cwd.split(/[\\/]/).slice(-2).join("/")}</span>{/if}
+				{#if session}<span class="cwd mono" title={workDir(session)}>{workDir(session).split(/[\\/]/).slice(-2).join("/")}</span>{/if}
 				{/if}
 			</span>
 			{/if}
@@ -349,8 +350,8 @@
 	@media (hover: hover) {
 		.focused .t:global([data-over]) {
 			text-overflow: clip;
-			-webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 14px), transparent);
-			mask-image: linear-gradient(90deg, #000 calc(100% - 14px), transparent);
+			-webkit-mask-image: var(--mq-mask);
+			mask-image: var(--mq-mask);
 		}
 		.focused .t:global([data-over]) .track {
 			display: flex;

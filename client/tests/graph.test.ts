@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { BAND_GAP, buildGraph, CARD_W_MAX, isMouseWheel, springStep, CARD_H, CARD_H_LIVE, edgeLength, edgePath, edgeTip, sparkPlan, fitGraph, fitView, focusCards, FIT_MIN, FIT_PAD, growthPlan, leavePlan, modelName, related, type DelegateRun, type GraphServer } from "../src/lib/graph";
+import { BAND_GAP, ROW_GAP, ROLE_STALE_MS, buildGraph, roleCardId, staleRoles, quietCards, CARD_W_MAX, isMouseWheel, springStep, CARD_H, CARD_H_LIVE, edgeLength, edgePath, edgeTip, sparkPlan, fitGraph, fitView, focusCards, FIT_MIN, FIT_PAD, growthPlan, leavePlan, modelName, related, type DelegateRun, type GraphServer } from "../src/lib/graph";
 import type { Activity } from "../src/lib/activity";
 import type { Session } from "../src/lib/types";
 
@@ -31,7 +31,8 @@ describe("buildGraph", () => {
 		expect(g.cards.get("p:a/p")!.name).toBe("My Proxy");
 		expect(g.cards.get("m:a/p/m")!.name).toBe("Fast model");
 		expect(g.cards.get("m:a/p/m2")!.name).toBe("m2"); // no name given: the id
-		expect(g.cards.get("r:a/explore")!.models!.map((m) => [m.model, m.name]).sort()).toEqual([["p/sub", "Helper model"], ["q/raw", "raw"]]);
+		expect(g.cards.get(roleCardId("a", "explore", "p/sub"))!.model!.name).toBe("Helper model");
+		expect(g.cards.get(roleCardId("a", "explore", "q/raw"))!.model!.name).toBe("raw");
 		expect(g.cards.get("v:a")!.name).toBe("a");
 	});
 
@@ -76,7 +77,7 @@ describe("buildGraph", () => {
 		expect(g.edges.find((e) => e.to === "s:a/idle")!.live).toBe(false);
 	});
 
-	test("subagents: one card per role per server, newest model first, free, asked and running counted; one edge per chat and role", () => {
+	test("subagents: one card per role and model per server, free, asked and running counted; one edge per chat and card", () => {
 		const runs = [
 			run("s1", "explore", { model: "p/old", at: 1 }),
 			run("s1", "explore", { model: "p/new", at: 5, asked: "p/new" }),
@@ -85,24 +86,46 @@ describe("buildGraph", () => {
 			run("closed", "explore"),
 		];
 		const g = buildGraph([server("a", [session("s1"), session("s2")], { runs })]);
-		const r = g.cards.get("r:a/explore")!;
-		expect(r).toMatchObject({ kind: "subagent", count: 3, running: 1, asked: 1, free: false, live: true });
-		expect(r.models!.map((m) => [m.model, m.n])).toEqual([["p/new", 2], ["p/old", 1]]);
-		expect(g.cards.get("r:a/adhoc")!.free).toBe(true);
-		// a running role says who called it and on what model, and grows by the live line like a working chat
-		expect(r.calls).toEqual([{ sessionId: "s2", who: "@s2", model: "p/new", name: "new", at: 3 }]);
+		const r = g.cards.get(roleCardId("a", "explore", "p/new"))!;
+		const old = g.cards.get(roleCardId("a", "explore", "p/old"))!;
+		expect(r).toMatchObject({ kind: "subagent", label: "explore", count: 2, running: 1, asked: 1, free: false, live: true, last: 5 });
+		expect(r.model).toMatchObject({ model: "p/new", name: "new" });
+		expect(old).toMatchObject({ count: 1, running: 0, live: false });
+		const adhoc = g.cards.get(roleCardId("a", "adhoc", "p/m"))!;
+		expect(adhoc.free).toBe(true);
+		// a running card says who called it, and grows by the live line like a working chat
+		expect(r.calls).toEqual([{ sessionId: "s2", who: "@s2", at: 3 }]);
 		expect(r.h).toBe(CARD_H_LIVE);
-		expect(g.cards.get("r:a/adhoc")!.h).toBe(CARD_H);
+		expect(adhoc.h).toBe(CARD_H);
 		const del = g.edges.filter((e) => e.kind === "delegate");
 		expect(del.map((e) => [e.from, e.to, e.weight, e.live]).sort()).toEqual([
-			["s:a/s1", "r:a/explore", 2, false],
-			["s:a/s2", "r:a/adhoc", 1, false],
-			["s:a/s2", "r:a/explore", 1, true],
+			["s:a/s1", old.id, 1, false],
+			["s:a/s1", r.id, 1, false],
+			["s:a/s2", adhoc.id, 1, false],
+			["s:a/s2", r.id, 1, true],
 		].sort());
+		// one role's cards stand together, the model used last on top
+		expect(old.y - r.y).toBe(r.h / 2 + ROW_GAP + old.h / 2);
 		// the subagents form the last column, without overlapping
 		const roles = [...g.cards.values()].filter((c) => c.kind === "subagent").sort((x, y) => x.y - y.y);
 		expect(roles.every((c) => c.col === g.cols.length - 1)).toBe(true);
 		expect(roles[1]!.y - roles[0]!.y).toBeGreaterThanOrEqual(CARD_H);
+	});
+
+	test("staleRoles: a role's card on a model it moved off fades after a while; its newest card and a running one never do", () => {
+		const now = 10 * ROLE_STALE_MS;
+		const runs = [
+			run("s1", "explore", { model: "p/old", at: now - 2 * ROLE_STALE_MS }),
+			run("s1", "explore", { model: "p/new", at: now - 3 * ROLE_STALE_MS }),
+			run("s1", "explore", { model: "p/newer", at: now - ROLE_STALE_MS / 2 }),
+			run("s1", "runner", { model: "p/a", at: now - 5 * ROLE_STALE_MS, running: true, doneAt: null }),
+			run("s1", "runner", { model: "p/b", at: now - 4 * ROLE_STALE_MS }),
+			run("s1", "lone", { model: "p/a", at: now - 9 * ROLE_STALE_MS }),
+		];
+		const g = buildGraph([server("a", [session("s1")], { runs })]);
+		expect([...staleRoles(g, now)].sort()).toEqual([roleCardId("a", "explore", "p/new"), roleCardId("a", "explore", "p/old")].sort());
+		// within the hour a moved-off model still counts as in use
+		expect(staleRoles(g, now - ROLE_STALE_MS).has(roleCardId("a", "explore", "p/old"))).toBe(false);
 	});
 
 	test("a server without the delegate route shows its chats and no subagents", () => {
@@ -110,7 +133,26 @@ describe("buildGraph", () => {
 		expect([...g.cards.values()].some((c) => c.kind === "subagent")).toBe(false);
 	});
 
-	test("two servers: hubs are per server, one frame each, the second below the first", () => {
+	test("quietCards: idle chats, hubs with only idle chats and every card of an offline server step back", () => {
+		const states: Record<string, Activity> = { busy: "working", ask: "asking", done: "done", rest: "idle", kid: "idle" };
+		const g = buildGraph([
+			server("a", [session("busy"), session("ask", { model: "m2" }), session("done", { model: "m3" }), session("rest", { model: "m4" }), session("kid", { model: "m4", parentId: "rest" })], { states }),
+			server("off", [session("x")], { online: false, states: { x: "working" } }),
+		]);
+		const q = quietCards(g, 0);
+		// at rest: the idle chats and the model with nothing but idle chats under it
+		expect(["s:a/rest", "s:a/kid", "m:a/p/m4"].every((id) => q.has(id))).toBe(true);
+		// in use: what works, asks or has something new, the hubs above them and the online server
+		expect(["s:a/busy", "s:a/ask", "s:a/done", "m:a/p/m", "m:a/p/m2", "m:a/p/m3", "p:a/p", "v:a"].some((id) => q.has(id))).toBe(false);
+		// a role steps back when it runs nothing and only resting chats call it
+		const r = buildGraph([server("a", [session("busy"), session("rest")], { states, runs: [run("rest", "explore"), run("rest", "runner"), run("busy", "runner"), run("rest", "ui", { running: true, doneAt: null })] })]);
+		const rq = quietCards(r, 0);
+		expect([roleCardId("a", "explore", "p/m"), roleCardId("a", "runner", "p/m"), roleCardId("a", "ui", "p/m")].map((id) => rq.has(id))).toEqual([true, false, false]);
+		// an offline server's cards all step back, even a chat it last saw working
+		expect(["v:off", "p:off/p", "m:off/p/m", "s:off/x"].every((id) => q.has(id))).toBe(true);
+	});
+
+	test("two servers: hubs are per server, the second below the first with the gap for the hairline between them", () => {
 		const g = buildGraph([server("a", [session("s1")]), server("b", [session("s1")])]);
 		expect(g.cards.has("p:a/p") && g.cards.has("p:b/p")).toBe(true);
 		expect(g.bands.map((b) => b.server)).toEqual(["a", "b"]);
@@ -147,10 +189,10 @@ describe("helpers", () => {
 	test("related: a chat brings its line to the server, the chats it started and the roles it called", () => {
 		const g = buildGraph([server("a", [session("s1"), session("s2"), session("kid", { parentId: "s1" })], { runs: [run("s1", "explore")] })]);
 		const r = related(g, "s:a/s1");
-		expect(["v:a", "p:a/p", "m:a/p/m", "s:a/kid", "r:a/explore"].every((id) => r.has(id))).toBe(true);
+		expect(["v:a", "p:a/p", "m:a/p/m", "s:a/kid", roleCardId("a", "explore", "p/m")].every((id) => r.has(id))).toBe(true);
 		expect(r.has("s:a/s2")).toBe(false);
 		// from the role's side: its callers and their line up
-		expect(related(g, "r:a/explore").has("v:a")).toBe(true);
+		expect(related(g, roleCardId("a", "explore", "p/m")).has("v:a")).toBe(true);
 	});
 	test("edgePath goes from the right edge to the left edge, or loops back out of the right side", () => {
 		const a = { x: 0, y: 0, w: 100 } as never, b = { x: 300, y: 50, w: 100 } as never, same = { x: 0, y: 100, w: 100 } as never;

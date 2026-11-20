@@ -53,6 +53,11 @@ export interface ToolContext {
 	};
 	/** Scheduled tasks (`schedule`). */
 	schedules?: ScheduleOps;
+	/** The session's working folder (`workdir`): where it works now, and moving it to another working tree of its repository. */
+	workdir?: {
+		show(): string;
+		move(path: string | null): string;
+	};
 }
 
 /** One question, or several asked together (`items`; `question`/`options` describe the first). */
@@ -646,14 +651,49 @@ const delegateTool: ToolDef = {
 	},
 };
 
+export const WORKDIR_TOOL = "workdir";
+const WORKDIR_DESCRIPTION =
+	"Where this session works, and moving it between the working trees (main checkout, git worktrees) of its repository. " +
+	"After a move, bash starts in the new folder and relative paths resolve against it, and the user sees the session listed there.\n" +
+	"move (path): when you start changing files of one task in another working tree, usually right after `git worktree add ../x` for it, or when the user asks you to work there. " +
+	"Not to look around or run one command elsewhere: use `cd x && …` or absolute paths for that.\n" +
+	"back: return to the session's own folder when that task is done, and before removing the worktree you are in.\n" +
+	"show: where the session works now and the working trees it can move to.";
+
+const workdirTool: ToolDef = {
+	name: WORKDIR_TOOL,
+	description: WORKDIR_DESCRIPTION,
+	create(_cwd, _roots, ctx) {
+		return defineTool({
+			name: WORKDIR_TOOL,
+			label: "Working folder",
+			description: WORKDIR_DESCRIPTION,
+			parameters: Type.Object({
+				action: Type.Union([Type.Literal("show"), Type.Literal("move"), Type.Literal("back")]),
+				path: Type.Optional(Type.String({ description: "move: the working tree to work in (absolute, or relative to where the session works now)" })),
+			}),
+			executionMode: "sequential",
+			async execute(_id, p) {
+				const w = ctx?.workdir;
+				if (!w) throw new Error("this session cannot change its working folder");
+				if (p.action === "show") return text(w.show(), { action: p.action });
+				if (p.action === "move" && !p.path) throw new Error("move needs a path");
+				return text(w.move(p.action === "back" ? null : p.path!), { action: p.action, path: p.path ?? null });
+			},
+		});
+	},
+};
+
 const PEER_DEFS = [peerTool];
 /** Built-in tools the user may switch off in the settings; every other built-in tool is locked on. */
 export const TOGGLEABLE_TOOLS = [askUserTool.name, ...PEER_DEFS.map((t) => t.name), DELEGATE_TOOL, scheduleTool.name];
 /** Tools every session gets whatever list it was created with (the other sessions must always be reachable). */
 export const PEER_TOOLS = PEER_DEFS.map((t) => t.name);
+/** Tools every session gets, locked on: moving between working trees is part of how the session works, not an option. */
+export const ALWAYS_TOOLS = [WORKDIR_TOOL];
 
 export const TOOL_DEFS: Record<string, ToolDef> = Object.fromEntries(
-	[readTool, writeTool, editTool, lsTool, grepTool, bashTool, askUserTool, ...PEER_DEFS, delegateTool, scheduleTool].map((t) => [t.name, t]),
+	[readTool, writeTool, editTool, lsTool, grepTool, bashTool, askUserTool, ...PEER_DEFS, delegateTool, scheduleTool, workdirTool].map((t) => [t.name, t]),
 );
 export const DEFAULT_TOOLS = Object.keys(TOOL_DEFS);
 

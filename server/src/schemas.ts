@@ -1,10 +1,9 @@
 import Type, { type TSchema } from "typebox";
-import { SERVICE_TIERS } from "./openrouter-catalog.ts";
 import { THINKING_LEVELS } from "./store.ts";
 
 // ── Shared building blocks ──────────────────────────────────────────────────
 
-export const Tier = Type.Union(SERVICE_TIERS.map(t => Type.Literal(t)));
+export const Tier = Type.Union([Type.Literal("default"), Type.Literal("flex"), Type.Literal("priority"), Type.Literal("ultrafast")]);
 export const OptionalTier = Type.Optional(Type.Union([Tier, Type.Null()]));
 export const Thinking = Type.Union(THINKING_LEVELS.map((l) => Type.Literal(l)));
 export const PromptMode = Type.Union([Type.Literal("prompt"), Type.Literal("steer"), Type.Literal("follow_up")], {
@@ -45,6 +44,7 @@ const sessionFields = {
 	name: Type.String({ description: "How other sessions address this one (@name), always in Korean (민수) whatever the UI language; unique among active sessions. Show it with nameInLang(name, uiLang) (Minsu in English)" }),
 	purpose: Type.String({ description: "What this session's agent works on, written by the system model (GET /system-model); empty until then" }),
 	cwd: Type.String({ description: "Absolute path of the working directory" }),
+	activeDir: Type.Optional(Nullable(Type.String({ description: "Absolute path of another git worktree of the cwd's repository the agent moved into and works in now; null while it works in its own. List the session under activeDir ?? cwd" }))),
 	provider: Type.String(),
 	model: Type.String(),
 	thinkingLevel: Thinking,
@@ -196,6 +196,7 @@ export const PatchSessionBody = Type.Object({
 	systemPrompt: Type.Optional(Type.String({ maxLength: 100_000, description: "Only before the first message (else 409)" })),
 	tools: Type.Optional(Type.Array(Type.String(), { description: "Only before the first message (else 409)" })),
 	closed: Type.Optional(Type.Boolean({ description: "true closes the session (aborting any run); false resumes it" })),
+	workDir: Type.Optional(Nullable(Type.String({ maxLength: 4096, description: "Move the session to another working tree (main checkout or git worktree) of its repository; null or its own cwd moves it home. 400 for any other folder, 409 while it runs. Its agent is told with its next message" }))),
 	muted: Type.Optional(Type.Boolean({ description: "Ignored. Per-session mute was removed; older clients may still send it (the quietPeers notification policy replaced it)", deprecated: true })),
 }, { additionalProperties: false });
 
@@ -322,6 +323,7 @@ export const ModelInfo = Type.Object({
 	imageGeneration: Type.Boolean({ description: "Makes pictures instead of text. It cannot run a chat (409 image_model_not_chat); set it as the image model (GET/PUT /image-model) and agents draw with the generate_image tool" }),
 	icon: Type.Optional(Type.String({ description: "Brand mark chosen for this model in its connection settings" })),
 	defaultThinkingLevel: Type.Optional(Thinking),
+	defaultServiceTier: Type.Optional(Tier),
 	configured: Type.Boolean({ description: "A usable credential exists for this model's provider" }),
 	available: Type.Boolean({ description: "false = the connection's own model list no longer contains this model" }),
 });

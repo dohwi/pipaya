@@ -33,6 +33,7 @@ import { Pairing } from "./pairing.ts";
 import { isAdminOnlyRoute, PUBLIC_PAIRING_PATH, registerPairingRoutes } from "./pairing-routes.ts";
 import { registerFsRoutes } from "./fs-routes.ts";
 import { registerFileRoutes } from "./file-routes.ts";
+import { workDirOf } from "./work-tree.ts";
 import { GroupManager, panesOf, peerGroupOps, type GroupRecord } from "./groups.ts";
 import { registerGroupRoutes } from "./groups-routes.ts";
 import { isTerminalId, TerminalManager } from "./terminals.ts";
@@ -172,7 +173,7 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 	};
 	const llm = new Llm(registry, modelRoles);
 	extensions.attach({
-		cwd: (id) => store.get(id)?.cwd,
+		cwd: (id) => { const r = store.get(id); return r ? workDirOf(r) : undefined; },
 		defaultCwd: () => configuration.defaultWorkdir(),
 		groups: {
 			list: () => groups.list().map(groupInfo),
@@ -595,7 +596,19 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 	});
 	app.patch("/sessions/:id", {
 		schema: { params: S.IdParams, body: S.PatchSessionBody, response: { 200: S.Session, ...S.errors(400, 401, 404, 409, 502) } },
-		handler: async (req) => sessions.configureSession(req.params.id, req.body),
+		handler: async (req) => {
+			const { workDir, ...rest } = req.body;
+			if (workDir !== undefined) sessions.moveWorkdir(req.params.id, workDir === null || workDir === "" ? null : workDir, "user");
+			return Object.keys(rest).length || workDir === undefined ? sessions.configureSession(req.params.id, rest) : sessions.get(req.params.id);
+		},
+	});
+	app.get("/sessions/:id/workdirs", {
+		schema: {
+			description: "The working trees (main checkout, git worktrees) of the session's repository it may be moved to (PATCH workDir), its own first; empty outside a repository",
+			params: S.IdParams,
+			response: { 200: Type.Object({ workdirs: Type.Array(Type.Object({ path: Type.String(), branch: Type.Union([Type.String(), Type.Null()]), home: Type.Boolean({ description: "The working tree of the session's own cwd" }), current: Type.Boolean({ description: "Where the session works now" }) })) }), ...S.errors(401, 404) },
+		},
+		handler: async (req) => ({ workdirs: sessions.workdirs(req.params.id) }),
 	});
 	app.delete("/sessions/:id", {
 		schema: { params: S.IdParams, response: { 204: Type.Null(), ...S.errors(401, 404) } },
@@ -696,7 +709,7 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 	registerImageModelRoutes(server, imageModel, bus);
 	registerVoiceRoutes(server, voice, credentials, bus);
 	registerFsRoutes(server, () => configuration.defaultWorkdir(), cfg.restrictWorkspace ? cfg.workspaceRoot : undefined);
-	registerFileRoutes(server, (id) => store.get(id)?.cwd);
+	registerFileRoutes(server, (id) => { const r = store.get(id); return r ? [...new Set([workDirOf(r), r.cwd])] : undefined; });
 	// A group the client named by default gets a better name from the system model, unless someone renamed it meanwhile.
 	registerGroupRoutes(server, groups, (rec) => {
 		if (!systemModel.resolve()) return;

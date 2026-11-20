@@ -2,7 +2,7 @@
  * What git says about a folder, read from the files under `.git` without starting git (it may not be installed, and a
  * sidebar asking about every folder must not spawn a process per folder). Anything unreadable is simply "not a repository".
  */
-import { existsSync, readFileSync, statSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 
@@ -69,4 +69,25 @@ export function repoOf(cwd: string, home = homedir()): RepoInfo | null {
 	} catch {
 		return null;
 	}
+}
+
+/**
+ * The working trees of the repository whose main working tree is `root`: the main checkout first, then each worktree
+ * still on disk (`.git/worktrees/<name>/gitdir` names its `.git` file), with the branch checked out in each.
+ */
+export function worktreesOf(root: string): { path: string; branch: string | null }[] {
+	const out: { path: string; branch: string | null }[] = [];
+	try {
+		out.push({ path: root, branch: headBranch(join(root, ".git")) });
+		const dir = join(root, ".git", "worktrees");
+		if (!existsSync(dir)) return out;
+		for (const name of readdirSync(dir).sort()) {
+			try {
+				const gitFile = readFileSync(join(dir, name, "gitdir"), "utf8").trim();
+				const path = dirname(isAbsolute(gitFile) ? gitFile : resolve(dir, name, gitFile));
+				if (existsSync(join(path, ".git"))) out.push({ path, branch: headBranch(join(dir, name)) });
+			} catch { /* a half-made or pruned entry: skip it */ }
+		}
+	} catch { /* unreadable: what was read so far */ }
+	return out;
 }

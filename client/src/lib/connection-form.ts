@@ -1,4 +1,5 @@
 import { t } from "./i18n";
+import { directRouter } from "./service-tier";
 import { compact } from "./format";
 import { THINKING_LEVELS, type ApiFormat, type CatalogModel, type CustomModel, type CustomProvider, type ThinkingLevel } from "./types";
 
@@ -25,6 +26,7 @@ export interface Row {
 	catalogId?: string | null;
 	/** Where a new chat with this model starts; undefined = this device's last choice */
 	defaultThinkingLevel?: ThinkingLevel;
+	defaultServiceTier?: CustomModel["defaultServiceTier"];
 	/** What the server matched this model to, for display only */
 	thinkingSource?: CustomModel["thinkingSource"];
 	/** The upstream's model list no longer contains it */
@@ -137,6 +139,7 @@ export function formFromProvider(p: CustomProvider): Form {
 			thinkingLevels: m.thinkingLevels ?? [],
 			catalogId: m.catalogId,
 			defaultThinkingLevel: m.defaultThinkingLevel,
+			defaultServiceTier: m.defaultServiceTier,
 			thinkingSource: m.thinkingSource,
 			unavailable: m.unavailable,
 		})),
@@ -214,6 +217,7 @@ export function collectModels(
 			...(r.reasoning && !r.imageGeneration && r.thinkingLevels.length ? { thinkingLevels: ALL_LEVELS.filter((l) => r.thinkingLevels.includes(l)) } : {}),
 			// A default outside the strengths this model offers would never be reachable, so it is dropped with them.
 			...(def ? { defaultThinkingLevel: def } : {}),
+			...(!r.imageGeneration && directRouter(f.baseUrl) && r.defaultServiceTier ? { defaultServiceTier: r.defaultServiceTier } : {}),
 		} as CustomModel);
 	}
 	if (new Set(out.map((m) => m.id)).size !== out.length) return { error: t("모델 ID가 중복되었습니다.") };

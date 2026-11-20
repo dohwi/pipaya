@@ -42,8 +42,8 @@
 		:global(:where(.side) .item:hover .title[data-over]),
 	:global(:where(.side) .item:has(:focus-visible) .title[data-over]) {
 			text-overflow: clip;
-			-webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 14px), transparent);
-			mask-image: linear-gradient(90deg, #000 calc(100% - 14px), transparent);
+			-webkit-mask-image: var(--mq-mask);
+			mask-image: var(--mq-mask);
 		}
 		:global(:where(.side) .item:hover .title[data-over] .track),
 	:global(:where(.side) .item:has(:focus-visible) .title[data-over] .track) {
@@ -64,8 +64,8 @@
 	@media (hover: none) {
 		:global(:where(.side) .item.active .title[data-over]) {
 			text-overflow: clip;
-			-webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 14px), transparent);
-			mask-image: linear-gradient(90deg, #000 calc(100% - 14px), transparent);
+			-webkit-mask-image: var(--mq-mask);
+			mask-image: var(--mq-mask);
 		}
 		:global(:where(.side) .item.active .title[data-over] .track) {
 			display: flex;

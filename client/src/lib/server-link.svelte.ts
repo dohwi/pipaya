@@ -1,6 +1,7 @@
 import { untrack } from "svelte";
 import { Api, ApiError, errorText, isUnsupportedRoute } from "./api";
 import type { RepoInfo } from "./projects";
+import { workDir } from "./nav";
 import { compat, isClientTooOld, type ServerVersions } from "./protocol";
 import { t } from "./i18n";
 import { settingsProblems, type SettingsProblem } from "./settings-problems";
@@ -137,7 +138,7 @@ export class ServerLink {
 		this.stopSaving = $effect.root(() => {
 			$effect(() => {
 				// read what is stored, so any change to it (not to activity) schedules a write
-				void this.data.sessions.length, this.data.sessions.map((s) => s.title + s.cwd + s.updatedAt), this.data.groups.map((g) => g.updatedAt), this.data.terminals.length, this.repos;
+				void this.data.sessions.length, this.data.sessions.map((s) => s.title + workDir(s) + s.updatedAt), this.data.groups.map((g) => g.updatedAt), this.data.terminals.length, this.repos;
 				this.saveLists();
 			});
 			$effect(() => {
@@ -152,7 +153,7 @@ export class ServerLink {
 	/** Folders asked about and not answered yet, so a burst of list changes asks once per folder. */
 	private reposAsked = new Set<string>();
 	private listedPaths(): string[] {
-		return [...new Set([...this.data.sessions.map((s) => s.cwd), ...this.data.terminals.map((x) => x.cwd)])];
+		return [...new Set([...this.data.sessions.map(workDir), ...this.data.terminals.map((x) => x.cwd)])];
 	}
 
 	/**

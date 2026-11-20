@@ -7,6 +7,12 @@ import { uniqueBy } from "./unique";
 export type Member = Session | TerminalInfo;
 
 /**
+ * The folder a conversation or terminal is listed under: where it works now. A conversation whose agent moved into
+ * another git worktree of its repository goes by that worktree (`Session.activeDir`), not the folder it was made in.
+ */
+export const workDir = (m: Member): string => ("activeDir" in m && m.activeDir) || m.cwd;
+
+/**
  * One tab of a working directory: a group (several panes laid out together), a lone conversation, or a lone terminal.
  * A session or terminal in a group is part of that group's tab only.
  */
@@ -43,11 +49,11 @@ export interface BlockOpts {
 
 /** The folder a group belongs to: the one most of its panes work in (ties: the first pane's). */
 function dirOf(members: Member[], pinned?: string): string {
-	if (pinned && members.some((m) => m.cwd === pinned)) return pinned;
+	if (pinned && members.some((m) => workDir(m) === pinned)) return pinned;
 	const n = new Map<string, number>();
-	for (const m of members) n.set(m.cwd, (n.get(m.cwd) ?? 0) + 1);
-	let best = members[0]!.cwd;
-	for (const m of members) if (n.get(m.cwd)! > n.get(best)!) best = m.cwd;
+	for (const m of members) n.set(workDir(m), (n.get(workDir(m)) ?? 0) + 1);
+	let best = workDir(members[0]!);
+	for (const m of members) if (n.get(workDir(m))! > n.get(best)!) best = workDir(m);
 	return best;
 }
 
@@ -77,7 +83,7 @@ export function sidebarDirs(sessions: readonly Session[], groups: readonly Group
 	}
 	for (const s of sessions) {
 		if (grouped.has(s.id) || !match(s)) continue;
-		all.push({ cwd: s.cwd, tab: { kind: "session", id: s.id, session: s }, created: s.createdAt ?? 0 });
+		all.push({ cwd: workDir(s), tab: { kind: "session", id: s.id, session: s }, created: s.createdAt ?? 0 });
 	}
 	for (const t of terminals) {
 		if (grouped.has(t.id) || !matchTerminal(t)) continue;

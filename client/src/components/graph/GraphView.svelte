@@ -11,7 +11,7 @@
 	import { formatCombo, isMac } from "../../lib/keys";
 	import { toolSummary } from "../../lib/tools";
 	import { graphRuns } from "../../lib/graph-runs.svelte";
-	import { isMouseWheel, edgeLength, edgePath, edgeTip, sparkPlan, fitGraph, fitView, focusCards, growthPlan, leavePlan, related, springStep, type Card, type Edge, type Graph, type GraphServer } from "../../lib/graph";
+	import { isMouseWheel, edgeLength, edgePath, edgeTip, sparkPlan, fitGraph, fitView, focusCards, growthPlan, leavePlan, quietCards, related, springStep, type Card, type Edge, type Graph, type GraphServer } from "../../lib/graph";
 	import Icon from "../ui/Icon.svelte";
 	import ModelLogo from "../models/ModelLogo.svelte";
 	import AgentBadge from "../shell/AgentBadge.svelte";
@@ -151,17 +151,15 @@
 		if (c.kind === "provider") return { parts: [n(t("모델 {n}개", { n: c.children.length })), n(t("대화 {n}개", { n: c.count }))], extra: 0 };
 		if (c.kind === "model") return { parts: [n(modelSource(c)), n(t("대화 {n}개", { n: c.count }))], extra: 0 };
 		if (c.kind !== "subagent") return { parts: [], extra: 0 };
-		const m = c.models?.[0];
-		const more = c.models && c.models.length > 1 ? t("외 {n}", { n: c.models.length - 1 }) : "";
+		const m = c.model;
 		// a running call is told on the live line below (who called it, on what model), so the facts line keeps to the role
 		const parts = [
 			...(m ? [{ text: m.name, mono: true }] : []), // `.mn` is always set in mono
-			...(more ? [n(more)] : []),
 			n(t("{n}회", { n: c.count })),
 			...(c.free ? [n(t("즉석"))] : []),
 		];
-		// the model's 14px logo + 4px gap, the 14px sparkle + 4px gap; "외 N" sits 4px after the name, not a dot's 17px
-		return { parts, extra: m ? 18 + (c.asked ? 18 : 0) + (more ? 4 - 17 : 0) : 0 };
+		// the model's 14px logo + 4px gap
+		return { parts, extra: m ? 18 : 0 };
 	}
 
 	/** The view's size: the layout wraps many chats into columns when that shows the graph larger in it. */
@@ -585,6 +583,9 @@
 		const id = setInterval(() => (now = Date.now()), 30_000);
 		return () => clearInterval(id);
 	});
+	/** Cards at rest step back with the lines into them (`quietCards`), unless the pointer is on them or what they belong to. */
+	const quiet = $derived(quietCards(graph, now));
+	const faded = (id: string) => quiet.has(id) && !focus?.has(id) && selected !== id;
 	function ago(at: number): string {
 		const sec = Math.max(0, Math.round((now - at) / 1000));
 		if (sec < 60) return t("방금");
@@ -655,8 +656,9 @@
 	>
 		<div class="world" style:transform="translate({Math.round(view.x)}px, {Math.round(view.y)}px) scale({view.k})">
 			{#if graph.bands.length > 1}
-				{#each graph.bands as b (b.server)}
-					<div class="band" class:down={!b.online} style:top="{b.y0 - 24}px" style:height="{b.y1 - b.y0 + 48}px" style:width="{graph.width + 48}px"></div>
+				<!-- two or more servers: a hairline in the gap between one server's cards and the next (no frames behind them) -->
+				{#each graph.bands.slice(1) as b, i (b.server)}
+					<div class="split" style:top="{(graph.bands[i]!.y1 + b.y0) / 2}px" style:width="{graph.width}px"></div>
 				{/each}
 			{/if}
 			<svg class="edges" aria-hidden="true">
@@ -675,7 +677,7 @@
 						{@const call = e.kind === "delegate"}
 						{@const d = edgePath(a, b, r, call ? "curve" : "elbow")}
 						{@const full = r >= 1 && !ghost}
-						<g class="e-{e.kind}" class:live={e.live && !ghost} class:dim={!on} class:hot={!!focus && on}>
+						<g class="e-{e.kind}" class:live={e.live && !ghost} class:dim={!on} class:hot={!!focus && on} class:quiet={on && (faded(e.from) || faded(e.to))}>
 							{#if e.live && full}<path class="halo" {d} filter="url(#gv-glow)" transition:glowFade />{/if}
 							<path class="base" {d} style:stroke-width={call && !e.live ? 1.25 + Math.min(2, Math.log2(e.weight) * 0.5) : undefined} />
 							{#if call && full}
@@ -717,6 +719,7 @@
 					class:working={!ghost && ((c.kind === "session" && c.activity === "working") || (c.kind === "subagent" && !!c.running))}
 					class:asking={!ghost && c.kind === "session" && c.activity === "asking"}
 					class:dim={!!focus && !focus.has(c.id)}
+					class:quiet={!ghost && faded(c.id)}
 					class:sel={selected === c.id}
 					class:dragging={dragging === c.id}
 					class:ghost
@@ -742,30 +745,26 @@
 						{:else}<span class="nm fl" title={`${c.name} · ${c.provider}/${c.label}`} use:marquee={c.name}>{@render flow(c.name)}</span>{/if}
 						<span class="meta"><span class="give fl" use:marquee={modelSource(c)}>{@render flow(modelSource(c))}</span><i>·</i><span>{t("대화 {n}개", { n: c.count })}</span></span>
 					{:else if c.kind === "subagent"}
-						{@const m = c.models?.[0]}
+						{@const m = c.model}
 						{@const ref = m ? splitModelRef(m.model) : null}
 						<span class="lead"><Icon name="bot" /></span>
 						<span class="nm fl mid" title={c.label} use:marquee={c.label}>{@render flow(c.label, true)}</span>
 						<span class="meta">
 							{#if m}
-								<span class="model" title={c.models!.map((x) => `${x.name} ${t("{n}회", { n: x.n })}`).join(" · ")}>
+								<span class="model" title={m.name !== ref?.id ? m.model : undefined}>
 									<ModelLogo conn={app.links[c.server]?.conn} icon={iconOf(c.server, ref?.provider, ref?.id ?? "")} provider={ref?.provider} model={ref?.id} size={14} colored />
 									<span class="mn fl" class:mono={m.name === ref?.id} class:mid={m.name === ref?.id} use:marquee={m.name}>{@render flow(m.name, m.name === ref?.id)}</span>
-									{#if c.asked}<span class="pick" title={t("에이전트가 모델을 직접 골랐습니다 ({n}회)", { n: c.asked })}><Icon name="sparkles" /></span>{/if}
-									{#if c.models!.length > 1}<span class="more">{t("외 {n}", { n: c.models!.length - 1 })}</span>{/if}
 								</span><i>·</i>
 							{/if}
 							<span>{t("{n}회", { n: c.count })}</span>
 							{#if c.free}<i>·</i><span title={t("역할 파일 없이 에이전트가 이름을 정한 서브에이전트입니다. 읽기 전용 도구만 쓰고 작업 내용이 곧 지침입니다")}>{t("즉석")}</span>{/if}
 						</span>
 						{#if c.running && c.calls?.length}
-							<!-- the newest running call: the chat that called it (its handle in the working colour) and the model it runs on -->
+							<!-- who runs it now (the card says on what model): the newest caller's handle in the working colour -->
 							{@const k = c.calls[0]!}
-							{@const kr = splitModelRef(k.model)}
-							<span class="doing" in:glowFade={{ delay: 120 }} title={c.calls.map((x) => `${x.who} · ${x.name}`).join("\n")}>
-								<Icon name="bolt" /><b class="by">{k.who}</b>
-								<span class="on"><ModelLogo conn={app.links[c.server]?.conn} icon={iconOf(c.server, kr.provider, kr.id)} provider={kr.provider} model={kr.id} size={14} colored /></span>
-								<span class="what fl" use:marquee={k.name}>{@render flow(k.name)}</span>
+							<span class="doing" in:glowFade={{ delay: 120 }} title={c.calls.map((x) => x.who).join("\n")}>
+								<Icon name="bolt" /><b class="by fl" use:marquee={k.who}>{@render flow(k.who)}</b>
+								<span class="what">{t("실행 중")}</span>
 								{#if c.calls.length > 1}<span class="q" title={t("실행 중 {n}", { n: c.calls.length })}>{t("외 {n}", { n: c.calls.length - 1 })}</span>{/if}
 							</span>
 						{/if}
@@ -926,22 +925,15 @@
 		top: 0;
 		transform-origin: 0 0;
 	}
-	.band {
+	.split {
 		position: absolute;
-		left: -24px;
-		border: 1px solid var(--border);
-		border-radius: var(--radius-panel);
-		background: color-mix(in srgb, var(--text) 2%, transparent);
+		left: 0;
+		height: 1px;
+		background: var(--border);
 		pointer-events: none;
-	}
-	.band {
 		transition:
 			top var(--motion-slow) var(--ease-std),
-			height var(--motion-slow) var(--ease-std),
 			width var(--motion-slow) var(--ease-std);
-	}
-	.band.down {
-		border-style: dashed;
 	}
 	.empty {
 		position: absolute;
@@ -1064,6 +1056,9 @@
 	.edges g.dim {
 		opacity: 0.12;
 	}
+	.edges g.quiet {
+		opacity: 0.4; /* a line with a card at rest on either end steps back with it */
+	}
 	.edges g.dim .halo {
 		animation-play-state: paused;
 	}
@@ -1179,6 +1174,11 @@
 	.card.dim.arriving {
 		opacity: calc(0.45 * var(--in));
 	}
+	/* at rest (an idle chat, a hub with only idle chats, a role's old model, an offline server's cards): quieter than what is at
+	   work, still readable, full again while the pointer is on it or what it belongs to */
+	.card.quiet:not(.dim) {
+		opacity: 0.6;
+	}
 	.card.ghost {
 		pointer-events: none;
 	}
@@ -1264,18 +1264,6 @@
 		font-family: var(--mono);
 		color: var(--text-dim);
 	}
-	.meta .pick {
-		flex: none;
-		display: inline-grid;
-		place-items: center;
-		width: 14px;
-		height: 14px;
-		font-size: 12px;
-		color: var(--warn);
-	}
-	.meta .more {
-		flex: none;
-	}
 
 	/* a chat: name and time, its title, and while it works what it is on */
 	.when {
@@ -1349,15 +1337,17 @@
 	}
 	/* a running role's caller: a chat at work, so its handle reads in the working colour */
 	.doing b.by {
+		flex: 0 1 auto;
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 		color: var(--info);
 	}
-	.doing .on {
+	.doing b.by + .what {
 		flex: none;
-		display: inline-grid;
-		place-items: center;
-		width: 14px;
-		height: 14px;
 	}
+
 	.doing .what {
 		min-width: 0;
 		overflow: hidden;
@@ -1468,8 +1458,8 @@
 	@media (hover: hover) and (prefers-reduced-motion: no-preference) {
 		.card:hover .fl:global([data-over]) {
 			text-overflow: clip;
-			-webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 14px), transparent);
-			mask-image: linear-gradient(90deg, #000 calc(100% - 14px), transparent);
+			-webkit-mask-image: var(--mq-mask);
+			mask-image: var(--mq-mask);
 		}
 		.card:hover .fl:global([data-over]) .cut {
 			display: none;
@@ -1515,7 +1505,7 @@
 	@media (prefers-reduced-motion: reduce) {
 		.edges path,
 		.edges g,
-		.band,
+		.split,
 		.card {
 			transition: none;
 		}

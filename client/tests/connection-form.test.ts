@@ -183,3 +183,14 @@ describe("thinking levels", () => {
 		expect(ALL_LEVELS).toEqual(["off", "minimal", "low", "medium", "high", "xhigh", "max"]);
 	});
 });
+
+test("new-chat speed round-trips only for direct OpenRouter text models, independent of thinking", () => {
+	const f = filled({ baseUrl: "https://openrouter.ai/api/v1", rows: [row({ defaultServiceTier: "default", reasoning: false })] });
+	const render = () => (collectModels(f, true, none, false) as { out: CustomProvider["models"] }).out;
+	expect(render()[0]?.defaultServiceTier).toBe("default");
+	expect(formFromProvider({ ...f, models: render() } as unknown as CustomProvider).rows[0]?.defaultServiceTier).toBe("default");
+	f.rows[0]!.imageGeneration = true;
+	expect(render()[0]).not.toHaveProperty("defaultServiceTier");
+	f.rows[0]!.imageGeneration = false; f.baseUrl = "https://openrouter.ai.proxy.invalid/api/v1";
+	expect(render()[0]).not.toHaveProperty("defaultServiceTier");
+});

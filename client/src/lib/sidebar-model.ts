@@ -70,7 +70,7 @@ export const newKey = (key: string) => `new${SEP}${key}`;
 import { t } from "./i18n";
 
 /** The icons a row's menu uses (a subset of the app's icon names, so no component import is needed here). */
-export type MenuIcon = "clock" | "columns" | "pencil" | "x" | "unlink" | "chat" | "terminal" | "copy" | "chevron-down" | "chevron-right" | "pin" | "repo";
+export type MenuIcon = "clock" | "columns" | "pencil" | "x" | "unlink" | "chat" | "terminal" | "copy" | "chevron-down" | "chevron-right" | "pin" | "repo" | "fork";
 
 /** One entry of a row's "more" menu. */
 export interface MenuEntry {
@@ -102,6 +102,8 @@ export interface RowActions {
 	isPinned?(id: string): boolean;
 	/** Open the scheduled-tasks page with a new task for this conversation (offered for conversations only, not terminals or split tabs) */
 	schedule?(id: string): void;
+	/** Pick another working tree of the conversation's repository to move it to (conversations only) */
+	moveWorkdir?(x: { id: string; title: string }): void;
 }
 
 /** The pin entry of a tab's menu: a pinned tab stands upright, pinning drives the pin in at the slant a pinned folder's icon has. */
@@ -141,6 +143,7 @@ export function rowMenuEntries(target: RowTarget, act: RowActions, member = fals
 		...(member ? [] : pinEntry(x.id, act)),
 		{ icon: "columns", label: t("다른 대화와 묶기"), title: "", run: () => act.groupWith(x) },
 		...(target.kind === "session" && act.schedule ? [{ icon: "clock", label: t("예약 추가…"), title: t("이 대화에 정해진 때 프롬프트를 보냅니다"), run: () => act.schedule!(x.id) } satisfies MenuEntry] : []),
+		...(target.kind === "session" && act.moveWorkdir ? [{ icon: "fork", label: t("작업 폴더 옮기기…"), title: t("이 대화가 같은 저장소의 다른 worktree에서 작업합니다"), run: () => act.moveWorkdir!(x) } satisfies MenuEntry] : []),
 		...(member && leave ? [{ icon: "unlink", label: t("그룹에서 빼기"), title: "", run: () => leave(x.id) } satisfies MenuEntry] : []),
 		close,
 	];

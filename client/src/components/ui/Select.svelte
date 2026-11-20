@@ -364,10 +364,12 @@
 		height: 20px;
 		padding: 0;
 		color: var(--text-faint);
-		transition: transform var(--motion-normal) var(--ease-spring);
+		/* closing: back over `fast` without the spring, in step with the list's own faster exit (surfaceOut) */
+		transition: transform var(--motion-fast) var(--ease-exit);
 	}
 	.open .chev {
 		transform: rotate(180deg);
+		transition: transform var(--motion-normal) var(--ease-spring);
 	}
 	.chev :global(svg) {
 		width: 16px;

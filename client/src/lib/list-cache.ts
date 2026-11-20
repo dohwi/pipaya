@@ -5,6 +5,7 @@
  * A cache, not a setting: it is not mirrored to durable storage and losing it costs one skeleton.
  */
 import type { LinkData } from "./server-link-model";
+import { workDir } from "./nav";
 import type { RepoInfo } from "./projects";
 import type { TerminalInfo } from "./terminal";
 import type { Group, Session, WorkspaceInfo } from "./types";
@@ -46,7 +47,7 @@ export function fingerprint(baseUrl: string, token: string): string {
 /** What to store: the lists without the per-session system prompt (long, and the sidebar never shows it). */
 export function toCache(fp: string, d: Pick<LinkData, "sessions" | "groups" | "terminals">, ws: WorkspaceInfo | null, now: number, shape?: number[], repos?: Record<string, RepoInfo | null>): ListCache {
 	// only the folders still listed: the map would otherwise keep every folder ever opened
-	const cwds = new Set([...d.sessions.map((s) => s.cwd), ...d.terminals.map((x) => x.cwd)]);
+	const cwds = new Set([...d.sessions.map(workDir), ...d.terminals.map((x) => x.cwd)]);
 	const kept = repos ? Object.fromEntries(Object.entries(repos).filter(([p]) => cwds.has(p))) : {};
 	return {
 		v: VERSION,

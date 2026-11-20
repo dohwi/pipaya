@@ -67,19 +67,24 @@ export const FileQuery = Type.Object({ path: Type.String({ minLength: 1, descrip
  * Read a file back for previews. Paths resolve against the session's working directory but are not confined to it
  * (see `safePath`): whoever holds a token can read any file the server user can, as the `read` tool already lets them.
  */
-export function registerFileRoutes(server: FastifyInstance, cwdOf: (sessionId: string) => string | undefined): void {
+/** `dirsOf`: the folders a session's relative paths may be written against, first match wins (where it works now, then where it was made). */
+export function registerFileRoutes(server: FastifyInstance, dirsOf: (sessionId: string) => string[] | undefined): void {
 	const app = server.withTypeProvider<TypeBoxProvider>();
 
 	app.get("/sessions/:id/files", {
 		schema: { params: Type.Object({ id: Type.String() }), querystring: FileQuery, response: { ...errors(400, 401, 404, 413) } },
 		handler: async (req, reply) => {
-			const cwd = cwdOf(req.params.id);
-			if (!cwd) throw notFound("session");
-			let abs: string;
-			try { abs = safePath(cwd, req.query.path); } catch (e) { throw badRequest((e as Error).message); }
+			const dirs = dirsOf(req.params.id);
+			if (!dirs?.length) throw notFound("session");
+			let abs = "";
 			let info;
-			try { info = await stat(abs); } catch { throw notFound("file"); }
-			if (!info.isFile()) throw notFound("file");
+			for (const dir of dirs) {
+				try { abs = safePath(dir, req.query.path); } catch (e) { throw badRequest((e as Error).message); }
+				try { info = await stat(abs); } catch { continue; }
+				if (info.isFile()) break;
+				info = undefined;
+			}
+			if (!info) throw notFound("file");
 			if (info.size > MAX_FILE_BYTES) throw new HttpError(413, "too_large", "file is too large to preview");
 			return reply
 				.header("content-type", mimeOf(abs))

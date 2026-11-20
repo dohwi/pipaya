@@ -6,6 +6,7 @@
 	/**
 	 * One choice out of a few, with the sliding marker (lib/sliding-indicator.ts) and arrow keys (lib/roving.ts).
 	 *  - `variant="fill"`: the compact pill track (`.seg` in app.css), for a mode switch;
+	 *  - `variant="ring"`: the same track with a hairline around the selection;
 	 *  - `variant="cards"`: equal-width outlined cards, for a setting (language, theme).
 	 * `tabs`: the options switch what is shown below (role=tablist/tab); otherwise they are a pressed-button group.
 	 * `option` renders an option's inside when it needs more than its label (an icon).
@@ -26,7 +27,7 @@
 		value: T;
 		onchange: (id: T) => void;
 		label: string;
-		variant?: "fill" | "cards";
+		variant?: "fill" | "ring" | "cards";
 		tabs?: boolean;
 		/** fill: stretch to the container's width */
 		full?: boolean;
@@ -39,13 +40,14 @@
 	const indicator = $derived(
 		variant === "cards"
 			? { selector: "button.on", variant: "outline" as const, radius: "var(--radius-control)", mirror: ["data-tone"] }
-			: { selector: "button.on", variant: "fill" as const, radius: size === "sm" ? "calc(var(--radius-control) - 3px)" : "calc(var(--radius) - 3px)" },
+			: { selector: "button.on", variant, radius: size === "sm" ? "calc(var(--radius-control) - 3px)" : "calc(var(--radius) - 3px)" },
 	);
 </script>
 
 <div
 	class={variant === "cards" ? "cards" : "seg"}
-	class:full={variant === "fill" && full}
+	class:full={variant !== "cards" && full}
+	class:ring={variant === "ring"}
 	class:sm={size === "sm"}
 	style:--cols={columns ?? options.length}
 	role={tabs ? "tablist" : "group"}
@@ -72,6 +74,10 @@
 </div>
 
 <style>
+	/* Keep the static ring until the sliding marker has measured its first position. */
+	.ring:not(:global([data-indicator-ready])) > button.on {
+		box-shadow: inset 0 0 0 1px var(--text-faint);
+	}
 	.cards {
 		position: relative;
 		display: grid;

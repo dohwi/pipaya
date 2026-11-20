@@ -23,13 +23,14 @@
 	import { shortDateTime, tilde } from "../../lib/format";
 	import { copyText } from "../../lib/clipboard";
 	import { chooseGroup } from "../../lib/group-picker";
+	import { chooseWorkdir } from "../../lib/workdir-picker";
 	import type { Point } from "../../lib/press-menu";
 	import { drag } from "../../lib/dnd.svelte";
 	import { blockDrag } from "../../lib/block-drag";
 	import { InlineRename } from "../../lib/inline-rename.svelte";
 	import { registerRenamePlace } from "../../lib/rename-places";
 	import { DragMarks } from "../../lib/drag-marks.svelte";
-	import type { DirBlock, Tab } from "../../lib/nav";
+	import { workDir, type DirBlock, type Tab } from "../../lib/nav";
 	import { dissolveProject, flattenBlocks, isManualRoot, joinProject, leaveProject, newProjectId, projectKey, type SidebarBlock } from "../../lib/projects";
 	import { dirKey, connectionState, edgeOf, headMenuEntries, newKey, newMenuEntries, orderServers, projectMenuEntries, rowMenuEntries, shortName, targetId, type RowActions } from "../../lib/sidebar-model";
 	import type { Group, Session } from "../../lib/types";
@@ -130,10 +131,33 @@
 			const row = offscreen(host);
 			return row ? () => row.scrollIntoView({ block: "nearest" }) : undefined;
 		});
-		// A folder unfolds over `normal` and the open row keeps moving under it: look once more when it has settled.
-		const settled = setTimeout(() => offscreen(host)?.scrollIntoView({ block: "nearest" }), ms("normal") + 50);
+		// A folder unfolds over `normal` and the open row keeps moving under it: look once more when it has settled. The
+		// folds can start late (the new row lands with the server's reply) and a folder above can fold away meanwhile, so the
+		// end of each (`introend` / `outroend`, caught on the way down since they do not bubble) is the real cue; the timer
+		// covers a change with no transition. Only until the user takes the list in hand (or a few seconds pass): a folder
+		// they open later must not pull the list back to the open row.
+		const look = () => offscreen(host)?.scrollIntoView({ block: "nearest" });
+		// an outro ends before its block leaves the DOM (and the gaps around it change with it): look on the next frame
+		let frame = 0;
+		const later = () => {
+			cancelAnimationFrame(frame);
+			frame = requestAnimationFrame(look);
+		};
+		const settled = setTimeout(look, ms("normal") + 50);
+		const ends = ["introend", "outroend"] as const;
+		const hands = ["wheel", "pointerdown", "touchstart", "keydown"] as const;
+		const off = () => {
+			for (const e of ends) host.removeEventListener(e, later, { capture: true });
+			for (const e of hands) host.removeEventListener(e, off, { capture: true });
+		};
+		for (const e of ends) host.addEventListener(e, later, { capture: true });
+		for (const e of hands) host.addEventListener(e, off, { capture: true, passive: true });
+		const stop = setTimeout(off, 3000);
 		return () => {
 			clearTimeout(settled);
+			clearTimeout(stop);
+			cancelAnimationFrame(frame);
+			off();
 			unschedule(host);
 		};
 	});
@@ -238,8 +262,23 @@
 		key: bid,
 		move: (o, target, after) => (o.kind === "server" ? app.moveServer(o.path, target, after) : app.sidebar.moveDir(o.serverId, o.paths, o.path, target, after)),
 	});
-	/** Let go on a folder: the pane steps out of its group, as a tab of its own. */
-	const dropOnDir = (id: string) => void app.leaveGroup(id);
+	/**
+	 * A lone conversation let go on another working tree (main checkout or worktree) of the repository it works in moves
+	 * there: its agent works there from its next message. Not while it runs (the server refuses), and not a split-tab pane.
+	 */
+	const movesTo = (n: Node, id: string, path: string) => {
+		const s = app.session(id);
+		if (!s || app.groupOf(id) || app.running[id]) return false;
+		const from = n.repos[workDir(s)];
+		const to = n.repos[path];
+		return !!from && !!to && from.root === to.root && to.top === path && from.top !== path;
+	};
+	/** Let go on a folder: a split-tab pane steps out of its group, as a tab of its own; a lone conversation moves to work there. */
+	const acceptsOnDir = (n: Node, path: string) => (id: string) => n.current && (!!app.groupOf(id) || movesTo(n, id, path));
+	const dropOnDir = (n: Node, path: string) => (id: string) => {
+		if (app.groupOf(id)) void app.leaveGroup(id);
+		else if (movesTo(n, id, path)) void app.moveWorkdir(id, path);
+	};
 	/** The "+" of a server or directory: a conversation or a terminal, both starting in that place. */
 	const newItems = (n: Node, path: string): RowMenuItem[] =>
 		newMenuEntries(platformName(n.platform), {
@@ -262,6 +301,7 @@
 		togglePin: (id) => app.sidebar.toggleTabPinned(app.serverId!, id),
 		isPinned: (id) => app.sidebar.isTabPinned(app.serverId!, id),
 		schedule: (id) => app.openScheduleFor(id),
+		moveWorkdir: (x) => void chooseWorkdir(x),
 	};
 	const menuItems = (target: MenuTarget, member = false): RowMenuItem[] => rowMenuEntries(target, rowActions, member);
 	let rowMenu: ReturnType<typeof RowMenu> | undefined = $state();
@@ -389,6 +429,7 @@
 		tabDropAt,
 		hover,
 		dropOnDir,
+		acceptsOnDir,
 		dirSource,
 		pretty,
 		shortLabel,
@@ -430,12 +471,13 @@
 			<span class="sico"><Icon name="fork" /></span> {t("그래프 뷰")}
 		</button>
 		{#if schedulesShown}
-			<button class="navbtn wide" onclick={() => (app.schedulesDialog = true)} title={schedulesTip}>
+			<button class="navbtn wide" onclick={() => ((app.schedulesDialog = true), (app.sidebar.open = false))} title={schedulesTip}>
 				<span class="sico"><Icon name="clock" /></span> {t("예약 작업")}
 				{#if scheduled.count}<span class="salert"><Badge size="sm">{scheduled.count}</Badge></span>{/if}
 			</button>
 		{/if}
-		<button class="settings navbtn wide" onclick={() => app.openSettings()}>
+		<!-- the phone drawer steps aside for the sheet (like the graph view does): it was left open behind it, two layers deep -->
+		<button class="settings navbtn wide" onclick={() => (app.openSettings(), (app.sidebar.open = false))}>
 			<span class="sico"><Icon name="settings" />{#if settingsAlert || extensionUpdates.any}<Pin tone={alertTone} label={settingsAlert || t("업데이트 있음")} />{/if}</span> {t("설정")}
 			{#if settingsAlert}<span class="salert"><Badge tone={alertTone} size="sm">{settingsAlert}</Badge></span>{/if}
 			{#if updater.current}<span class="sver" class:push={!settingsAlert}>v{updater.current}</span>{/if}
@@ -572,11 +614,18 @@
 		transform: translate(calc(-50% - 4px), -50%);
 	}
 	}
-	:global(:where(.side) .dirnew:hover),
 	:global(:where(.side) .dirnew.on) {
 		background: color-mix(in srgb, var(--text) 14%, transparent);
 		color: var(--text);
 		opacity: 1;
+	}
+	/* hover only with a real pointer: after a tap the "+" kept its grey disc on a phone (sticky :hover) */
+	@media (hover: hover) {
+		:global(:where(.side) .dirnew:hover) {
+			background: color-mix(in srgb, var(--text) 14%, transparent);
+			color: var(--text);
+			opacity: 1;
+		}
 	}
 	/* one lead column: the model's logo, or the terminal / split icon */
 	:global(:where(.side) .lead) {

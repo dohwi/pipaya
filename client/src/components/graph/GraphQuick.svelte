@@ -27,9 +27,11 @@
 
 	/** Leave the graph for this chat (not back to where the graph was opened from). */
 	function openChat() {
+		// read the props first: closing clears the store's peek, and the props are read through it (`quick.server`)
+		const to = { server, session };
 		app.graphFrom = null;
 		onclose();
-		app.openIn(server, { session });
+		app.openIn(to.server, { session: to.session });
 	}
 </script>
 

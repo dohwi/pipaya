@@ -22,7 +22,7 @@ import { ServerLink, type NetState as LinkNet } from "./server-link.svelte";
 import { applyLinkEvent, applyLiveEvent } from "./server-link-model";
 import { dropListCache } from "./list-cache";
 import { viewport } from "./viewport.svelte";
-import { sessionOrder, sidebarDirs, tabOf, tabPanes, type DirBlock, type Tab } from "./nav";
+import { sessionOrder, sidebarDirs, tabOf, tabPanes, workDir, type DirBlock, type Tab } from "./nav";
 import { flattenBlocks, projectBlocks, projectKey, type SidebarBlock } from "./projects";
 import { dirKey } from "./sidebar-model";
 import { MAX_PANES, append, has as layoutHas, pair, panesOf, place, remove as layoutRemove, replaceSession, worthKeeping, type Layout, type Zone } from "./layout";
@@ -820,6 +820,7 @@ class AppStore {
     this.attachToken++;
     // The extension host reads the open server's list once at launch (init); only a later switch has to swap it.
     const changing = this.openedFor !== null && this.openedFor !== id;
+    if (changing) this.draft = readDraft(); // Never carry an explicit tier to a different server.
     this.serverId = id;
     this.openedFor = id;
     write(K.currentServer, id);
@@ -1037,7 +1038,7 @@ class AppStore {
     // A model and its starting strength travel together: a model that names one keeps it unless a level comes with the patch.
     if (patch.thinkingLevel === undefined && (patch.provider !== undefined || patch.model !== undefined))
       next.thinkingLevel = this.modelDefaultLevel(next.provider, next.model) ?? next.thinkingLevel;
-    if (patch.serviceTier === undefined && (next.provider !== this.draft.provider || next.model !== this.draft.model)) next.serviceTier = null;
+    if (patch.serviceTier === undefined && (next.provider !== this.draft.provider || next.model !== this.draft.model)) next.serviceTier = this.models.find(m => m.provider === next.provider && m.id === next.model)?.defaultServiceTier ?? null;
     this.draft = next;
     write(K.draft, this.draft);
   }
@@ -1260,6 +1261,9 @@ class AppStore {
     ) {
       this.updateDraft(draftFromDefault(now));
     }
+    if (!now && before && this.draft.provider === before.provider && this.draft.model === before.model) {
+      this.updateDraft({ serviceTier: this.models.find(m => m.provider === before.provider && m.id === before.model)?.defaultServiceTier ?? null });
+    }
     this.ensureDraftModel();
   }
 
@@ -1302,6 +1306,12 @@ class AppStore {
       this.fail(e, t("저장하지 못했습니다"));
       return false;
     }
+  }
+
+  /** Where a conversation or terminal works now: the folder the sidebar lists it under (see `workDir`). */
+  memberDir(id: string | null | undefined): string | undefined {
+    const m = id ? (this.session(id) ?? this.terminal(id)) : undefined;
+    return m ? workDir(m) : undefined;
   }
 
   setWorkdir(path: string) {
@@ -1617,7 +1627,7 @@ class AppStore {
         await this.saveLayout(g.id, replaceSession(g.layout, from, id));
         void this.refreshGroups();
       }
-      await this.openSession(id, true);
+      await this.openMade(id);
       return true;
     } catch (e) {
       this.fail(e, t("다시 열지 못했습니다"));
@@ -1653,10 +1663,18 @@ class AppStore {
       /* ignore */
     }
     this.sidebar.open = false;
+    this.resetNewChatDraft();
+  }
+
+  private resetNewChatDraft() {
     // A new chat starts from the server default, not from a model picked in an earlier new chat.
     const d = this.serverDefault;
     if (d && this.models.some((m) => m.provider === d.provider && m.id === d.model && m.configured && m.available !== false))
       this.updateDraft(draftFromDefault(d));
+    else {
+      this.ensureDraftModel();
+      this.updateDraft({ serviceTier: this.models.find(m => m.provider === this.draft.provider && m.id === this.draft.model)?.defaultServiceTier ?? null });
+    }
   }
 
   /**
@@ -1666,6 +1684,7 @@ class AppStore {
    * empty one is already open.
    */
   async startChat(): Promise<void> {
+    this.resetNewChatDraft();
     const api = this.api;
     const d = this.draft;
     if (!api || !d.model) return this.newChat();
@@ -1679,7 +1698,7 @@ class AppStore {
         serviceTier: d.serviceTier,
       });
       if (!this.sessions.some((x) => x.id === s.id)) this.sessions.unshift(s);
-      await this.openSession(s.id, true);
+      await this.openMade(s.id);
     } catch (e) {
       this.fail(e, t("새 대화를 만들지 못했습니다"));
     }
@@ -1687,27 +1706,29 @@ class AppStore {
 
   /**
    * `/new` (and the new-chat shortcut): start another conversation beside the open one, which stays where it is (in the
-   * sidebar and, in a group, in its pane). The newcomer starts in the focused session's working directory and with its
-   * model settings. Without an open chat this is a plain `startChat`.
+   * sidebar and, in a group, in its pane). The newcomer starts in the focused session's working directory and with the
+   * new-chat defaults. Without an open chat this is a plain `startChat`.
    */
   async newChatInPane(): Promise<void> {
     const api = this.api;
     const from = this.session(this.activeId);
     if (!api || !from) return this.startChat();
+    this.resetNewChatDraft();
+    const d = this.draft;
     let made: Session;
     try {
       made = await api.createSession({
-        cwd: from.cwd,
-        provider: from.provider,
-        model: from.model,
-        thinkingLevel: from.thinkingLevel,
-        serviceTier: from.serviceTier,
+        cwd: workDir(from),
+        provider: d.provider,
+        model: d.model,
+        thinkingLevel: d.thinkingLevel,
+        serviceTier: d.serviceTier,
       });
     } catch (e) {
       return this.fail(e, t("새 대화를 만들지 못했습니다"));
     }
     if (!this.sessions.some((x) => x.id === made.id)) this.sessions.unshift(made);
-    await this.openSession(made.id, true);
+    await this.openMade(made.id);
   }
 
   /**
@@ -1724,7 +1745,7 @@ class AppStore {
     let made: Session;
     try {
       made = await api.createSession({
-        cwd: from.cwd,
+        cwd: workDir(from),
         provider: from.provider,
         model: from.model,
         thinkingLevel: from.thinkingLevel,
@@ -1760,10 +1781,21 @@ class AppStore {
     const sid = this.serverId;
     if (!sid) return;
     // the folder as the sidebar lists it (a group's is the one it was placed under), else the pane's own directory
-    const path = tabOf(this.dirs, id)?.dir.path ?? this.session(id)?.cwd ?? this.terminal(id)?.cwd;
+    const path = tabOf(this.dirs, id)?.dir.path ?? this.memberDir(id);
     const project = path ? this.blocksByServer[sid]?.find((b) => b.kind === "project" && b.dirs.some((d) => d.path === path)) : undefined;
     if (project?.kind === "project") this.sidebar.reveal(projectKey(sid, project.root));
     this.sidebar.reveal(sid);
+  }
+
+  /**
+   * Show a conversation or terminal that was just made (new chat, terminal, fork, resume): unlike opening an existing
+   * one, it also undoes a hand fold of its own folder, so the new row is listed instead of hiding under the fold.
+   */
+  private async openMade(id: string, force = true): Promise<void> {
+    const sid = this.serverId;
+    const path = tabOf(this.dirs, id)?.dir.path ?? this.session(id)?.cwd ?? this.terminal(id)?.cwd;
+    if (sid && path) this.sidebar.unshut(dirKey(sid, path));
+    await this.openSession(id, force);
   }
 
   /**
@@ -1791,7 +1823,7 @@ class AppStore {
     delete this.unread[id];
     delete this.failed[id];
     notifications.read(id);
-    const cwd = this.sessions.find((s) => s.id === id)?.cwd ?? this.terminal(id)?.cwd;
+    const cwd = this.memberDir(id);
     if (cwd) this.setWorkdir(this.relPath(cwd));
     this.sidebar.open = false;
     if (isTerminalId(id)) return;
@@ -1959,7 +1991,7 @@ class AppStore {
         if (!fresh.ready) throw new Error(fresh.loadError || t("불러오지 못했습니다"));
         fresh.addOptimisticUser(text, images, files.map((f) => ({ path: "", name: f.name, size: f.size, mimeType: f.mimeType })));
         this.chats = { ...this.chats, [s.id]: fresh };
-        await this.openSession(s.id);
+        await this.openMade(s.id, false);
         to = s.id;
         seeded = true;
       }
@@ -2208,6 +2240,29 @@ class AppStore {
     }
   }
 
+  /**
+   * Move a conversation to another working tree of its repository (`dir`; its own folder brings it home): its agent
+   * works there from its next message, and the sidebar lists it there. The toast offers to move it back.
+   */
+  async moveWorkdir(id: string, dir: string, undo = true): Promise<boolean> {
+    const s = this.session(id);
+    if (!this.api || !s) return false;
+    const from = workDir(s);
+    if (dir === from) return true;
+    try {
+      const updated = await this.api.patchSession(id, { workDir: dir === s.cwd ? null : dir });
+      const i = this.sessions.findIndex((x) => x.id === id);
+      if (i >= 0) this.sessions[i] = updated;
+      const name = dir.split(/[\\/]/).filter(Boolean).pop() ?? dir;
+      this.toast(t("'{title}'의 작업 폴더를 {dir}(으)로 옮겼습니다", { title: sessionTitle(s.title), dir: name }), "ok", null,
+        undo ? { label: t("되돌리기"), run: () => void this.moveWorkdir(id, from, false) } : undefined);
+      return true;
+    } catch (e) {
+      this.fail(e, t("작업 폴더를 옮기지 못했습니다"), id);
+      return false;
+    }
+  }
+
   async rename(id: string, title: string) {
     title = title.trim();
     if (!this.api || !title) return;
@@ -2305,7 +2360,7 @@ class AppStore {
     }
     try {
       const made = await api.createSession({
-        cwd: from.cwd,
+        cwd: workDir(from),
         provider: base?.provider ?? d.provider,
         model: base?.model ?? d.model,
         thinkingLevel: base?.thinkingLevel ?? normalizeThinking(d.thinkingLevel),
@@ -2359,7 +2414,7 @@ class AppStore {
     let made: Session;
     try {
       made = await api.createSession({
-        cwd: from.cwd,
+        cwd: workDir(from),
         provider: from.provider,
         model: from.model,
         thinkingLevel: from.thinkingLevel,
@@ -2419,14 +2474,14 @@ class AppStore {
     }
     if (!this.terminals.some((x) => x.id === made.id)) this.terminals.push(made);
     if (beside) await this.dropSession(made.id, beside.target, beside.zone, beside.focus ?? true);
-    else await this.openSession(made.id);
+    else await this.openMade(made.id, false);
     return made;
   }
 
   /** A terminal beside the focused pane: below by default, or the given side: it starts where that pane works. */
   async splitTerminal(zone: Zone = "bottom"): Promise<void> {
     const id = this.activeId;
-    const cwd = this.session(id)?.cwd ?? this.terminal(id)?.cwd;
+    const cwd = this.memberDir(id);
     if (!id || !cwd) return void (await this.openTerminal(this.workdir));
     await this.openTerminal(cwd, { target: id, zone });
   }
@@ -2488,7 +2543,7 @@ class AppStore {
     try {
       // the new group's tab takes the place of the tab the drop landed on (the pane split; `pair` puts it first or second)
       const before = this.dirs;
-      const g = await this.api.createGroup({ layout, name: name || groupNameFor(panesOf(layout).map((id) => this.session(id)?.cwd), new Set(this.groups.map((g) => g.name))), ...(name ? {} : { autoName: true }) });
+      const g = await this.api.createGroup({ layout, name: name || groupNameFor(panesOf(layout).map((id) => this.memberDir(id)), new Set(this.groups.map((g) => g.name))), ...(name ? {} : { autoName: true }) });
       if (!this.groups.some((x) => x.id === g.id)) this.groups.push(g);
       this.replaceTabs(before, panesOf(layout), [g.id]);
       // the server moved these sessions out of any group they were in
@@ -2565,7 +2620,7 @@ class AppStore {
         if (panesOf(g.layout).length < MAX_PANES) await this.dropSession(s.id, id, "right");
         else this.toast(t("그룹에는 대화를 최대 {n}개까지 넣을 수 있습니다", { n: MAX_PANES }), "error");
       }
-      await this.openSession(s.id, true);
+      await this.openMade(s.id);
       this.toast(t("새 대화로 분기했습니다"), "ok", s.id);
       return true;
     } catch (e) {

@@ -329,6 +329,18 @@
 			background: var(--bg-hover);
 		}
 	}
+	/* a finger needs more than 22px: the hit box grows sideways to 40px (into the 8px gap and the 4px bleed) and to 26px high,
+	   the row plus the 4px gap, so the boxes of two rows meet but never overlap (rows are ROW + GAP apart) */
+	@media (pointer: coarse) {
+		.qx {
+			position: relative;
+		}
+		.qx::after {
+			content: "";
+			position: absolute;
+			inset: -2px -9px; /* 22 + 4 = 26 high, 22 + 18 = 40 wide */
+		}
+	}
 	.qx :global(svg) {
 		width: 14px;
 		height: 14px;

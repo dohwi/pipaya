@@ -11,8 +11,12 @@
 	 * from inside Settings is still seen. With no chat area on screen (no server yet) they span the window.
 	 */
 	let box = $state<{ left: number; width: number; top: number } | null>(null);
+	/** A phone sheet that covers the whole screen (tab overview): a strip under the header would sit on its title and first
+	 *  cards, so the strips drop to the bottom edge instead, where the sheet has nothing to cover. */
+	let overSheet = $state(false);
 
 	function measure() {
+		overSheet = viewport.phone && !!document.querySelector(".modal.sheet.full");
 		const stage = document.querySelector<HTMLElement>(".stage");
 		if (!stage) return (box = null);
 		// the stage's overlay column: the top of the chat area, or under the graph view's header while that is open
@@ -24,7 +28,7 @@
 
 	$effect(() => {
 		// re-attach when the layout around the stage changes shape
-		void [app.servers.length, app.feedback.notices.length, app.sidebar.collapsed, app.sidebar.open, viewport.narrow, app.activeGroup?.id, app.graphOpen, app.net];
+		void [app.servers.length, app.feedback.notices.length, app.globalToasts.length, app.tabOverview, app.sidebar.collapsed, app.sidebar.open, viewport.narrow, app.activeGroup?.id, app.graphOpen, app.net];
 		let ro: ResizeObserver | undefined;
 		let dead = false;
 		tick().then(() => {
@@ -47,14 +51,15 @@
 <div
 	class="toasts"
 	data-part="toasts"
-	class:anchored={!!box}
-	style:left={box ? `${box.left}px` : null}
-	style:width={box ? `${box.width}px` : null}
-	style:top={box ? `${box.top}px` : null}
+	class:anchored={!!box && !overSheet}
+	class:bottom={overSheet}
+	style:left={box && !overSheet ? `${box.left}px` : null}
+	style:width={box && !overSheet ? `${box.width}px` : null}
+	style:top={box && !overSheet ? `${box.top}px` : null}
 	aria-live="polite"
 >
 	<VersionNotice />
-	<ToastStrip toasts={app.globalToasts} />
+	<ToastStrip toasts={app.globalToasts} from={overSheet ? "bottom" : "top"} />
 </div>
 
 <style>
@@ -71,5 +76,15 @@
 	}
 	.toasts.anchored {
 		right: auto;
+	}
+	.toasts.bottom {
+		top: auto;
+		bottom: 0;
+		padding-bottom: var(--sab);
+		flex-direction: column-reverse;
+	}
+	.toasts.bottom :global(.strip) {
+		border-bottom: 0;
+		border-top: 1px solid color-mix(in srgb, var(--tone) 25%, var(--border-strong));
 	}
 </style>

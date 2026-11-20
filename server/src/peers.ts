@@ -1,5 +1,6 @@
 import { conflict, notFound } from "./errors.ts";
 import { branchOf } from "./git-info.ts";
+import { workDirOf } from "./work-tree.ts";
 import { groupHandle, koreanName, mentioned, nameKey, nextMemberName, sameName } from "./member-names.ts";
 import type { QuestionAnswer, QuestionRequest } from "./questions.ts";
 import type { SessionPatch, SessionRecord, SessionStore, ThinkingLevel } from "./store.ts";
@@ -224,7 +225,7 @@ export class PeerService {
 		const lastAssistant = this.host.store.lastMessages(id, 6).reverse().find((x) => x.message.role === "assistant");
 		const parts = (Array.isArray(lastAssistant?.message.content) ? lastAssistant!.message.content : []) as { type: string; text?: string }[];
 		const last = parts.filter((c) => c.type === "text").map((c) => c.text ?? "").join(" ");
-		return { name: r.name, purpose: r.purpose, cwd: r.cwd, branch: branchOf(r.cwd), running: this.host.isRunning(id), last };
+		return { name: r.name, purpose: r.purpose, cwd: r.cwd, branch: branchOf(r.activeDir ?? r.cwd), running: this.host.isRunning(id), last };
 	}
 
 	// ── tools ───────────────────────────────────────────────────────────────
@@ -264,9 +265,9 @@ export class PeerService {
 		return rows.map((r) => {
 			const parts = [`@${r.name}`, this.host.isRunning(r.id) ? "working" : "idle"];
 			if (r.title) parts.push(`"${oneLine(r.title, 60)}"`);
-			const branch = branchOf(r.cwd);
+			const branch = branchOf(r.activeDir ?? r.cwd);
 			if (branch) parts.push(`branch ${branch}`);
-			parts.push(r.cwd);
+			parts.push(r.activeDir ?? r.cwd);
 			return `- ${parts.join(" · ")}`;
 		}).join("\n");
 	}
@@ -297,7 +298,7 @@ export class PeerService {
 		this.sends.set(selfId, count);
 		const own = this.host.store.get(selfId);
 		const notify = input.notify ?? true;
-		const r = await this.host.create({ title: input.title, cwd: input.cwd ?? own?.cwd, provider: input.provider, model: input.model, thinkingLevel: input.thinkingLevel }, selfId);
+		const r = await this.host.create({ title: input.title, cwd: input.cwd ?? (own ? workDirOf(own) : undefined), provider: input.provider, model: input.model, thinkingLevel: input.thinkingLevel }, selfId);
 		if (input.purpose) this.host.update(r.id, { purpose: input.purpose.slice(0, 200) });
 		if (notify) this.host.store.watch(r.id, selfId);
 		try {

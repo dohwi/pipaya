@@ -15,6 +15,7 @@
 	import ImageModelSection from "./ImageModelSection.svelte";
 	import ProviderAccounts from "./ProviderAccounts.svelte";
 	import ConnectModal from "../server/ConnectModal.svelte";
+	import { tierLabel } from "../../lib/service-tier";
 	import { modelDisplayName } from "../../lib/model-name";
 	import { flash } from "../../lib/settings-focus";
 	import type {
@@ -144,7 +145,11 @@
 	}
 	/** The model and its strength are one choice, saved together. */
 	function pickDefault(c: DefaultModelSelection | null) {
-		void saveDefault(c);
+		if (c && shownModel?.provider === c.provider && shownModel.model === c.model && saved?.serviceTier === undefined && c.serviceTier === (shownInfo?.defaultServiceTier ?? null)) {
+			// Changing only thinking must not pin a previously inherited per-model speed.
+			const { serviceTier: _tier, ...inherited } = c;
+			void saveDefault(inherited);
+		} else void saveDefault(c);
 	}
 
 	/* ---------- provider actions ---------- */
@@ -309,7 +314,7 @@
 				providers={providerList}
 				value={shownModel}
 				level={shownThinking}
-				tier={saved?.serviceTier}
+				tier={cfg?.effectiveDefaults?.serviceTier}
 				{tierApi}
 				favs={serverId === app.serverId ? app.favModels : []}
 				onfav={serverId === app.serverId ? (p, id) => app.toggleFavModel(p, id) : undefined}
@@ -336,6 +341,12 @@
 					{t("추론 강도를 지정하지 않아 새 대화는 이 기기의 마지막 설정으로 시작합니다.")}
 				{/if}
 			</p>
+			{#if shownInfo?.openRouterTiers}
+				<p class="hint note">{cfg?.effectiveDefaults?.serviceTier ? t("새 대화는 {tier} 속도로 시작합니다.", { tier: tierLabel(cfg.effectiveDefaults.serviceTier) }) : t("새 대화의 응답 속도는 OpenRouter 설정을 따릅니다.")}</p>
+				{#if saved && saved.serviceTier !== undefined}
+					<Button variant="ghost" size="sm" disabled={busy} onclick={() => { if (saved) { const { serviceTier: _tier, ...inherited } = saved; void saveDefault(inherited); } }}>{t("모델의 기본 속도 따르기")}</Button>
+				{/if}
+			{/if}
 		</section>
 
 		<div bind:this={sections.compaction}><CompactionSection {serverId} models={chatModels} providers={providerList} /></div>
