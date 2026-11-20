@@ -381,6 +381,7 @@
 	@media (hover: hover) {
 		.item:hover:not(:disabled) { border-color: var(--border-strong); background: var(--bg-active); }
 	}
+	.item:focus-visible { outline-offset: -2px; } /* keyboard scrolling can leave a service against the scrollport edge */
 	.item:disabled { opacity: 0.55; cursor: default; }
 	.item :global(svg) { flex: none; width: 15px; height: 15px; stroke: var(--text-faint); stroke-width: 2; }
 	.pname { flex: 1; min-width: 0; font-size: var(--fs-sm); }

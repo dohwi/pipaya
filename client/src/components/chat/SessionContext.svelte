@@ -194,6 +194,7 @@
 	.part { margin: 0 0 8px 0; font-size: var(--fs-sm); font-weight: 600; color: var(--text); }
 	.rest { margin-top: 24px; padding-top: 24px; border-top: 1px solid var(--border); }
 	h3 { margin: 0 0 8px 0; font-size: var(--fs-xs); font-weight: 600; color: var(--text-faint); }
+	.fold:focus-visible { outline-offset: -2px; } /* the fold fills its rounded, clipped source card */
 	.fold { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; padding: 12px; text-align: left; overflow-wrap: anywhere; }
 	/* hover only where a pointer hovers: on touch it stuck on the last tapped row and read as selected */
 	@media (hover: hover) { .fold:hover { background: var(--bg-hover); } }
