@@ -1,5 +1,6 @@
 import { conflict, notFound } from "./errors.ts";
 import { branchOf } from "./git-info.ts";
+import { workDirOf } from "./work-tree.ts";
 import { groupHandle, koreanName, mentioned, nameKey, nextMemberName, sameName } from "./member-names.ts";
 import type { QuestionAnswer, QuestionRequest } from "./questions.ts";
 import type { SessionPatch, SessionRecord, SessionStore, ThinkingLevel } from "./store.ts";
@@ -297,7 +298,7 @@ export class PeerService {
 		this.sends.set(selfId, count);
 		const own = this.host.store.get(selfId);
 		const notify = input.notify ?? true;
-		const r = await this.host.create({ title: input.title, cwd: input.cwd ?? own?.cwd, provider: input.provider, model: input.model, thinkingLevel: input.thinkingLevel }, selfId);
+		const r = await this.host.create({ title: input.title, cwd: input.cwd ?? (own ? workDirOf(own) : undefined), provider: input.provider, model: input.model, thinkingLevel: input.thinkingLevel }, selfId);
 		if (input.purpose) this.host.update(r.id, { purpose: input.purpose.slice(0, 200) });
 		if (notify) this.host.store.watch(r.id, selfId);
 		try {

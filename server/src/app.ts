@@ -33,6 +33,7 @@ import { Pairing } from "./pairing.ts";
 import { isAdminOnlyRoute, PUBLIC_PAIRING_PATH, registerPairingRoutes } from "./pairing-routes.ts";
 import { registerFsRoutes } from "./fs-routes.ts";
 import { registerFileRoutes } from "./file-routes.ts";
+import { workDirOf } from "./work-tree.ts";
 import { GroupManager, panesOf, peerGroupOps, type GroupRecord } from "./groups.ts";
 import { registerGroupRoutes } from "./groups-routes.ts";
 import { isTerminalId, TerminalManager } from "./terminals.ts";
@@ -172,7 +173,7 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 	};
 	const llm = new Llm(registry, modelRoles);
 	extensions.attach({
-		cwd: (id) => store.get(id)?.cwd,
+		cwd: (id) => { const r = store.get(id); return r ? workDirOf(r) : undefined; },
 		defaultCwd: () => configuration.defaultWorkdir(),
 		groups: {
 			list: () => groups.list().map(groupInfo),
@@ -696,7 +697,7 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 	registerImageModelRoutes(server, imageModel, bus);
 	registerVoiceRoutes(server, voice, credentials, bus);
 	registerFsRoutes(server, () => configuration.defaultWorkdir(), cfg.restrictWorkspace ? cfg.workspaceRoot : undefined);
-	registerFileRoutes(server, (id) => store.get(id)?.cwd);
+	registerFileRoutes(server, (id) => { const r = store.get(id); return r ? [...new Set([workDirOf(r), r.cwd])] : undefined; });
 	// A group the client named by default gets a better name from the system model, unless someone renamed it meanwhile.
 	registerGroupRoutes(server, groups, (rec) => {
 		if (!systemModel.resolve()) return;

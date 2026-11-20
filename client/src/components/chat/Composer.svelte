@@ -67,7 +67,7 @@
 	/** A new chat is a real, still empty session (outside a group); its folder can be changed until the first message. */
 	const freshSession = $derived(!!pane.id && !app.groupOf(pane.id) && !!chat?.ready && !chat.loadError && chat.items.length === 0);
 	const whereShown = $derived(!pane.id || freshSession);
-	const wherePath = $derived(pane.id ? (app.session(pane.id)?.cwd ?? app.workdirAbs) : app.workdirAbs);
+	const wherePath = $derived(pane.id ? (app.memberDir(pane.id) ?? app.workdirAbs) : app.workdirAbs);
 
 	// Unsent input survives switching to another session and back (kept per session; "" = new chat), and a restart.
 	let text = $state("");
@@ -361,7 +361,7 @@
 			.map((x) => x.m);
 	});
 
-	const mentionCwd = $derived((pane.id ? app.session(pane.id)?.cwd : null) || app.workdirAbs);
+	const mentionCwd = $derived((pane.id ? app.memberDir(pane.id) : null) || app.workdirAbs); // the agent reads relative paths against where it works now
 	$effect(() => {
 		const q = mention?.query;
 		const cwd = mentionCwd;

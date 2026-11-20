@@ -41,8 +41,16 @@ describe("cdTarget", () => {
 		expect(cdTarget("git status\ncd '../app-x'", "/w/app", "/h")).toBe("/w/app-x");
 		expect(cdTarget("cd ~/w/app-x", "/w/app", "/h")).toBe("/h/w/app-x");
 	});
+	test("making a worktree counts as moving into it", () => {
+		expect(cdTarget("git worktree add -b feat/x ../app-x origin/main", "/w/app", "/h")).toBe("/w/app-x");
+		expect(cdTarget("git fetch -q && git worktree add -q -B fix/y --reason 'r' /w/app-y", "/w/app", "/h")).toBe("/w/app-y");
+		expect(cdTarget("git -C /w/app worktree add ../app-z", "/tmp", "/h")).toBe("/w/app-z");
+		// a cd after it wins, and a worktree made from inside another folder is resolved there
+		expect(cdTarget("git worktree add ../app-x && cd ../app-x/server", "/w/app", "/h")).toBe("/w/app-x/server");
+		expect(cdTarget("git worktree list && git worktree remove ../app-x", "/w/app", "/h")).toBeNull();
+		expect(cdTarget("git worktree add $WT", "/w/app", "/h")).toBeNull();
+	});
 	test("a command without a readable cd says nothing", () => {
-		expect(cdTarget("git worktree add -b feat/x ../app-x origin/main", "/w/app", "/h")).toBeNull();
 		expect(cdTarget("(cd ../app-x && bun install)", "/w/app", "/h")).toBeNull();
 		expect(cdTarget("cd $WT", "/w/app", "/h")).toBeNull();
 		expect(cdTarget("cd - && ls", "/w/app", "/h")).toBeNull();
@@ -129,11 +137,26 @@ describe("a session's agent moving into a worktree", () => {
 		upstream.stop();
 	});
 
-	test("the session is listed in the worktree its agent works in, and back in its own when it returns", async () => {
+	const lastToolText = async (id: string) => {
+		const { json } = await api("GET", `/sessions/${id}/messages`);
+		const results = (json.messages as { message: { role: string; content: { type: string; text?: string }[] } }[]).filter((m) => m.message.role === "toolResult");
+		return results.at(-1)!.message.content.map((c) => c.text ?? "").join("\n");
+	};
+
+	test("the agent works in the worktree it moved into, is told so, and comes back to its own", async () => {
 		const { json: s } = await api("POST", "/sessions", { cwd: main });
 		expect(s.activeDir ?? null).toBeNull();
 		await run(s.id, "!bash cd ../app-x && pwd");
 		expect((await api("GET", `/sessions/${s.id}`)).json.activeDir).toBe(wt);
+		expect(await lastToolText(s.id)).toContain(`now works in the git worktree ${wt} (branch feat/x)`);
+		// the next call starts there: no cd needed, and relative paths resolve against it
+		await run(s.id, "!bash pwd");
+		expect(await lastToolText(s.id)).toStartWith(wt);
+		await run(s.id, '!write {"path":"note.md","content":"hi"}');
+		expect(await Bun.file(join(wt, "note.md")).text()).toBe("hi");
+		// the file preview finds it from the session's relative path
+		const res = await fetch(`${base}/sessions/${s.id}/files?path=note.md`, { headers: { authorization: `Bearer ${TOKEN}` } });
+		expect(await res.text()).toBe("hi");
 		// a fork goes on where its history left off
 		const { json: fork } = await api("POST", `/sessions/${s.id}/fork`, {});
 		expect(fork.activeDir).toBe(wt);
@@ -142,5 +165,24 @@ describe("a session's agent moving into a worktree", () => {
 		expect((await api("GET", `/sessions/${s.id}`)).json.activeDir).toBe(wt);
 		await run(s.id, `!bash cd ${main} && pwd`);
 		expect((await api("GET", `/sessions/${s.id}`)).json.activeDir).toBeNull();
+		expect(await lastToolText(s.id)).toContain(`works in ${main} (branch main) again`);
+		await run(s.id, "!bash pwd");
+		expect(await lastToolText(s.id)).toStartWith(main);
+	});
+
+	test("a worktree removed under the session sends it home before its next call", async () => {
+		const gone = join(dir, "app-gone");
+		mkdirSync(gone);
+		writeFileSync(join(gone, ".git"), `gitdir: ${join(main, ".git/worktrees/app-gone")}\n`);
+		mkdirSync(join(main, ".git/worktrees/app-gone"), { recursive: true });
+		writeFileSync(join(main, ".git/worktrees/app-gone/HEAD"), "ref: refs/heads/feat/gone\n");
+		writeFileSync(join(main, ".git/worktrees/app-gone/commondir"), "../..\n");
+		const { json: s } = await api("POST", "/sessions", { cwd: main });
+		await run(s.id, "!bash cd ../app-gone");
+		expect((await api("GET", `/sessions/${s.id}`)).json.activeDir).toBe(gone);
+		rmSync(gone, { recursive: true, force: true });
+		await run(s.id, "!bash pwd");
+		expect((await api("GET", `/sessions/${s.id}`)).json.activeDir).toBeNull();
+		expect(await lastToolText(s.id)).toStartWith(main);
 	});
 });
