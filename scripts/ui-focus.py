@@ -254,7 +254,8 @@ with sync_playwright() as p:
                 seen, found, checked = set(), 0, 0
                 # the keyboard took the page over: the first press makes later focus :focus-visible
                 for i in range(a.max_tabs):
-                    pg.keyboard.press("Tab")
+                    # Forward Tab in the folder path completes a name; traverse these dialogs backwards.
+                    pg.keyboard.press("Shift+Tab" if name in ("dir-picker", "dir-create") else "Tab")
                     # A field's focus halo transitions from 0 to 3px. Measure the finished shadow, not its first frame.
                     pg.evaluate("""async () => {
                         await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
