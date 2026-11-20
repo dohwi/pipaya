@@ -75,6 +75,15 @@
 		app.links[id]?.api.mcp().then((r) => { if (live) mcpSide = { id, rows: r.servers.map((x) => ({ name: x.name, ready: x.status === "ready", failed: x.status === "error" })) }; }).catch(() => { if (live) mcpSide = null; });
 		return () => { live = false; };
 	});
+	// The client extensions of a server that is not the open one come from its idle editor, which only exists once attached.
+	// Attach it here too, not only in the extensions pane: otherwise switching servers (the editor is handed over when a server
+	// opens) left this list with the server's own extensions alone until that pane was shown. Re-run when the open server or
+	// the connection changes (no connection yet: attach does nothing, so it has to try again when one arrives).
+	$effect(() => {
+		void app.serverId;
+		const id = server?.id;
+		if (id && app.links[id]?.api) void app.attachExtensionStore(id);
+	});
 	type Kid = ExtensionRow;
 	/** The server's own update lives in "정보": its dot there says where the dot on the server chip leads (only the open server is known). */
 	const serverHasUpdate = $derived(!!server && server.id === app.serverId && serverUpdater.available);
