@@ -28,7 +28,7 @@
 	let host: HTMLDivElement | undefined = $state();
 	let seq = 0;
 	const RING = 220; // px: width of the lit band
-	const SLOP = 10; // px: moving further than this while held cancels the charge
+	const SLOP = 10; // px: moving further than this before the gauge shows is a swipe or a scroll, not a press
 	/** The press being held on empty space: the gauge at (x, y) shows while `shown`. */
 	let charge: { x: number; y: number; shown: boolean; full: boolean } | null = $state(null);
 
@@ -82,8 +82,8 @@
 	});
 
 	/**
-	 * A click on empty space sends a wave of lit grid lines out from the pointer. Holding the press fills a round gauge
-	 * under it; letting go sends a second wave that spreads faster the fuller the gauge is.
+	 * A click on empty space sends a wave of lit grid lines out from where it is let go. Holding the press instead fills a
+	 * round gauge that follows the pointer; letting go sends the wave from there, faster the fuller the gauge is.
 	 */
 	$effect(() => {
 		const el = host;
@@ -103,6 +103,8 @@
 			clearTimeout(showTimer);
 			clearTimeout(fullTimer);
 			removeEventListener("pointermove", move);
+			removeEventListener("touchmove", hold);
+			removeEventListener("selectstart", noSelect);
 			removeEventListener("pointerup", up);
 			removeEventListener("pointercancel", stop);
 			removeEventListener("blur", stop);
@@ -110,14 +112,28 @@
 			charge = null;
 		};
 		const move = (e: PointerEvent) => {
-			if (held && e.pointerId === held.id && Math.hypot(e.clientX - held.cx, e.clientY - held.cy) > SLOP) stop();
+			if (!held || e.pointerId !== held.id) return;
+			if (!charge) {
+				if (Math.hypot(e.clientX - held.cx, e.clientY - held.cy) > SLOP) stop();
+				return;
+			}
+			const r = el.getBoundingClientRect();
+			held.x = charge.x = e.clientX - r.left;
+			held.y = charge.y = e.clientY - r.top;
+			getSelection()?.removeAllRanges(); // a selection begun with the press would follow the drag
 		};
+		// once the gauge shows, a moving finger drags it instead of scrolling the page
+		const hold = (e: TouchEvent) => {
+			if (charge && e.cancelable) e.preventDefault();
+		};
+		// and a moving mouse does not select text on its way
+		const noSelect = (e: Event) => charge && e.preventDefault();
 		const up = (e: PointerEvent) => {
 			if (!held || e.pointerId !== held.id) return;
 			const level = chargeLevel(performance.now() - held.t0);
 			const { x, y } = held;
 			stop();
-			if (level > 0) wave(x, y, chargedDur(level));
+			wave(x, y, level > 0 ? chargedDur(level) : DUR);
 		};
 		const down = (e: PointerEvent) => {
 			if (e.button !== 0 || held) return;
@@ -125,7 +141,6 @@
 			const r = el.getBoundingClientRect();
 			const x = e.clientX - r.left;
 			const y = e.clientY - r.top;
-			wave(x, y, DUR);
 			held = { id: e.pointerId, cx: e.clientX, cy: e.clientY, x, y, t0: performance.now() };
 			showTimer = setTimeout(() => (charge = { x, y, shown: true, full: false }), HOLD);
 			fullTimer = setTimeout(() => {
@@ -133,6 +148,8 @@
 				buzz();
 			}, HOLD + CHARGE);
 			addEventListener("pointermove", move, { passive: true });
+			addEventListener("touchmove", hold, { passive: false });
+			addEventListener("selectstart", noSelect);
 			addEventListener("pointerup", up);
 			addEventListener("pointercancel", stop);
 			addEventListener("blur", stop);
