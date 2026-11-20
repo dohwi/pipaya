@@ -23,13 +23,14 @@
 	import { shortDateTime, tilde } from "../../lib/format";
 	import { copyText } from "../../lib/clipboard";
 	import { chooseGroup } from "../../lib/group-picker";
+	import { chooseWorkdir } from "../../lib/workdir-picker";
 	import type { Point } from "../../lib/press-menu";
 	import { drag } from "../../lib/dnd.svelte";
 	import { blockDrag } from "../../lib/block-drag";
 	import { InlineRename } from "../../lib/inline-rename.svelte";
 	import { registerRenamePlace } from "../../lib/rename-places";
 	import { DragMarks } from "../../lib/drag-marks.svelte";
-	import type { DirBlock, Tab } from "../../lib/nav";
+	import { workDir, type DirBlock, type Tab } from "../../lib/nav";
 	import { dissolveProject, flattenBlocks, isManualRoot, joinProject, leaveProject, newProjectId, projectKey, type SidebarBlock } from "../../lib/projects";
 	import { dirKey, connectionState, edgeOf, headMenuEntries, newKey, newMenuEntries, orderServers, projectMenuEntries, rowMenuEntries, shortName, targetId, type RowActions } from "../../lib/sidebar-model";
 	import type { Group, Session } from "../../lib/types";
@@ -261,8 +262,23 @@
 		key: bid,
 		move: (o, target, after) => (o.kind === "server" ? app.moveServer(o.path, target, after) : app.sidebar.moveDir(o.serverId, o.paths, o.path, target, after)),
 	});
-	/** Let go on a folder: the pane steps out of its group, as a tab of its own. */
-	const dropOnDir = (id: string) => void app.leaveGroup(id);
+	/**
+	 * A lone conversation let go on another working tree (main checkout or worktree) of the repository it works in moves
+	 * there: its agent works there from its next message. Not while it runs (the server refuses), and not a split-tab pane.
+	 */
+	const movesTo = (n: Node, id: string, path: string) => {
+		const s = app.session(id);
+		if (!s || app.groupOf(id) || app.running[id]) return false;
+		const from = n.repos[workDir(s)];
+		const to = n.repos[path];
+		return !!from && !!to && from.root === to.root && to.top === path && from.top !== path;
+	};
+	/** Let go on a folder: a split-tab pane steps out of its group, as a tab of its own; a lone conversation moves to work there. */
+	const acceptsOnDir = (n: Node, path: string) => (id: string) => n.current && (!!app.groupOf(id) || movesTo(n, id, path));
+	const dropOnDir = (n: Node, path: string) => (id: string) => {
+		if (app.groupOf(id)) void app.leaveGroup(id);
+		else if (movesTo(n, id, path)) void app.moveWorkdir(id, path);
+	};
 	/** The "+" of a server or directory: a conversation or a terminal, both starting in that place. */
 	const newItems = (n: Node, path: string): RowMenuItem[] =>
 		newMenuEntries(platformName(n.platform), {
@@ -285,6 +301,7 @@
 		togglePin: (id) => app.sidebar.toggleTabPinned(app.serverId!, id),
 		isPinned: (id) => app.sidebar.isTabPinned(app.serverId!, id),
 		schedule: (id) => app.openScheduleFor(id),
+		moveWorkdir: (x) => void chooseWorkdir(x),
 	};
 	const menuItems = (target: MenuTarget, member = false): RowMenuItem[] => rowMenuEntries(target, rowActions, member);
 	let rowMenu: ReturnType<typeof RowMenu> | undefined = $state();
@@ -412,6 +429,7 @@
 		tabDropAt,
 		hover,
 		dropOnDir,
+		acceptsOnDir,
 		dirSource,
 		pretty,
 		shortLabel,

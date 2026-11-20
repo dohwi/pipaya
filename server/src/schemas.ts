@@ -196,6 +196,7 @@ export const PatchSessionBody = Type.Object({
 	systemPrompt: Type.Optional(Type.String({ maxLength: 100_000, description: "Only before the first message (else 409)" })),
 	tools: Type.Optional(Type.Array(Type.String(), { description: "Only before the first message (else 409)" })),
 	closed: Type.Optional(Type.Boolean({ description: "true closes the session (aborting any run); false resumes it" })),
+	workDir: Type.Optional(Nullable(Type.String({ maxLength: 4096, description: "Move the session to another working tree (main checkout or git worktree) of its repository; null or its own cwd moves it home. 400 for any other folder, 409 while it runs. Its agent is told with its next message" }))),
 	muted: Type.Optional(Type.Boolean({ description: "Ignored. Per-session mute was removed; older clients may still send it (the quietPeers notification policy replaced it)", deprecated: true })),
 }, { additionalProperties: false });
 

@@ -1,36 +1,17 @@
 /**
- * Which working tree a session's agent works in now. An agent that makes a git worktree of its session's repository
- * (`git worktree add ../app-x`), goes there (`cd ../app-x && …`) or edits under it works on another branch: the session's
- * `activeDir` follows it. Its tools then start there (bash runs there, relative paths resolve against it), the agent is
- * told so, and the sidebar lists the session under that worktree. AGENTS.md, skills and the session's `cwd` stay as made.
- * Only another working tree of the session's own repository counts; anything else leaves `activeDir` as it is.
+ * Which working tree a session works in. A session is made in one folder (`cwd`); its agent (the `workdir` tool) or the
+ * user (moving it in the sidebar) can move it into another working tree of the same git repository, usually a worktree
+ * made for one task. The session's `activeDir` then names it: its tools start there (bash runs there, relative paths
+ * resolve against it) and the sidebar lists the session under it. AGENTS.md, skills and `cwd` itself stay as made.
+ * Nothing moves on its own: a tool call that works in another worktree only earns a hint. The one exception is a
+ * worktree that is gone, which sends the session home.
  */
-import { existsSync, statSync } from "node:fs";
+import { existsSync, realpathSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, isAbsolute, resolve } from "node:path";
-import { repoOf } from "./git-info.ts";
+import { repoOf, worktreesOf } from "./git-info.ts";
 
 const unquote = (s: string) => s.replace(/^(['"])(.*)\1$/, "$2");
-
-/** Options of `git worktree add` that take a value: the path is the first word that is neither one nor its value. */
-const ADD_VALUE_OPTIONS = new Set(["-b", "-B", "--reason"]);
-
-/** The path `git [-C dir] worktree add [opts] <path> …` creates, against `dir`; null when the words are not that command. */
-function worktreeAddPath(words: string[], dir: string, home: string): string | null {
-	if (words[0] !== "git") return null;
-	let i = 1;
-	let base = dir;
-	while (words[i] === "-C" && words[i + 1]) { base = absolute(unquote(words[i + 1]!), base, home); i += 2; }
-	if (words[i] !== "worktree" || words[i + 1] !== "add") return null;
-	for (i += 2; i < words.length; i++) {
-		const w = words[i]!;
-		if (ADD_VALUE_OPTIONS.has(w)) { i++; continue; }
-		if (w.startsWith("-")) continue;
-		const path = unquote(w);
-		return path.includes("$") || path.includes("`") ? null : absolute(path, base, home);
-	}
-	return null;
-}
 
 const absolute = (p: string, base: string, home: string) => {
 	const path = p === "~" ? home : p.startsWith("~/") ? resolve(home, p.slice(2)) : p;
@@ -38,27 +19,22 @@ const absolute = (p: string, base: string, home: string) => {
 };
 
 /**
- * The folder a shell command leaves its agent in: after its `cd`s, each resolved against the one before (a bash call
- * starts in `cwd`), or in a git worktree it just made (`git worktree add ../app-x`: making one is how work on it starts).
- * Null when the command does neither, or moves in a way that cannot be read (`cd -`, a variable). A `cd` in a subshell
- * (`(cd x && …)`) does not count: it is undone when the parenthesis closes.
+ * The folder a shell command ends up in after its `cd`s, each resolved against the one before (a bash call starts in
+ * `cwd`). Null when it never changes folder or does so in a way that cannot be read (`cd -`, a variable). A `cd` in a
+ * subshell (`(cd x && …)`) does not count: it is undone when the parenthesis closes.
  */
 export function cdTarget(command: string, cwd: string, home = homedir()): string | null {
 	let dir = cwd;
-	let target: string | null = null;
+	let moved = false;
 	for (const raw of command.split(/&&|\|\||[;\n|]/)) {
 		const words = raw.trim().split(/\s+/).filter(Boolean);
-		if (words[0] === "cd" || words[0] === "pushd") {
-			if (words.length > 2) continue;
-			const arg = unquote(words[1] ?? "~");
-			if (arg === "-" || arg.includes("$") || arg.includes("`")) return null;
-			target = dir = absolute(arg, dir, home);
-			continue;
-		}
-		const made = worktreeAddPath(words, dir, home);
-		if (made) target = made;
+		if ((words[0] !== "cd" && words[0] !== "pushd") || words.length > 2) continue;
+		const arg = unquote(words[1] ?? "~");
+		if (arg === "-" || arg.includes("$") || arg.includes("`")) return null;
+		dir = absolute(arg, dir, home);
+		moved = true;
 	}
-	return target;
+	return moved ? dir : null;
 }
 
 /** The folder a tool call shows the agent working in, or null when the call says nothing about it. */
@@ -69,35 +45,75 @@ export function touchedDir(tool: string, args: unknown, cwd: string, home = home
 	return null;
 }
 
-/** Where a session's agent works: the worktree it moved into, else the folder it was made in. */
+/** Where a session works: the working tree it was moved into, else the folder it was made in. */
 export const workDirOf = (r: { cwd: string; activeDir?: string | null }): string => r.activeDir || r.cwd;
 
-/** What the agent is told when its working folder changes, appended to the tool result that moved it. */
-export function movedNote(cwd: string, from: string, to: string | null): string {
-	const here = to ?? cwd;
-	const branch = repoOf(here)?.branch;
-	const where = `${here}${branch ? ` (branch ${branch})` : ""}`;
-	if (!to && !existsSync(from)) return `[pipaya] ${from} is gone, so this session works in ${where} again: later tool calls start there.`;
-	if (!to) return `[pipaya] This session works in ${where} again: later bash, read, edit and write calls start there and relative paths resolve against it.`;
-	return `[pipaya] This session now works in the git worktree ${where}: later bash, read, edit and write calls start there and relative paths resolve against it. Your session's own folder is ${cwd}; \`cd ${cwd}\` goes back to it.`;
+const isDir = (p: string) => { try { return statSync(p).isDirectory(); } catch { return false; } };
+const real = (p: string) => { try { return realpathSync(p); } catch { return resolve(p); } };
+
+/** A working tree a session made in `cwd` may move to: one of its repository's, with the branch checked out there. */
+export interface WorkTarget {
+	path: string;
+	branch: string | null;
+	/** The working tree holding `cwd` itself: moving there is going home */
+	home: boolean;
 }
 
-const isDir = (p: string) => { try { return statSync(p).isDirectory(); } catch { return false; } };
+/** The working trees a session made in `cwd` may move to (its repository's main checkout and worktrees), home first. */
+export function workTargets(cwd: string, allowed: (dir: string) => boolean = () => true): WorkTarget[] {
+	const own = repoOf(cwd);
+	if (!own) return [];
+	return worktreesOf(own.root)
+		.filter((w) => w.path === own.top || allowed(w.path))
+		.map((w) => ({ path: w.path, branch: w.branch, home: real(w.path) === real(own.top) }))
+		.sort((a, b) => Number(b.home) - Number(a.home));
+}
 
 /**
- * The session's next `activeDir`: the top of another worktree of its repository it moved into, null when it is back in
- * its own (or the worktree it was in is gone), else `current` unchanged. `allowed` rejects folders outside the workspace.
+ * Checks a move of a session made in `cwd` to `target` and says what `activeDir` becomes: null for its own working tree,
+ * else the top of the other one. Throws a message fit for the agent or the user when the move is not allowed.
  */
-export function nextActiveDir(cwd: string, current: string | null, touched: string | null, allowed: (dir: string) => boolean = () => true): string | null {
-	let next = current && existsSync(current) ? current : null;
-	if (!touched) return next;
-	// a file written in a folder that does not exist yet still names its working tree: look from the nearest one up
+export function resolveMove(cwd: string, target: string, allowed: (dir: string) => boolean = () => true): string | null {
+	const own = repoOf(cwd);
+	if (!own) throw new Error(`this session's folder ${cwd} is not in a git repository, so it has no other working tree to move to`);
+	if (!isDir(target)) throw new Error(`${target} is not a folder`);
+	const there = repoOf(target);
+	if (!there || real(there.root) !== real(own.root)) {
+		const list = workTargets(cwd, allowed).map((w) => `${w.path}${w.branch ? ` (${w.branch})` : ""}`).join(", ");
+		throw new Error(`${target} is not a working tree of this session's repository (${own.root}). Move to one of: ${list || "none"}. To work outside it, use absolute paths or a new session (peer create with cwd).`);
+	}
+	if (real(there.top) === real(own.top)) return null;
+	if (!allowed(there.top)) throw new Error(`${there.top} is outside the workspace this server may use`);
+	return there.top;
+}
+
+/** "path (branch x)", for the notes below. */
+export function placeText(dir: string): string {
+	const branch = repoOf(dir)?.branch;
+	return `${dir}${branch ? ` (branch ${branch})` : ""}`;
+}
+
+/** What the agent is told when its working folder changed: by its own `workdir` call, by the user, or because it was removed. */
+export function movedNote(cwd: string, from: string, to: string | null, by: "agent" | "user" | "gone"): string {
+	const here = placeText(to ?? cwd);
+	if (by === "gone") return `[pipaya] ${from} no longer exists, so this session works in ${here} again: tool calls start there.`;
+	const who = by === "user" ? "The user moved this session" : "This session moved";
+	return `[pipaya] ${who} from ${from} to ${here}: bash starts there and relative paths resolve against it.${to ? ` Its own folder is ${cwd} (workdir back).` : ""}`;
+}
+
+/**
+ * The hint for a call that worked in another working tree of the session's repository without moving there (a `cd`
+ * into it, an edit under it), or null. Looking or running one command there is fine; staying is what `workdir` is for.
+ */
+export function stayHint(cwd: string, current: string, touched: string | null): string | null {
+	if (!touched) return null;
 	let dir = touched;
 	while (!isDir(dir) && dirname(dir) !== dir) dir = dirname(dir);
 	const own = repoOf(cwd);
 	const there = repoOf(dir);
-	if (!own || !there || there.root !== own.root) return next;
-	if (there.top === own.top) next = null;
-	else if (allowed(there.top)) next = there.top;
-	return next;
+	if (!own || !there || real(there.root) !== real(own.root) || real(there.top) === real(repoOf(current)?.top ?? current)) return null;
+	return `[pipaya] That call worked in ${placeText(there.top)}, but this session still works in ${current}. If the work continues there, call workdir (action move, path ${there.top}) so later calls start there and the user sees the session there.`;
 }
+
+/** The working tree the session moved into is gone (removed with `git worktree remove`, deleted): it goes home. */
+export const isGone = (activeDir: string | null | undefined): activeDir is string => !!activeDir && !existsSync(activeDir);

@@ -2,6 +2,7 @@ import { describe, expect, it } from "bun:test";
 import { pane, splitAt } from "../src/lib/layout";
 import { sidebarDirs, workDir } from "../src/lib/nav";
 import { projectBlocks } from "../src/lib/projects";
+import { rowMenuEntries } from "../src/lib/sidebar-model";
 import type { TerminalInfo } from "../src/lib/terminal";
 import type { Group, Session } from "../src/lib/types";
 
@@ -32,5 +33,20 @@ describe("sessions that moved into a worktree", () => {
 		const g = { id: "g", name: "g", layout: splitAt(splitAt(pane("b"), "b", "c", "right"), "c", "d", "right"), createdAt: 1 } as unknown as Group;
 		const dirs = sidebarDirs([...sessions, s("d", "/w/app", "/w/app-x")], [g], []);
 		expect(dirs.find((d) => d.tabs.some((t) => t.id === "g"))?.path).toBe("/w/app-x");
+	});
+});
+
+describe("the row menu's 작업 폴더 옮기기…", () => {
+	it("is offered for conversations when the sidebar can pick, never for terminals or split tabs", () => {
+		const picked: string[] = [];
+		const act = { renameTab: () => {}, renameGroup: () => {}, groupWith: () => {}, closeSession: () => {}, closeTerminal: () => {}, moveWorkdir: (x: { id: string }) => picked.push(x.id) };
+		const chat = rowMenuEntries({ kind: "session", x: { id: "s1", title: "Chat" } }, act);
+		expect(chat.map((e) => e.icon)).toEqual(["pencil", "columns", "fork", "x"]);
+		chat.find((e) => e.icon === "fork")!.run();
+		expect(picked).toEqual(["s1"]);
+		expect(rowMenuEntries({ kind: "terminal", x: { id: "t1", title: "sh" } }, act).map((e) => e.icon)).not.toContain("fork");
+		expect(rowMenuEntries({ kind: "group", g: { id: "g1", name: "G" } }, act).map((e) => e.icon)).not.toContain("fork");
+		const { moveWorkdir: _, ...without } = act;
+		expect(rowMenuEntries({ kind: "session", x: { id: "s1", title: "Chat" } }, without).map((e) => e.icon)).not.toContain("fork");
 	});
 });

@@ -104,6 +104,8 @@ export interface PatchSessionInput {
 	thinkingLevel?: ThinkingLevel;
 	serviceTier?: ServiceTier | null;
 	closed?: boolean;
+	/** Move the session to another working tree (main checkout or worktree) of its repository; null: back to its own folder */
+	workDir?: string | null;
 }
 
 export const normalizeUrl = (url: string): string => {
@@ -443,6 +445,8 @@ export class Api {
 	commandFamilies = (cwd?: string, signal?: AbortSignal) =>
 		this.req<{ cwd: string; families: CommandFamily[] }>("GET", `/server-extensions/commands${cwd ? `?cwd=${encodeURIComponent(cwd)}` : ""}`, undefined, signal);
 	patchSession = (id: string, patch: PatchSessionInput) => this.req<Session>("PATCH", `/sessions/${id}`, patch);
+	/** The working trees of the session's repository it may be moved to (`patchSession` workDir), its own first. */
+	sessionWorkdirs = (id: string) => this.req<{ workdirs: { path: string; branch: string | null; home: boolean; current: boolean }[] }>("GET", `/sessions/${encodeURIComponent(id)}/workdirs`);
 	deleteSession = (id: string) => this.req<void>("DELETE", `/sessions/${id}`);
 	/** Delete several at once. Ones running or waiting for the user are skipped and come back in `skipped`. */
 	deleteSessions = (ids: string[]) => this.req<{ deleted: string[]; skipped: string[] }>("POST", "/sessions/delete", { ids });

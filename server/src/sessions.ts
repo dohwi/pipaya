@@ -16,12 +16,13 @@ import { checkServiceTier, withServiceTier, modelDefaultTier, modelDefaultLevel,
 import { contextTokens, pickCut, SUMMARY_MAX_TOKENS, SUMMARY_SYSTEM, summaryMessage, summaryRequest, thresholdFor, type CompactionSettings } from "./compaction.ts";
 import { type DelegateCall, type SessionPatch, type SessionRecord, type SessionStore, type ThinkingLevel } from "./store.ts";
 import type { McpManager } from "./mcp.ts";
-import { buildTools, DEFAULT_TOOLS, DELEGATE_TOOL, isInside, PEER_TOOLS, TOOL_DEFS, type ToolContext, type ToolDef } from "./tools.ts";
-import { movedNote, nextActiveDir, touchedDir, workDirOf } from "./work-tree.ts";
+import { ALWAYS_TOOLS, buildTools, DEFAULT_TOOLS, DELEGATE_TOOL, isInside, PEER_TOOLS, TOOL_DEFS, WORKDIR_TOOL, type ToolContext, type ToolDef } from "./tools.ts";
+import { isGone, movedNote, placeText, resolveMove, stayHint, touchedDir, workDirOf, workTargets } from "./work-tree.ts";
+import { repoOf } from "./git-info.ts";
 import { SCHEDULE_TOOL } from "./schedule-tool.ts";
 import type { Scheduler } from "./scheduler.ts";
 import { sameName } from "./member-names.ts";
-import { PeerService, type GroupOps, type GroupRef } from "./peers.ts";
+import { HINT_OPEN, PeerService, type GroupOps, type GroupRef } from "./peers.ts";
 import type { QuestionRequest } from "./questions.ts";
 import type { ExtensionHost } from "./extensions/host.ts";
 import type { MessageNote } from "./extensions/types.ts";
@@ -659,6 +660,8 @@ export class SessionManager {
 		const live = this.ensureLive(record);
 
 		const content: ({ type: "text"; text: string } | ImageContent)[] = [{ type: "text", text: input.text }, ...extraParts];
+		const moved = this.takeNote(id);
+		if (moved) content.push({ type: "text", text: `${HINT_OPEN}${moved}</pipaya-hint>` });
 		for (const hint of this.peers.hints(id, input.text)) content.push({ type: "text", text: hint });
 		if (input.origin === "schedule") content.push({ type: "text", text: SCHEDULE_NOTE });
 		if (this.skills) {
@@ -989,6 +992,7 @@ export class SessionManager {
 		live.origin = origin;
 		live.runStartedAt = Date.now();
 		live.turns = 0;
+		live.hinted = undefined;
 		live.recentCalls = [];
 		live.stopCause = undefined;
 		live.limitReason = undefined;
@@ -1162,7 +1166,7 @@ export class SessionManager {
 
 	private ensureLive(record: SessionRecord): Live {
 		// a worktree removed since the last run sends the session home before its tools are built
-		if (record.activeDir && !this.live.get(record.id)?.running && this.followWorkTree(record.id, null)) record = this.store.get(record.id) ?? record;
+		if (isGone(record.activeDir) && !this.live.get(record.id)?.running) { this.homeIfGone(record.id); record = this.store.get(record.id) ?? record; }
 		const existing = this.live.get(record.id);
 		if (existing) {
 			// Refresh idle sessions after provider endpoint/model configuration changes.
@@ -1265,7 +1269,7 @@ export class SessionManager {
 	}
 
 	private toolPlan(names: string[]) {
-		return planTools({ chosen: names, always: [...PEER_TOOLS, DELEGATE_TOOL, ...(this.scheduler ? [SCHEDULE_TOOL] : []), ...(this.ext?.alwaysTools() ?? []), ...(this.mcp?.toolNames() ?? [])], disabled: this.disabledTools(), image: this.imageModel?.resolve() ? IMAGE_TOOL : undefined });
+		return planTools({ chosen: names, always: [...PEER_TOOLS, DELEGATE_TOOL, ...ALWAYS_TOOLS, ...(this.scheduler ? [SCHEDULE_TOOL] : []), ...(this.ext?.alwaysTools() ?? []), ...(this.mcp?.toolNames() ?? [])], disabled: this.disabledTools(), image: this.imageModel?.resolve() ? IMAGE_TOOL : undefined });
 	}
 
 	/** The text the system adds beyond the session prompt, tools and AGENTS.md, for the context view. */
@@ -1291,7 +1295,10 @@ export class SessionManager {
 			create: (input) => this.peers.create(sessionId, input),
 			manage: (name, action, a) => this.peers.manage(sessionId, name, action, a),
 			group: (action, a) => this.peers.group(sessionId, action, a),
-		}, schedules: this.scheduleOps(sessionId) };
+		}, schedules: this.scheduleOps(sessionId), workdir: {
+			show: () => this.workdirShow(sessionId),
+			move: (path) => this.moveWorkdir(sessionId, path, "agent").note,
+		} };
 		if (q) {
 			ctx.ask = async (toolCallId, req, signal) => {
 				const items = req.items?.map((i) => ({ ...i, allowFreeText: i.allowFreeText ?? true }));
@@ -1484,40 +1491,99 @@ export class SessionManager {
 		}
 	}
 
-	/**
-	 * Moves the session's `activeDir` to the git worktree a finished tool call shows its agent working in (see
-	 * work-tree.ts) and tells the clients, so the sidebar lists it there. Returns the line that tells the agent, or null
-	 * when nothing moved. Reading `.git` can fail on odd layouts: then nothing changes.
-	 */
-	private followWorkTree(sessionId: string, tool: string | null, args?: unknown): string | null {
-		const rec = this.store.get(sessionId);
-		if (!rec) return null;
-		const current = rec.activeDir ?? null;
-		if (!current && !tool) return null;
-		let next: string | null;
-		try {
-			const touched = tool ? touchedDir(tool, args, workDirOf(rec), this.home) : null;
-			next = nextActiveDir(rec.cwd, current, touched, (dir) => !this.cfg.restrictWorkspace || isInside(this.cfg.workspaceRoot, dir));
-		} catch { return null; }
-		if (next === current) return null;
-		const updated = this.store.setActiveDir(sessionId, next);
-		if (updated) this.bus.publish(sessionId, "session_updated", updated);
-		return movedNote(rec.cwd, current ?? rec.cwd, next);
+	/** Folders outside the workspace are not offered or accepted when the server is confined to it. */
+	private allowedDir = (dir: string) => !this.cfg.restrictWorkspace || isInside(this.cfg.workspaceRoot, dir);
+
+	/** Sets `activeDir` and tells the clients (the sidebar lists the session there). */
+	private setActiveDir(id: string, dir: string | null): SessionRecord {
+		const updated = this.store.setActiveDir(id, dir);
+		if (!updated) throw notFound("session");
+		this.bus.publish(id, "session_updated", updated);
+		return updated;
 	}
 
 	/**
-	 * The session agent's `afterToolCall`: extension `tool_result` hooks, then the working-folder check. A call that moved
-	 * the agent into another worktree (or back) gets a line saying so, so it knows where its next calls start.
+	 * Moves the session to another working tree of its repository (`target`), or home (null). Shared by the agent's
+	 * `workdir` tool and the user (PATCH workDir). The tools follow from the next turn of a run, or the next run. A user
+	 * move leaves a note the agent sees with its next message; the agent's own move is reported in its tool result.
+	 */
+	moveWorkdir(id: string, target: string | null, by: "agent" | "user"): { record: SessionRecord; note: string } {
+		const rec = this.get(id);
+		if (by === "user" && this.live.get(id)?.running) throw conflict("the session is working; move it after it finishes");
+		const from = workDirOf(rec);
+		let next: string | null;
+		try {
+			next = target === null ? null : resolveMove(rec.cwd, isAbsolute(target) ? resolve(target) : resolve(from, target), this.allowedDir);
+		} catch (e) {
+			throw badRequest((e as Error).message);
+		}
+		const note = movedNote(rec.cwd, from, next, by);
+		if (next === (rec.activeDir ?? null)) return { record: rec, note: `[pipaya] This session already works in ${placeText(from)}.` };
+		const record = this.setActiveDir(id, next);
+		if (by === "user") this.pendingNotes.set(id, note);
+		return { record, note };
+	}
+
+	/**
+	 * What the agent must hear before its next model call about a move it did not make itself (the user moved the
+	 * session, or its worktree is gone): given with its next message or turn, then dropped. The latest move wins.
+	 */
+	private pendingNotes = new Map<string, string>();
+
+	/** Takes the pending move note for the session, if any. */
+	private takeNote(id: string): string | undefined {
+		const note = this.pendingNotes.get(id);
+		this.pendingNotes.delete(id);
+		return note;
+	}
+
+	/** The working trees the session may move to, its own first, with the one it works in now marked. */
+	workdirs(id: string): { path: string; branch: string | null; home: boolean; current: boolean }[] {
+		const rec = this.get(id);
+		const here = resolve(rec.activeDir ?? repoOf(rec.cwd)?.top ?? rec.cwd);
+		return workTargets(rec.cwd, this.allowedDir).map((t) => ({ ...t, current: resolve(t.path) === here }));
+	}
+
+	/** What the `workdir` tool shows: where the session works and where it can go. */
+	private workdirShow(id: string): string {
+		const rec = this.get(id);
+		const here = workDirOf(rec);
+		const targets = this.workdirs(id);
+		const lines = [`Works in ${placeText(here)}${rec.activeDir ? ` (its own folder is ${rec.cwd})` : " (its own folder)"}.`];
+		if (targets.length > 1) lines.push("Working trees of its repository:", ...targets.map((t) => `- ${t.path}${t.branch ? ` (${t.branch})` : ""}${t.home ? " [own]" : ""}${t.current ? " [here]" : ""}`));
+		else if (!targets.length) lines.push("Its folder is not in a git repository: there is nowhere to move.");
+		else lines.push("Its repository has no other worktree yet (git worktree add ../<name> makes one).");
+		return lines.join("\n");
+	}
+
+	/**
+	 * The session agent's `afterToolCall`: extension `tool_result` hooks, then a hint when the call worked in another
+	 * working tree of the repository without moving there (the agent decides whether to; see `workdir`).
 	 */
 	private async afterSessionTool(sessionId: string, c: Parameters<SessionManager["extensionToolResult"]>[1]) {
 		const out = await this.extensionToolResult(sessionId, c);
-		// a failed command may still have moved (`cd ../x && false`), but most failures never got there; it can only tell
-		// that the worktree it worked in is gone (removed under it), which sends the session home
 		const failed = out?.isError ?? c.isError;
-		const note = this.followWorkTree(sessionId, failed ? null : c.toolCall.name, c.args);
+		// the worktree it worked in was removed (by this very call, often): home, and the result says so
+		this.homeIfGone(sessionId);
+		let note = this.takeNote(sessionId) ?? null;
+		const rec = this.store.get(sessionId);
+		const live = this.live.get(sessionId);
+		if (!note && !failed && rec && live && c.toolCall.name !== WORKDIR_TOOL) {
+			try { note = stayHint(rec.cwd, workDirOf(rec), touchedDir(c.toolCall.name, c.args, workDirOf(rec), this.home)); } catch { /* odd .git layout: no hint */ }
+			if (note && live.hinted?.has(note)) note = null;
+			else if (note) (live.hinted ??= new Set()).add(note); // once per place per run: a hint on every call is noise
+		}
 		if (!note) return out;
 		const content = (out?.content ?? c.result.content) as { type: string }[];
 		return { ...out, content: [...(Array.isArray(content) ? content : []), { type: "text" as const, text: note }] };
+	}
+
+	/** A working tree the session was moved into and that is gone sends it home, and says so to the agent. */
+	private homeIfGone(id: string): void {
+		const rec = this.store.get(id);
+		if (!rec || !isGone(rec.activeDir)) return;
+		this.pendingNotes.set(id, movedNote(rec.cwd, rec.activeDir, null, "gone"));
+		this.setActiveDir(id, null);
 	}
 
 	/**
@@ -1526,7 +1592,7 @@ export class SessionManager {
 	 */
 	private retargetTools(sessionId: string): AgentTool<any>[] | undefined {
 		const live = this.live.get(sessionId);
-		this.followWorkTree(sessionId, null); // a worktree removed meanwhile sends the session home
+		this.homeIfGone(sessionId);
 		const rec = this.store.get(sessionId);
 		const snap = this.store.context(sessionId);
 		if (!live || !rec || !snap) return undefined;

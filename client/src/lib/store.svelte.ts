@@ -2240,6 +2240,29 @@ class AppStore {
     }
   }
 
+  /**
+   * Move a conversation to another working tree of its repository (`dir`; its own folder brings it home): its agent
+   * works there from its next message, and the sidebar lists it there. The toast offers to move it back.
+   */
+  async moveWorkdir(id: string, dir: string, undo = true): Promise<boolean> {
+    const s = this.session(id);
+    if (!this.api || !s) return false;
+    const from = workDir(s);
+    if (dir === from) return true;
+    try {
+      const updated = await this.api.patchSession(id, { workDir: dir === s.cwd ? null : dir });
+      const i = this.sessions.findIndex((x) => x.id === id);
+      if (i >= 0) this.sessions[i] = updated;
+      const name = dir.split(/[\\/]/).filter(Boolean).pop() ?? dir;
+      this.toast(t("'{title}'의 작업 폴더를 {dir}(으)로 옮겼습니다", { title: sessionTitle(s.title), dir: name }), "ok", null,
+        undo ? { label: t("되돌리기"), run: () => void this.moveWorkdir(id, from, false) } : undefined);
+      return true;
+    } catch (e) {
+      this.fail(e, t("작업 폴더를 옮기지 못했습니다"), id);
+      return false;
+    }
+  }
+
   async rename(id: string, title: string) {
     title = title.trim();
     if (!this.api || !title) return;
