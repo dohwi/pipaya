@@ -119,7 +119,7 @@ SCREENS = [
     ("palette", CHAT + ["key:Control+k"], '.pal'),
     ("find", CHAT + ["key:Control+f"], '.find'),
     ("schedules", ['button.navbtn:has-text("예약 작업")'], '[role="dialog"][aria-label="예약 작업"]'),
-    ("graph", GRAPH, '.graph .world'),
+    ("graph", GRAPH, '.graph .card.server[data-card]'),
     *[(f"graph-{kind}", GRAPH + [f'.card.{kind}[data-card]'], '.modal .kv') for kind in ("server", "provider", "model")],
     ("graph-chat", GRAPH + ['.card.session[data-card]'], '.modal button.open'),
     ("new-menu", CHAT + ['button.add[aria-haspopup="menu"] >> visible=true'], '[role="menu"]'),
@@ -255,7 +255,12 @@ with sync_playwright() as p:
                 # the keyboard took the page over: the first press makes later focus :focus-visible
                 for i in range(a.max_tabs):
                     pg.keyboard.press("Tab")
-                    pg.evaluate("() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))")
+                    # A field's focus halo transitions from 0 to 3px. Measure the finished shadow, not its first frame.
+                    pg.evaluate("""async () => {
+                        await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+                        await Promise.allSettled(document.activeElement.getAnimations()
+                            .filter(a => a.transitionProperty === 'box-shadow').map(a => a.finished));
+                    }""")
                     # TabBar reveals a chip with a smooth scroll. Measure after it settles, not midway through the move.
                     if pg.evaluate("!!document.activeElement?.closest('[data-part=tabbar]')"):
                         pg.wait_for_timeout(350)
