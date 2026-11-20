@@ -236,6 +236,16 @@
 		color: var(--text-faint);
 		white-space: nowrap;
 	}
+	/* a message from another session or a scheduled task sits on the left: the row mirrors the answer's foot, the time
+	   first on the bubble's left line and the buttons after it, so the hidden buttons no longer push the time inwards */
+	.row.user.headed .actions {
+		margin-right: 0;
+	}
+	.row.user.headed .when {
+		order: -1;
+		margin-left: 0;
+		margin-right: 4px; /* the next box overlaps 2px and holds its 14px glyph 9px in: 11px to the ink, as the answer's stats */
+	}
 	/* copy / reply / branch are lighter than the app's other buttons: a 14px glyph at 1.75 in the time's faint colour,
 	   so they read as part of the time's line instead of three dark marks after it (16px at stroke 2 did). Hover brings the text colour */
 	.actions :global(.iconbtn) {
