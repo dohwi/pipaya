@@ -13,12 +13,14 @@
 	 * opens downwards, or upwards when there is no room.
 	 *
 	 * `editable`: the trigger is a text field and the options are suggestions; whatever is typed is committed on Enter or
-	 * blur (a font name that is not in the list). Otherwise only an option can be chosen.
+	 * blur (a font name that is not in the list). Otherwise only an option can be chosen. `oninput` sees every keystroke
+	 * before that, for a form whose Save button must wake up while the user is still typing.
 	 */
 	let {
 		options,
 		value,
 		onchange,
+		oninput,
 		label,
 		id,
 		placeholder = "",
@@ -34,6 +36,8 @@
 		options: { value: T; label: string; hint?: string; disabled?: boolean }[];
 		value: T | string;
 		onchange: (value: T) => void;
+		/** editable only: the text as it is typed, before it is committed */
+		oninput?: (text: string) => void;
 		/** accessible name when no <label for> points at the trigger */
 		label?: string;
 		id?: string;
@@ -205,7 +209,7 @@
 				spellcheck="false"
 				autocomplete="off"
 				value={draft ?? shown}
-				oninput={(e) => { draft = e.currentTarget.value; active = -1; }}
+				oninput={(e) => { draft = e.currentTarget.value; active = -1; oninput?.(draft); }}
 				{onkeydown}
 				onblur={onblur}
 			/>

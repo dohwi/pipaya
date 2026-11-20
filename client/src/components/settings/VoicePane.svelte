@@ -1,6 +1,7 @@
 <script lang="ts">
 	import Button from "../ui/Button.svelte";
 	import Notice from "../ui/Notice.svelte";
+	import Select from "../ui/Select.svelte";
 	import SettingRow from "../ui/SettingRow.svelte";
 	import Switch from "../ui/Switch.svelte";
 	import { t, getLang } from "../../lib/i18n";
@@ -35,6 +36,16 @@
 
 	/** Nothing set up yet: the placeholders then carry the whole example, so the first visit says what to type. */
 	const firstRun = $derived(!voice.settings.baseUrl && !voice.settings.model && !voice.hasKey);
+
+	/**
+	 * Suggestions only; any name the server takes can be typed. OpenAI recommends `gpt-transcribe` for new integrations
+	 * (whisper-1 and the gpt-4o transcribe models shut down there on 2027-02-26), while self-hosted OpenAI-compatible
+	 * servers commonly answer to `whisper-1`. gpt-4o-transcribe (retired with whisper-1) and voxtral (no longer used) were dropped.
+	 */
+	const MODELS = $derived([
+		{ value: "gpt-transcribe", label: "gpt-transcribe", hint: t("OpenAI 권장") },
+		{ value: "whisper-1", label: "whisper-1", hint: t("이전 모델 · 호환 서버") },
+	]);
 
 	/** The language the UI is in, as the hint a person most likely wants ("ko" for Korean). Only a placeholder, never a value. */
 	const uiLang = $derived(getLang().slice(0, 2));
@@ -97,16 +108,12 @@
 		<input class="field" type="url" inputmode="url" autocomplete="off" spellcheck="false" placeholder={firstRun ? "https://api.openai.com" : t("예: https://api.openai.com")} bind:value={draft.baseUrl} aria-label={t("변환 서버 주소")} />
 	</label>
 	<span class="hint">{t("OpenAI 호환이면 됩니다. 주소만 쓰고 경로는 아래에 따로 넣습니다.")}</span>
-	<label class="row">
-		<span>{t("모델")}</span>
-		<input class="field" type="text" autocomplete="off" spellcheck="false" list="voice-models" placeholder={firstRun ? "whisper-1" : t("비우면 서버 기본 모델")} bind:value={draft.model} aria-label={t("변환 모델")} />
-		<datalist id="voice-models">
-			<option value="whisper-1"></option>
-			<option value="gpt-4o-transcribe"></option>
-			<option value="gpt-transcribe"></option>
-			<option value="voxtral-mini-transcribe-3-0"></option>
-		</datalist>
-	</label>
+	<div class="row">
+		<label for="voice-model">{t("모델")}</label>
+		<!-- The shared editable dropdown, not <input list>: Chromium drew a bare ▼ on hover that nobody could read, WebKit drew nothing. -->
+		<Select id="voice-model" editable label={t("변환 모델")} describedby="voice-model-hint" placeholder={firstRun ? "gpt-transcribe" : t("비우면 서버 기본 모델")} value={draft.model} options={MODELS} onchange={(model) => (draft = { ...draft, model })} oninput={(model) => (draft = { ...draft, model })} />
+	</div>
+	<span class="hint" id="voice-model-hint">{t("목록은 예시입니다. 변환 서버가 받는 모델 이름이면 무엇이든 직접 입력할 수 있습니다.")}</span>
 	<label class="row">
 		<span>{t("API 키")}</span>
 		<input
@@ -160,7 +167,8 @@
 		flex-direction: column;
 		gap: var(--dlg-gap-sm);
 	}
-	.row > span {
+	.row > span,
+	.row > label {
 		font-size: var(--fs-sm);
 		line-height: 20px;
 		color: var(--text-dim);
