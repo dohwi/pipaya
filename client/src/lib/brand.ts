@@ -31,10 +31,10 @@ const BY_MODEL: [RegExp, Brand][] = [
 	[/stepfun|\bstep-/i, "stepfun"],
 ];
 
-/** Each maker's own colour, used only where the logo is shown coloured. Grok, Meta-style black marks follow the theme text colour. */
+/** Each maker's own colour, used only where the logo is shown coloured. OpenAI, Grok and other black marks follow the theme text colour. */
 export const BRAND_COLOR: Record<Brand, string> = {
 	claude: "#D97757",
-	openai: "#10A37F",
+	openai: "var(--text)",
 	gemini: "#3186FF",
 	grok: "var(--text)",
 	deepseek: "#4D6BFE",
