@@ -24,7 +24,7 @@ export const UI_SLOTS = Object.freeze([
 export type UISlot = (typeof UI_SLOTS)[number];
 /** Built-in pieces a trusted extension component may replace. The original is passed as the `fallback` snippet. */
 export const UI_PARTS = Object.freeze([
-	"header.title", "sidebar.brand", "pane.empty", "pane.welcome", "composer.send", "statusline", "message.user", "message.assistant",
+	"header.title", "sidebar.brand", "pane.empty", "pane.welcome", "composer.send", "statusline", "message.user", "message.user.bubble", "message.assistant",
 	"extension.settings",
 ] as const);
 export type UIPart = (typeof UI_PARTS)[number];
@@ -36,7 +36,7 @@ export type UIPart = (typeof UI_PARTS)[number];
 export const OWNED_PAGE_NAMES: ReadonlySet<string> = Object.freeze(new Set<string>(["extension.page.top", "extension.settings"]));
 /** `data-part` names the app puts on its main elements: the stable selectors for `ui-style` CSS. */
 export const STYLE_PARTS = Object.freeze([
-	"app", "sidebar", "sidebar.brand", "sidebar.bottom", "header", "header.title", "pane", "messages", "message.user", "message.assistant",
+	"app", "sidebar", "sidebar.brand", "sidebar.bottom", "header", "header.title", "pane", "messages", "message.user", "message.user.bubble", "message.assistant",
 	"composer", "composer.box", "composer.bar", "composer.recording", "statusline",
 	"rail", "tabbar", "toasts", "palette", "tool", "welcome", "sessions", "modal", "dock", "floating",
 ] as const);

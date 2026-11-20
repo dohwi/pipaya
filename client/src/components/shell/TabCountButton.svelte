@@ -44,7 +44,7 @@
 	.count.header {
 		width: 28px; /* beside the 28px "+" (TabControls), so the pair sits tight */
 		height: 40px;
-		border-radius: 14px;
+		border-radius: min(var(--radius-pill), 14px); /* the pill of the "+" beside it (TabControls) */
 	}
 	.count.header:focus-visible {
 		outline-offset: -2px; /* 40px in a 44px bar, like the header's other buttons */

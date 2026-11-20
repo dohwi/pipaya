@@ -86,7 +86,7 @@
 		width: 160px;
 		padding: 4px 8px;
 		border: 1px solid var(--border);
-		border-radius: 6px;
+		border-radius: var(--radius-control);
 		background: var(--bg-input, transparent);
 		color: inherit;
 		font: inherit;

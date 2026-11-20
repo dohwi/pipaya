@@ -140,11 +140,11 @@
 		margin: 0 -12px 4px -8px; /* header strip spanning the card: a darker tone marks everything below as belonging to this server */
 		padding: 0 12px 0 8px;
 		box-shadow: inset 0 -1px 0 color-mix(in srgb, var(--text) 8%, transparent); /* open: one hairline under the header instead of a darker strip (a shadow, so the row stays 32px) */
-		border-radius: 11px 11px 0 0; /* the card's corners, minus its 1px border */
+		border-radius: max(0px, var(--radius) - 1px) max(0px, var(--radius) - 1px) 0 0; /* the card's corners (--radius), minus its 1px border */
 	}
 	.srvhead:last-child {
 		box-shadow: none;
-		border-radius: 11px;
+		border-radius: max(0px, var(--radius) - 1px); /* the card's corners, minus its 1px border */
 		margin-bottom: 0;
 	}
 	.srv:has(> .srvhead:last-child) {

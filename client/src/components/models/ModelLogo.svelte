@@ -67,6 +67,6 @@
 	}
 	.img {
 		object-fit: contain;
-		border-radius: 4px;
+		border-radius: var(--radius-xs);
 	}
 </style>

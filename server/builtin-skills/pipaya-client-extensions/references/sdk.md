@@ -146,7 +146,8 @@ Reapplied on light/dark switch; later extensions in the list win on the same tok
 
 - Colors (hex `#rgb #rgba #rrggbb #rrggbbaa` or numeric `rgb()/rgba()`):
   `--bg --bg-side --bg-group --bg-elev --bg-hover --bg-active --bg-code --border --border-strong --text --text-dim --text-faint --user-bg --accent --accent-hover --accent-fg --accent-soft --info --ok --ok-fg --warn --danger --info-soft --ok-soft --warn-soft --danger-soft --scrim --lv-minimal --lv-low --lv-medium --lv-high --lv-xhigh --lv-max --mark-img --mark-file --mark-header --mark-mention`
-- Sizes (integer px, bounds in `SIZE_TOKENS`): `--radius --radius-panel --radius-sm --radius-control --radius-xs` (0–32), `--radius-pill` (0–999), `--control-h` (24–64), `--control-h-sm` (20–56), `--content-w` (480–1200), `--sidebar-w` (200–480), `--fs-2xs … --fs-2xl` (8–40/48)
+- Sizes (integer px, bounds in `SIZE_TOKENS`): `--radius --radius-panel --radius-sm --radius-control --radius-xs` (0–32), `--radius-pill` (0–999), `--control-h` (24–64), `--control-h-sm` (20–56), `--content-w` (480–1200), `--sidebar-w` (200–480; the default width until the user drags the sidebar's edge, a double click on the edge goes back to it; drawn within the grip's 220–560), `--fs-2xs … --fs-2xl` (8–40/48)
+- Every corner of the app follows the radius tokens (the composer box is `--radius-panel` × 1.375, the server card's header `--radius` − 1, the header's tab buttons at most `--radius-pill`), so a theme with `--radius*: 0px` squares them all.
 - Fonts: `--font --mono`, a family list (`"Brand Sans", Inter, sans-serif`). Ship the faces as `assets` with `@font-face` in `styles`.
 
 ## Language packs

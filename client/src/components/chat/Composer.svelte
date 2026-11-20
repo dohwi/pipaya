@@ -854,7 +854,7 @@
 	.box {
 		position: relative;
 		border: 1px solid var(--border-strong);
-		border-radius: 22px;
+		border-radius: calc(var(--radius-panel) * 1.375); /* 22 at the default 16: a step rounder than a panel; a theme's --radius-panel scales it (0 = square) */
 		background: color-mix(in srgb, var(--bg-elev) 92%, transparent);
 		transition:
 			border-color var(--motion-fast) var(--ease-std),
@@ -991,7 +991,7 @@
 	}
 	@container (max-width: 420px) {
 		.box {
-			border-radius: 18px;
+			border-radius: calc(var(--radius-panel) * 1.125); /* 18 at the default 16, a narrow pane's smaller box */
 		}
 		textarea,
 		.mirror {

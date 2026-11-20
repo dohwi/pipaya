@@ -43,7 +43,7 @@
 <!-- a tap shows this message's buttons on a touch screen (reveal.svelte.ts); the buttons themselves are reachable on their own -->
 <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
 <div class="row user" data-part="message.user" class:headed={!!header || scheduled} class:fresh={item.fresh} class:shown={reveal.key === item.key} onclick={(e) => reveal.tap(e, item.key)}>
-	<div class="bubble" class:headedbubble={!!header || scheduled} class:scheduled class:glow-working={working} data-level={working ? level : undefined}>
+	<div class="bubble" data-part="message.user.bubble" class:headedbubble={!!header || scheduled} class:scheduled class:glow-working={working} data-level={working ? level : undefined}>
 		{#if item.images.length}
 			<div class="imgs">
 				{#each item.images as img, i}
@@ -136,7 +136,7 @@
 		--tint: var(--mark-header);
 		background: color-mix(in srgb, var(--tint) 9%, var(--user-bg));
 		border-color: color-mix(in srgb, var(--tint) 35%, var(--border));
-		border-top-left-radius: 4px;
+		border-top-left-radius: var(--radius-xs);
 	}
 	.headedbubble.scheduled {
 		--tint: var(--info);

@@ -48,7 +48,7 @@ export function workspaceAdapter(app: typeof AppStore, builtIn: { names(): strin
       const active = app.activeTab?.tab.id ?? null;
       return {
         narrow: viewport.narrow,
-        sidebar: { open: app.sidebar.open, collapsed: app.sidebar.collapsed, width: app.sidebar.width, minWidth: SIDEBAR_W.min, maxWidth: SIDEBAR_W.max },
+        sidebar: { open: app.sidebar.open, collapsed: app.sidebar.collapsed, width: app.sidebar.shownWidth(), minWidth: SIDEBAR_W.min, maxWidth: SIDEBAR_W.max },
         folder: dir?.path ?? app.workdirAbs,
         tabs: (dir?.tabs ?? []).map((x) => ({
           id: x.id, kind: x.kind, active: x.id === active,

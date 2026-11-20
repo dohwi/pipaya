@@ -39,6 +39,6 @@
 	.crash p { margin: 0; font-size: 16px; }
 	.crash small { max-width: 480px; opacity: 0.7; word-break: break-word; }
 	.row { display: flex; gap: 8px; }
-	button { height: 40px; padding: 0 16px; border-radius: 8px; border: 1px solid currentColor; background: transparent; color: inherit; cursor: pointer; }
+	button { height: 40px; padding: 0 16px; border-radius: var(--radius-sm, 8px); border: 1px solid currentColor; background: transparent; color: inherit; cursor: pointer; }
 	.copy { height: 32px; border: 0; opacity: 0.7; text-decoration: underline; }
 </style>

@@ -10,6 +10,7 @@ Flags, unless the same line or the line above carries a /* comment */ that says 
   z-index   a raw number above 9 (use a --z-* token from app.css; 0-9 inside one component is fine)
   nudge     margin-left/right/top: -Npx used to centre or nudge (fix the box instead)
   hover     a :hover rule that only tints (background / border / color) outside @media (hover: hover): it sticks on touch
+  radius    a literal px corner above 3 (use a --radius-* token, or calc() / min() of one, so an extension theme reaches it)
 Exit code 1 when something is flagged.
 """
 import pathlib
@@ -20,6 +21,7 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 SRC = ROOT / "client/src"
 SPACE = re.compile(r"(?<![-\w])(margin|padding|gap|row-gap|column-gap|inset|top|right|bottom|left)(-(?:top|right|bottom|left|inline|block)(?:-start|-end)?)?\s*:\s*([^;{}]+);")
 Z = re.compile(r"(?<![-\w])z-index\s*:\s*(-?\d+)")
+RADIUS = re.compile(r"(?<![-\w])border(?:-(?:top|bottom|start|end)-(?:left|right|start|end))?-radius\s*:\s*([^;{}]+);")
 PX = re.compile(r"(-?\d*\.?\d+)px")
 EM = re.compile(r"(-?\d*\.?\d+)em\b")
 # the PinMark hosts (PinMark.svelte's :where list): a rule reaching every svg inside them also hits the mark's own pin
@@ -105,6 +107,9 @@ def main():
                         (allowed if ok else hits).append((where, "em-space", f"{prop}: {val.strip()}"))
                 if has_pin and PINHOST.search(line.split("/*")[0]):
                     hits.append((where, "pinhost", line.strip()))
+                for m in RADIUS.finditer(line):
+                    if "var(" not in m.group(1) and any(float(x) > 3 for x in PX.findall(m.group(1))):
+                        (allowed if ok else hits).append((where, "radius", f"border-radius: {m.group(1).strip()}"))
                 for m in Z.finditer(line):
                     if abs(int(m.group(1))) > 9:
                         (allowed if ok else hits).append((where, "z-index", line.strip()))
