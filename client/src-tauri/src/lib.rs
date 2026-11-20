@@ -277,6 +277,86 @@ mod local_server {
     }
 }
 
+/// The macOS app menu. Without one Tauri adds its default menu, whose File > Close Window (⌘W) and Window > Minimize
+/// (⌘M) take those keys before the page sees them: ⌘W closed the whole window instead of a tab and ⌘M (the model
+/// picker) minimised it. This is that default menu with both items still there but bound to no key, so the app's own
+/// shortcuts get ⌘W and ⌘M. Quit, Hide, the Edit items (copy, paste, undo …) and full screen keep their keys.
+#[cfg(target_os = "macos")]
+fn macos_menu(app: &tauri::AppHandle) -> tauri::Result<tauri::menu::Menu<tauri::Wry>> {
+    use tauri::menu::{AboutMetadata, Menu, MenuItem, PredefinedMenuItem, Submenu};
+    let pkg = app.package_info();
+    let about = AboutMetadata {
+        name: Some(pkg.name.clone()),
+        version: Some(pkg.version.to_string()),
+        copyright: app.config().bundle.copyright.clone(),
+        authors: app.config().bundle.publisher.clone().map(|p| vec![p]),
+        ..Default::default()
+    };
+    let close = MenuItem::with_id(app, MENU_CLOSE_WINDOW, "Close Window", true, None::<&str>)?;
+    let minimize = MenuItem::with_id(app, MENU_MINIMIZE, "Minimize", true, None::<&str>)?;
+    let app_menu = Submenu::with_items(
+        app,
+        pkg.name.clone(),
+        true,
+        &[
+            &PredefinedMenuItem::about(app, None, Some(about))?,
+            &PredefinedMenuItem::separator(app)?,
+            &PredefinedMenuItem::services(app, None)?,
+            &PredefinedMenuItem::separator(app)?,
+            &PredefinedMenuItem::hide(app, None)?,
+            &PredefinedMenuItem::hide_others(app, None)?,
+            &PredefinedMenuItem::separator(app)?,
+            &PredefinedMenuItem::quit(app, None)?,
+        ],
+    )?;
+    let file = Submenu::with_items(app, "File", true, &[&close])?;
+    let edit = Submenu::with_items(
+        app,
+        "Edit",
+        true,
+        &[
+            &PredefinedMenuItem::undo(app, None)?,
+            &PredefinedMenuItem::redo(app, None)?,
+            &PredefinedMenuItem::separator(app)?,
+            &PredefinedMenuItem::cut(app, None)?,
+            &PredefinedMenuItem::copy(app, None)?,
+            &PredefinedMenuItem::paste(app, None)?,
+            &PredefinedMenuItem::select_all(app, None)?,
+        ],
+    )?;
+    let view = Submenu::with_items(app, "View", true, &[&PredefinedMenuItem::fullscreen(app, None)?])?;
+    let window = Submenu::with_id_and_items(
+        app,
+        tauri::menu::WINDOW_SUBMENU_ID,
+        "Window",
+        true,
+        &[&minimize, &PredefinedMenuItem::maximize(app, None)?, &PredefinedMenuItem::separator(app)?, &close],
+    )?;
+    let help = Submenu::with_id_and_items(app, tauri::menu::HELP_SUBMENU_ID, "Help", true, &[])?;
+    Menu::with_items(app, &[&app_menu, &file, &edit, &view, &window, &help])
+}
+
+#[cfg(target_os = "macos")]
+const MENU_CLOSE_WINDOW: &str = "pipaya-close-window";
+#[cfg(target_os = "macos")]
+const MENU_MINIMIZE: &str = "pipaya-minimize";
+
+/// The keyless Close Window and Minimize items of `macos_menu`, chosen from the menu bar with the mouse.
+#[cfg(target_os = "macos")]
+fn on_macos_menu(app: &tauri::AppHandle, event: tauri::menu::MenuEvent) {
+    use tauri::Manager;
+    let Some(window) = app.get_webview_window("main") else { return };
+    match event.id().as_ref() {
+        MENU_CLOSE_WINDOW => {
+            let _ = window.close();
+        }
+        MENU_MINIMIZE => {
+            let _ = window.minimize();
+        }
+        _ => {}
+    }
+}
+
 /// The app has its own shortcuts, so WebView2's browser ones (find, print, reload, zoom, devtools …) must not fire.
 #[cfg(windows)]
 fn disable_browser_shortcuts(app: &tauri::App) {
@@ -345,6 +425,10 @@ pub fn run() {
     // QR scanning for "connect to a server" is phone only.
     #[cfg(mobile)]
     let builder = builder.plugin(tauri_plugin_barcode_scanner::init());
+
+    // macOS: an app menu that leaves ⌘W and ⌘M to the app (see `macos_menu`).
+    #[cfg(target_os = "macos")]
+    let builder = builder.menu(macos_menu).on_menu_event(on_macos_menu);
 
     builder
         .invoke_handler(tauri::generate_handler![
