@@ -3,11 +3,28 @@
  * order the user dragged folders and tabs into (per server). Persisted on this device.
  */
 import { clampTo } from "./number";
-import { K, read, write } from "./persist";
+import { K, read, remove, write } from "./persist";
 import type { ManualProject, ProjectOverrides } from "./projects";
 
 export const SIDEBAR_W = { min: 220, max: 560, def: 288 };
 const clamp = (n: number) => clampTo(Number.isFinite(n) ? Math.round(n) : n, SIDEBAR_W.min, SIDEBAR_W.max, SIDEBAR_W.def);
+
+/** The stored width, or null when the user never set one (then `--sidebar-w` from `:root`, which a theme may set, decides). */
+export function storedWidth(raw: unknown): number | null {
+  return typeof raw === "number" && Number.isFinite(raw) ? clamp(raw) : null;
+}
+
+function rootSidebarWidth(): string | undefined {
+  if (typeof document === "undefined" || typeof getComputedStyle !== "function") return undefined;
+  return getComputedStyle(document.documentElement).getPropertyValue("--sidebar-w");
+}
+
+/** The width `--sidebar-w` gives the page now (an extension theme's value or app.css), in px and within SIDEBAR_W like the
+ * CSS that draws it (App.svelte, Sidebar.svelte); the default when unreadable. */
+export function themeWidth(value: string | undefined = rootSidebarWidth()): number {
+  const px = /^\s*(\d+(?:\.\d+)?)px\s*$/.exec(value ?? "");
+  return px ? clamp(Number(px[1])) : SIDEBAR_W.def;
+}
 
 /** Put `key` before/after `target` within `visible` (the entries as listed now). Null when nothing changes. */
 export function reorder(visible: string[], key: string, target: string, after: boolean): string[] | null {
@@ -57,7 +74,8 @@ export class SidebarState {
   /** The drawer on a narrow screen. */
   open = $state(false);
   collapsed = $state(read<boolean>(K.sidebar, false));
-  width = $state(clamp(read<number>(K.sidebarW, SIDEBAR_W.def)));
+  /** The width the user dragged to, or null: follow `--sidebar-w` (app.css, or an extension theme). See `shownWidth`. */
+  width = $state<number | null>(storedWidth(read<unknown>(K.sidebarW, null)));
   /** Folded servers, projects and split tabs. Folders are kept apart (`openDirs`): they start folded instead. */
   folded = $state<string[]>(withoutDirKeys(read<string[]>(K.folded, [])));
   /**
@@ -105,10 +123,21 @@ export class SidebarState {
   /** Folder each group is listed under, per server: fixed when first seen so adding or closing panes cannot move the group. */
   groupDir = $state<Record<string, Record<string, string>>>(read<Record<string, Record<string, string>>>(K.groupDir, {}));
 
+  /** The width on screen in px: the user's own, else the theme's. */
+  shownWidth(): number {
+    return this.width ?? themeWidth();
+  }
+
   /** `save` false while dragging the edge: persist once, at the end. */
   setWidth(px: number, save = true) {
     this.width = clamp(px);
     if (save) write(K.sidebarW, this.width);
+  }
+
+  /** Back to the theme's width (double click on the edge): the stored width is forgotten. */
+  resetWidth() {
+    this.width = null;
+    remove(K.sidebarW);
   }
 
   toggleCollapsed() {

@@ -530,7 +530,7 @@
 	}
 	@media (min-width: 861px) {
 		.side {
-			width: var(--sidebar-w); /* the wrapper animates its width; the content must not reflow */
+			width: clamp(220px, var(--sidebar-w), 560px); /* the wrapper animates its width; the content must not reflow. SIDEBAR_W, like App.svelte */
 		}
 	}
 	.list {

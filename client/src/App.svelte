@@ -281,7 +281,7 @@
 	let gripFrom = { x: 0, w: 0 };
 	function gripDown(e: PointerEvent) {
 		(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-		gripFrom = { x: e.clientX, w: app.sidebar.width };
+		gripFrom = { x: e.clientX, w: app.sidebar.shownWidth() };
 		resizing = true;
 		document.body.style.userSelect = "none";
 	}
@@ -293,13 +293,13 @@
 		if (!resizing) return;
 		resizing = false;
 		document.body.style.userSelect = "";
-		app.sidebar.setWidth(app.sidebar.width); // persist once, at the end of the drag
+		app.sidebar.setWidth(app.sidebar.shownWidth()); // persist once, at the end of the drag
 	}
 	function gripKey(e: KeyboardEvent) {
 		const d = e.key === "ArrowLeft" ? -16 : e.key === "ArrowRight" ? 16 : 0;
 		if (!d) return;
 		e.preventDefault();
-		app.sidebar.setWidth(app.sidebar.width + d * (e.shiftKey ? 4 : 1));
+		app.sidebar.setWidth(app.sidebar.shownWidth() + d * (e.shiftKey ? 4 : 1));
 	}
 
 	// Phone drawer: a session carried out of it and let go on the dimmed page joins what is being viewed (its group, or a new one).
@@ -335,6 +335,8 @@
 	let locked = false; // decided: this gesture is a horizontal drag of the drawer
 	let swipe: number | null = $state(null); // drawer's visible width in px while dragging
 	let drawerW = $state(320);
+	/** The sidebar's drawn width: the user's, or the theme's `--sidebar-w` (which can change while the app runs). */
+	let sideW = $state(0);
 	// A swipe that starts on these keeps its own meaning (typing, selecting, scrolling sideways, dragging, panning a canvas
 	// that marks itself `data-own-swipe`, such as the graph view). The 24px screen edge still opens the drawer.
 	const NO_SWIPE = "input, textarea, select, [contenteditable], [role=separator], [role=slider], [draggable=true], .grip, [data-own-swipe]";
@@ -455,7 +457,7 @@
 	<div class="app" data-part="app">
 		<!-- A closed drawer is only slid off screen: `inert` keeps Tab and screen readers out of it too (they walked 14 hidden
 		     controls before reaching the page). Not while a swipe is pulling it in, so it answers the moment it shows. -->
-		<div class="side" inert={viewport.narrow && !app.sidebar.open && swipe === null} bind:this={sideEl} class:dragging={swipe !== null} style:translate={swipe !== null ? `${swipe - drawerW}px 0` : undefined} class:open={app.sidebar.open} class:collapsed={app.sidebar.collapsed} class:resizing style:--sidebar-w="{app.sidebar.width}px">
+		<div class="side" inert={viewport.narrow && !app.sidebar.open && swipe === null} bind:this={sideEl} bind:offsetWidth={sideW} class:dragging={swipe !== null} style:translate={swipe !== null ? `${swipe - drawerW}px 0` : undefined} class:open={app.sidebar.open} class:collapsed={app.sidebar.collapsed} class:resizing style:--sidebar-w={app.sidebar.width === null ? undefined : `${app.sidebar.width}px`}>
 			<div class="full"><Sidebar /></div>
 			<div class="rail-slot"><Rail /></div>
 			{#if !app.sidebar.collapsed}
@@ -468,14 +470,14 @@
 					aria-label={t("사이드바 너비 조절")}
 					aria-valuemin={SIDEBAR_W.min}
 					aria-valuemax={SIDEBAR_W.max}
-					aria-valuenow={app.sidebar.width}
+					aria-valuenow={app.sidebar.width ?? (sideW || app.sidebar.shownWidth())}
 					tabindex="0"
 					title={t("끌어서 너비 조절 · 더블 클릭으로 원래 크기")}
 					onpointerdown={gripDown}
 					onpointermove={gripMove}
 					onpointerup={gripUp}
 					onpointercancel={gripUp}
-					ondblclick={() => app.sidebar.setWidth(SIDEBAR_W.def)}
+					ondblclick={() => app.sidebar.resetWidth()}
 					onkeydown={gripKey}
 				></div>
 			{/if}
@@ -626,7 +628,7 @@
 	}
 	.side {
 		flex: none;
-		width: var(--sidebar-w);
+		width: clamp(220px, var(--sidebar-w), 560px); /* SIDEBAR_W: a theme's --sidebar-w (200-480) stays in the range the grip allows */
 		height: 100%;
 	}
 	main {

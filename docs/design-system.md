@@ -152,6 +152,9 @@ When you add an icon or a button to a sidebar row: pick the column it belongs to
 ## 4. Other tokens (already in `app.css`)
 
 - Radius: `--radius-xs` 4, `--radius-sm` 8 (rows), `--radius-control` 10, `--radius` 12 (card), `--radius-panel` 16, `--radius-pill`.
+  Corners come from these tokens only (an extension theme sets them): a size off the scale is a `calc()` of one (the composer box
+  `calc(var(--radius-panel) * 1.375)` = 22, so 0 stays square, a card's inner header `var(--radius) - 1px`), a pill on a fixed box `min(var(--radius-pill), half its height)`.
+  `scripts/ui-lint.py` flags a literal px radius above 3.
   Containers step up (10 → 12 → 16) so nested corners stay concentric.
 - Type: `--fs-2xs` 11 … `--fs-2xl` 20. Inputs are at least `--fs-lg` 16 on iOS (smaller zooms the page).
 - Dialog widths: `--modal-w-s/m/l/xl` = 420 / 480 / 560 / 720, with `--modal-gutter` 24 to the screen edge.

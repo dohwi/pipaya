@@ -51,7 +51,7 @@
 <style>
 	.qr {
 		position: relative;
-		border-radius: 14px;
+		border-radius: 14px; /* fixed, not a theme token: a rounder corner would cut into the 2-module quiet zone a scanner needs */
 		overflow: hidden;
 		background: #fff;
 		/* a scanner needs a light background and dark modules whatever the theme is */

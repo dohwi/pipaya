@@ -77,7 +77,7 @@
 	.header .add {
 		width: 28px;
 		height: 40px;
-		border-radius: 14px; /* a pill, 28 x 40: a circle would leave the 40px height unrounded */
+		border-radius: min(var(--radius-pill), 14px); /* a pill, 28 x 40: a circle would leave the 40px height unrounded; a theme's --radius-pill squares it */
 	}
 	.header .add :global(svg) {
 		width: 19px;

@@ -85,8 +85,8 @@
 	@media (min-width: 761px) { .back { display: none; } }
 	@media (max-width: 760px) {
 		.page { gap: 12px; }
-		.back { padding: 4px 12px 4px 4px; border: 1px solid var(--border); border-radius: 999px; background: var(--bg-elev); }
-		.line { padding: 12px; border: 1px solid var(--border); border-radius: var(--radius-lg, 14px); background: var(--bg-elev); }
+		.back { padding: 4px 12px 4px 4px; border: 1px solid var(--border); border-radius: var(--radius-pill); background: var(--bg-elev); }
+		.line { padding: 12px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg-elev); }
 	}
 	.back:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 	.chev { flex: none; display: inline-flex; color: var(--text-faint); transition: transform var(--motion-fast) var(--ease-exit); }

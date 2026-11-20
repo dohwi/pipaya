@@ -339,7 +339,7 @@
 		max-width: min(96vw, 1800px);
 		max-height: calc(var(--dvh) * 0.88);
 		object-fit: contain;
-		border-radius: 6px;
+		border-radius: var(--radius-sm);
 		box-shadow: 0 20px 80px rgba(0, 0, 0, 0.55);
 		user-select: none;
 		-webkit-user-drag: none;
@@ -418,7 +418,7 @@
 		font-size: var(--fs-md, 14px);
 		color: #fff;
 		background: rgba(20, 20, 20, 0.88);
-		border-radius: 18px;
+		border-radius: min(var(--radius-pill), 18px); /* a one-line note: a pill (18 = half its 36px height) */
 		line-height: 1.35;
 		box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5);
 		pointer-events: none;

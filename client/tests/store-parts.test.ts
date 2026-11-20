@@ -20,6 +20,8 @@ let Feedback: typeof FeedbackModule.Feedback;
 let NOTICE_MAX: number;
 let announces: typeof FeedbackModule.announces;
 let reorder: typeof SidebarModule.reorder;
+let storedWidth: typeof SidebarModule.storedWidth;
+let themeWidth: typeof SidebarModule.themeWidth;
 let SidebarState: typeof SidebarModule.SidebarState;
 let ServerPrefs: typeof ServerPrefsModule.ServerPrefs;
 let ExtensionRequests: typeof ExtensionRequestsModule.ExtensionRequests;
@@ -50,7 +52,7 @@ beforeAll(async () => {
 	({ Feedback, NOTICE_MAX, announces } = await loadRunes("feedback"));
 	// sidebar.svelte.ts reads localStorage at construction only; reorder is a pure function
 	(globalThis as any).localStorage ??= { getItem: () => null, setItem: () => {} };
-	({ reorder, SidebarState } = await loadRunes("sidebar"));
+	({ reorder, SidebarState, storedWidth, themeWidth } = await loadRunes("sidebar"));
 	({ ServerPrefs } = await loadRunes("server-prefs"));
 	({ ExtensionRequests } = await loadRunes("extension-requests"));
 	// the extension host and notifications modules it imports read session storage when they load
@@ -70,6 +72,42 @@ describe("sidebar reorder", () => {
 	test("no change when dropped on itself or on something not listed", () => {
 		expect(reorder(["a", "b"], "a", "a", true)).toBeNull();
 		expect(reorder(["a", "b"], "a", "z", true)).toBeNull();
+	});
+});
+
+describe("sidebar width", () => {
+	test("no stored width means none: the theme's --sidebar-w decides", () => {
+		expect(storedWidth(null)).toBeNull();
+		expect(storedWidth("300")).toBeNull();
+		expect(storedWidth(Number.NaN)).toBeNull();
+		expect(storedWidth(300)).toBe(300);
+		expect(storedWidth(100)).toBe(220);
+		expect(storedWidth(900)).toBe(560);
+	});
+	test("the theme's width is read in px and kept within the grip's range", () => {
+		expect(themeWidth(" 340px")).toBe(340);
+		expect(themeWidth("200px")).toBe(220);
+		expect(themeWidth("")).toBe(288);
+		expect(themeWidth("20rem")).toBe(288);
+	});
+	test("a fresh sidebar follows the theme until the user drags, and a reset forgets the drag", () => {
+		const saved: Record<string, string> = {};
+		const prev = (globalThis as any).localStorage;
+		(globalThis as any).localStorage = { getItem: (k: string) => saved[k] ?? null, setItem: (k: string, v: string) => { saved[k] = v; }, removeItem: (k: string) => { delete saved[k]; } };
+		try {
+			const sb = new SidebarState();
+			expect(sb.width).toBeNull();
+			expect(sb.shownWidth()).toBe(288);
+			sb.setWidth(320);
+			expect(sb.width).toBe(320);
+			expect(saved["pipaya.sidebar.w"]).toBe("320");
+			expect(new SidebarState().width).toBe(320);
+			sb.resetWidth();
+			expect(sb.width).toBeNull();
+			expect(saved["pipaya.sidebar.w"]).toBeUndefined();
+		} finally {
+			(globalThis as any).localStorage = prev;
+		}
 	});
 });
 

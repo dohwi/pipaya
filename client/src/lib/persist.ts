@@ -2,7 +2,7 @@
  * Local persistence for the app's own state: every key it keeps in localStorage, and the read/write pair that also
  * mirrors writes to durable storage (so a WebView that clears localStorage gets them back; see durable-storage.ts).
  */
-import { setDurableSetting } from "./durable-storage";
+import { removeDurableSetting, setDurableSetting } from "./durable-storage";
 
 export const K = {
   servers: "pipaya.servers",
@@ -46,6 +46,16 @@ export function read<T>(key: string, fallback: T): T {
     return raw ? (JSON.parse(raw) as T) : fallback;
   } catch {
     return fallback;
+  }
+}
+
+/** Forget a value here and in durable storage, so the next read gets the fallback. */
+export function remove(key: string) {
+  try {
+    localStorage.removeItem(key);
+    void removeDurableSetting(key);
+  } catch {
+    /* storage unavailable */
   }
 }
 
