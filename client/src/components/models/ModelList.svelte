@@ -129,6 +129,9 @@
 		min-height: 46px;
 		text-align: left;
 	}
+	.mopen:focus-visible {
+		outline-offset: -2px; /* the first and last row meet the clipped list border */
+	}
 	.mitem {
 		display: flex;
 		align-items: center;

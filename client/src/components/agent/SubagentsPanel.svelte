@@ -163,7 +163,8 @@
 				<input class="field" bind:value={form.description} maxlength="500" autocomplete="off" />
 			</FormField>
 			<FormField label={t("지침")}>
-				<textarea class="field mono area" bind:value={form.prompt} rows="8" placeholder={t("이 서브에이전트가 할 일, 지킬 규칙, 답하는 형식")} spellcheck="false"></textarea>
+				<!-- Chromium reveals the caret, not the whole eight-line field, on Tab. Keep its lower edge and halo in view. -->
+				<textarea class="field mono area" onfocus={(e) => e.currentTarget.scrollIntoView({ block: "nearest", inline: "nearest" })} bind:value={form.prompt} rows="8" placeholder={t("이 서브에이전트가 할 일, 지킬 규칙, 답하는 형식")} spellcheck="false"></textarea>
 			</FormField>
 			<FormField label={t("모델")} group hint={t("비워 두면 호출한 대화의 모델로 실행합니다")}>
 				<ModelField

@@ -410,6 +410,9 @@
 	.dseg:global([data-more="start end"]) {
 		mask-image: linear-gradient(to right, transparent, #000 24px, #000 calc(100% - 24px), transparent);
 	}
+	.dseg button:focus-visible {
+		outline-offset: -2px; /* keep the ring inside the visible strength at either scroll edge */
+	}
 	.dseg button[data-level]:not(.on)::before {
 		content: "";
 		display: inline-block;
@@ -451,6 +454,9 @@
 	}
 	.src.bad {
 		color: var(--danger);
+	}
+	.grid2 .field:focus {
+		box-shadow: inset 0 0 0 3px var(--accent-soft); /* the model limits can land flush with the scrolling form footer */
 	}
 	.grid2 {
 		display: grid;

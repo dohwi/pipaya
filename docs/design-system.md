@@ -298,11 +298,11 @@ line's `⋯`) draws its ring inside (`outline-offset: -2px`); a grid of cards ge
 (the tab overview's `.body` pads 8px on top for the current card's 2px frame + 4px offset). A strip that scrolls brings a
 focused item into view itself (`TabBar` `reveal`): a chip inside a nested scroll box is not scrolled to by the browser.
 `--seed` adds the conversations, a terminal and a split tab the screens need (`--echo` also runs a tool call, for the work box
-and the answer's foot); `--only` picks screens, `--theme light` spot-checks the light theme. It covers 25 screens: home, a
-conversation with and without tool calls, the tab overview, all 12 settings panes, the model picker, the conversation list, the
-folder picker, the context popover, the palette (Ctrl+K), find in chat (Ctrl+F), scheduled tasks, the graph view and the "+"
-menu. Result at the time of writing: 0 cut rings over 25 screens x 3 sizes (16 before #173), and 0 with every work box and tool
-card opened in place.
+and the answer's foot); `--only` picks screens, `--theme light` spot-checks the light theme. Each screen starts with fresh browser storage and must reach an identifiable element on the
+intended surface. A missing screen, an exhausted Tab budget or no measured rings fails the run, not just a clipped ring.
+Coverage includes all settings panes and search, nested server/connection/model forms, icon and catalog grids, unsaved
+changes, MCP/role/schedule forms, extension settings and marketplace, graph details and chat preview, and context source rows.
+Use `--seed --echo` for the tool transcript as well; `--seed` alone does not create it.
 
 ### Alignment lint (finds the misses by itself)
 
