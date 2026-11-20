@@ -79,8 +79,8 @@ export class SidebarState {
   /** Folded servers, projects and split tabs. Folders are kept apart (`openDirs`): they start folded instead. */
   folded = $state<string[]>(withoutDirKeys(read<string[]>(K.folded, [])));
   /**
-   * Folders opened by hand to list their tabs, by `dirKey`. Other folders start folded, so the sidebar stays a list of
-   * places; only the folder of what is open shows its tabs on its own (`autoDir`).
+   * Folders opened to list their tabs, by `dirKey`. Folders start folded: the tab bar lists the open folder's tabs, so the
+   * sidebar stays a list of places and a folder shows its tabs only when the user opens it.
    */
   openDirs = $state<string[]>(read<string[]>(K.openDirs, []));
   dirOrder = $state<Record<string, string[]>>(read<Record<string, string[]>>(K.dirOrder, {}));
@@ -150,63 +150,13 @@ export class SidebarState {
     write(K.folded, this.folded);
   }
 
-  /**
-   * The folder of what is open now (`dirKey`, null on the graph or with no server): it shows its tabs without being in
-   * `openDirs`, and folds again once focus moves to another folder. Set by the sidebar (`setAutoDir`).
-   */
-  autoDir = $state<string | null>(null);
-  /** The auto-opened folder the user folded by hand: it stays folded until focus leaves it. Not kept. */
-  private shut = $state<string | null>(null);
-  /**
-   * Folders that were auto-opened while the pointer was on the list: they stay open until it leaves, so the row just
-   * clicked does not slide away under the cursor when a folder above it folds.
-   */
-  linger = $state<string[]>([]);
-  private holding = false;
-
   isDirFolded(key: string): boolean {
-    if (this.openDirs.includes(key)) return false;
-    if (key === this.autoDir) return this.shut === key;
-    return !this.linger.includes(key);
+    return !this.openDirs.includes(key);
   }
 
-  /** Opening keeps the folder open (`openDirs`); folding also folds it while it is the auto-opened one. */
   toggleDir(key: string) {
-    if (this.isDirFolded(key)) {
-      this.openDirs = [...this.openDirs.filter((p) => p !== key), key];
-      if (this.shut === key) this.shut = null;
-    } else {
-      this.openDirs = this.openDirs.filter((p) => p !== key);
-      if (key === this.autoDir) this.shut = key;
-      if (this.linger.includes(key)) this.linger = this.linger.filter((p) => p !== key);
-    }
+    this.openDirs = this.openDirs.includes(key) ? this.openDirs.filter((p) => p !== key) : [...this.openDirs, key];
     write(K.openDirs, this.openDirs);
-  }
-
-  /** Focus moved to folder `key`: open it, and fold the one before unless the pointer is still on the list (`hold`). */
-  setAutoDir(key: string | null) {
-    if (key === this.autoDir) return;
-    const prev = this.autoDir;
-    const keep = this.holding && prev !== null && prev !== this.shut && !this.linger.includes(prev);
-    const linger = keep ? [...this.linger, prev] : this.holding ? this.linger : [];
-    this.linger = key === null ? linger : linger.filter((p) => p !== key);
-    this.autoDir = key;
-    this.shut = null;
-  }
-
-  /**
-   * Something new (a conversation, a terminal) was opened in folder `key`: a hand fold of the auto-opened folder no longer
-   * holds, so its new row shows. Focus stays in the folder, so `setAutoDir` alone would keep it folded. Folders the user
-   * never opened stay as they are: `setAutoDir` opens the folder focus moves to.
-   */
-  unshut(key: string) {
-    if (this.shut === key) this.shut = null;
-  }
-
-  /** The pointer is on the sidebar's list (true) or left it (false: the lingering folders fold now). */
-  hold(on: boolean) {
-    this.holding = on;
-    if (!on && this.linger.length) this.linger = [];
   }
 
   /**

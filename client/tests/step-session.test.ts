@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { stepWorkspaceTarget, type StepServer } from "../src/lib/step-session";
-import { dirKey } from "../src/lib/sidebar-model";
+import { stepRowTarget, stepWorkspaceTarget, type StepServer } from "../src/lib/step-session";
+import { dirKey, groupKey } from "../src/lib/sidebar-model";
 import type { DirBlock } from "../src/lib/nav";
 
 const tab = (id: string) => ({ kind: "session", id }) as never;
@@ -9,6 +9,41 @@ const grp = (id: string, ...members: string[]) => ({ kind: "group", id, members:
 
 const A: StepServer = { id: "A", dirs: [dir("/a", "a1", "a2"), dir("/b", "a3")] };
 const B: StepServer = { id: "B", dirs: [dir("/c", "b1", "b2")] };
+
+describe("stepRowTarget", () => {
+	const open = (...keys: string[]) => (server: string, path: string) => !keys.includes(dirKey(server, path));
+	const row = (servers: StepServer[], dirFolded: (s: string, p: string) => boolean, server: string | null, id: string | null, n: 1 | -1, folded: string[] = []) =>
+		stepRowTarget(servers, folded, dirFolded, { server, id }, n);
+	const all = open(dirKey("A", "/a"), dirKey("A", "/b"), dirKey("B", "/c"));
+	test("walks the tabs of open folders, crossing into the next server, and wraps", () => {
+		expect(row([A, B], all, "A", "a1", 1)).toEqual({ server: "A", id: "a2" });
+		expect(row([A, B], all, "A", "a2", 1)).toEqual({ server: "A", id: "a3" });
+		expect(row([A, B], all, "A", "a3", 1)).toEqual({ server: "B", id: "b1" });
+		expect(row([A, B], all, "B", "b2", 1)).toEqual({ server: "A", id: "a1" });
+		expect(row([A, B], all, "A", "a1", -1)).toEqual({ server: "B", id: "b2" });
+	});
+	test("a folded folder is one row: it opens its first tab and the walk goes on from it", () => {
+		const onlyB = open(dirKey("A", "/b"));
+		expect(row([A, B], onlyB, "A", "a3", -1)).toEqual({ server: "A", id: "a1" });
+		expect(row([A, B], onlyB, "A", "a2", 1)).toEqual({ server: "A", id: "a3" });
+		expect(row([A, B], onlyB, "A", "a3", 1)).toEqual({ server: "B", id: "b1" });
+		expect(row([A, B], onlyB, "B", "b2", 1)).toEqual({ server: "A", id: "a1" });
+	});
+	test("a folded split tab shows its first pane only; a folded server or project is passed by", () => {
+		const G: StepServer = { id: "A", dirs: [dir("/a", "x"), { path: "/g", tabs: [grp("g", "p", "q")] }, dir("/z", "y")] };
+		const none = () => false;
+		expect(row([G], none, "A", "x", 1)).toEqual({ server: "A", id: "p" });
+		expect(row([G], none, "A", "p", 1)).toEqual({ server: "A", id: "q" });
+		expect(row([G], none, "A", "p", 1, [groupKey("g")])).toEqual({ server: "A", id: "y" });
+		expect(row([A, B], all, "A", "a3", 1, ["B"])).toEqual({ server: "A", id: "a1" });
+		expect(row([{ ...A, foldedDirs: ["/b"] }, B], all, "A", "a2", 1)).toEqual({ server: "B", id: "b1" });
+	});
+	test("nothing open starts at an end; a single row has nowhere to go", () => {
+		expect(row([A, B], all, "A", null, 1)).toEqual({ server: "A", id: "a1" });
+		expect(row([A, B], all, "A", null, -1)).toEqual({ server: "B", id: "b2" });
+		expect(row([{ id: "A", dirs: [dir("/a", "only")] }], all, "A", "only", 1)).toBeNull();
+	});
+});
 
 describe("stepWorkspaceTarget", () => {
 	const ws = (servers: StepServer[], folded: string[], server: string | null, id: string | null, n: 1 | -1) =>

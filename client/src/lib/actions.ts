@@ -3,8 +3,8 @@ import { app } from "./store.svelte";
 import { isTauri } from "./tauri";
 import { findChat, runCommand } from "./commands";
 import { paneToward, panesOf, type Edge } from "./layout";
-import { connectionState, orderServers, unreachable } from "./sidebar-model";
-import { stepWorkspaceTarget } from "./step-session";
+import { connectionState, dirKey, orderServers, unreachable } from "./sidebar-model";
+import { stepRowTarget, stepWorkspaceTarget } from "./step-session";
 import { projectKey } from "./projects";
 import { needsLook, stepFrom, tabPanes } from "./nav";
 import { appTakesKey } from "./terminal";
@@ -95,6 +95,12 @@ function goTo(to: { server: string; id: string } | null) {
   if (!to) return;
   if (to.server !== app.serverId) app.openIn(to.server, { session: to.id });
   else if (to.id !== app.activeId) void app.openSession(to.id);
+}
+
+/** Previous / next row of the sidebar, across servers: a tab (a pane of a split tab), or a folded folder's first tab. */
+function stepRow(step: 1 | -1) {
+  const dirFolded = (server: string, path: string) => app.sidebar.isDirFolded(dirKey(server, path));
+  goTo(stepRowTarget(stepBands(), app.sidebar.folded, dirFolded, { server: app.serverId, id: app.activeId }, step));
 }
 
 /** Previous / next workspace (a folder row in the sidebar: a plain folder or a worktree in a project), across servers: opens its first tab. */
@@ -197,6 +203,8 @@ const RUN: Record<ActionId, () => void | Promise<void>> = {
   newChat: () => app.newChatInPane(),
   clearChat: () => app.clearChatInPane(),
   closeSession: () => app.closeActive(),
+  prevRow: () => stepRow(-1),
+  nextRow: () => stepRow(1),
   prevWorkspace: () => stepWorkspace(-1),
   nextWorkspace: () => stepWorkspace(1),
   prevTab: () => stepTab(-1),

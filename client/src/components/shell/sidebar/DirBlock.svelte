@@ -21,9 +21,8 @@
 	import TerminalRow from "./TerminalRow.svelte";
 
 	/**
-	 * One folder of a server: its header (fold, name, "+") and, once opened, its tabs. Folders start folded, so the sidebar
-	 * is a list of places; the folder of what is open lists its tabs on its own until focus moves on (`SidebarState.autoDir`),
-	 * and one opened by hand stays open. The chevron opens or folds the list; the name shows
+	 * One folder of a server: its header (fold, name, "+") and, once opened, its tabs. Folders start folded: the tab bar
+	 * lists the open folder's tabs, so the sidebar is a list of places. The chevron opens or folds the list; the name shows
 	 * the folder (its last used tab). Inside a project the folder is named by its branch. The header can be dragged to
 	 * reorder folders, and a split-tab pane dropped on it steps out of its group.
 	 */
