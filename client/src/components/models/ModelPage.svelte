@@ -361,14 +361,18 @@
 		background: transparent;
 		transition: background var(--motion-fast) var(--ease-std), opacity var(--motion-fast) var(--ease-std);
 	}
+	/* off: a plain grey chip; the level's colour shows only once it is on, so the off row reads as one quiet set
+	   instead of a scatter of faint coloured rings */
 	.cap.lv:not([aria-pressed="true"]) {
 		background: transparent;
 		border-style: dashed;
+		border-color: var(--border-strong);
 		color: var(--text-faint);
 		font-weight: 450;
 	}
 	.cap.lv:not([aria-pressed="true"]) .dot {
-		opacity: 0.55;
+		border-color: currentColor;
+		opacity: 0.6;
 	}
 	@media (hover: hover) {
 		.cap.lv:not([aria-pressed="true"]):hover {
@@ -395,8 +399,9 @@
 	.dseg::-webkit-scrollbar {
 		display: none;
 	}
+	/* equal columns while the row fits (basis 0), never narrower than the label (min-width auto) so a phone scrolls */
 	.dseg button {
-		flex: 1 0 auto;
+		flex: 1 0 0;
 		padding: 0 8px;
 		white-space: nowrap;
 		font-size: var(--fs-sm);
@@ -412,17 +417,6 @@
 	}
 	.dseg button:focus-visible {
 		outline-offset: -2px; /* keep the ring inside the visible strength at either scroll edge */
-	}
-	.dseg button[data-level]:not(.on)::before {
-		content: "";
-		display: inline-block;
-		width: 5px;
-		height: 5px;
-		margin-right: 8px; /* was 6 */
-		border-radius: 50%;
-		background: var(--lv);
-		opacity: 0.55;
-		vertical-align: 1px;
 	}
 	.dseg button.on {
 		background: var(--lv-soft, var(--bg-active));
