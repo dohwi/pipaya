@@ -6,12 +6,13 @@
 	import { tailKeepLast } from "../../lib/fit-text";
 
 	/** Pill above the composer showing the folder a new chat will work in; a press opens the folder picker. */
-	let { path, onclick }: { path: string; onclick: () => void } = $props();
+	/** `disabled`: offline or still connecting; the pill keeps its place (no jump on connect) but cannot open the picker. */
+	let { path, disabled = false, onclick }: { path: string; disabled?: boolean; onclick: () => void } = $props();
 	/** The home folder reads as `~`, like the sidebar, so the part that matters survives a narrow screen. */
 	const shown = $derived(tilde(path, app.workspace?.home));
 </script>
 
-<button class="where mono tap" {onclick} title={t("새 대화가 작업할 폴더 (눌러서 바꾸기)")} aria-label={t("작업 폴더: {path}", { path })}>
+<button class="where mono tap" {disabled} {onclick} title={t("새 대화가 작업할 폴더 (눌러서 바꾸기)")} aria-label={t("작업 폴더: {path}", { path })}>
 	<Icon name="folder" />
 	<span class="p" title={path} use:tailKeepLast={shown || t("서버 기본 폴더")}></span>
 	<span class="chg">{t("변경")}</span>
@@ -36,8 +37,11 @@
 			border-color var(--motion-fast) var(--ease-std),
 			color var(--motion-fast) var(--ease-std);
 	}
+	.where:disabled {
+		opacity: 0.6; /* same as the composer box while offline */
+	}
 	@media (hover: hover) {
-		.where:hover {
+		.where:hover:not(:disabled) {
 			color: var(--text);
 			border-color: var(--border-strong);
 		}
