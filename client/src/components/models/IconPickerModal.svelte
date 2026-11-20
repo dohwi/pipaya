@@ -119,6 +119,7 @@
 		white-space: nowrap;
 	}
 	.cell:focus-visible {
+		outline-offset: -2px; /* inside the cell, like the other picker rows: the grid fills its scroll box edge to edge */
 		background: var(--bg-hover);
 		color: var(--text);
 	}
