@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { bezier, cssMs, dialogFrame, easeEnter, easeExit, modalIn, modalQuickIn, ms, surfaceFrame } from "../src/lib/motion";
+import { bezier, clipSlide, cssMs, dialogFrame, easeEnter, easeExit, modalIn, modalQuickIn, ms, surfaceFrame } from "../src/lib/motion";
 import { rippleSize } from "../src/lib/ripple";
 
 describe("bezier", () => {
@@ -282,6 +282,22 @@ describe("model icon image cache", () => {
 		} finally {
 			globalThis.fetch = realFetch;
 			URL.createObjectURL = realCreate;
+		}
+	});
+});
+
+describe("clipSlide", () => {
+	test("clips with overflow: clip so the first row's margin keeps collapsing while it slides", () => {
+		const style = { display: "block", opacity: "1", height: "96px", paddingTop: "0px", paddingBottom: "0px", marginTop: "0px", marginBottom: "0px", borderTopWidth: "0px", borderBottomWidth: "0px" };
+		const real = globalThis.getComputedStyle;
+		globalThis.getComputedStyle = (() => style) as unknown as typeof getComputedStyle;
+		try {
+			const css = clipSlide({} as Element, { duration: 100, easing: (t) => t }).css!(0.5, 0.5);
+			expect(css).toContain("overflow: clip;");
+			expect(css.indexOf("overflow: hidden;")).toBeLessThan(css.indexOf("overflow: clip;")); // fallback first
+			expect(css).toContain("height: 48px");
+		} finally {
+			globalThis.getComputedStyle = real;
 		}
 	});
 });
