@@ -17,7 +17,7 @@ import { contextTokens, pickCut, SUMMARY_MAX_TOKENS, SUMMARY_SYSTEM, summaryMess
 import { type DelegateCall, type SessionPatch, type SessionRecord, type SessionStore, type ThinkingLevel } from "./store.ts";
 import type { McpManager } from "./mcp.ts";
 import { buildTools, DEFAULT_TOOLS, DELEGATE_TOOL, isInside, PEER_TOOLS, TOOL_DEFS, type ToolContext, type ToolDef } from "./tools.ts";
-import { nextActiveDir, touchedDir } from "./work-tree.ts";
+import { movedNote, nextActiveDir, touchedDir, workDirOf } from "./work-tree.ts";
 import { SCHEDULE_TOOL } from "./schedule-tool.ts";
 import type { Scheduler } from "./scheduler.ts";
 import { sameName } from "./member-names.ts";
@@ -345,7 +345,7 @@ export class SessionManager {
 			skills: skills.map(({ name, description, path, scope }) => ({ name, description, path, scope })),
 			state: snapshot ? "applied" : "preview",
 			capturedAt: snapshot?.capturedAt ?? null,
-			toolSpecs: this.toolSpecs(base.tools, record.cwd),
+			toolSpecs: this.toolSpecs(base.tools, workDirOf(record)),
 			systemPrompts: this.systemPromptList(record.provider, record.model, auth.anthropicOAuth),
 			readFiles: aggregateReadFiles(record.cwd, this.store.toolResults(id, "read")),
 		};
@@ -671,7 +671,7 @@ export class SessionManager {
 		}
 		if (input.images?.length) content.push(...input.images);
 		if (input.files?.length) {
-			const saved = await saveUploads(record.cwd, input.files);
+			const saved = await saveUploads(workDirOf(record), input.files);
 			content.push({ type: "text", text: filesNote(saved) });
 		}
 		const message: AgentMessage = { role: "user", content, timestamp: Date.now() };
@@ -1161,6 +1161,8 @@ export class SessionManager {
 	}
 
 	private ensureLive(record: SessionRecord): Live {
+		// a worktree removed since the last run sends the session home before its tools are built
+		if (record.activeDir && !this.live.get(record.id)?.running && this.followWorkTree(record.id, null)) record = this.store.get(record.id) ?? record;
 		const existing = this.live.get(record.id);
 		if (existing) {
 			// Refresh idle sessions after provider endpoint/model configuration changes.
@@ -1170,7 +1172,10 @@ export class SessionManager {
 				existing.agent.state.model = model;
 				this.syncSkills(record.id, existing);
 				const snap = this.store.context(record.id);
-				if (snap) existing.agent.state.tools = this.sessionTools(record.id, snap.tools, snap.cwd, existing.readRoots);
+				if (snap) {
+					existing.toolsDir = workDirOf(record);
+					existing.agent.state.tools = this.sessionTools(record.id, snap.tools, existing.toolsDir, existing.readRoots);
+				}
 			}
 			return existing;
 		}
@@ -1190,7 +1195,7 @@ export class SessionManager {
 				systemPrompt: buildSystemPrompt(snapshot.systemPrompt, instructions, skills),
 				model,
 				thinkingLevel: record.thinkingLevel,
-				tools: this.sessionTools(record.id, snapshot.tools, snapshot.cwd, readRoots),
+				tools: this.sessionTools(record.id, snapshot.tools, workDirOf(record), readRoots),
 				messages: history,
 			},
 			// A gateway that drops for a moment (502 …) is waited out instead of ending the run
@@ -1206,9 +1211,13 @@ export class SessionManager {
 			}),
 			sessionId: record.id,
 			transformContext: async (messages) => this.transformContext(record.id, messages),
-			prepareNextTurnWithContext: async (turn) => this.compactMidRun(record.id, turn.context.tools),
+			prepareNextTurnWithContext: async (turn) => {
+				const out = await this.compactMidRun(record.id, turn.context.tools);
+				const tools = this.retargetTools(record.id);
+				return tools ? { ...out, context: { messages: out?.context.messages ?? turn.context.messages, tools } } : out;
+			},
 			beforeToolCall: async (c) => this.extensionToolCall(record.id, c),
-			afterToolCall: async (c) => this.extensionToolResult(record.id, c),
+			afterToolCall: async (c) => this.afterSessionTool(record.id, c),
 		});
 
 		const live: Live = {
@@ -1221,6 +1230,7 @@ export class SessionManager {
 			unsubscribe: () => {},
 			promptKey: promptKey(skills, instructions),
 			readRoots,
+			toolsDir: workDirOf(record),
 			turns: 0,
 			recentCalls: [],
 		};
@@ -1342,12 +1352,12 @@ export class SessionManager {
 		const defs2 = this.toolDefs();
 		const off = this.disabledTools();
 		const names = def.tools.filter((n) => defs2[n] && !off.includes(n));
-		const tools = buildTools(names, rec.cwd, this.live.get(sessionId)?.readRoots ?? [], { sessionId, canSeeImages: () => model.input.includes("image") }, defs2);
+		const tools = buildTools(names, workDirOf(rec), this.live.get(sessionId)?.readRoots ?? [], { sessionId, canSeeImages: () => model.input.includes("image") }, defs2);
 		const release = this.delegates.acquire(sessionId, { calls: pol.maxCalls, running: pol.maxConcurrent });
 		const cap = Math.min(def.maxTurns, pol.maxTurns);
 		let turns = 0, limited = false;
 		const agent = new Agent({
-			initialState: { systemPrompt: subagentSystem(def, rec.cwd), model, thinkingLevel: this.subagentThinking(rec, def.thinking, provider, modelId), tools, messages: [] },
+			initialState: { systemPrompt: subagentSystem(def, workDirOf(rec)), model, thinkingLevel: this.subagentThinking(rec, def.thinking, provider, modelId), tools, messages: [] },
 			streamFn: withUpstreamRetry((m, ctx, opts) => this.registry.models.streamSimple(m, ctx, opts), DEFAULT_UPSTREAM_RETRY),
 			beforeToolCall: async (c) => this.extensionToolCall(sessionId, c),
 			afterToolCall: async (c) => this.extensionToolResult(sessionId, c),
@@ -1450,18 +1460,6 @@ export class SessionManager {
 			case "tool_execution_update":
 				pub("tool_execution_update", { toolCallId: event.toolCallId, toolName: event.toolName, partialResult: event.partialResult }, true);
 				return;
-			case "tool_execution_start":
-				pub(event.type, event);
-				if (event.toolName === "bash" || event.toolName === "edit" || event.toolName === "write") (live.toolArgs ??= new Map()).set(event.toolCallId, { tool: event.toolName, args: event.args });
-				return;
-			case "tool_execution_end": {
-				pub(event.type, event);
-				const call = live.toolArgs?.get(event.toolCallId);
-				live.toolArgs?.delete(event.toolCallId);
-				// a failed command may still have moved (`cd ../x && false`), but most failures never got there
-				if (call && !event.isError) this.followWorkTree(sessionId, call.tool, call.args);
-				return;
-			}
 			case "message_end": {
 				const seq = live.nextSeq++;
 				// Remember the reasoning strength this reply was written with (the session's setting can change later).
@@ -1488,20 +1486,56 @@ export class SessionManager {
 
 	/**
 	 * Moves the session's `activeDir` to the git worktree a finished tool call shows its agent working in (see
-	 * work-tree.ts), and tells the clients so the sidebar lists it there. Reading `.git` can fail on odd layouts: then
-	 * nothing changes.
+	 * work-tree.ts) and tells the clients, so the sidebar lists it there. Returns the line that tells the agent, or null
+	 * when nothing moved. Reading `.git` can fail on odd layouts: then nothing changes.
 	 */
-	private followWorkTree(sessionId: string, tool: string, args: unknown): void {
+	private followWorkTree(sessionId: string, tool: string | null, args?: unknown): string | null {
 		const rec = this.store.get(sessionId);
-		if (!rec) return;
+		if (!rec) return null;
 		const current = rec.activeDir ?? null;
+		if (!current && !tool) return null;
 		let next: string | null;
 		try {
-			next = nextActiveDir(rec.cwd, current, touchedDir(tool, args, rec.cwd, this.home), (dir) => !this.cfg.restrictWorkspace || isInside(this.cfg.workspaceRoot, dir));
-		} catch { return; }
-		if (next === current) return;
+			const touched = tool ? touchedDir(tool, args, workDirOf(rec), this.home) : null;
+			next = nextActiveDir(rec.cwd, current, touched, (dir) => !this.cfg.restrictWorkspace || isInside(this.cfg.workspaceRoot, dir));
+		} catch { return null; }
+		if (next === current) return null;
 		const updated = this.store.setActiveDir(sessionId, next);
 		if (updated) this.bus.publish(sessionId, "session_updated", updated);
+		return movedNote(rec.cwd, current ?? rec.cwd, next);
+	}
+
+	/**
+	 * The session agent's `afterToolCall`: extension `tool_result` hooks, then the working-folder check. A call that moved
+	 * the agent into another worktree (or back) gets a line saying so, so it knows where its next calls start.
+	 */
+	private async afterSessionTool(sessionId: string, c: Parameters<SessionManager["extensionToolResult"]>[1]) {
+		const out = await this.extensionToolResult(sessionId, c);
+		// a failed command may still have moved (`cd ../x && false`), but most failures never got there; it can only tell
+		// that the worktree it worked in is gone (removed under it), which sends the session home
+		const failed = out?.isError ?? c.isError;
+		const note = this.followWorkTree(sessionId, failed ? null : c.toolCall.name, c.args);
+		if (!note) return out;
+		const content = (out?.content ?? c.result.content) as { type: string }[];
+		return { ...out, content: [...(Array.isArray(content) ? content : []), { type: "text" as const, text: note }] };
+	}
+
+	/**
+	 * Rebuilds the session's tools for the folder it works in now when that changed (a run keeps the tools it started
+	 * with until its next turn). Returns the new tools, or undefined when they still fit.
+	 */
+	private retargetTools(sessionId: string): AgentTool<any>[] | undefined {
+		const live = this.live.get(sessionId);
+		this.followWorkTree(sessionId, null); // a worktree removed meanwhile sends the session home
+		const rec = this.store.get(sessionId);
+		const snap = this.store.context(sessionId);
+		if (!live || !rec || !snap) return undefined;
+		const dir = workDirOf(rec);
+		if (live.toolsDir === dir) return undefined;
+		const tools = this.sessionTools(sessionId, snap.tools, dir, live.readRoots);
+		live.agent.state.tools = tools;
+		live.toolsDir = dir;
+		return tools;
 	}
 
 	private forwardToExtensions(sessionId: string, event: AgentEvent): void {

@@ -8,6 +8,7 @@ import type { ThinkingLevel } from "./store.ts";
 export const DEFAULT_SYSTEM_PROMPT = `You are a capable coding assistant working inside a sandboxed working directory.
 Use the available tools to inspect and change files and run commands. Prefer small, verifiable steps.
 Be concise. Paths are relative to the working directory.
+Work on code in one place: when you make a git worktree for a task (\`git worktree add ../x\`), this session's working directory moves there and later calls start there; you are told when it changes. Keep that task's edits in its worktree.
 During long work, between tool calls, give a one-line progress note in plain words: what is done, rough counts, what is next (e.g. "Read 30 of 128 articles; the download is half done, next I cut the clip."). Do not narrate every call.
 Files the user attaches are saved in the working directory and listed in the message. To hand a file back (a report, image, export), write it into the working directory and mention it as a markdown link to its relative path, e.g. [report.pdf](out/report.pdf) or ![chart](out/chart.png); the user sees a preview.`;
 
@@ -92,8 +93,8 @@ export interface Live {
 	stopCause?: RunStopCause;
 	/** The run-limit message, set together with stopCause "limit". */
 	limitReason?: string;
-	/** bash / edit / write calls started and not finished yet, so their end can tell where the agent works (see work-tree.ts). */
-	toolArgs?: Map<string, { tool: string; args: unknown }>;
+	/** The folder the agent's tools were built for (`activeDir ?? cwd` then); they are rebuilt when it moves. */
+	toolsDir: string;
 	/** Set by `before_agent_start` extensions; applies to the current run only. */
 	runSystem?: { replace?: string; append?: string };
 }
