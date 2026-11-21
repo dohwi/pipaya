@@ -266,17 +266,7 @@
 		padding: 0;
 		font-size: var(--fs-2xs);
 	}
-	.seg button:not(.on):not(:disabled)::before {
-		content: "";
-		display: inline-block;
-		width: 5px;
-		height: 5px;
-		margin-right: 4px;
-		border-radius: 50%;
-		background: var(--lv);
-		opacity: 0.55;
-		vertical-align: 1px;
-	}
+	/* no coloured dot before the other strengths (the model page dropped it in #311): only the chosen one carries its colour */
 	.seg button.on {
 		background: var(--lv-soft);
 		color: var(--lv);
