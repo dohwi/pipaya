@@ -12,7 +12,7 @@
 	import type { ConnectionResult, CustomProvider } from "../../lib/types";
 
 	/**
-	 * One custom connection in the list: its name and address with a state chip (usable, key needed, no models), its
+	 * One custom connection in the list: its name and address with a state badge (usable, key needed, no models), its
 	 * models (each with a test button and the result), and its actions: add / delete the key, refresh the model list,
 	 * edit, delete. Doing things is the caller's (`on…`); what is running comes in as props.
 	 *
@@ -76,7 +76,7 @@
 			<span class="ptitle">{p.name}</span>
 			<span class="pid mono url">{p.baseUrl}</span>
 		</div>
-		{#if !p.models.some((m) => !m.disabled)}<span class="chip">{t("모델 없음")}</span>{:else if p.configured}<span class="chip ok">{t("사용 가능")}</span>{:else}<span class="chip warn">{t("키 필요")}</span>{/if}
+		{#if !p.models.some((m) => !m.disabled)}<Badge>{t("모델 없음")}</Badge>{:else if p.configured}<Badge tone="ok">{t("사용 가능")}</Badge>{:else}<Badge tone="warn">{t("키 필요")}</Badge>{/if}
 	</div>
 
 	<div class="models">

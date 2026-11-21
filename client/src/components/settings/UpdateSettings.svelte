@@ -6,7 +6,7 @@
 	import Switch from "../ui/Switch.svelte";
 	import SettingRow from "../ui/SettingRow.svelte";
 	import UpdateHeader from "../server/UpdateHeader.svelte";
-	import StatusChip from "../ui/StatusChip.svelte";
+	import Badge from "../ui/Badge.svelte";
 	import { collapseIn, collapseOut } from "../../lib/motion";
 
 	const android = notificationPlatform() === "android";
@@ -30,9 +30,9 @@
 				{#if updater.current}<span class="ver">{updater.current}</span>{/if}
 			</div>
 			{#if appNew}
-				<StatusChip tone="ok">{t("새 버전 {version}", { version: updater.version })}</StatusChip>
+				<Badge tone="ok">{t("새 버전 {version}", { version: updater.version })}</Badge>
 			{:else if updater.phase === "idle" && updater.current}
-				<StatusChip tone="neutral">{t("최신 버전입니다")}</StatusChip>
+				<Badge>{t("최신 버전입니다")}</Badge>
 			{/if}
 			{#if updater.phase === "available"}
 				<Button size="sm" variant="update" onclick={() => updater.install()}>{t("업데이트")}</Button>

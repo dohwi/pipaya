@@ -9,7 +9,7 @@
 	import DialogBody from "../ui/DialogBody.svelte";
 	import RemoveExtensionConfirm from "./RemoveExtensionConfirm.svelte";
 	import PairInstallConfirm from "./PairInstallConfirm.svelte";
-	import StatusChip from "../ui/StatusChip.svelte";
+	import Badge from "../ui/Badge.svelte";
 	import VersionBump from "./VersionBump.svelte";
 	import { DEFAULT_MARKETPLACE_URL, compareVersions, fetchCatalog, fetchPackage, fetchStars, formatStars, localizedDescription, repoLoc, type MarketCatalog, type MarketEntry } from "../../lib/extensions/marketplace";
 	import type { ExtensionPackage } from "../../lib/extensions/schema";
@@ -197,7 +197,7 @@
 						{#if pairOf(entry)}{@const other = pairOf(entry)}
 							<span class="pair" role="img" aria-label={t("‘{name}’ 확장과 함께 작동합니다.", { name: other?.name ?? "" })} title={t("‘{name}’ 확장과 함께 작동합니다.", { name: other?.name ?? "" })}><Icon name="clip" /></span>
 						{/if}
-						{#if newer}<StatusChip tone="ok">{t("새 버전")}</StatusChip>{:else if have || (entry.kind === "server" && serverHave[entry.id])}<StatusChip tone="ok">{t("설치됨")}</StatusChip>{/if}
+						{#if newer}<Badge tone="ok">{t("새 버전")}</Badge>{:else if have || (entry.kind === "server" && serverHave[entry.id])}<Badge tone="ok">{t("설치됨")}</Badge>{/if}
 						{#if newer && have}<span class="ver"><VersionBump from={have.version} to={entry.version} /></span>{:else}<span class="ver">v{entry.version}</span>{/if}
 					</div>
 					{#if desc}<p class="desc">{desc}</p>{/if}

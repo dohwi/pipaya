@@ -7,6 +7,7 @@
 	import { slidingIndicator } from "../../lib/sliding-indicator";
 	import { collapseIn, collapseOut } from "../../lib/motion";
 	import Icon from "../ui/Icon.svelte";
+	import Badge from "../ui/Badge.svelte";
 	import PickerModal from "../ui/PickerModal.svelte";
 	import ModelLogo from "./ModelLogo.svelte";
 	import PickerOption from "../ui/PickerOption.svelte";
@@ -161,7 +162,7 @@
 			{#each starred as m (m.provider + m.id)}{@render opt(m, true)}{/each}
 		{/if}
 		{#each shown as g (g.id)}
-			<div class="pk-group">{g.name}{#if !g.configured} <span class="chip">{t("키 없음")}</span>{/if}</div>
+			<div class="pk-group">{g.name}{#if !g.configured} <Badge size="sm">{t("키 없음")}</Badge>{/if}</div>
 			{#each g.models as m (m.id)}{@render opt(m, false)}{/each}
 		{/each}
 		{#if !starred.length && !shown.length}

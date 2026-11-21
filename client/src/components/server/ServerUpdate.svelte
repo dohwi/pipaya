@@ -7,7 +7,7 @@
 	import { serverReleaseState, serverVersionLabel } from "../../lib/protocol";
 	import { collapseIn, collapseOut } from "../../lib/motion";
 	import UpdateHeader from "./UpdateHeader.svelte";
-	import StatusChip from "../ui/StatusChip.svelte";
+	import Badge from "../ui/Badge.svelte";
 	import ConfirmButton from "../ui/ConfirmButton.svelte";
 
 	/** Only the server the app is connected to can be asked: it is the one `updater.connection` talks to. */
@@ -37,13 +37,13 @@
 				<span class="ver">{shown.from}{#if isNew && shown.to} → {shown.to}{/if}</span>
 			{/if}
 			{#if serverUpdater.progressLabel}
-				<StatusChip tone="warn">{serverUpdater.progressLabel}</StatusChip>
+				<Badge tone="warn">{serverUpdater.progressLabel}</Badge>
 			{:else if isNew}
-				<StatusChip tone="ok">{t("서버에 새 버전이 있습니다")}</StatusChip>
+				<Badge tone="ok">{t("서버에 새 버전이 있습니다")}</Badge>
 			{:else if release === "older"}
-				<StatusChip tone="warn">{t("앱보다 오래된 버전입니다")}</StatusChip>
+				<Badge tone="warn">{t("앱보다 오래된 버전입니다")}</Badge>
 			{:else if status || release === "current"}
-				<StatusChip tone="neutral">{t("최신 버전입니다")}</StatusChip>
+				<Badge>{t("최신 버전입니다")}</Badge>
 			{/if}
 		</div>
 		{#if isNew}

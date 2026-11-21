@@ -50,6 +50,18 @@ share one left and one right line. Never write a raw side padding in a dialog; u
 - A list of bordered cards (`SessionsPanel`): the card's 1px border sits inside the buttons' right edge (`margin: 0 -1px`), checkbox column x = 12 in the header and in every row.
 - A header action row that can be too wide for a phone wraps (`flex-wrap`), it never overlaps the name (bulk buttons of the conversation list).
 
+### Which control (toggle, choice, state)
+
+- **On / off is a `Switch`** (in a `SettingRow`, a `ListItem` lead or a switch row). Never a chip or pill that stays pressed.
+- **One of a few is `Segmented`** (`fill` for a mode, `cards` for a setting). A list of many is a picker (`PickerOption`).
+- **A state or category you only read is a `Badge`** (`tone`: neutral, ok, warn, danger, accent, info). No hand-made
+  `.chip` / `.pill` / `.tag` spans with their own colours, no leading dot inside the pill (the tone already says it).
+- Chips that stay pressed are only for filters and multi-pick from a long list (`FilterChip`: settings servers,
+  quick folders, a role's tools). Toolbar toggles (mic, source view, a terminal modifier, favourite star) are icon
+  buttons with `aria-pressed`, not chips.
+- No decorative glow, halo or coloured `box-shadow` spread. A focus ring, an elevation shadow and the "working" breath
+  (`.glow-working`) are the only coloured shadows.
+
 ### Shared dialog parts (use these, do not re-write the CSS)
 
 - `DialogBody`: the scrolling body of a dialog (`--dlg-px` gutters, body top/bottom, rule under the header). Skills, commands, MCP and the context view (`SessionContext`) all use it.

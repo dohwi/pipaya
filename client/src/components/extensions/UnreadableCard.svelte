@@ -1,5 +1,6 @@
 <script lang="ts">
 	import Button from "../ui/Button.svelte";
+	import Badge from "../ui/Badge.svelte";
 	import Notice from "../ui/Notice.svelte";
 	import type { UnreadableExtension } from "../../lib/extensions/host.svelte";
 	import type { ExtensionTasks } from "../../lib/extension-tasks.svelte";
@@ -35,7 +36,7 @@
 <article class="card" aria-label={name}>
 	<div class="heading">
 		<h4>{name}</h4>
-		<span class="state chip danger">{t("읽을 수 없음")}</span>
+		<Badge tone="danger">{t("읽을 수 없음")}</Badge>
 	</div>
 	{#if item.id}<p class="facts">{item.id}</p>{/if}
 	<Notice tone="warn" size="sm">{t("이 버전에서 지원하지 않는 형식입니다:")} {item.reason}</Notice>
