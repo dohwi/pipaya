@@ -1058,11 +1058,13 @@ export class SessionManager {
 			const status = limited || interrupted ? "aborted" : !failed && !error ? "ok" : last?.role === "assistant" && last.stopReason === "aborted" ? "aborted" : "error";
 			// Sent while the stop took effect (the run still counted as busy, so they were queued): dropped like the rest.
 			if (status === "aborted") this.dropQueued(id, live);
+			// The last hop of an agent-to-agent chain the person started (A → B → A, A answers) ends as "user": it notifies.
+			const origin = this.peers.settleRun(id, live.origin, status);
 			this.bus.publish(id, "run_finished", {
 				status,
 				error,
 				durationMs: Date.now() - live.runStartedAt,
-				origin: live.origin,
+				origin,
 				usage: this.store.usage(id),
 				...(live.stopCause ? { cause: live.stopCause } : {}),
 			});

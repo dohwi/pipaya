@@ -504,7 +504,7 @@ export const EVENTS: EventDef[] = [
 			status: Type.Union([Type.Literal("ok"), Type.Literal("error"), Type.Literal("aborted")]),
 			error: Nullable(Type.String()),
 			durationMs: Type.Integer(),
-			origin: Type.Optional(Type.Union([Type.Literal("user"), Type.Literal("peer"), Type.Literal("schedule")], { description: "Who the run was for; peer = agent-to-agent traffic, which the quietPeers notification policy keeps silent; schedule = a scheduled task (notifies like user)" })),
+			origin: Type.Optional(Type.Union([Type.Literal("user"), Type.Literal("peer"), Type.Literal("schedule")], { description: "Who the run was for; peer = agent-to-agent traffic, which the quietPeers notification policy keeps silent; schedule = a scheduled task (notifies like user). The last hop of an agent-to-agent chain a user run started (A → B → A, A passes nothing more on) ends as user, so it notifies" })),
 			usage: Usage,
 			cause: Type.Optional(Type.Union([Type.Literal("user"), Type.Literal("limit"), Type.Literal("close"), Type.Literal("shutdown"), Type.Literal("force")], { description: "Who stopped the run from outside; absent when it ended by itself (or in an older record)" })),
 		}),
