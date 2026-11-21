@@ -171,6 +171,21 @@ describe("buildGraph", () => {
 		const g = buildGraph([server("a", [session("s1")])], { pins: { "s:a/s1": { x: 5, y: 6 } } });
 		expect([g.cards.get("s:a/s1")!.x, g.cards.get("s:a/s1")!.y]).toEqual([5, 6]);
 	});
+
+	test("a working chat over one branch pushes its neighbours away instead of covering them", () => {
+		const sessions = [session("a", { updatedAt: 9 }), session("b", { parentId: "a", updatedAt: 8 }), session("c", { updatedAt: 7 }), session("d", { updatedAt: 6 })];
+		const g = buildGraph([server("v", sessions, { states: { a: "working" } })]);
+		const chats = [...g.cards.values()].filter((c) => c.kind === "session");
+		for (const x of chats)
+			for (const y of chats) {
+				if (x === y || x.col !== y.col) continue;
+				expect(x.y + x.h / 2 + ROW_GAP <= y.y - y.h / 2 || y.y + y.h / 2 + ROW_GAP <= x.y - x.h / 2).toBe(true);
+			}
+		const a = g.cards.get("s:v/a")!, b = g.cards.get("s:v/b")!;
+		expect(a.h).toBe(CARD_H_LIVE);
+		expect(b.y).toBe(a.y); // still centred on its branch
+		expect(a.y - a.h / 2).toBe(0);
+	});
 });
 
 describe("helpers", () => {
