@@ -154,7 +154,6 @@
 		{#snippet title()}
 			<span class="name mono">{s.name}</span>
 			<Badge size="sm" variant="outline">{s.scope === "project" ? t("프로젝트") : s.scope === "builtin" ? t("기본 내장") : t("전역")}</Badge>
-			{#if !on}<Badge size="sm">{t("꺼짐")}</Badge>{/if}
 			{#if !s.modelInvocable}<span title={t("에이전트는 이 스킬을 모릅니다. /skill:이름 으로 직접 부를 때만 쓰입니다.")}><Badge size="sm" variant="outline">{t("수동 전용")}</Badge></span>{/if}
 			{#if mode === "project" && s.override !== null}
 				<Badge size="sm" variant="solid" tone="accent">{s.override ? t("프로젝트에서 켬") : t("프로젝트에서 끔")}</Badge>

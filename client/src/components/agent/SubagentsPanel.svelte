@@ -216,7 +216,7 @@
 								{#snippet lead()}<Switch checked={r.enabled} disabled={busy} onchange={(on) => toggle(r, on)} label={r.name} />{/snippet}
 								{#snippet title()}
 									<span class="name mono">{r.name}</span>
-									{#if !r.enabled}<Badge size="sm">{t("꺼짐")}</Badge>{:else if r.overridden}<Badge size="sm" tone="warn">{t("프로젝트 역할이 우선")}</Badge>{/if}
+									{#if r.enabled && r.overridden}<Badge size="sm" tone="warn">{t("프로젝트 역할이 우선")}</Badge>{/if}
 								{/snippet}
 								{#snippet actions()}
 									<Button size="sm" onclick={() => edit(r)} disabled={busy}>{t("수정")}</Button>

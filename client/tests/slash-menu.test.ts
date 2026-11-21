@@ -11,7 +11,7 @@ describe("recommendation menu rows", () => {
 		expect(rows).toEqual([
 			{ id: "model", text: "/model", args: "[name]", desc: "pick a model", group: "명령" },
 			{ id: "skill:review", text: "/skill:review", desc: "review code", accent: true, group: "스킬" },
-			{ id: "snip:fix", text: "/snip:fix", args: "<what>", desc: "fix it", tag: "Snippets",
+			{ id: "snip:fix", text: "/snip:fix", args: "<what>", desc: "fix it",
 				accent: true, group: "Snippets" },
 		]);
 	});
