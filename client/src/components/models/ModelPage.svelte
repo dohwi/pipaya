@@ -144,19 +144,20 @@
 		{@const shown = shownLevels(r, matched)}
 		<section class="fsec set-group">
 			<div class="section-label">{t("선택 가능한 추론 강도")}</div>
-			<div class="caps" role="group" aria-label={t("선택 가능한 추론 강도")}>
+			<div class="ladder" role="group" aria-label={t("선택 가능한 추론 강도")}>
+				<span class="rail" aria-hidden="true"></span>
 				{#each ALL_LEVELS as l (l)}
 					<button
 						type="button"
-						class="cap lv tap"
+						class="step tap"
 						data-level={l}
 						aria-pressed={shown.includes(l)}
 						disabled={isLastLevel(r, matched, l)}
 						title={isLastLevel(r, matched, l) ? t("하나는 남겨 두어야 합니다") : undefined}
 						onclick={() => toggleLevel(r, matched, l)}
 					>
-						<span class="dot"></span>
-						<span>{l}</span>
+						<span class="node" aria-hidden="true"></span>
+						<span class="name">{l}</span>
 					</button>
 				{/each}
 			</div>
@@ -346,44 +347,80 @@
 		color: var(--text);
 		font-weight: 600;
 	}
-	/* the strengths this model offers: on = its own colour with a filled dot, off = faded with a hollow one.
-	   The dot is the same 8px box either way, so switching a chip never changes its width (no re-wrapping). */
-	.cap.lv {
-		gap: 8px; /* was 6: the 8px dot and its label on the 4px scale */
+	/* the strengths this model offers, as a ladder from off to max: one quiet rail, seven nodes, each node a toggle.
+	   off = a hollow ring on the rail, on = the ring filled in the level's colour (no halo: the fill and the coloured
+	   name already say "on") and the name in that colour. The rail is never coloured between nodes: a filled span would read as a range slider to drag.
+	   Seven equal columns on every width (390px phone: 46px each, "minimal" in 12px fits), so nothing wraps or scrolls. */
+	.ladder {
+		position: relative;
+		display: grid;
+		grid-template-columns: repeat(7, minmax(0, 1fr));
+		padding: 12px 4px 8px;
+		background: var(--bg);
+		border: 1px solid var(--border);
+		border-radius: var(--radius);
 	}
-	.cap.lv .dot {
-		flex: none;
-		width: 8px;
-		height: 8px;
+	/* from the first node's centre to the last one's: half a column in from each side of the 4px padding */
+	.rail {
+		position: absolute;
+		left: calc(4px + (100% - 8px) / 14);
+		right: calc(4px + (100% - 8px) / 14);
+		top: 23px; /* 12 padding + 4 node inset + 8 (half the 16px node) - 1 (half the 2px rail) */
+		height: 2px;
+		border-radius: 1px;
+		background: var(--border-strong);
+	}
+	.step {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 4px;
+		min-width: 0;
+		padding: 4px 0;
+		background: none;
+		border: 0;
+		border-radius: var(--radius-control);
+		color: var(--text-faint);
+	}
+	.node {
+		position: relative; /* above the rail */
+		width: 16px;
+		height: 16px;
 		box-sizing: border-box;
 		border-radius: 50%;
-		border: 1.5px solid var(--lv);
-		background: transparent;
-		transition: background var(--motion-fast) var(--ease-std), opacity var(--motion-fast) var(--ease-std);
+		border: 2px solid var(--border-strong);
+		background: var(--bg);
+		transition: background var(--motion-fast) var(--ease-std), border-color var(--motion-fast) var(--ease-std), transform var(--motion-fast) var(--ease-std);
 	}
-	.cap.lv:not([aria-pressed="true"]) {
-		background: transparent;
-		border-style: dashed;
-		color: var(--text-faint);
-		font-weight: 450;
-	}
-	.cap.lv:not([aria-pressed="true"]) .dot {
-		opacity: 0.55;
+	/* the name may run a few px past its column (a 360px phone: "medium" 44px in a 41.7px column); its neighbours'
+	   names are short enough that they never meet, so it is never cut */
+	.name {
+		white-space: nowrap;
+		line-height: 20px;
+		font-size: var(--fs-sm);
+		font-weight: 500;
+		transition: color var(--motion-fast) var(--ease-std);
 	}
 	@media (hover: hover) {
-		.cap.lv:not([aria-pressed="true"]):hover {
-			background: var(--bg-hover);
-			color: var(--text-dim);
+		.step:hover {
+			color: var(--text);
+		}
+		.step:hover .node {
+			transform: scale(1.15);
+		}
+		.step[aria-pressed="false"]:hover .node {
+			border-color: var(--lv);
 		}
 	}
-	.cap.lv[aria-pressed="true"] {
-		background: var(--lv-soft);
-		border-color: color-mix(in srgb, var(--lv) 45%, transparent);
+	.step[aria-pressed="true"] {
 		color: var(--lv);
-		font-weight: 600;
 	}
-	.cap.lv[aria-pressed="true"] .dot {
+	.step[aria-pressed="true"] .name {
+		font-weight: 650;
+	}
+	.step[aria-pressed="true"] .node {
 		background: var(--lv);
+		border-color: var(--lv);
 	}
 	/* starting strength: one row of the offered strengths; scrolls sideways when a phone is too narrow for them */
 	.dseg {
@@ -395,8 +432,9 @@
 	.dseg::-webkit-scrollbar {
 		display: none;
 	}
+	/* equal columns while the row fits (basis 0), never narrower than the label (min-width auto) so a phone scrolls */
 	.dseg button {
-		flex: 1 0 auto;
+		flex: 1 0 0;
 		padding: 0 8px;
 		white-space: nowrap;
 		font-size: var(--fs-sm);
@@ -413,17 +451,6 @@
 	.dseg button:focus-visible {
 		outline-offset: -2px; /* keep the ring inside the visible strength at either scroll edge */
 	}
-	.dseg button[data-level]:not(.on)::before {
-		content: "";
-		display: inline-block;
-		width: 5px;
-		height: 5px;
-		margin-right: 8px; /* was 6 */
-		border-radius: 50%;
-		background: var(--lv);
-		opacity: 0.55;
-		vertical-align: 1px;
-	}
 	.dseg button.on {
 		background: var(--lv-soft, var(--bg-active));
 		color: var(--lv, var(--text));
@@ -435,12 +462,27 @@
 		box-shadow: none;
 	}
 	@media (max-width: 640px) {
-		.dseg button {
+		.dseg button,
+		.ladder .name {
 			font-size: var(--fs-xs);
 		}
 	}
+	/* a 360px phone gives each column 40px: "minimal" and "medium" in 12px crowded their neighbours. 11px and no side
+	   padding (columns 41.7px) keep a gap between every pair of names; the rail's ends follow the padding. */
+	@media (max-width: 380px) {
+		.ladder {
+			padding-inline: 0;
+		}
+		.rail {
+			left: calc(100% / 14);
+			right: calc(100% / 14);
+		}
+		.ladder .name {
+			font-size: var(--fs-2xs);
+		}
+	}
 	/* the last strength of a matched model: it stays on, so it neither hovers nor reads as clickable */
-	.cap.lv:disabled {
+	.step:disabled {
 		cursor: default;
 		pointer-events: none;
 	}
