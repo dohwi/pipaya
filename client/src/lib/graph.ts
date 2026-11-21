@@ -276,6 +276,7 @@ function layout(cards: Map<string, Card>, servers: GraphServer[], delegates: Edg
 		maxCol = Math.max(maxCol, col);
 		c.children.sort(order);
 		if (!c.children.length) { c.y = cursor + c.h / 2; cursor += c.h + ROW_GAP; return; }
+		const top = cursor;
 		const leaves = c.children.filter((k) => get(k).kind === "session" && !get(k).children.length);
 		const lanes = leaves.length >= WRAP_MIN ? Math.min(maxLanes, Math.ceil(leaves.length / WRAP_ROWS)) : 1;
 		if (lanes < 2) for (const k of c.children) place(k, col + 1);
@@ -300,6 +301,22 @@ function layout(cards: Map<string, Card>, servers: GraphServer[], delegates: Edg
 		}
 		const ys = c.children.map((k) => get(k).y);
 		c.y = (Math.min(...ys) + Math.max(...ys)) / 2;
+		// a card taller than the rows under it (a working chat over one branch) would reach into the rows above and below:
+		// move what is under it down so it is centred on them, and its own rows end below it
+		const lift = top + c.h / 2 - c.y;
+		if (lift > 0) {
+			const down = (id: string) => {
+				for (const k of get(id).children) {
+					get(k).y += lift;
+					const b = busY.get(k);
+					if (b !== undefined) busY.set(k, b + lift);
+					down(k);
+				}
+			};
+			down(id);
+			c.y += lift;
+			cursor = Math.max(cursor + lift, top + c.h + ROW_GAP);
+		}
 	};
 	const roles = [...cards.values()].filter((c) => c.kind === "subagent");
 	const bands: Band[] = [];
