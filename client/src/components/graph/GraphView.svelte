@@ -663,7 +663,6 @@
 			{/if}
 			<svg class="edges" aria-hidden="true">
 				<defs>
-					<filter id="gv-glow" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="3" /></filter>
 				</defs>
 				{#each [...graph.edges.filter((x) => !x.live), ...graph.edges.filter((x) => x.live), ...ghostEdges] as e (e.id)}
 					{@const ghost = !graph.cards.has(e.from) || !graph.cards.has(e.to) || ghostEdges.includes(e)}
@@ -678,7 +677,6 @@
 						{@const d = edgePath(a, b, r, call ? "curve" : "elbow")}
 						{@const full = r >= 1 && !ghost}
 						<g class="e-{e.kind}" class:live={e.live && !ghost} class:dim={!on} class:hot={!!focus && on} class:quiet={on && (faded(e.from) || faded(e.to))}>
-							{#if e.live && full}<path class="halo" {d} filter="url(#gv-glow)" transition:glowFade />{/if}
 							<path class="base" {d} style:stroke-width={call && !e.live ? 1.25 + Math.min(2, Math.log2(e.weight) * 0.5) : undefined} />
 							{#if call && full}
 								<!-- a call points at the subagent: a small level chevron on the card's edge (the line arrives level) -->
@@ -998,7 +996,7 @@
 	.e-delegate .base {
 		opacity: 0.4;
 	}
-	/* a line carrying work: a solid coloured stroke, a soft glow under it, a dash train and sparks running along it */
+	/* a line carrying work: a solid coloured stroke, a dash train and sparks running along it (no blurred glow under it) */
 	.edges g.live .base {
 		stroke-width: 2;
 		opacity: 0.9;
@@ -1010,20 +1008,6 @@
 	}
 	.e-delegate.live .base {
 		stroke-width: 2.5;
-	}
-	/* the glow under a live line breathes slowly, in step with the working cards (same beat as the card ring's glow) */
-	.edges .halo {
-		stroke-width: 6;
-		opacity: 0.3;
-		animation: halo 3.2s ease-in-out infinite;
-	}
-	.e-delegate .halo {
-		stroke-width: 7;
-	}
-	@keyframes halo {
-		50% {
-			opacity: 0.1;
-		}
 	}
 	/* a spark: a bright head and a tail that thins out behind it (fill-opacity: the opacity itself fades it at the ends) */
 	.spark .dot {
@@ -1058,9 +1042,6 @@
 	}
 	.edges g.quiet {
 		opacity: 0.4; /* a line with a card at rest on either end steps back with it */
-	}
-	.edges g.dim .halo {
-		animation-play-state: paused;
 	}
 	.edges g.dim .spark {
 		display: none;
@@ -1106,8 +1087,8 @@
 	}
 	/*
 	 * A card at work: a light runs round its border (a conic gradient behind a transparent border, turning on the
-	 * registered --ring-a), in the colour of the line it sits on: green for a chat, blue for a subagent. A soft glow
-	 * breathes around it. A chat waiting for an answer holds a steady amber ring that breathes, no running light.
+	 * registered --ring-a), in the colour of the line it sits on: green for a chat, blue for a subagent. No glow
+	 * around it (a blurred halo read as decoration). A chat waiting for an answer holds a steady amber ring, no running light.
 	 */
 	.card.working,
 	.card.asking {
@@ -1122,9 +1103,7 @@
 					color-mix(in srgb, var(--ring) 35%, var(--border-strong)) 100%
 				)
 				border-box;
-		animation:
-			ring-turn 3.2s linear infinite,
-			ring-glow 3.2s ease-in-out infinite;
+		animation: ring-turn 3.2s linear infinite;
 	}
 	.card.subagent.working {
 		--ring: var(--info);
@@ -1134,24 +1113,11 @@
 		background:
 			linear-gradient(var(--bg), var(--bg)) padding-box,
 			linear-gradient(color-mix(in srgb, var(--ring) 70%, var(--border-strong)), color-mix(in srgb, var(--ring) 70%, var(--border-strong))) border-box;
-		animation: ring-glow 3.2s ease-in-out infinite;
+		animation: none;
 	}
 	@keyframes ring-turn {
 		to {
 			--ring-a: 360deg;
-		}
-	}
-	@keyframes ring-glow {
-		0%,
-		100% {
-			box-shadow:
-				0 0 0 0 color-mix(in srgb, var(--ring) 0%, transparent),
-				var(--shadow-soft);
-		}
-		50% {
-			box-shadow:
-				0 0 16px 0 color-mix(in srgb, var(--ring) 24%, transparent),
-				var(--shadow-soft);
 		}
 	}
 	.card.sel {
@@ -1517,7 +1483,6 @@
 				linear-gradient(color-mix(in srgb, var(--ring) 70%, var(--border-strong)), color-mix(in srgb, var(--ring) 70%, var(--border-strong))) border-box;
 		}
 		.card.asking,
-		.edges .halo,
 		.run .lead,
 		.doing > :global(.ic) {
 			animation: none;
