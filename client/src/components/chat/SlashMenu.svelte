@@ -12,7 +12,7 @@
 		listId,
 		optionId,
 	}: {
-		items: { id: string; text: string; args?: string; desc: string; current?: boolean; tag?: string; accent?: boolean; group?: string; state?: Activity }[];
+		items: { id: string; text: string; args?: string; desc: string; current?: boolean; accent?: boolean; group?: string; state?: Activity }[];
 		index: number;
 		label?: string;
 		empty?: string;
@@ -49,7 +49,6 @@
 		>
 			<span class="n mono {item.state && item.state !== 'idle' ? `act-${ACTIVITY_TONE[item.state]}` : ''}" class:skill={item.accent}>{item.text}{#if item.args}{" "}<span class="a">{item.args}</span>{/if}</span>
 			<span class="d">{t(item.desc)}</span>
-			{#if item.tag}<span class="tag">{t(item.tag)}</span>{/if}
 			{#if item.current}<span class="current">{t("현재")}</span>{/if}
 		</button>
 	{:else}
@@ -115,19 +114,6 @@
 	.n.act-warn { color: var(--warn); }
 	.n.act-ok { color: var(--ok); }
 	.n.act-danger { color: var(--danger); }
-	.tag {
-		margin-left: auto;
-		flex: none;
-		padding: 0 4px;
-		font-size: var(--fs-2xs);
-		line-height: 16px;
-		border-radius: var(--radius-pill);
-		color: var(--accent);
-		border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
-	}
-	.tag + .current {
-		margin-left: 0;
-	}
 	.a {
 		font-weight: 400;
 		color: var(--text-faint);

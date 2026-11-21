@@ -50,7 +50,7 @@
 	}
 	/* a switched-off item steps its text down a colour instead of fading to 0.55, which took small badges and the path
 	   line under it to 2.3:1: the name from --text to --text-faint at normal weight, so on and off still read apart at a
-	   glance; the faint lines under it stay as they are. Badges keep their colours: the status badge says "off" already. */
+	   glance; the faint lines under it stay as they are. Badges keep their colours. The switch says "off": no "꺼짐" badge beside it. */
 	.off .info {
 		color: var(--text-faint);
 	}
