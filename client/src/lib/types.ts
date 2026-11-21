@@ -610,6 +610,9 @@ export interface AssistantMessage {
 	model?: string;
 	/** Reasoning strength the reply was written with; absent for models without reasoning and for older replies. */
 	thinkingLevel?: ThinkingLevel;
+	/** OpenRouter speed the call asked for (absent = OpenRouter's own routing) and the one that served it (absent = not reported). */
+	requestedTier?: ServiceTier;
+	servedTier?: ServiceTier;
 	stopReason: StopReason;
 	errorMessage?: string;
 	durationMs?: number;
@@ -721,6 +724,8 @@ export interface AssistantItem {
 	provider?: string;
 	model?: string;
 	thinkingLevel?: ThinkingLevel;
+	requestedTier?: ServiceTier;
+	servedTier?: ServiceTier;
 	durationMs?: number;
 	tokens?: number;
 	usage?: AssistantMessage["usage"];

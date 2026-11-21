@@ -117,7 +117,8 @@
 		sel = { provider: m.provider, model: m.id };
 		// A model that names its own starting strength starts there; one that does not keeps the choice made here.
 		if (m.defaultThinkingLevel) lvl = null;
-		apply(m.defaultServiceTier ?? null, allowUnset);
+		// No speed is sent: the chat (or draft) starts the new model at the speed a new chat with it would, the same rule as on the server.
+		apply(null, true);
 	}
 	function unset() {
 		if (!sel) return;

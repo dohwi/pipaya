@@ -114,6 +114,9 @@ test("only direct OpenRouter chats can save advertised tiers; default, reset and
 	expect((await call("PATCH", path, { serviceTier: "priority" })).json().serviceTier).toBe("priority");
 	expect((await call("PATCH", path, proxy)).json().serviceTier).toBeNull();
 	expect((await call("PATCH", path, { serviceTier: "priority" })).statusCode).toBe(400);
+	// Back on the router model the chat starts at the speed a new chat with it would: the saved new-chat choice.
+	expect((await call("PATCH", path, router)).json().serviceTier).toBe("priority");
+	expect((await call("PATCH", path, proxy)).json().serviceTier).toBeNull();
 	expect((await call("PUT", "/configuration/defaults", { ...proxy, serviceTier: "priority" })).statusCode).toBe(400);
 	expect((await get(path)).serviceTier).toBeNull();
 });
@@ -148,8 +151,33 @@ test("new chats snapshot the chosen speed: explicit session > new-chat setting >
 		expect((await save(body)).statusCode).toBe(400);
 	}
 	expect((await call("PATCH", `/sessions/${existing.id}`, { serviceTier: "default" })).json().serviceTier).toBe("default");
+	// Switching a chat to a model follows the same order as a new chat: an explicit speed, else the new-chat choice for
+	// that model, else the model's own default. Switching to a model with neither leaves OpenRouter's own routing.
+	const other = "other-speed";
+	expect((await call("PUT", `/configuration/providers/${other}`, { ...conn, models: [{ ...model, defaultServiceTier: "priority" }] })).statusCode).toBe(200);
+	const switched = `/sessions/${existing.id}`;
+	expect((await call("PATCH", switched, { provider: other, model: id })).json().serviceTier).toBe("priority");
+	expect((await call("PATCH", switched, { provider, model: id, serviceTier: null })).json().serviceTier).toBeNull();
+	expect((await call("PATCH", switched, { provider: other, model: id })).json().serviceTier).toBe("priority");
+	expect((await call("PATCH", switched, { provider, model: id })).json().serviceTier).toBe("default");
 	// A connection whose id sounds like OpenRouter still cannot pin a tier on a different transport.
 	const shadow = "openrouter-shadow";
 	expect((await call("PUT", `/configuration/providers/${shadow}`, { ...conn, baseUrl: "http://127.0.0.1:9/v1", models: [{ id, contextWindow: 10000, maxTokens: 200, reasoning: false, vision: false }] })).statusCode).toBe(200);
 	expect((await call("POST", "/sessions", { provider: shadow, model: id, serviceTier: "default" })).statusCode).toBe(400);
+});
+
+test("a subagent runs at its session's speed on the same model, else at its own model's default, never at a proxy's", async () => {
+	const call = async (method: "POST" | "PUT", url: string, payload: object) => app.server.inject({ method, url, headers: auth, payload });
+	const id = "anthropic/claude-fable-5.2";
+	const model = { id, contextWindow: 10000, maxTokens: 200, reasoning: true, vision: false };
+	const conn = (baseUrl: string, models: object[]) => ({ name: "Sub", baseUrl, api: "openai-completions", authRequired: false, models });
+	expect((await call("PUT", "/configuration/providers/sub-fast", conn("https://openrouter.ai/api/v1", [{ ...model, defaultServiceTier: "priority" }]))).statusCode).toBe(200);
+	expect((await call("PUT", "/configuration/providers/sub-plain", conn("https://openrouter.ai/api/v1", [model]))).statusCode).toBe(200);
+	expect((await call("PUT", "/configuration/providers/sub-proxy", conn("http://127.0.0.1:9/v1", [model]))).statusCode).toBe(200);
+	const session = (await call("POST", "/sessions", { provider: "sub-plain", model: id, serviceTier: "default" })).json();
+	const rec = app.sessions.get(session.id);
+	const tierOf = (provider: string) => (app.sessions as unknown as { subagentTier(r: unknown, p: string, m: string): unknown }).subagentTier(rec, provider, id);
+	expect(tierOf("sub-plain")).toBe("default");
+	expect(tierOf("sub-fast")).toBe("priority");
+	expect(tierOf("sub-proxy")).toBeNull();
 });
