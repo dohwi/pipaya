@@ -12,6 +12,8 @@
 	import type { CatalogModel, ThinkingLevel } from "../../lib/types";
 	import Icon from "../ui/Icon.svelte";
 	import Badge from "../ui/Badge.svelte";
+	import Switch from "../ui/Switch.svelte";
+	import { CAPS } from "../../lib/model-caps";
 	import ModelLogo from "./ModelLogo.svelte";
 
 	/**
@@ -44,6 +46,13 @@
 		onremove: () => void;
 	} = $props();
 
+	const uid = $props.id();
+	/** The three abilities an owner switches on. Reasoning stays in place but off while the model draws pictures, so the rows never shift under the pointer. */
+	const capRows = $derived([
+		{ ...CAPS.reasoning, on: r.reasoning && !r.imageGeneration, disabled: !!r.imageGeneration, set: (on: boolean) => (r.reasoning = on) },
+		{ ...CAPS.vision, on: r.vision, disabled: false, set: (on: boolean) => (r.vision = on) },
+		{ ...CAPS.image, on: !!r.imageGeneration, disabled: false, set: (on: boolean) => { r.imageGeneration = on; if (on) r.reasoning = false; } },
+	]);
 	/** An upstream model keeps its fixed id, unless the upstream stopped listing it: then it is just a typed-in model. */
 	const catalogApi = $derived(connection ? new Api(connection) : null);
 	const locked = $derived(!!r.fromUpstream && !r.unavailable);
@@ -126,10 +135,18 @@
 	</section>
 	<section class="fsec set-group">
 		<div class="section-label">{t("기능")}</div>
-		<div class="caps">
-			{#if !r.imageGeneration}<button type="button" class="cap tap" aria-pressed={r.reasoning} onclick={() => (r.reasoning = !r.reasoning)}><Icon name="brain" /> {t("추론")}</button>{/if}
-			<button type="button" class="cap tap" aria-pressed={r.vision} onclick={() => (r.vision = !r.vision)}><Icon name="image" /> {t("이미지 읽기")}</button>
-			<button type="button" class="cap tap" aria-pressed={r.imageGeneration} onclick={() => { r.imageGeneration = !r.imageGeneration; if (r.imageGeneration) r.reasoning = false; }}><Icon name="sparkles" /> {t("이미지 생성·편집")}</button>
+		<!-- one switch per ability, like every other on/off setting: a row of pressed chips read as badges, not as toggles -->
+		<div class="capsw">
+			{#each capRows as c (c.key)}
+				<div class="caprow" class:on={c.on} class:off={c.disabled}>
+					<span class="capic" aria-hidden="true"><Icon name={c.icon} /></span>
+					<span class="captext">
+						<b>{t(c.label)}</b>
+						<small id="{uid}-{c.key}">{c.disabled ? t("이미지 생성 모델은 추론하지 않습니다") : t(c.hint)}</small>
+					</span>
+					<Switch checked={c.on} disabled={c.disabled} label={t(c.label)} describedby="{uid}-{c.key}" onchange={c.set} />
+				</div>
+			{/each}
 		</div>
 		<p class="hint note">{r.imageGeneration ? t("그림만 그리는 모델입니다. 에이전트 설정에서 이미지 모델로 고르세요.") : t("기본은 글로 대화하는 채팅 모델입니다. 켠 기능만 모델에 표시됩니다.")}</p>
 		{#if r.imageGeneration}
@@ -311,41 +328,65 @@
 	:global(.btn.danger-text) {
 		align-self: flex-start;
 	}
-	.caps {
+	/* the abilities: one card of switch rows (like the agent tools list), a hairline between rows */
+	.capsw {
 		display: flex;
-		flex-wrap: wrap;
-		gap: 8px;
-	}
-	.cap {
-		display: inline-flex;
-		align-items: center;
-		gap: 4px;
-		height: 32px;
-		padding: 0 12px;
-		border-radius: var(--radius-pill);
-		border: 1px solid var(--border);
+		flex-direction: column;
 		background: var(--bg);
-		color: var(--text-dim);
-		font-size: var(--fs-sm);
-		font-weight: 500;
-		transition: background var(--motion-fast) var(--ease-std), color var(--motion-fast) var(--ease-std), border-color var(--motion-fast) var(--ease-std);
+		border: 1px solid var(--border);
+		border-radius: var(--radius);
 	}
-	.cap :global(svg) {
+	.caprow {
+		display: flex;
+		align-items: center;
+		gap: 12px;
+		padding: 12px;
+	}
+	.caprow + .caprow {
+		border-top: 1px solid var(--border);
+	}
+	/* the 16px glyph on the card's 12px inner line, centred on the label's 20px line */
+	.capic {
+		flex: none;
+		display: grid;
+		place-items: center;
+		width: 16px;
+		height: 20px;
+		align-self: flex-start;
+		color: var(--text-dim);
+		transition: color var(--motion-fast) var(--ease-std);
+	}
+	.capic :global(svg) {
 		width: 16px;
 		height: 16px;
 		stroke-width: 1.8;
 	}
-	@media (hover: hover) {
-		.cap:hover {
-			background: var(--bg-hover);
-		}
-	}
-	/* pressed = the selected FilterChip look */
-	.cap[aria-pressed="true"] {
-		background: var(--bg-active);
-		border-color: var(--border-strong);
+	.caprow.on .capic {
 		color: var(--text);
+	}
+	.captext {
+		flex: 1;
+		min-width: 0;
+		display: flex;
+		flex-direction: column;
+		gap: 4px;
+		word-break: keep-all; /* don't split a Korean word between syllables */
+	}
+	.captext b {
+		font-size: var(--fs-sm);
 		font-weight: 600;
+		line-height: 20px; /* whole-pixel line box */
+		color: var(--text);
+	}
+	.captext small {
+		font-size: var(--fs-xs);
+		line-height: 16px; /* whole-pixel line box */
+		color: var(--text-faint);
+	}
+	/* reasoning while the model draws pictures: kept in place, read as unavailable */
+	.caprow.off .captext b,
+	.caprow.off .capic {
+		color: var(--text-faint);
 	}
 	/* the strengths this model offers, as a ladder from off to max: one quiet rail, seven nodes, each node a toggle.
 	   off = a hollow ring on the rail, on = the ring filled in the level's colour (no halo: the fill and the coloured

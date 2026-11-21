@@ -453,6 +453,7 @@ export const en: Record<string, string> = {
 	"답하기 전에 깊이 생각합니다": "Thinks it through before answering",
 	"보낸 이미지를 읽고 이해합니다": "Reads and understands the images you send",
 	"그림을 만들고, 이전 그림을 고칩니다": "Draws pictures and edits the previous one",
+	"이미지 생성 모델은 추론하지 않습니다": "Image generation models do not reason",
 	"이미지를 만드는 모델입니다": "This model makes images",
 	"기본은 글로 대화하는 채팅 모델입니다. 켠 기능만 모델에 표시됩니다.": "By default a model is a text chat model. Only the abilities you turn on are shown.",
 	"이 모델 삭제": "Delete this model",
