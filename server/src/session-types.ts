@@ -27,6 +27,9 @@ export type PromptMode = "prompt" | "steer" | "follow_up";
  * for the "no notifications for peer talk" setting: the origin of the run, not what the run did (a user run that
  * used peer tools still notifies when it ends). "schedule": started by a scheduled task. The person set it up, so it is
  * not agent-to-agent traffic: it notifies and leaves an unread mark like a "user" run; the transcript labels it.
+ * One exception at the end of a run: when a user run passed work on (A → B) and a later peer run of the same session
+ * passes nothing more on, that run is the result the person waits for, so its run_finished says "user" (see
+ * PeerService.settleRun).
  */
 export type RunOrigin = "user" | "peer" | "schedule";
 

@@ -150,6 +150,29 @@ describe("peer sessions: names, peer / peer read and @mentions", () => {
 		expect((await said(boss)).split("finished its run").length).toBe(before);
 	});
 
+	test("the last hop of a chain the user started ends as a user run; the hops in between stay peer", async () => {
+		const [boss, worker] = [await mk(), await mk()];
+		const wName = await nameOf(worker);
+		const ends: { id: string; origin?: string }[] = [];
+		const off = app.bus.subscribe((e) => { if (e.type === "run_finished" && (e.sessionId === boss || e.sessionId === worker)) ends.push({ id: e.sessionId, origin: (e.data as { origin?: string }).origin }); });
+		try {
+			// user → boss passes work on (user run) → worker answers (peer, quiet) → boss gets the report and ends the chain (user)
+			await api("POST", `/sessions/${boss}/messages`, { text: `!peer ${JSON.stringify({ action: "send", to: wName, message: "do the thing", notify: true })}` });
+			await idle(boss);
+			await idle(worker);
+			await Bun.sleep(300);
+			await idle(boss);
+			expect(ends).toEqual([{ id: boss, origin: "user" }, { id: worker, origin: "peer" }, { id: boss, origin: "user" }]);
+			// the chain is over: a later peer message to the boss is plain agent-to-agent traffic again
+			ends.length = 0;
+			await api("POST", `/sessions/${worker}/messages`, { text: `!peer ${JSON.stringify({ action: "send", to: await nameOf(boss), message: "fyi" })}` });
+			await idle(worker);
+			await Bun.sleep(100);
+			await idle(boss);
+			expect(ends.find((x) => x.id === boss)).toEqual({ id: boss, origin: "peer" });
+		} finally { off(); }
+	});
+
 	test("peer_create starts a session on a task and reports back; peer_manage closes, renames and deletes it", async () => {
 		const boss = await mk();
 		const call = async (tool: string, args: unknown) => { await api("POST", `/sessions/${boss}/messages`, { text: `!${tool} ${JSON.stringify(args)}` }); await idle(boss); };

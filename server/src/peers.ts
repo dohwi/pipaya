@@ -3,6 +3,7 @@ import { branchOf } from "./git-info.ts";
 import { workDirOf } from "./work-tree.ts";
 import { groupHandle, koreanName, mentioned, nameKey, nextMemberName, sameName } from "./member-names.ts";
 import type { QuestionAnswer, QuestionRequest } from "./questions.ts";
+import type { RunOrigin } from "./session-types.ts";
 import type { SessionPatch, SessionRecord, SessionStore, ThinkingLevel } from "./store.ts";
 
 /**
@@ -178,6 +179,31 @@ export class PeerService {
 			if (!r || r.closed) continue;
 			void this.host.deliver(w, body, this.host.isRunning(w) ? "follow_up" : "prompt").catch(() => {});
 		}
+	}
+
+	/**
+	 * Sessions that passed work on to other sessions from a run the person asked for (or a scheduled one), and have not
+	 * yet ended a run without passing more on. Kept in memory: a restart only costs one notification.
+	 */
+	private chains = new Set<string>();
+
+	/**
+	 * A run of `id` ends; returns the origin its `run_finished` should carry. A user run that passes work on (A → B)
+	 * opens a chain; the peer runs that follow (B → A → B …) stay "peer" while they pass work on; the first peer run of
+	 * that session which passes nothing on is the chain's result, which the person waits for, so it ends as "user" and
+	 * notifies. Sessions whose user run passed nothing on (B) stay quiet. Call before the next run resets `sends`.
+	 */
+	settleRun(id: string, origin: RunOrigin, status: string): RunOrigin {
+		if (status === "aborted") return origin; // a stopped run is silent anyway and decides nothing about the chain
+		const sent = (this.sends.get(id) ?? 0) > 0;
+		if (origin !== "peer") {
+			if (sent) this.chains.add(id);
+			else this.chains.delete(id);
+			return origin;
+		}
+		if (sent || !this.chains.has(id)) return origin;
+		this.chains.delete(id);
+		return "user";
 	}
 
 	/** Starts a new run of this session: its send allowance is full again. */
