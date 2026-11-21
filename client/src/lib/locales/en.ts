@@ -502,6 +502,8 @@ export const en: Record<string, string> = {
 	"모델 목록을 불러오지 못했습니다: {error}": "Could not read the model list: {error}",
 	"일치하는 모델이 없습니다": "No matching models",
 	"추론 강도": "Reasoning effort",
+	"요청한 속도 {asked}, 실제 처리 {served}": "Asked for {asked}, served at {served}",
+	"처리 속도 {tier}": "Served at {tier}",
 	"ID 필요": "ID required",
 	"OpenRouter에서 찾은 모델": "Model found on OpenRouter",
 	"업스트림 제공": "From upstream",

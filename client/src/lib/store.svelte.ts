@@ -84,7 +84,7 @@ export type { PaletteItem, PaletteSpec, Draft, Server } from "./store-model";
 export { defaultServerUrl } from "./store-model";
 import { draftFromDefault, loadServers, normalizeThinking, pinLocal, readDraft } from "./store-model";
 import type { Draft, PaletteSpec, Server } from "./store-model";
-import type { ThinkingLevel } from "./types";
+import type { ServiceTier, ThinkingLevel } from "./types";
 import type { SettingsProblem } from "./settings-problems";
 import { forgetDraft } from "./composer/saved-drafts";
 import { forgetAttachments } from "./composer/saved-attachments";
@@ -1027,6 +1027,16 @@ class AppStore {
     if (pick) this.updateDraft({ provider: pick.provider, model: pick.id });
   }
 
+  /**
+   * The speed a chat on this model starts at, as the server decides it: the saved new-chat choice when it is this very
+   * model (null there = OpenRouter's own routing), else the model's own default.
+   */
+  private startingTier(provider: string, id: string): ServiceTier | null {
+    const d = this.serverDefault;
+    if (d && d.provider === provider && d.model === id && d.serviceTier !== undefined) return d.serviceTier;
+    return this.models.find((m) => m.provider === provider && m.id === id)?.defaultServiceTier ?? null;
+  }
+
   /** The strength a connection names for this model as its starting point, if it names one. */
   private modelDefaultLevel(provider: string, id: string): ThinkingLevel | undefined {
     const m = this.models.find((x) => x.provider === provider && x.id === id);
@@ -1038,7 +1048,7 @@ class AppStore {
     // A model and its starting strength travel together: a model that names one keeps it unless a level comes with the patch.
     if (patch.thinkingLevel === undefined && (patch.provider !== undefined || patch.model !== undefined))
       next.thinkingLevel = this.modelDefaultLevel(next.provider, next.model) ?? next.thinkingLevel;
-    if (patch.serviceTier === undefined && (next.provider !== this.draft.provider || next.model !== this.draft.model)) next.serviceTier = this.models.find(m => m.provider === next.provider && m.id === next.model)?.defaultServiceTier ?? null;
+    if (patch.serviceTier === undefined && (next.provider !== this.draft.provider || next.model !== this.draft.model)) next.serviceTier = this.startingTier(next.provider, next.model);
     this.draft = next;
     write(K.draft, this.draft);
   }
@@ -1262,7 +1272,7 @@ class AppStore {
       this.updateDraft(draftFromDefault(now));
     }
     if (!now && before && this.draft.provider === before.provider && this.draft.model === before.model) {
-      this.updateDraft({ serviceTier: this.models.find(m => m.provider === before.provider && m.id === before.model)?.defaultServiceTier ?? null });
+      this.updateDraft({ serviceTier: this.startingTier(before.provider, before.model) });
     }
     this.ensureDraftModel();
   }
@@ -1673,7 +1683,7 @@ class AppStore {
       this.updateDraft(draftFromDefault(d));
     else {
       this.ensureDraftModel();
-      this.updateDraft({ serviceTier: this.models.find(m => m.provider === this.draft.provider && m.id === this.draft.model)?.defaultServiceTier ?? null });
+      this.updateDraft({ serviceTier: this.startingTier(this.draft.provider, this.draft.model) });
     }
   }
 

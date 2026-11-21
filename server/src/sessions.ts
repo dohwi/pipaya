@@ -12,7 +12,9 @@ import { mentionedSkills, readSkillText, skillCallHint, skillsPrompt, type Skill
 import { badRequest, conflict, HttpError, notFound } from "./errors.ts";
 import { filesNote, saveUploads } from "./file-routes.ts";
 import type { EventBus } from "./events.ts";
-import { checkServiceTier, withServiceTier, modelDefaultTier, modelDefaultLevel, reasoningOption, type ModelRegistry } from "./models.ts";
+import { checkServiceTier, modelDefaultTier, modelDefaultLevel, reasoningOption, type ModelRegistry } from "./models.ts";
+import { streamAtTier } from "./served-tier.ts";
+import type { ServiceTier } from "./openrouter-catalog.ts";
 import { contextTokens, pickCut, SUMMARY_MAX_TOKENS, SUMMARY_SYSTEM, summaryMessage, summaryRequest, thresholdFor, type CompactionSettings } from "./compaction.ts";
 import { type DelegateCall, type SessionPatch, type SessionRecord, type SessionStore, type ThinkingLevel } from "./store.ts";
 import type { McpManager } from "./mcp.ts";
@@ -286,13 +288,10 @@ export class SessionManager {
 		const id = randomUUID();
 		const cwd = this.resolveCwd(input.cwd);
 		const now = Date.now();
-		const saved = this.registry.defaultSelection?.();
-		// null means “use OpenRouter settings”; it must not fall through to a paid default.
-		const initialTier = saved?.provider === provider && saved.model === model ? saved.serviceTier : undefined;
-		const serviceTier = input.serviceTier !== undefined ? input.serviceTier : initialTier !== undefined ? initialTier : modelDefaultTier(this.registry.models.getModel(provider, model));
+		const serviceTier = input.serviceTier !== undefined ? input.serviceTier : this.startingTier(provider, model);
 		if (serviceTier) await checkServiceTier(this.registry, provider, model, serviceTier);
 		const record: SessionRecord = {
-			serviceTier: serviceTier ?? null,
+			serviceTier,
 			id,
 			title: input.title?.trim() || "New session",
 			name: this.peers.newName(),
@@ -528,7 +527,8 @@ export class SessionManager {
 		if (patch.provider !== undefined || patch.model !== undefined) {
 			const provider = patch.provider ?? current.provider;
 			const model = patch.model ?? current.model;
-			if (patch.serviceTier === undefined && (model !== current.model || provider !== current.provider)) clean.serviceTier = null;
+			// A new model starts at the speed a new chat with it would: the speed never carries over to a model that may not offer it.
+			if (patch.serviceTier === undefined && (model !== current.model || provider !== current.provider)) clean.serviceTier = this.startingTier(provider, model);
 			if (!this.registry.models.getModel(provider, model)) throw badRequest(`unknown model ${provider}/${model}`);
 			this.assertChatModel(provider, model);
 		}
@@ -573,6 +573,23 @@ export class SessionManager {
 		if (own) return own;
 		const saved = this.registry.defaultSelection?.();
 		return saved && saved.provider === provider && saved.model === model && saved.thinkingLevel ? saved.thinkingLevel : "medium";
+	}
+
+	/**
+	 * The speed a chat on this model starts at: the saved new-chat choice when it is this very model (null there means
+	 * "OpenRouter's own routing" and must not fall through to a paid default), else the model's own default. Both were
+	 * checked against the catalog when they were saved.
+	 */
+	private startingTier(provider: string, model: string): ServiceTier | null {
+		const saved = this.registry.defaultSelection?.();
+		const chosen = saved?.provider === provider && saved.model === model ? saved.serviceTier : undefined;
+		return chosen !== undefined ? chosen : (modelDefaultTier(this.registry.models.getModel(provider, model)) ?? null);
+	}
+
+	/** A subagent on the session's own model runs at the session's speed, on another model at that model's own default. */
+	private subagentTier(rec: SessionRecord, provider: string, modelId: string): ServiceTier | null {
+		if (provider === rec.provider && modelId === rec.model) return this.store.get(rec.id)?.serviceTier ?? null;
+		return modelDefaultTier(this.registry.models.getModel(provider, modelId)) ?? null;
 	}
 
 	/** An image model only draws (through the generate_image tool); a chat never runs on it. */
@@ -1207,10 +1224,8 @@ export class SessionManager {
 			// A gateway that drops for a moment (502 …) is waited out instead of ending the run
 			streamFn: withUpstreamRetry(async (m, ctx, opts) => {
 				const current = this.get(record.id);
-				const tier = current.provider === m.provider && current.model === m.id ? current.serviceTier : null;
-				if (!tier) return this.registry.models.streamSimple(m, ctx, opts);
-				await checkServiceTier(this.registry, m.provider, m.id, tier);
-				return this.registry.models.streamSimple(m, ctx, withServiceTier(opts, tier));
+				const tier = current.provider === m.provider && current.model === m.id ? current.serviceTier ?? null : null;
+				return streamAtTier(this.registry, m, ctx, opts, tier);
 			}, {
 				...DEFAULT_UPSTREAM_RETRY,
 				onRetry: (attempt, maxRetries, delayMs, errorMessage) => this.bus.publish(record.id, "run_retrying", { attempt, maxRetries, delayMs, ...(retryReason(errorMessage) ? { reason: retryReason(errorMessage) } : {}) }, { ephemeral: true }),
@@ -1364,10 +1379,11 @@ export class SessionManager {
 		const tools = buildTools(names, workDirOf(rec), this.live.get(sessionId)?.readRoots ?? [], { sessionId, canSeeImages: () => model.input.includes("image") }, defs2);
 		const release = this.delegates.acquire(sessionId, { calls: pol.maxCalls, running: pol.maxConcurrent });
 		const cap = Math.min(def.maxTurns, pol.maxTurns);
+		const tier = this.subagentTier(rec, provider, modelId);
 		let turns = 0, limited = false;
 		const agent = new Agent({
 			initialState: { systemPrompt: subagentSystem(def, workDirOf(rec)), model, thinkingLevel: this.subagentThinking(rec, def.thinking, provider, modelId), tools, messages: [] },
-			streamFn: withUpstreamRetry((m, ctx, opts) => this.registry.models.streamSimple(m, ctx, opts), DEFAULT_UPSTREAM_RETRY),
+			streamFn: withUpstreamRetry((m, ctx, opts) => streamAtTier(this.registry, m, ctx, opts, tier), DEFAULT_UPSTREAM_RETRY),
 			beforeToolCall: async (c) => this.extensionToolCall(sessionId, c),
 			afterToolCall: async (c) => this.extensionToolResult(sessionId, c),
 		});

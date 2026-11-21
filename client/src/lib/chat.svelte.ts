@@ -65,6 +65,8 @@ function assistantFields(m: AssistantMessage) {
 		provider: m.provider,
 		model: m.model,
 		thinkingLevel: m.thinkingLevel,
+		requestedTier: m.requestedTier,
+		servedTier: m.servedTier,
 		durationMs: m.durationMs,
 		tokens: m.usage?.totalTokens,
 		usage: m.usage,

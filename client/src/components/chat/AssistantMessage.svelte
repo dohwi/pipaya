@@ -14,6 +14,7 @@
 	import { compact, duration, fullTime, timeOfDay } from "../../lib/format";
 	import { plainTextOf, replyActions, segmentsOf, type Segment } from "../../lib/reply-blocks";
 	import { modelDisplayName } from "../../lib/model-name";
+	import { tierLabel } from "../../lib/service-tier";
 	import { SWIPE_BLOCKERS, SWIPE_TRIGGER, SwipeReply } from "../../lib/swipe-reply";
 	import type { AssistantItem, Session } from "../../lib/types";
 	import { tapTitle } from "../../lib/touch-hints";
@@ -110,8 +111,12 @@
 	const took = $derived(parts.reduce((n, p) => n + (p.durationMs ?? 0), 0));
 	/** The reasoning level the reply ran at: "off" for a model that cannot think (it ignores the session's level). */
 	const level = $derived(tailModel && !tailModel.reasoning ? "off" : (tail?.thinkingLevel ?? ""));
-	/** "level · 1.2k 토큰 · 3.4s", each part only when known: the details the line shows only with the buttons. */
-	const statsMore = $derived([level, tokens ? t("{n} 토큰", { n: compact(tokens) }) : "", took ? duration(took) : ""].filter(Boolean).join(" · "));
+	/** A model call OpenRouter served at another speed than asked (Ultrafast or Fast fall back quietly when capacity or balance runs short). */
+	const fell = $derived(parts.find((p) => p.requestedTier && p.servedTier && p.servedTier !== p.requestedTier));
+	/** The speed OpenRouter reports for the closing call, when it is worth naming: a chosen speed, or a paid one it picked itself. */
+	const served = $derived(tail?.servedTier && (tail.requestedTier || tail.servedTier !== "default") ? tierLabel(tail.servedTier) : "");
+	/** "level · Fast · 1.2k 토큰 · 3.4s", each part only when known: the details the line shows only with the buttons. */
+	const statsMore = $derived([level, fell ? "" : served, tokens ? t("{n} 토큰", { n: compact(tokens) }) : "", took ? duration(took) : ""].filter(Boolean).join(" · "));
 	const ref = $derived(tail?.model ? (tail.provider ? `${tail.provider}/${tail.model}` : tail.model) : "");
 	/** The full line on hover, with the provider and the exact token count, for when the pane cuts it short. */
 	const statsTitle = $derived(
@@ -119,6 +124,7 @@
 			// the registered name with the exact provider/id it stands for, so the tooltip still tells two same-named models apart
 			tail?.model ? (modelName !== tail.model ? `${modelName} (${ref})` : ref) : "",
 			level ? `${t("추론 강도")} ${level}` : "",
+			fell ? t("요청한 속도 {asked}, 실제 처리 {served}", { asked: tierLabel(fell.requestedTier!), served: tierLabel(fell.servedTier!) }) : served ? t("처리 속도 {tier}", { tier: served }) : "",
 			tokens ? t("{n} 토큰", { n: tokens.toLocaleString(localeTag()) }) : "",
 			took ? duration(took) : "",
 		]
@@ -179,7 +185,7 @@
 					{#if tail.ts && (tail.model || statsMore)}<span class="sep" aria-hidden="true">·</span>{/if}
 					{#if tail.model}<span class="slogo"><ModelLogo icon={tailModel?.icon} provider={tail.provider} model={tail.model} size={13} colored /></span>{/if}
 					<!-- at rest only who wrote it; the level, tokens and duration come with the buttons (hover, focus, or a tap on touch) -->
-					{#if modelName || statsMore}<span class="stext">{modelName}{#if statsMore}<span class="more">{modelName ? " · " : ""}{statsMore}</span>{/if}</span>{/if}
+					{#if modelName || statsMore || fell}<span class="stext">{modelName}{#if fell}<!-- a fallback stays on the quiet line at rest: the reply was billed at a speed other than the one chosen -->{modelName ? " · " : ""}<span class="fell">{tierLabel(fell.requestedTier!)} → {tierLabel(fell.servedTier!)}</span>{/if}{#if statsMore}<span class="more">{modelName || fell ? " · " : ""}{statsMore}</span>{/if}</span>{/if}
 				</span>
 				<!-- retry is what a failed answer needs, so it always shows; the everyday actions wait for the pointer -->
 				{#if actions.retry}
@@ -344,6 +350,10 @@
 			opacity: 1;
 			pointer-events: auto;
 		}
+	}
+	/* "Ultrafast → Fast": one step brighter than the line it sits in, no warning colour (nothing failed, it was billed at the served speed) */
+	.fell {
+		color: var(--text-dim);
 	}
 	/* the line at rest is "time · model"; the rest of the stats shows with the buttons. Nothing to its left moves when it
 	   appears, and the buttons were invisible until then, so their shift goes unseen */
