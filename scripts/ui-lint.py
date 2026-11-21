@@ -11,6 +11,8 @@ Flags, unless the same line or the line above carries a /* comment */ that says 
   nudge     margin-left/right/top: -Npx used to centre or nudge (fix the box instead)
   hover     a :hover rule that only tints (background / border / color) outside @media (hover: hover): it sticks on touch
   radius    a literal px corner above 3 (use a --radius-* token, or calc() / min() of one, so an extension theme reaches it)
+  glow      a box-shadow / drop-shadow with a blur and a colour from a token or color-mix (a decorative halo; grey
+            elevation tokens like var(--shadow) and hard focus spreads `0 0 0 3px` pass)
   chip      markup `class="chip …"`: a hand-made state pill (use Badge; a toggle is a Switch, one-of-N a Segmented).
             Allowed when the element carries `data-lint-ok` or the line holds a <!-- comment --> saying why
 Exit code 1 when something is flagged.
@@ -30,6 +32,22 @@ EM = re.compile(r"(-?\d*\.?\d+)em\b")
 PIN_HOSTS = ("lead", "dicon", "ico")
 PINHOST = re.compile(r"\.(" + "|".join(PIN_HOSTS) + r")\s+(?::global\()?svg\b")
 # properties a hover may change and still be "only a tint"; anything else (opacity, display, transform) reveals or moves something
+# a blurred coloured shadow: `0 0 <blur>px …` (any blur > 0 with a 0 offset) in a colour, not an elevation token
+GLOW = re.compile(r"^0(?:px)?\s+0(?:px)?\s+([1-9]\d*(?:\.\d+)?)px\b.*(?:var\(--(?!shadow)|color-mix|#|rgb)")
+
+
+def layers(value: str):
+    """The comma-separated layers of a shadow, not split inside color-mix( … , … )."""
+    out, depth, cur = [], 0, ""
+    for c in value:
+        depth += (c == "(") - (c == ")")
+        if c == "," and depth == 0:
+            out.append(cur.strip())
+            cur = ""
+        else:
+            cur += c
+    return out + [cur.strip()]
+GLOW_FILTER = re.compile(r"drop-shadow\(")
 # a hand-made pill in markup (the global .chip): states are a Badge, toggles a Switch
 CHIP = re.compile(r'class="(?:[^"]*\s)?chip(?:\s[^"]*)?"')
 # the model button's level / speed labels: part of a control (they size with the trigger and shrink in a narrow pane), not a state badge
@@ -119,6 +137,14 @@ def main():
                 for m in Z.finditer(line):
                     if abs(int(m.group(1))) > 9:
                         (allowed if ok else hits).append((where, "z-index", line.strip()))
+            nc = re.sub(r"/\*.*?\*/", lambda m: re.sub(r"[^\n]", " ", m.group(0)), css, flags=re.S)
+            for m in re.finditer(r"(?<![-\w])box-shadow\s*:([^;{}]+);", nc):
+                i = nc[: m.start()].count("\n")
+                if any(GLOW.search(x) for x in layers(" ".join(m.group(1).split()))):
+                    (allowed if commented(lines, i) else hits).append((f"{f.relative_to(ROOT)}:{offset + i + 1}", "glow", " ".join(m.group(0).split())[:90]))
+            for m in GLOW_FILTER.finditer(nc):
+                i = nc[: m.start()].count("\n")
+                (allowed if commented(lines, i) else hits).append((f"{f.relative_to(ROOT)}:{offset + i + 1}", "glow", lines[i].strip()[:90]))
             for i, sel in bare_hovers(css):
                 (allowed if commented(lines, i) else hits).append((f"{f.relative_to(ROOT)}:{offset + i + 1}", "hover", sel[:90]))
     for f in files:

@@ -59,8 +59,9 @@ share one left and one right line. Never write a raw side padding in a dialog; u
 - Chips that stay pressed are only for filters and multi-pick from a long list (`FilterChip`: settings servers,
   quick folders, a role's tools). Toolbar toggles (mic, source view, a terminal modifier, favourite star) are icon
   buttons with `aria-pressed`, not chips.
-- No decorative glow, halo or coloured `box-shadow` spread. A focus ring, an elevation shadow and the "working" breath
-  (`.glow-working`) are the only coloured shadows.
+- No decorative glow, halo or blurred coloured `box-shadow`. A focus ring (a hard 2-3px spread) and the grey elevation
+  shadows are the only shadows. "Working" is told by the border alone: `.glow-working` breathes the border colour, a
+  graph card's ring turns; neither spreads a halo outside its box.
 
 ### Shared dialog parts (use these, do not re-write the CSS)
 
