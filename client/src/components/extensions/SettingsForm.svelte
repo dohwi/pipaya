@@ -4,6 +4,7 @@
 	import { untrack, type Component } from "svelte";
 	import Accordion from "../ui/Accordion.svelte";
 	import Select from "../ui/Select.svelte";
+	import Switch from "../ui/Switch.svelte";
 	import { describeSettingErrors, fillSettingDefaults, resolveSettings, settingShown, type SettingField } from "../../lib/extensions/schema";
 	import { collapseIn, collapseOut } from "../../lib/motion";
 	import { displayValue } from "../../lib/extensions/translations";
@@ -102,10 +103,14 @@
 		{#if field.description}<p class="hint" id={hintId(field.key)}>{field.description}</p>{/if}
 	{:else}
 		{#if field.type === "boolean"}
-			<label class="check" for={fieldId(field.key)}>
-				<input id={fieldId(field.key)} type="checkbox" checked={draft[field.key] === true} {disabled} aria-invalid={error ? "true" : undefined} aria-describedby={describedBy(field)} onchange={(event) => { draft[field.key] = event.currentTarget.checked; }} />
-				<span class="name">{field.label}{#if field.required}<span class="req" aria-hidden="true"> *</span>{/if}</span>
-			</label>
+			<!-- on / off is a Switch (DESIGN.md rule 8): label and description on the left, the switch on the right -->
+			<div class="swrow">
+				<span class="swtext">
+					<span class="name">{field.label}{#if field.required}<span class="req" aria-hidden="true"> *</span>{/if}</span>
+					{#if field.description}<span class="hint" id={hintId(field.key)}>{field.description}</span>{/if}
+				</span>
+				<Switch checked={draft[field.key] === true} {disabled} label={field.label} describedby={describedBy(field)} onchange={(on) => { draft[field.key] = on; }} />
+			</div>
 		{:else}
 			<label class="name" for={fieldId(field.key)}>{field.label}{#if field.required}<span class="req" aria-hidden="true"> *</span><span class="sr-only"> ({t("필수")})</span>{/if}</label>
 			{#if field.type === "select"}
@@ -128,7 +133,7 @@
 				<input id={fieldId(field.key)} type={field.secret ? "password" : "text"} autocomplete="off" autocapitalize="off" spellcheck="false" inputmode={field.format === "origin" ? "url" : undefined} placeholder={field.placeholder} {disabled} aria-required={field.required ? "true" : undefined} aria-invalid={error ? "true" : undefined} aria-describedby={describedBy(field)} value={typeof draft[field.key] === "string" ? draft[field.key] as string : ""} oninput={(event) => { draft[field.key] = event.currentTarget.value; }} />
 			{/if}
 		{/if}
-		{#if field.description}<p class="hint" id={hintId(field.key)}>{field.description}</p>{/if}
+		{#if field.description && field.type !== "boolean"}<p class="hint" id={hintId(field.key)}>{field.description}</p>{/if}
 		{#if error}<p class="hint danger" id={errorId(field.key)}>{error}</p>{/if}
 	{/if}
 {/snippet}
@@ -189,8 +194,10 @@
 	/* A value the extension wrote: plain text under its name, so it does not look like a field a person can fill in. */
 	.readonly-value { margin: 0; color: var(--text); font-size: var(--fs-sm); line-height: 1.5; overflow-wrap: anywhere; white-space: pre-wrap; }
 	.readonly-value.empty { color: var(--text-faint); }
-	.check { display: flex; align-items: flex-start; gap: 8px; cursor: pointer; }
-	.check input { flex: none; width: 17px; height: 17px; margin: 1px 0 0; accent-color: var(--text); }
+	/* a boolean field: one row, the switch centred on the label's 20px line when there is no description, on the text block otherwise */
+	.swrow { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-width: 0; }
+	.swtext { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+	.swtext .name { line-height: 20px; }
 	input[type="text"], input[type="password"], input[type="number"], textarea {
 		display: block; width: 100%; min-width: 0; box-sizing: border-box; padding: 0 12px; height: 38px;
 		border: 1px solid var(--border-strong); border-radius: var(--radius-sm); background: var(--bg-code); color: var(--text);
@@ -200,7 +207,6 @@
 	/* touch: 16px, or iOS zooms the page in when the field takes focus */
 	@media (pointer: coarse) { textarea { font-size: var(--fs-lg); } }
 	input:focus-visible, textarea:focus-visible { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
-	.check input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; box-shadow: none; }
 	.invalid input:not([type="checkbox"]), textarea[aria-invalid="true"] { border-color: var(--danger); }
 	input:disabled, textarea:disabled { opacity: 0.6; }
 	.advanced { margin-top: 4px; }
