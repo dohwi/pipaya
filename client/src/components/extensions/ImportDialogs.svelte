@@ -6,6 +6,7 @@
 
 <script lang="ts">
 	import Button from "../ui/Button.svelte";
+	import Badge from "../ui/Badge.svelte";
 	import DialogBody from "../ui/DialogBody.svelte";
 	import DialogFooter from "../ui/DialogFooter.svelte";
 	import { t } from "../../lib/i18n";
@@ -90,8 +91,8 @@
 							<strong>{manifestName(r.pkg.manifest)}</strong>
 							<span class="facts">{r.pkg.manifest.id} · {t("버전")} {r.pkg.manifest.version}</span>
 							<div class="tags">
-								{#each featuresOf(r.pkg) as feature (feature)}<span class="chip">{t(feature)}</span>{/each}
-								<span class="chip {r.running ? "ok" : ""}">{r.running ? t("실행 중") : t("꺼짐")}</span>
+								{#each featuresOf(r.pkg) as feature (feature)}<Badge>{t(feature)}</Badge>{/each}
+								<Badge tone={r.running ? "ok" : "neutral"}>{r.running ? t("실행 중") : t("꺼짐")}</Badge>
 							</div>
 						</div>
 					{/if}
@@ -121,7 +122,7 @@
 						<span class="facts">{p.manifest.id} · {t("버전")} {p.manifest.version} · {filename}</span>
 						{#if manifestDescription(p.manifest)}<span class="rdesc">{manifestDescription(p.manifest)}</span>{/if}
 						<div class="tags" aria-label={t("포함 기능")}>
-							{#each featuresOf(p) as feature (feature)}<span class="chip">{t(feature)}</span>{/each}
+							{#each featuresOf(p) as feature (feature)}<Badge>{t(feature)}</Badge>{/each}
 						</div>
 					</div>
 					{#if !replacement}

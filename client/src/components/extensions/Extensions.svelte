@@ -3,6 +3,7 @@
 	import Button from "../ui/Button.svelte";
 	import { LocalizedError, t } from "../../lib/i18n";
 	import Icon from "../ui/Icon.svelte";
+	import Badge from "../ui/Badge.svelte";
 	import Notice from "../ui/Notice.svelte";
 	import VersionBump from "./VersionBump.svelte";
 	import SettingRow from "../ui/SettingRow.svelte";
@@ -443,7 +444,7 @@
 	{@const upd = clientUpdate(entry)}
 	{@const needServer = extensionUpdates.missingServerFor(id, serverId ?? app.serverId)}
 	<ExtensionRow id="extension-{id}" name={manifestName(entry.package.manifest)} brief={manifestDescription(entry.package.manifest)} busy={tasks.busy[id] || entry.state === "starting"} dim={!!needServer} onopen={() => (selected = id)}>
-		{#snippet meta()}{#if upd}{@render updateMeta(entry.package.manifest.version, upd)}{/if}<span class="facts">{#if !upd}v{entry.package.manifest.version}{/if}{#if entry.state === "starting"} · {t("시작 중")}{:else if entry.state === "error"} · {t("오류")}{/if}</span>{#if needServer}<span class="chip warn">{t("동작 안 함")}</span>{/if}{/snippet}
+		{#snippet meta()}{#if upd}{@render updateMeta(entry.package.manifest.version, upd)}{/if}<span class="facts">{#if !upd}v{entry.package.manifest.version}{/if}{#if entry.state === "starting"} · {t("시작 중")}{:else if entry.state === "error"} · {t("오류")}{/if}</span>{#if needServer}<Badge tone="warn">{t("동작 안 함")}</Badge>{/if}{/snippet}
 		{#snippet control()}
 			{#if upd}{@render updateButton(upd, !!tasks.busy[id] || !!tasks.busy.$import || !!tasks.busy.$all)}{/if}
 			<Switch
@@ -559,7 +560,7 @@
 					{#snippet control()}{#if upd}{@render updateButton(upd, !!tasks.busy[srvKey(ext.name)] || !!tasks.busy.$all)}{/if}{/snippet}
 					{#snippet meta()}
 						{#if upd && ext.version}{@render updateMeta(ext.version, upd)}{:else if ext.version}<span class="facts">v{ext.version}</span>{/if}
-						{#if half}<span class="chip warn">{t("동작 안 함")}</span>{/if}
+						{#if half}<Badge tone="warn">{t("동작 안 함")}</Badge>{/if}
 					{/snippet}
 				</ExtensionRow>
 		{/each}

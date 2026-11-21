@@ -775,22 +775,6 @@ kbd {
 	background: var(--warn-soft);
 	color: var(--warn);
 }
-.chip.ok {
-	background: var(--ok-soft);
-	color: var(--ok);
-}
-.chip.warn {
-	background: var(--warn-soft);
-	color: var(--warn);
-}
-.chip.danger {
-	background: var(--danger-soft);
-	color: var(--danger);
-}
-.chip.accent {
-	background: var(--accent-soft);
-	color: var(--text);
-}
 /* Reasoning level: each strength has its own colour, cool and quiet at the bottom, warm and loud at the top.
    Set data-level on an element and it (and anything inside) reads --lv / --lv-soft. "off" (no reasoning asked for)
    keeps the quietest, fully neutral one. */

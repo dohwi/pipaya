@@ -11,6 +11,8 @@ Flags, unless the same line or the line above carries a /* comment */ that says 
   nudge     margin-left/right/top: -Npx used to centre or nudge (fix the box instead)
   hover     a :hover rule that only tints (background / border / color) outside @media (hover: hover): it sticks on touch
   radius    a literal px corner above 3 (use a --radius-* token, or calc() / min() of one, so an extension theme reaches it)
+  chip      markup `class="chip …"`: a hand-made state pill (use Badge; a toggle is a Switch, one-of-N a Segmented).
+            Allowed when the element carries `data-lint-ok` or the line holds a <!-- comment --> saying why
 Exit code 1 when something is flagged.
 """
 import pathlib
@@ -28,6 +30,10 @@ EM = re.compile(r"(-?\d*\.?\d+)em\b")
 PIN_HOSTS = ("lead", "dicon", "ico")
 PINHOST = re.compile(r"\.(" + "|".join(PIN_HOSTS) + r")\s+(?::global\()?svg\b")
 # properties a hover may change and still be "only a tint"; anything else (opacity, display, transform) reveals or moves something
+# a hand-made pill in markup (the global .chip): states are a Badge, toggles a Switch
+CHIP = re.compile(r'class="(?:[^"]*\s)?chip(?:\s[^"]*)?"')
+# the model button's level / speed labels: part of a control (they size with the trigger and shrink in a narrow pane), not a state badge
+CHIP_OK = {"client/src/components/models/ModelField.svelte"}
 TINT = re.compile(r"^(background(-color|-image)?|color|border(-\w+)?-color|box-shadow|text-decoration(-\w+)?|outline(-color)?|filter|stroke|fill|--[\w-]+)$")
 
 
@@ -115,6 +121,14 @@ def main():
                         (allowed if ok else hits).append((where, "z-index", line.strip()))
             for i, sel in bare_hovers(css):
                 (allowed if commented(lines, i) else hits).append((f"{f.relative_to(ROOT)}:{offset + i + 1}", "hover", sel[:90]))
+    for f in files:
+        if f.suffix != ".svelte":
+            continue
+        text = re.sub(r"<style[^>]*>.*?</style>", lambda m: "\n" * m.group(0).count("\n"), f.read_text(encoding="utf-8"), flags=re.S)
+        for i, line in enumerate(text.split("\n")):
+            if CHIP.search(line):
+                ok = "data-lint-ok" in line or "<!--" in line or str(f.relative_to(ROOT)) in CHIP_OK
+                (allowed if ok else hits).append((f"{f.relative_to(ROOT)}:{i + 1}", "chip", line.strip()[:90]))
     seen = set()
     for where, kind, what in hits:
         if (where, kind) in seen:

@@ -7,7 +7,7 @@
 	 *
 	 *  tone     meaning: neutral | ok | warn | danger | accent
 	 *  variant  soft = tinted fill (default), outline = border only, solid = filled with the accent colour
-	 *  size     sm (18px) for dense rows, md (22px, matches `.chip` and StatusChip)
+	 *  size     sm (18px) for dense rows, md (22px, matches the model field's `.chip`)
 	 *  mono     monospace face, for codes and counts
 	 * Every badge is a pill: square corners are kept for key caps (`kbd`) only.
 	 */
