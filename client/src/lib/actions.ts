@@ -3,7 +3,7 @@ import { app } from "./store.svelte";
 import { isTauri } from "./tauri";
 import { findChat, runCommand } from "./commands";
 import { paneToward, panesOf, type Edge } from "./layout";
-import { connectionState, dirKey, orderServers, unreachable } from "./sidebar-model";
+import { connectionState, orderServers, unreachable } from "./sidebar-model";
 import { stepRowTarget, stepWorkspaceTarget } from "./step-session";
 import { projectKey } from "./projects";
 import { needsLook, stepFrom, tabPanes } from "./nav";
@@ -99,8 +99,7 @@ function goTo(to: { server: string; id: string } | null) {
 
 /** Previous / next row of the sidebar, across servers: a tab (a pane of a split tab), or a folded folder's first tab. */
 function stepRow(step: 1 | -1) {
-  const dirFolded = (server: string, path: string) => app.sidebar.isDirFolded(dirKey(server, path));
-  goTo(stepRowTarget(stepBands(), app.sidebar.folded, dirFolded, { server: app.serverId, id: app.activeId }, step));
+  goTo(stepRowTarget(stepBands(), app.sidebar.folded, (server, path) => app.dirFolded(server, path), { server: app.serverId, id: app.activeId }, step));
 }
 
 /** Previous / next workspace (a folder row in the sidebar: a plain folder or a worktree in a project), across servers: opens its first tab. */

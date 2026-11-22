@@ -146,6 +146,20 @@ describe("sidebar folders", () => {
 		sb.toggleDir("s\u0000/a");
 		expect(sb.isDirFolded("s\u0000/a")).toBe(true);
 	});
+
+	test("folders inside a project start open, fold by hand, and fold or open all at once", () => {
+		const sb = new SidebarState();
+		expect(sb.isDirFolded("s\u0000/r/a", true)).toBe(false);
+		sb.toggleDir("s\u0000/r/a", true);
+		expect(sb.isDirFolded("s\u0000/r/a", true)).toBe(true);
+		expect(sb.openDirs).toEqual([]);
+		sb.toggleDir("s\u0000/r/a", true);
+		expect(sb.isDirFolded("s\u0000/r/a", true)).toBe(false);
+		sb.setProjectDirsFolded(["s\u0000/r/a", "s\u0000/r/b"], true);
+		expect(sb.isDirFolded("s\u0000/r/a", true) && sb.isDirFolded("s\u0000/r/b", true)).toBe(true);
+		sb.setProjectDirsFolded(["s\u0000/r/a", "s\u0000/r/b"], false);
+		expect(sb.foldedProjectDirs).toEqual([]);
+	});
 });
 
 describe("sidebar shared part", () => {

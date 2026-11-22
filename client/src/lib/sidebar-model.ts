@@ -208,6 +208,10 @@ export interface ProjectActions extends NewActions {
 	/** Undo a hand-made project, its folders going back to the automatic grouping */
 	dissolve?(): void;
 	copyPath?(): void;
+	/** Open every folder of the project (offered while one of them is folded) */
+	openAll?(): void;
+	/** Fold every folder of the project down to its row (offered while one of them lists tabs) */
+	foldAll?(): void;
 }
 
 /** A project header's context menu: the "+" entries, renaming and undoing a hand-made project, folding. */
@@ -217,6 +221,8 @@ export function projectMenuEntries(os: string | undefined, folded: boolean, act:
 		...(act.rename ? [{ icon: "pencil", label: t("이름 바꾸기"), title: "", run: act.rename } satisfies MenuEntry] : []),
 		...(act.copyPath ? [{ icon: "copy", label: t("경로 복사"), title: "", run: act.copyPath } satisfies MenuEntry] : []),
 		...(act.dissolve ? [{ icon: "unlink", label: t("프로젝트 풀기"), title: t("폴더들을 자동 묶기로 되돌립니다"), run: act.dissolve } satisfies MenuEntry] : []),
+		...(act.openAll ? [{ icon: "chevron-down", label: t("폴더 모두 펼치기"), title: t("이 프로젝트의 폴더마다 탭을 펼칩니다"), run: act.openAll } satisfies MenuEntry] : []),
+		...(act.foldAll ? [{ icon: "chevron-right", label: t("폴더 모두 접기"), title: t("이 프로젝트의 폴더를 한 줄씩으로 접습니다"), run: act.foldAll } satisfies MenuEntry] : []),
 		folded ? { icon: "chevron-down", label: t("펼치기"), title: "", run: act.toggle } : { icon: "chevron-right", label: t("접기"), title: "", run: act.toggle },
 	];
 }

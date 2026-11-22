@@ -28,6 +28,7 @@ export const K = {
   settingsFold: "pipaya.settings.fold", // settings sections folded or unfolded by the user: { <tabId>: true (folded) | false }
   folded: "pipaya.folded", // sidebar tree nodes collapsed: "<serverId>", "project\u0000<serverId>\u0000<root>", "group\u0000<groupId>"
   openDirs: "pipaya.opendirs", // sidebar folders opened to list their tabs (folders start folded): ["<serverId>\u0000<workdir>", ...]
+  foldedProjectDirs: "pipaya.foldedprojdirs", // folders inside a project folded by hand (they start open): ["<serverId>\u0000<workdir>", ...]
   tabOrder: "pipaya.taborder", // tab order set by dragging (sidebar and tab bar): { <serverId>: [groupId | sessionId | terminalId, ...] }
   fullGroups: "pipaya.fullgroups", // groups shown one pane at a time with a tab strip: [groupId, ...]
   groupDir: "pipaya.groupdir", // folder a group is listed under, fixed once seen: { <serverId>: { <groupId>: cwd } }

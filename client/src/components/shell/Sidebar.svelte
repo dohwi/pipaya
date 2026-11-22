@@ -91,7 +91,7 @@
 
 
 	const isFolded = (key: string) => app.sidebar.folded.includes(key);
-	const isDirFolded = (key: string) => app.sidebar.isDirFolded(key);
+	const isDirFolded = (key: string, inProject = false) => app.sidebar.isDirFolded(key, inProject);
 
 	/**
 	 * Keep the open row in view: the list scrolls to it when something else opens (a new conversation in a folder far
@@ -314,10 +314,11 @@
 		const workdir = path === null ? "." : path === n.root ? "." : path;
 		// a folder folds by its own list (they start folded); a server keeps the shared one
 		const dir = path !== null;
-		const items = headMenuEntries(platformName(n.platform), dir ? isDirFolded(key) : isFolded(key), {
+		const inProject = dir && !!projectOf(n, path);
+		const items = headMenuEntries(platformName(n.platform), dir ? isDirFolded(key, inProject) : isFolded(key), {
 			chat: () => app.openIn(n.server.id, { workdir }),
 			terminal: () => app.openIn(n.server.id, { workdir, terminal: true }),
-			toggle: () => (dir ? app.sidebar.toggleDir(key) : app.sidebar.toggleFolded(key)),
+			toggle: () => (dir ? app.sidebar.toggleDir(key, inProject) : app.sidebar.toggleFolded(key)),
 			togglePin: path === null ? undefined : () => app.sidebar.togglePinned(n.server.id, path),
 			pinned: path !== null && app.sidebar.isPinned(n.server.id, path),
 			rename: path !== null ? () => dirRename.start(key, shortLabel(n, path)) : undefined,
@@ -366,12 +367,20 @@
 	function projectMenuAt(pt: Point, n: Node, root: string, key: string, workdir: string) {
 		const id = newKey(key);
 		const manual = isManualRoot(root);
+		const block = n.blocks.find((b) => b.kind === "project" && b.root === root);
+		// only folders with tabs: an empty one has nothing to open or fold
+		const keys = block?.kind === "project" ? block.dirs.filter((d) => d.tabs.length).map((d) => dirKey(n.server.id, d.path)) : [];
+		const anyFolded = keys.some((k) => isDirFolded(k, true));
+		const anyOpen = keys.some((k) => !isDirFolded(k, true));
 		const items = projectMenuEntries(platformName(n.platform), isFolded(key), {
 			chat: () => app.openIn(n.server.id, { workdir }),
 			terminal: () => app.openIn(n.server.id, { workdir, terminal: true }),
 			toggle: () => app.sidebar.toggleFolded(key),
 			rename: () => projectRename.start(key, projectName(n, root)),
 			dissolve: manual ? () => app.sidebar.setOverrides(n.server.id, dissolveProject(app.sidebar.overrides(n.server.id), root.slice("manual:".length))) : undefined,
+			// the header itself folds the whole project: the per-folder entries only mean something while it is open
+			openAll: !isFolded(key) && anyFolded ? () => app.sidebar.setProjectDirsFolded(keys, false) : undefined,
+			foldAll: !isFolded(key) && anyOpen ? () => app.sidebar.setProjectDirsFolded(keys, true) : undefined,
 			copyPath: manual ? undefined : () => void copyText(root).then((ok) => app.toast(ok ? t("경로를 복사했습니다") : t("복사하지 못했습니다"), ok ? "ok" : "error")),
 		});
 		rowMenu?.openAt(pt, id, items);

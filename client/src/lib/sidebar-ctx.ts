@@ -58,8 +58,8 @@ export interface SidebarCtx {
 	readonly menuId: string | null;
 	/** Folded state of a server, project or split tab */
 	isFolded(key: string): boolean;
-	/** Folded state of a folder: folders start folded and list their tabs only once opened */
-	isDirFolded(key: string): boolean;
+	/** Folded state of a folder: folders start folded and list their tabs only once opened; inside a project they start open */
+	isDirFolded(key: string, inProject?: boolean): boolean;
 	/** Activity of a conversation, from its own server's live state */
 	stateOf(n: SidebarNode, x: Session): Activity;
 	/** Activity by id (a terminal or an unknown id is idle) */
