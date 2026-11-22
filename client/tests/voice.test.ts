@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import {
 	CONFIG_FAILURES, FAILURE_TEXT, failureHasFix, failureTone, MAX_RECORD_MS, MIME_CANDIDATES, TAP_MS, formatTime, isConfigFailure, micAvailability,
-	micFailure, pickMimeType, PressToTalk, serverFailure, voiceState,
+	micFailure, pickMimeType, PressToTalk, serverFailure, upstreamDetail, voiceState,
 } from "../src/lib/voice";
 
 describe("voiceState", () => {
@@ -57,11 +57,18 @@ describe("failures", () => {
 		expect(serverFailure("not_found")).toBe("not_found");
 		expect(serverFailure("too_large")).toBe("too_large");
 		expect(serverFailure("timeout")).toBe("timeout");
+		expect(serverFailure("rate_limited")).toBe("rate_limited");
 		expect(serverFailure("weird_new_code")).toBe("upstream_error");
+	});
+	test("the transcription server's own reason is read from the error's detail", () => {
+		expect(upstreamDetail({ detail: " unknown model " })).toBe("unknown model");
+		expect(upstreamDetail({ detail: "" })).toBeNull();
+		expect(upstreamDetail({ detail: 3 })).toBeNull();
+		expect(upstreamDetail(undefined)).toBeNull();
 	});
 	test("only settings problems take the button away; a passing network error leaves it", () => {
 		for (const kind of CONFIG_FAILURES) expect(isConfigFailure(kind)).toBe(true);
-		for (const kind of ["network", "timeout", "tooShort", "tooBig", "micDenied", "empty", "aborted"] as const) expect(isConfigFailure(kind)).toBe(false);
+		for (const kind of ["network", "timeout", "rate_limited", "tooShort", "tooBig", "micDenied", "empty", "aborted"] as const) expect(isConfigFailure(kind)).toBe(false);
 	});
 	test("every failure has a sentence", () => {
 		for (const [kind, text] of Object.entries(FAILURE_TEXT)) expect({ kind, empty: !text }).toEqual({ kind, empty: false });

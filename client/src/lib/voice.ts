@@ -130,7 +130,7 @@ export function voiceState(o: { enabled: boolean; usable: boolean; failed: boole
 
 /** Why a recording or its upload failed, as the pill and the toast say it. */
 export type VoiceFailure =
-	| "micDenied" | "noMic" | "micBusy" | "micFailed" | "tooShort" | "tooBig" | "network" | "timeout"
+	| "micDenied" | "noMic" | "micBusy" | "micFailed" | "tooShort" | "tooBig" | "network" | "timeout" | "rate_limited"
 	| "not_configured" | "bad_key" | "not_found" | "too_large" | "upstream_error" | "bad_response" | "empty" | "aborted";
 
 /** The kinds that mean the settings are wrong: the button goes away until the user fixes them and tests again. */
@@ -157,7 +157,7 @@ export function micFailure(error: unknown): VoiceFailure {
 
 /** The server's error code as a failure kind; unknown codes are a server error. */
 export function serverFailure(code: string): VoiceFailure {
-	const known: VoiceFailure[] = ["not_configured", "bad_key", "not_found", "too_large", "timeout", "upstream_error", "bad_response", "network"];
+	const known: VoiceFailure[] = ["not_configured", "bad_key", "not_found", "too_large", "timeout", "rate_limited", "upstream_error", "bad_response", "network"];
 	return known.includes(code as VoiceFailure) ? (code as VoiceFailure) : "upstream_error";
 }
 
@@ -170,6 +170,7 @@ export const FAILURE_TEXT: Record<VoiceFailure, string> = {
 	tooBig: msg("녹음이 너무 깁니다. 더 짧게 나눠 말해 주세요."),
 	network: msg("서버에 연결할 수 없습니다. 네트워크를 확인하세요."),
 	timeout: msg("변환이 제한 시간 안에 끝나지 않았습니다."),
+	rate_limited: msg("변환 서버의 사용 한도에 걸렸습니다. 잠시 뒤 다시 시도하세요."),
 	not_configured: msg("설정 > 음성 입력에서 서버 주소와 API 키를 입력하고 연결을 확인하세요."),
 	bad_key: msg("API 키가 거부되었습니다. 설정 > 음성 입력에서 키를 고치고 다시 확인하세요."),
 	not_found: msg("변환 경로를 찾을 수 없습니다. 설정의 주소와 경로를 확인하세요."),
@@ -187,6 +188,15 @@ export function failureTone(failure: VoiceFailure): "info" | "warn" | "error" {
 
 /** Whether Settings > Voice is the place to fix it (so the toast offers the way there). */
 export const failureHasFix = (failure: VoiceFailure) => isConfigFailure(failure) || failure === "timeout";
+
+/**
+ * The transcription server's own reason (the pipaya server passes it on as `detail`), so a refused model or an account
+ * a gateway lacks reads as itself instead of only "the server answered with an error". Null when there is none.
+ */
+export function upstreamDetail(data: Record<string, unknown> | undefined): string | null {
+	const detail = data?.detail;
+	return typeof detail === "string" && detail.trim() ? detail.trim() : null;
+}
 
 /** Whether a failure means the settings must be fixed before the button may show again. */
 export const isConfigFailure = (failure: VoiceFailure) => CONFIG_FAILURES.includes(failure);

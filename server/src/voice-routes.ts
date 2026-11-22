@@ -15,7 +15,7 @@ export const TranscribeResult = Type.Object({ text: Type.String() });
 export const TranscribeTestResult = Type.Object({ text: Type.String(), status: Type.Integer() });
 
 /** The kinds the client turns into a message of its own; anything else is a server error. */
-export type VoiceFailure = "not_configured" | "bad_key" | "not_found" | "too_large" | "timeout" | "upstream_error" | "bad_response";
+export type VoiceFailure = "not_configured" | "bad_key" | "not_found" | "too_large" | "timeout" | "rate_limited" | "upstream_error" | "bad_response";
 
 /**
  * The failures that mean the settings are wrong (the same list as the client's `CONFIG_FAILURES`): they take the
@@ -36,6 +36,8 @@ export function failureStatus(kind: VoiceFailure): number {
 			return 413;
 		case "timeout":
 			return 504;
+		case "rate_limited":
+			return 429;
 		case "bad_response":
 			return 502;
 		default:
@@ -49,7 +51,33 @@ export function upstreamFailure(status: number): VoiceFailure {
 	if (status === 404 || status === 405) return "not_found";
 	if (status === 413) return "too_large";
 	if (status === 408 || status === 504) return "timeout";
+	// a quota or rate limit passes by itself; it must not take the microphone away like a wrong setting does
+	if (status === 429) return "rate_limited";
 	return "upstream_error";
+}
+
+/**
+ * The upstream's own error sentence, so "the server answered 400" can say why (an unknown model name, a missing
+ * account on a gateway). OpenAI and CLIProxyAPI plugins answer `{error: {message}}`, Mistral `{message}` or
+ * `{detail}`, some gateways `{error: "..."}`. The key is blanked out in case the upstream echoes it, the text is cut
+ * short and never logged; null when there is no readable sentence.
+ */
+export function upstreamDetail(body: string, key: string): string | null {
+	let parsed: unknown;
+	try {
+		parsed = JSON.parse(body);
+	} catch {
+		return null;
+	}
+	const record = (value: unknown) => (value && typeof value === "object" ? (value as Record<string, unknown>) : null);
+	const root = record(parsed);
+	const error = root?.error;
+	const candidates = [record(error)?.message, error, root?.message, root?.detail];
+	const found = candidates.find((value): value is string => typeof value === "string" && value.trim().length > 0);
+	if (!found) return null;
+	let text = found.replace(/[\u0000-\u001f\u007f]+/g, " ").trim();
+	if (key) text = text.split(key).join("…");
+	return text.length > 300 ? `${text.slice(0, 299)}…` : text;
 }
 
 export interface TranscribeInput {
@@ -93,7 +121,8 @@ export async function transcribe(input: TranscribeInput): Promise<string> {
 	}
 	if (!response.ok) {
 		const kind = upstreamFailure(response.status);
-		throw new HttpError(failureStatus(kind), kind, `the transcription server answered ${response.status}`);
+		const detail = upstreamDetail(await response.text().catch(() => ""), input.key);
+		throw new HttpError(failureStatus(kind), kind, `the transcription server answered ${response.status}`, detail ? { detail } : undefined);
 	}
 	let body: unknown;
 	try {
@@ -183,7 +212,7 @@ export function registerVoiceRoutes(server: FastifyInstance, settings: VoiceSett
 	 */
 	app.post("/voice/transcribe", {
 		bodyLimit: MAX_AUDIO_BYTES + 1024 * 1024,
-		schema: { response: { 200: TranscribeResult, ...errors(400, 401, 413, 502, 504) } },
+		schema: { response: { 200: TranscribeResult, ...errors(400, 401, 413, 429, 502, 504) } },
 		handler: async (req) => {
 			const form = await multipartOf(req.headers["content-type"], req.body);
 			// The upload is checked first: a malformed or non-audio request is the same answer whatever the settings say.
@@ -211,7 +240,7 @@ export function registerVoiceRoutes(server: FastifyInstance, settings: VoiceSett
 	 * microphone state; a passing or failing test is also published, so another device that is open follows along.
 	 */
 	app.post("/voice/test", {
-		schema: { response: { 200: TranscribeTestResult, ...errors(400, 401, 502, 504) } },
+		schema: { response: { 200: TranscribeTestResult, ...errors(400, 401, 429, 502, 504) } },
 		handler: async (req) => {
 			const controller = new AbortController();
 			req.raw.on("close", () => { if (!req.raw.complete) controller.abort(); });

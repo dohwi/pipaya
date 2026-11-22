@@ -13,7 +13,7 @@ import { t } from "./i18n";
 import { swallowClick } from "./press-menu";
 import { REC_START_MS } from "./sound";
 import {
-	AVAILABILITY_TEXT, MAX_RECORD_MS, MAX_UPLOAD_BYTES, MIN_RECORD_MS, FAILURE_TEXT, failureHasFix, failureTone, isConfigFailure, micAvailability, micFailure, pickMimeType,
+	AVAILABILITY_TEXT, MAX_RECORD_MS, MAX_UPLOAD_BYTES, MIN_RECORD_MS, FAILURE_TEXT, failureHasFix, failureTone, isConfigFailure, micAvailability, micFailure, pickMimeType, upstreamDetail,
 	PressToTalk, serverFailure, voiceState, type VoiceFailure, type VoiceState,
 } from "./voice";
 
@@ -139,7 +139,7 @@ class VoiceStore {
 		if (!this.settings.baseUrl) return t("변환 서버 주소를 입력하세요.");
 		if (!this.hasKey) return t("변환 API 키를 입력하세요.");
 		// only a test that failed blocks it; an untested setup is offered and the first recording reports the problem
-		if (this.tested && !this.tested.ok) return (this.tested.reason && FAILURE_TEXT[this.tested.reason]) || t("연결 확인에 실패했습니다.");
+		if (this.tested && !this.tested.ok) return (this.tested.reason && FAILURE_TEXT[this.tested.reason] && t(FAILURE_TEXT[this.tested.reason])) || t("연결 확인에 실패했습니다.");
 		return null;
 	}
 
@@ -167,7 +167,8 @@ class VoiceStore {
 		} catch (cause) {
 			const failure = cause instanceof ApiError ? serverFailure(cause.code) : "network";
 			this.tested = { at: Date.now(), ok: false, reason: failure };
-			return { ok: false, message: FAILURE_TEXT[failure] };
+			const detail = cause instanceof ApiError ? upstreamDetail(cause.data) : null;
+			return { ok: false, message: detail ? t("{text} (서버 응답: {detail})", { text: t(FAILURE_TEXT[failure]), detail }) : t(FAILURE_TEXT[failure]) };
 		} finally {
 			this.testing = false;
 		}
@@ -293,7 +294,7 @@ class VoiceStore {
 			// the user's own cancel is an answer, not a failure: no chip, no toast
 			if (abort.signal.aborted && !timedOut) return;
 			const failure = timedOut ? "timeout" : cause instanceof ApiError ? serverFailure(cause.code) : (cause as Error)?.name === "AbortError" ? "aborted" : "network";
-			this.fail(failure);
+			this.fail(failure, cause instanceof ApiError ? upstreamDetail(cause.data) : null);
 		} finally {
 			clearTimeout(limit);
 			this.transcribeAbort = null;
@@ -317,13 +318,14 @@ class VoiceStore {
 	}
 
 	/** Records a failure: the pill says it, and a settings problem also takes the button away until it is fixed. */
-	fail(failure: VoiceFailure) {
+	fail(failure: VoiceFailure, detail: string | null = null) {
 		this.failure = failure;
 		// severity: nothing heard or too short is a nudge (warn); a rejected key, a timeout, a server error is an error,
 		// and a settings problem carries the way to Settings > Voice
 		const tone = failureTone(failure);
 		const fix = failureHasFix(failure) ? { label: t("설정에서 고치기"), run: () => app.openSettings("voice") } : undefined;
-		app.toast(t(FAILURE_TEXT[failure]), tone, this.paneId ?? undefined, fix);
+		const text = detail ? t("{text} (서버 응답: {detail})", { text: t(FAILURE_TEXT[failure]), detail }) : t(FAILURE_TEXT[failure]);
+		app.toast(text, tone, this.paneId ?? undefined, fix);
 		// The server records a settings failure it finds itself (see POST /voice/transcribe), so every device hides the
 		// microphone at once; here the local state follows without a round trip.
 		if (isConfigFailure(failure)) this.tested = { at: Date.now(), ok: false, reason: failure };

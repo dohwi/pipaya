@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { buildApp, type App } from "../src/app.ts";
 import type { Config } from "../src/config.ts";
-import { SILENCE_WAV } from "../src/voice-routes.ts";
+import { SILENCE_WAV, upstreamDetail } from "../src/voice-routes.ts";
 import { MAX_AUDIO_BYTES, endpointOf, parseBase, parsePath, usesLanguagesList } from "../src/voice-input.ts";
 
 /** A stand-in transcription server: records what it got and answers what the test asks for. */
@@ -161,7 +161,7 @@ describe("POST /voice/transcribe", () => {
 		await api("PUT", "/voice", { settings: settings({ path: "/stt" }) });
 	});
 	test("upstream failures become the client's error kinds", async () => {
-		for (const [upstream, status, code] of [[401, 502, "bad_key"], [403, 502, "bad_key"], [404, 502, "not_found"], [413, 413, "too_large"], [500, 502, "upstream_error"], [504, 504, "timeout"]] as const) {
+		for (const [upstream, status, code] of [[401, 502, "bad_key"], [403, 502, "bad_key"], [404, 502, "not_found"], [413, 413, "too_large"], [429, 429, "rate_limited"], [500, 502, "upstream_error"], [503, 502, "upstream_error"], [504, 504, "timeout"]] as const) {
 			stt.answer = { status: upstream, body: JSON.stringify({ error: "nope" }) };
 			const r = await api("POST", "/voice/transcribe", multipart(webmOf(1200)));
 			expect({ upstream, status: r.status, code: r.json.error.code }).toEqual({ upstream, status, code });
@@ -171,6 +171,20 @@ describe("POST /voice/transcribe", () => {
 		expect(bad.json.error.code).toBe("bad_response");
 		stt.answer = { status: 200, body: JSON.stringify({ nope: 1 }) };
 		expect((await api("POST", "/voice/transcribe", multipart(webmOf(1200)))).json.error.code).toBe("bad_response");
+		stt.answer = { status: 200, body: JSON.stringify({ text: "ok" }) };
+	});
+	test("the upstream's own reason travels with the error, without the key", async () => {
+		// OpenAI and the CLIProxyAPI plugins: {error: {message}}
+		stt.answer = { status: 400, body: JSON.stringify({ error: { message: "model must be one of gpt-transcribe", type: "invalid_request_error", code: "model_not_supported" } }) };
+		const openai = await api("POST", "/voice/transcribe", multipart(webmOf(1200)));
+		expect(openai.json.error).toMatchObject({ code: "upstream_error", detail: "model must be one of gpt-transcribe" });
+		// Mistral: {message} or {detail}; an echoed key is blanked out
+		stt.answer = { status: 401, body: JSON.stringify({ message: "Unauthorized key sk-test-123" }) };
+		expect((await api("POST", "/voice/transcribe", multipart(webmOf(1200)))).json.error).toMatchObject({ code: "bad_key", detail: "Unauthorized key …" });
+		stt.answer = { status: 422, body: JSON.stringify({ detail: [{ msg: "bad" }] }) };
+		expect((await api("POST", "/voice/transcribe", multipart(webmOf(1200)))).json.error.detail).toBeUndefined();
+		stt.answer = { status: 502, body: "<html>bad gateway</html>", contentType: "text/html" };
+		expect((await api("POST", "/voice/transcribe", multipart(webmOf(1200)))).json.error.detail).toBeUndefined();
 		stt.answer = { status: 200, body: JSON.stringify({ text: "ok" }) };
 	});
 	test("refuses what is not an audio upload, and an oversized one before it is sent", async () => {
@@ -241,6 +255,14 @@ describe("pure helpers", () => {
 		expect(parseBase("https://api.example.com/v1")).toBeNull();
 		expect(endpointOf({ baseUrl: "https://api.example.com", path: "" })).toBe("https://api.example.com/v1/audio/transcriptions");
 		expect(endpointOf({ baseUrl: "", path: "" })).toBeNull();
+	});
+	test("the upstream's reason is read from the common error shapes and kept short", () => {
+		expect(upstreamDetail(JSON.stringify({ error: "plain" }), "")).toBe("plain");
+		expect(upstreamDetail(JSON.stringify({ detail: "Invalid model" }), "")).toBe("Invalid model");
+		expect(upstreamDetail(JSON.stringify({ error: { message: "a\nb" } }), "")).toBe("a b");
+		expect(upstreamDetail(JSON.stringify({ error: { message: "x".repeat(500) } }), "")!.length).toBe(300);
+		expect(upstreamDetail("not json", "")).toBeNull();
+		expect(upstreamDetail(JSON.stringify({ ok: 1 }), "")).toBeNull();
 	});
 	test("only gpt-transcribe takes a language list", () => {
 		expect(usesLanguagesList(" GPT-Transcribe ")).toBe(true);
