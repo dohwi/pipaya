@@ -32,7 +32,7 @@
 	import { InlineRename } from "../../lib/inline-rename.svelte";
 	import { registerRenamePlace } from "../../lib/rename-places";
 	import { DragMarks } from "../../lib/drag-marks.svelte";
-	import { workDir, type DirBlock, type Tab } from "../../lib/nav";
+	import { dirPaneCount, workDir, type DirBlock, type Tab } from "../../lib/nav";
 	import { dissolveProject, flattenBlocks, isManualRoot, joinProject, leaveProject, newProjectId, projectKey, type SidebarBlock } from "../../lib/projects";
 	import { dirKey, connectionState, edgeOf, headMenuEntries, newKey, newMenuEntries, orderServers, projectMenuEntries, rowMenuEntries, shortName, targetId, type RowActions } from "../../lib/sidebar-model";
 	import type { Group, Session } from "../../lib/types";
@@ -89,7 +89,7 @@
 			// The shared list (see app.blocksByServer): the rail and the shortcuts walk the same one.
 			const blocks = app.blocksByServer[server.id] ?? [];
 			const dirs = flattenBlocks(blocks);
-			const total = dirs.reduce((sum, x) => sum + x.tabs.length, 0);
+			const total = dirs.reduce((sum, x) => sum + dirPaneCount(x), 0);
 			return { server, local: server.local, current, state, loaded: Boolean(link?.listed || link?.cached), stale: Boolean(link?.cached), home: ws?.home, platform: link?.terminalSupport?.platform, repos: link?.repos ?? {}, root: ws?.root, total, dirs, blocks };
 		});
 		// A server that is up rises above the ones still being checked, and both above the unreachable (shown only; the saved order is untouched).

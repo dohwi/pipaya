@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { pair, pane, paneToward, splitAt, type Layout } from "../src/lib/layout";
-import { needsLook, sessionOrder, sidebarDirs, stepFrom, tabOf } from "../src/lib/nav";
+import { dirPaneCount, needsLook, sessionOrder, sidebarDirs, stepFrom, tabOf } from "../src/lib/nav";
 import { registerRenamePlace, renameNow } from "../src/lib/rename-places";
 import { ACTIONS, DEFAULT_BINDINGS, MAX_KEYS, RENAME_KEY, actionFor, fixedActionFor, buildCombo, chordNext, chordOptions, hasLongerBinding, nextChord, emptyRecording, escapeShouldStop, escapeShouldUnzoom, renameShouldFallThrough, tabComboYieldsFocus, OVERLAY_SELECTOR, keyCount, recordKey, recordingCombo, recordingIsEmpty, recordingLabel, undoRecording, type Recording } from "../src/lib/keys";
 import type { Group, Session } from "../src/lib/types";
@@ -453,6 +453,14 @@ describe("sidebarDirs / tabOf", () => {
 		const dirs = sidebarDirs(sessions, [grp("G", pair("a", "b"))], [], { match: (s) => s.id === "b" });
 		const g = dirs[0]!.tabs[0]!;
 		expect(g.kind === "group" && g.members.map((m) => m.id)).toEqual(["b"]);
+	});
+	test("dirPaneCount counts each group member alongside standalone tabs", () => {
+		const three = splitAt(pair("a", "b"), "b", "d", "right");
+		const dirs = sidebarDirs([sess("a", "/w", 1), sess("b", "/w", 2), sess("d", "/w", 3), sess("e", "/w", 4)], [grp("G", three)]);
+		expect(dirs).toHaveLength(1);
+		expect(dirs[0]!.tabs).toHaveLength(2);
+		expect(dirPaneCount(dirs[0]!)).toBe(4);
+		expect(dirPaneCount({ path: "/empty", tabs: [] })).toBe(0);
 	});
 });
 

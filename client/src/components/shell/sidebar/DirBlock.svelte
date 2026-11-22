@@ -3,7 +3,7 @@
 	import { tail, tailKeepLast } from "../../../lib/fit-text";
 	import { t } from "../../../lib/i18n";
 	import { ACTIVITY_LABEL, ACTIVITY_TONE, mostUrgent } from "../../../lib/activity";
-	import { tabPanes } from "../../../lib/nav";
+	import { dirPaneCount, tabPanes } from "../../../lib/nav";
 	import { app } from "../../../lib/store.svelte";
 	import { dropTarget } from "../../../lib/dnd.svelte";
 	import type { DirBlock as Dir } from "../../../lib/nav";
@@ -51,6 +51,7 @@
 	const twin = $derived(n.dirs.some((x) => x.path !== d.path && sb.shortLabel(n, x.path) === label));
 	/** The most urgent state among the folder's tabs: tints the count while folded */
 	const dstate = $derived(mostUrgent(d.tabs.flatMap((x) => tabPanes(x)).map((id) => sb.stateOfId(n, id))));
+	const dcount = $derived(dirPaneCount(d));
 </script>
 
 <!-- A drop and drag target for folders; the folder toggle inside is a real button. -->
@@ -90,7 +91,7 @@
 					{#if above && !inProject}<span class="dparent mono" class:twin use:tail={above}></span>{/if}
 				{/if}
 			</span>
-			{#if folded && d.tabs.length}<span class="cbadge tint {ACTIVITY_TONE[dstate]}" title={t("{n}개", { n: d.tabs.length }) + (dstate !== "idle" ? ` · ${ACTIVITY_LABEL[dstate]}` : "")}>{d.tabs.length}</span>{/if}
+			{#if folded && dcount}<span class="cbadge tint {ACTIVITY_TONE[dstate]}" title={t("{n}개", { n: dcount }) + (dstate !== "idle" ? ` · ${ACTIVITY_LABEL[dstate]}` : "")}>{dcount}</span>{/if}
 		</button>
 		<ListButton serverId={n.server.id} filter={{ cwd: d.path }} name={t("대화 목록 관리")} tip={t("이 폴더의 대화 목록 관리")} />
 		<NewButton {n} workdir={asWorkdir(d.path, n.root)} {key} name={parent} tip={t("이 폴더에서 새 대화 또는 터미널")} />
