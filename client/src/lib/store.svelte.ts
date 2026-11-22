@@ -344,6 +344,8 @@ class AppStore {
   schedulesDialog = $state(false);
   /** The session the scheduled-tasks page opens a new-task form for (set by a conversation's menu, taken by the page). */
   scheduleFor = $state<string | null>(null);
+  /** The task the scheduled-tasks page opens in its edit form (set by a row above the input, taken by the page). */
+  scheduleEdit = $state<string | null>(null);
   openMcp() {
     if (this.api) this.mcpDialog = true;
   }
@@ -385,6 +387,11 @@ class AppStore {
   /** Opens the scheduled-tasks page with a new-task form for this conversation. */
   openScheduleFor(sessionId: string) {
     this.scheduleFor = sessionId;
+    this.openSettings("schedules");
+  }
+  /** Opens the scheduled-tasks page with this task in the edit form. */
+  openScheduleEdit(id: string) {
+    this.scheduleEdit = id;
     this.openSettings("schedules");
   }
   sending = $state(false);
