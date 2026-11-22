@@ -1,5 +1,5 @@
 <script lang="ts">
-	import Button from "../ui/Button.svelte";
+	import ConfirmButton from "../ui/ConfirmButton.svelte";
 	import Icon from "../ui/Icon.svelte";
 	import Segmented from "../ui/Segmented.svelte";
 	import SettingRow from "../ui/SettingRow.svelte";
@@ -35,7 +35,7 @@
 
 <div class="head">
 	<div class="section-label">{t("푸터")}</div>
-	<Button size="sm" disabled={!changed} onclick={() => app.prefs.resetFooter()}>{t("기본값으로")}</Button>
+	<ConfirmButton size="sm" confirmLabel={t("정말 초기화")} disabled={!changed} onconfirm={() => app.prefs.resetFooter()}>{t("기본값으로")}</ConfirmButton>
 </div>
 <span class="hint">{t("입력창 아래 줄에 띄울 항목과 순서입니다. 이 기기에만 적용됩니다")}</span>
 

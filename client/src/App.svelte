@@ -57,7 +57,7 @@
 	// Load the transcript of every session on screen (all panes of the open group on a wide screen), drop the rest.
 	$effect(() => {
 		const ids = app.visibleIds;
-		untrack(() => { app.syncChats(ids); void notifications.heartbeat(); });
+		untrack(() => { app.syncChats(ids); });
 	});
 	// The sidebar's scheduled-task count and clocks: read when the open server connects and again after its task events pause.
 	$effect(() => {
@@ -129,9 +129,16 @@
 			// Settings is the dialog people open most: fetched on the first click, its sheet arrived ~0.6s late on a phone.
 			void preload(load.settings).catch(() => {});
 		};
-		const idle = (window as { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number }).requestIdleCallback;
-		if (idle) idle(run, { timeout: 2000 });
-		else setTimeout(run, 500);
+		const win = window as {
+			requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number;
+			cancelIdleCallback?: (id: number) => void;
+		};
+		if (win.requestIdleCallback) {
+			const id = win.requestIdleCallback(run, { timeout: 2000 });
+			return () => win.cancelIdleCallback?.(id);
+		}
+		const id = setTimeout(run, 500);
+		return () => clearTimeout(id);
 	});
 	/** The shared context menu of the rail, pane title bars and the phone's pane strip (lib/context-menu). */
 	let contextMenu: ReturnType<typeof RowMenu> | undefined = $state();
@@ -222,7 +229,7 @@
 
 	onMount(() => {
 		armSound();
-		app.init();
+		const stopApp = app.init();
 		let stopLinks = () => {};
 		let gone = false;
 		void listenForPairingLinks(link => app.connectByLink(link)).then(stop => { if (gone) stop(); else stopLinks = stop; });
@@ -262,7 +269,7 @@
 			statesChanged: () => app.statesChanged(),
 			configuration: { capture: () => app.captureConfiguration(), apply: document => app.applyConfiguration(document), applyBackground: document => app.applyBackgroundConfiguration(document), backup: () => app.backupConfiguration(), restore: value => app.restoreConfiguration(value), confirm: message => app.extensionRequests.confirm(message) },
 		});
-		return () => { gone = true; stopLinks(); clearTimeout(updateTimer); extensions.stop(); notifications.stop(); };
+		return () => { gone = true; stopLinks(); clearTimeout(updateTimer); extensions.stop(); notifications.stop(); stopApp(); };
 	});
 
 	// Drag the sidebar edge to resize it (desktop).
@@ -450,7 +457,7 @@
 <!-- The connection strip: in the column above the stage, or (the graph view covers that) first in the stage's overlay under the graph's header -->
 {#snippet netBanner()}
 	{#if app.net !== "online"}
-		<div class="banner" class:bad={app.net === "offline" || app.net === "unauthorized"} in:fadeIn out:fadeOut>
+		<div class="banner" role="status" aria-live="polite" class:bad={app.net === "offline" || app.net === "unauthorized"} in:fadeIn out:fadeOut>
 			{#if app.net === "connecting"}
 				<span class="spinner"></span> {t("연결하는 중…")}
 			{:else if app.net === "unauthorized"}
