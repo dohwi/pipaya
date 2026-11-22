@@ -170,6 +170,11 @@ export class SessionStore {
 		return new Set((this.db.query("SELECT name FROM sessions WHERE closed = 0 AND name != ''").all() as { name: string }[]).map((r) => nameKey(r.name)));
 	}
 
+	/** `nameKey`s of the names closed sessions still carry: a new name avoids them while it can, so the chats list rarely shows one name twice. */
+	closedNames(): Set<string> {
+		return new Set((this.db.query("SELECT DISTINCT name FROM sessions WHERE closed = 1 AND name != ''").all() as { name: string }[]).map((r) => nameKey(r.name)));
+	}
+
 	/** `watcher` wants a report about `target` (its end, its questions). */
 	watch(target: string, watcher: string): void {
 		this.db.query("INSERT OR IGNORE INTO peer_watch (target_id, watcher_id) VALUES ($target, $watcher)").run({ target, watcher });

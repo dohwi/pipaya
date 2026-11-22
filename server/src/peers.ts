@@ -220,14 +220,14 @@ export class PeerService {
 		return taken;
 	}
 
-	/** A free name for a new session. Names are stored in Korean whatever the UI language (see member-names.ts). */
+	/** A free name for a new session, one no closed session carries either while there is one. Names are stored in Korean whatever the UI language (see member-names.ts). */
 	newName(): string {
-		return nextMemberName(this.taken());
+		return nextMemberName(this.taken(), undefined, this.host.store.closedNames());
 	}
 
 	/** The name a session takes back when reopened: its own, unless another session has it by now (or it never had one). */
 	resumedName(r: SessionRecord): string {
-		return r.name && !this.taken().has(nameKey(r.name)) ? r.name : nextMemberName(this.taken());
+		return r.name && !this.taken().has(nameKey(r.name)) ? r.name : this.newName();
 	}
 
 	// ── addressing ──────────────────────────────────────────────────────────

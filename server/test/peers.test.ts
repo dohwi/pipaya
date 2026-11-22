@@ -83,13 +83,20 @@ describe("peer sessions: names, peer / peer read and @mentions", () => {
 		expect(body).toContain("Group @Hint-Crew");
 	});
 
-	test("every active session has its own name, a closed one gives it up, and a name does not follow the UI language", async () => {
+	test("every active session has its own name, a new one avoids a closed one's, and a name does not follow the UI language", async () => {
 		const [a, b, c] = [await mk(), await mk(), await mk()];
 		const names = async () => Object.fromEntries(await Promise.all([a, b, c].map(async (id) => [id, await nameOf(id)] as const)));
 		const before = await names();
 		expect(new Set(Object.values(before)).size).toBe(3);
 		await api("PATCH", `/sessions/${c}`, { closed: true });
 		const d = await mk();
+		expect([before[a]!, before[b]!, before[c]!]).not.toContain(await nameOf(d)); // c's name is free, but a fresh one is left
+		await api("PATCH", `/sessions/${c}`, { closed: false });
+		expect(await nameOf(c)).toBe(before[c]!); // nobody took it: c gets its own back
+		// a name a closed session gave up can still be taken on purpose; reopened, that session then gets a fresh one
+		await api("PATCH", `/sessions/${c}`, { closed: true });
+		await api("POST", `/sessions/${a}/messages`, { text: `!peer ${JSON.stringify({ action: "rename", name: await nameOf(d), newName: before[c]! })}` });
+		await idle(a);
 		expect(await nameOf(d)).toBe(before[c]!);
 		await api("PATCH", `/sessions/${c}`, { closed: false });
 		const after = await nameOf(c);

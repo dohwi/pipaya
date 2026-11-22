@@ -77,6 +77,10 @@
 			.map(([cwd, list]) => ({ cwd, list, updatedAt: list[0]?.updatedAt ?? 0 }))
 			.sort((a, b) => b.updatedAt - a.updatedAt);
 	});
+	/** Names the open chats answer to. A closed chat whose old name one of them carries now shows no handle: the dialog
+	   never lists one `@name` twice, and the one it shows is the one that answers. */
+	const openNames = $derived(new Set((sessions ?? []).filter((s) => !s.closed && s.name).map((s) => s.name.toLowerCase())));
+	const handleOf = (s: Session) => (s.closed && openNames.has(s.name.toLowerCase()) ? undefined : peerLabel(s));
 	const nIn = (list: Session[]) => list.filter((s) => picked[s.id]).length;
 
 	const allIn = (list: Session[]) => list.length > 0 && list.every((s) => picked[s.id]);
@@ -184,7 +188,7 @@
 					{#if !folded[g.cwd]}
 						<ul in:collapseIn out:collapseOut>
 							{#each g.list as s (s.id)}
-								{@const who = peerLabel(s)}
+								{@const who = handleOf(s)}
 								<li class:on={picked[s.id]} animate:reflow in:rowIn out:rowOut>
 									<label>
 										<input type="checkbox" checked={!!picked[s.id]} onchange={() => toggleOne(s.id)} aria-label={s.title} />

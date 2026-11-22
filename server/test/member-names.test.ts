@@ -23,6 +23,18 @@ describe("member names", () => {
 		expect(nextMemberName(all)).toBe(`${MEMBER_NAMES_KO[0]}3`);
 	});
 
+	test("never hands out a name a closed session still carries", () => {
+		const [a, b, c] = MEMBER_NAMES_KO as [string, string, string];
+		// a pool name nobody carries comes first
+		expect(nextMemberName(new Set([a]), undefined, new Set([b]))).toBe(c);
+		// with the pool used up (open or closed), a numbered name nobody carries
+		const open = new Set(MEMBER_NAMES_KO.slice(0, 150).map((n) => n.toLowerCase()));
+		const closed = new Set([...MEMBER_NAMES_KO.slice(150), `${a}2`].map((n) => n.toLowerCase()));
+		expect(nextMemberName(open, undefined, closed)).toBe(`${a}3`);
+		// a closed name is skipped even when nothing open is in the way
+		expect(nextMemberName(new Set(), ["가", "나"], new Set(["가"]))).toBe("나");
+	});
+
 	test("shows a name in the language asked for, numbered ones included, and leaves strangers alone", () => {
 		const ko = MEMBER_NAMES_KO[0]!;
 		const en = MEMBER_NAMES_EN[0]!;
