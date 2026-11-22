@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { dayLabel, dayStart, fileStamp, fullTime, shortDate, shortDateTime, timeOfDay } from "../src/lib/format";
+import { ago, dayLabel, dayStart, fileStamp, fullTime, shortDate, shortDateTime, timeOfDay } from "../src/lib/format";
 import { setLang } from "../src/lib/i18n";
 
 describe("fileStamp", () => {
@@ -49,5 +49,38 @@ describe("fullTime / shortDate / shortDateTime", () => {
 	test("a day and a time, no year or seconds", () => {
 		expect(shortDateTime(ts, "en-US")).toBe("Nov 19, 03:04 PM");
 		expect(shortDateTime(ts, "ko-KR")).toBe("11월 19일 오후 03:04");
+	});
+});
+
+describe("ago", () => {
+	const now = new Date(2026, 10, 17, 12, 0, 0).getTime();
+	test("59 seconds -> '방금' (no seconds option)", () => {
+		setLang("ko");
+		expect(ago(now - 59_000, now)).toBe("방금");
+	});
+	test("59 seconds -> '59초 전' (seconds option)", () => {
+		setLang("ko");
+		expect(ago(now - 59_000, now, { seconds: true })).toBe("59초 전");
+	});
+	test("60 seconds -> '1분 전'", () => {
+		setLang("ko");
+		expect(ago(now - 60_000, now)).toBe("1분 전");
+	});
+	test("59 minutes -> '59분 전'", () => {
+		setLang("ko");
+		expect(ago(now - 59 * 60_000, now)).toBe("59분 전");
+	});
+	test("23 hours -> '23시간 전'", () => {
+		setLang("ko");
+		expect(ago(now - 23 * 3_600_000, now)).toBe("23시간 전");
+	});
+	test("24 hours -> '1일 전'", () => {
+		setLang("ko");
+		expect(ago(now - 24 * 3_600_000, now)).toBe("1일 전");
+	});
+	test("now defaults to Date.now() (at = now → '방금')", () => {
+		setLang("ko");
+		const at = Date.now();
+		expect(ago(at)).toBe("방금");
 	});
 });

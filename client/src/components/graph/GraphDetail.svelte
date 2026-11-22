@@ -1,11 +1,10 @@
 <script lang="ts">
 	import { app } from "../../lib/store.svelte";
 	import { t } from "../../lib/i18n";
-	import { compact, duration, tilde } from "../../lib/format";
+	import { ago, compact, duration, tilde } from "../../lib/format";
 	import { copyText } from "../../lib/clipboard";
 	import { abortable } from "../../lib/abortable";
 	import { sessionTitle } from "../../lib/session-title";
-	import { agoText } from "../../lib/tab-overview";
 	import { BRAND_LABEL } from "../../lib/brand";
 	import { connectionState } from "../../lib/sidebar-model";
 	import { ROLE_STALE_MS, type Card, type DelegateRun, type Graph } from "../../lib/graph";
@@ -52,7 +51,6 @@
 		const timer = setInterval(() => (now = Date.now()), 30_000);
 		return () => clearInterval(timer);
 	});
-	const ago = (at: number) => agoText(at, now);
 
 	// ---- what each kind shows ----
 	const chats = $derived(card && card.kind !== "subagent" && card.kind !== "session" ? under(graph, card.id, "session") : []);
@@ -101,7 +99,7 @@
 		return roleStats((graphRuns.runs[server] ?? []).filter((r) => r.model === model), card.label, (sid) => graph.cards.has(`s:${server}/${sid}`));
 	});
 	/** A role card's row end: its calls, and when it was last used if that was a while ago (a model the role moved off). */
-	const roleEnd = (c: Card) => (c.last && now - c.last > ROLE_STALE_MS ? `${t("{n}회", { n: c.count })} · ${ago(c.last)}` : t("{n}회", { n: c.count }));
+	const roleEnd = (c: Card) => (c.last && now - c.last > ROLE_STALE_MS ? `${t("{n}회", { n: c.count })} · ${ago(c.last, now)}` : t("{n}회", { n: c.count }));
 	/** Calls of the role on every model, when it ran on more than this one. */
 	const roleTotal = $derived(siblings.length ? siblings.reduce((n, c) => n + c.count, card?.count ?? 0) : 0);
 	const callerCwd = $derived(stats?.callers[0] ? link?.sessionById.get(stats.callers[0].sessionId)?.cwd : undefined);
@@ -170,7 +168,7 @@
 			<span class="mark"><AgentBadge id={s.id} server={c.server} state={c.activity} size={20} /></span>
 			<span class="nm {c.activity}" class:who={!!s.name}>{s.name ? `@${s.name}` : sessionTitle(s.title)}</span>
 			{#if s.name}<span class="sub">{sessionTitle(s.title)}</span>{/if}
-			<span class="end">{ago(s.updatedAt)}</span>
+			<span class="end">{ago(s.updatedAt, now)}</span>
 		</button>
 	</li>
 {/snippet}
@@ -189,7 +187,7 @@
 			<span class="end">
 				<span class="st {st}">{CALL_TEXT[st]()}</span>
 				{#if r.doneAt !== null && !r.running}<i>·</i><span class="mono">{duration(Math.max(0, r.doneAt - r.at))}</span>{/if}
-				<i>·</i><span>{ago(r.at)}</span>
+				<i>·</i><span>{ago(r.at, now)}</span>
 			</span>
 		</button>
 	</li>

@@ -1,5 +1,4 @@
 import type { StoredMessage } from "./api";
-import { t } from "./i18n";
 import type { ChatItem } from "./types";
 
 /**
@@ -71,16 +70,6 @@ export function previewOfStored(messages: readonly StoredMessage[]): Preview | n
 	return null;
 }
 
-/** "just now", "5m ago", "3h ago", "2d ago" (the graph view's wording). */
-export function agoText(at: number, now: number): string {
-	const sec = Math.max(0, Math.round((now - at) / 1000));
-	if (sec < 60) return t("방금");
-	const min = Math.floor(sec / 60);
-	if (min < 60) return t("{n}분 전", { n: min });
-	const hour = Math.floor(min / 60);
-	if (hour < 24) return t("{n}시간 전", { n: hour });
-	return t("{n}일 전", { n: Math.floor(hour / 24) });
-}
 
 /** The last two steps of a path, as the header shows a working directory (`proj/app`). */
 export const shortPath = (p: string): string => p.split(/[\\/]/).filter(Boolean).slice(-2).join("/") || p;

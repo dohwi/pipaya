@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { t } from "../../lib/i18n";
 	import ConfirmDialog from "../ui/ConfirmDialog.svelte";
+	import Switch from "../ui/Switch.svelte";
 
 	/**
 	 * "Delete this extension?" over the marketplace or its page: delete or cancel, with one box for its settings. Settings are kept
@@ -33,10 +34,15 @@
 	]}
 >
 	{#if keepable}
-		<label class="wipe"><input type="checkbox" bind:checked={wipe} disabled={busy} /> {t("설정값도 함께 삭제")}</label>
+		<!-- the visible name beside the switch; a click on it flips the switch too, as the checkbox label did -->
+		<div class="wipe-row">
+			<Switch checked={wipe} label={t("설정값도 함께 삭제")} disabled={busy} onchange={(on) => (wipe = on)} />
+			<button type="button" class="wipe-name" tabindex={-1} aria-hidden="true" disabled={busy} onclick={() => (wipe = !wipe)}>{t("설정값도 함께 삭제")}</button>
+		</div>
 	{/if}
 </ConfirmDialog>
 
 <style>
-	.wipe { display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 8px; font-size: var(--fs-sm); color: var(--text-dim); cursor: pointer; }
+	.wipe-row { display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 8px; }
+	.wipe-name { font-size: var(--fs-sm); line-height: 20px; color: var(--text-dim); }
 </style>

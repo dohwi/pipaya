@@ -2,7 +2,7 @@
 	import Badge from "../ui/Badge.svelte";
 	import Icon from "../ui/Icon.svelte";
 	import { t } from "../../lib/i18n";
-	import { compact } from "../../lib/format";
+	import { ago, compact } from "../../lib/format";
 	import PickerModal from "../ui/PickerModal.svelte";
 	import CapTags from "./CapTags.svelte";
 	import PickerOption from "../ui/PickerOption.svelte";
@@ -35,15 +35,6 @@
 		onclose: () => void;
 	} = $props();
 
-	/** "6시간 전": how long ago the list was fetched, so "not there" reads as "not there yet" when it is old. */
-	function ago(at: number): string {
-		const min = Math.floor((Date.now() - at) / 60_000);
-		if (min < 1) return t("방금");
-		if (min < 60) return t("{n}분 전", { n: min });
-		const hour = Math.floor(min / 60);
-		if (hour < 24) return t("{n}시간 전", { n: hour });
-		return t("{n}일 전", { n: Math.floor(hour / 24) });
-	}
 	/**
 	 * One short line in the footer: where the list came from and how old it is. The reason a fetch failed goes in the
 	 * tooltip instead of the line, so the line never ellipsizes the part that matters.
