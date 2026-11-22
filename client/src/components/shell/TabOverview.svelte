@@ -1,11 +1,12 @@
 <script lang="ts">
 	import { untrack } from "svelte";
 	import { t } from "../../lib/i18n";
+	import { ago } from "../../lib/format";
 	import { app } from "../../lib/store.svelte";
 	import { sessionTitle } from "../../lib/session-title";
 	import { activityOf, ACTIVITY_LABEL, ACTIVITY_TONE, URGENCY, type Activity } from "../../lib/activity";
 	import { tabPanes, type Tab } from "../../lib/nav";
-	import { agoText, gridNext, previewOfItems, previewOfStored, shortPath, type Preview } from "../../lib/tab-overview";
+	import { gridNext, previewOfItems, previewOfStored, shortPath, type Preview } from "../../lib/tab-overview";
 	import { reflow, rowOut } from "../../lib/motion";
 	import { drag, dragSource, dropTarget, type Point } from "../../lib/dnd.svelte";
 	import { hintOnce } from "../../lib/touch-hints";
@@ -243,7 +244,7 @@
 									<span class="info">
 										{#if x.kind === "group"}{t("대화 {n}개", { n: x.members.length })}
 										{:else if x.kind === "terminal"}{t("터미널")} · <span class="mono">{shortPath(x.terminal.cwd)}</span>
-										{:else}{agoText(x.session.updatedAt, now)}{/if}
+										{:else}{ago(x.session.updatedAt, now)}{/if}
 									</span>
 								</div>
 							</div>

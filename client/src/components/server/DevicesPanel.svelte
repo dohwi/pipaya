@@ -7,6 +7,7 @@
 	import ConfirmButton from "../ui/ConfirmButton.svelte";
 	import { onDestroy, onMount } from "svelte";
 	import { t } from "../../lib/i18n";
+	import { ago } from "../../lib/format";
 	import { Api, errorText } from "../../lib/api";
 	import { app } from "../../lib/store.svelte";
 	import { notifications } from "../../lib/notifications";
@@ -124,16 +125,6 @@
 		p === "android" ? "Android" : p === "ios" ? "iOS" : p === "web" ? t("웹 브라우저") : t("데스크톱 앱");
 	const icon = (p: NotificationDevice["platform"]): "phone" | "monitor" => (p === "android" || p === "ios" ? "phone" : "monitor");
 
-	function ago(at: number | null): string {
-		if (!at) return t("기록 없음");
-		const sec = Math.max(0, Math.round((now - at) / 1000));
-		if (sec < 60) return t("{n}초 전", { n: sec });
-		const min = Math.floor(sec / 60);
-		if (min < 60) return t("{n}분 전", { n: min });
-		const hour = Math.floor(min / 60);
-		if (hour < 24) return t("{n}시간 전", { n: hour });
-		return t("{n}일 전", { n: Math.floor(hour / 24) });
-	}
 	/** This window reports to every saved server under one id, so its row is "this device" on any server tab. */
 	const mine = (d: NotificationDevice) => d.id === notifications.id;
 
@@ -188,7 +179,7 @@
 						</span>
 						<span class="sub">{[d.os ?? platformName(d.platform), d.app].filter(Boolean).join(" · ")}</span>
 						<span class="sub">
-							{d.live ? t("접속 중") : t("마지막 접속 {ago}", { ago: ago(d.lastSeen) })}{d.push ? ` · ${t("모바일 푸시")}` : ""}{d.enabled ? "" : ` · ${t("알림 꺼짐")}`}
+							{d.live ? t("접속 중") : d.lastSeen ? t("마지막 접속 {ago}", { ago: ago(d.lastSeen, now, { seconds: true }) }) : t("기록 없음")}{d.push ? ` · ${t("모바일 푸시")}` : ""}{d.enabled ? "" : ` · ${t("알림 꺼짐")}`}
 						</span>
 					</div>
 					<ConfirmButton size="sm" confirmLabel={t("정말 해지")} disabled={busy === d.id} onconfirm={() => remove(d)}>{t("해지")}</ConfirmButton>
@@ -207,7 +198,7 @@
 						<span class="kind"><Icon name="phone" /></span>
 						<div class="meta">
 							<span class="name">{p.name}</span>
-							<span class="sub">{p.lastUsedAt ? t("마지막 사용 {ago}", { ago: ago(p.lastUsedAt) }) : t("아직 사용하지 않음")}</span>
+							<span class="sub">{p.lastUsedAt ? t("마지막 사용 {ago}", { ago: ago(p.lastUsedAt, now, { seconds: true }) }) : t("아직 사용하지 않음")}</span>
 						</div>
 						<ConfirmButton size="sm" confirmLabel={t("정말 취소")} disabled={revoking === p.id} onconfirm={() => revoke(p.id)}>{t("접속 취소")}</ConfirmButton>
 					</li>

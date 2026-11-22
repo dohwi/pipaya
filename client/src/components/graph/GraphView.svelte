@@ -4,7 +4,7 @@
 	import { marquee, middle } from "../../lib/fit-text";
 	import { app } from "../../lib/store.svelte";
 	import { t } from "../../lib/i18n";
-	import { hostOf } from "../../lib/format";
+	import { ago, hostOf } from "../../lib/format";
 	import { sessionTitle } from "../../lib/session-title";
 	import { BRAND_LABEL } from "../../lib/brand";
 	import { activityOf } from "../../lib/activity";
@@ -586,15 +586,6 @@
 	/** Cards at rest step back with the lines into them (`quietCards`), unless the pointer is on them or what they belong to. */
 	const quiet = $derived(quietCards(graph, now));
 	const faded = (id: string) => quiet.has(id) && !focus?.has(id) && selected !== id;
-	function ago(at: number): string {
-		const sec = Math.max(0, Math.round((now - at) / 1000));
-		if (sec < 60) return t("방금");
-		const min = Math.floor(sec / 60);
-		if (min < 60) return t("{n}분 전", { n: min });
-		const hour = Math.floor(min / 60);
-		if (hour < 24) return t("{n}시간 전", { n: hour });
-		return t("{n}일 전", { n: Math.floor(hour / 24) });
-	}
 	/** What a model card says it comes from: its maker, else its connection's name. */
 	const modelSource = (c: Card) => (c.brand ? BRAND_LABEL[c.brand] : providerDisplayName(app.links[c.server]?.providers ?? [], c.provider)); // not `graph`: widths are measured while it is built
 	/** The mark the owner picked for a model on that server, if any. */
@@ -775,7 +766,7 @@
 						<span class="lead"><AgentBadge id={s.id} server={c.server} state={c.activity} size={24} /></span>
 						{@const name = s.name ? `@${s.name}` : sessionTitle(s.title)}
 						<span class="nm fl" class:who={!!s.name} title={name} use:marquee={name}>{@render flow(name)}</span>
-						{#if !busy}<span class="when">{ago(s.updatedAt)}</span>{/if}
+						{#if !busy}<span class="when">{ago(s.updatedAt, now)}</span>{/if}
 						<span class="title fl" title={sessionTitle(s.title)} use:marquee={sessionTitle(s.title)}>{@render flow(sessionTitle(s.title))}</span>
 						{#if busy}
 							<span class="doing" class:ask={c.activity === "asking"} in:glowFade={{ delay: 120 }}>

@@ -2,6 +2,7 @@
 	import Button from "../ui/Button.svelte";
 	import DialogFooter from "../ui/DialogFooter.svelte";
 	import FilterChip from "../ui/FilterChip.svelte";
+	import Switch from "../ui/Switch.svelte";
 	import { splitTyped } from "../../lib/workdir-path";
 	import { DirBrowser } from "../../lib/dir-browser.svelte";
 	import { msg, t, tc } from "../../lib/i18n";
@@ -207,7 +208,8 @@
 
 	<DialogFooter rule wrap>
 		{#snippet start()}
-			<label class="check"><input type="checkbox" bind:checked={browser.hidden} onchange={() => void browser.go(browser.listing?.path)} /> {t("숨김 폴더")}</label>
+			<!-- the visible name beside the switch; a click on it flips the switch too, as a checkbox label did -->
+			<span class="swrow"><Switch checked={browser.hidden} label={t("숨김 폴더")} onchange={(on) => { browser.hidden = on; void browser.go(browser.listing?.path); }} /><button type="button" class="swname" tabindex={-1} aria-hidden="true" onclick={() => { browser.hidden = !browser.hidden; void browser.go(browser.listing?.path); }}>{t("숨김 폴더")}</button></span>
 			<Button variant="ghost" size="sm" onclick={() => browser.startCreating()} disabled={!browser.listing || browser.creating}><Icon name="plus" /> {t("새 폴더")}</Button>
 		{/snippet}
 		{#if mode === "default" && current?.saved}
@@ -364,12 +366,14 @@
 	.err {
 		color: var(--danger);
 	}
-	.check {
-		font-size: var(--fs-xs);
-		color: var(--text-dim);
-		display: flex;
+	.swrow {
+		display: inline-flex;
 		align-items: center;
 		gap: 8px;
-		cursor: pointer;
+	}
+	.swname {
+		font-size: var(--fs-xs);
+		line-height: 20px;
+		color: var(--text-dim);
 	}
 </style>

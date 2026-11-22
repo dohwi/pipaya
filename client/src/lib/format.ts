@@ -1,4 +1,4 @@
-import { localeTag } from "./i18n";
+import { localeTag, t } from "./i18n";
 
 export const compact = (n: number): string =>
   n >= 1_000_000
@@ -48,6 +48,21 @@ export function dayLabel(ts: number, locale?: string, now: number = Date.now()):
   if (days === 0 || days === 1) return new Intl.RelativeTimeFormat(locale, { numeric: "auto" }).format(-days, "day");
   const year = new Date(ts).getFullYear() !== new Date(now).getFullYear();
   return new Date(ts).toLocaleDateString(locale, { year: year ? "numeric" : undefined, month: "long", day: "numeric", weekday: "short" });
+}
+
+/**
+ * "방금" / "N초 전" / "N분 전" / "N시간 전" / "N일 전".
+ * `seconds` (default false): show seconds for under-one-minute spans (DevicesPanel); otherwise shows "방금".
+ * `now` defaults to `Date.now()` so callers that hold a reactive clock can pass their own value.
+ */
+export function ago(at: number, now = Date.now(), opts?: { seconds?: boolean }): string {
+  const sec = Math.max(0, Math.round((now - at) / 1000));
+  if (sec < 60) return opts?.seconds ? t("{n}초 전", { n: sec }) : t("방금");
+  const min = Math.floor(sec / 60);
+  if (min < 60) return t("{n}분 전", { n: min });
+  const hour = Math.floor(min / 60);
+  if (hour < 24) return t("{n}시간 전", { n: hour });
+  return t("{n}일 전", { n: Math.floor(hour / 24) });
 }
 
 export const firstLine = (s: string): string => s.split("\n", 1)[0] ?? "";
