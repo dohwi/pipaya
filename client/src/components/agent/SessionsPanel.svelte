@@ -12,6 +12,8 @@
 	import { tailKeepLast } from "../../lib/fit-text";
 	import type { Session } from "../../lib/types";
 	import Badge from "../ui/Badge.svelte";
+	import Handle from "../ui/Handle.svelte";
+	import { peerLabel } from "../../lib/peers";
 	import Icon from "../ui/Icon.svelte";
 	import Notice from "../ui/Notice.svelte";
 	import { collapseIn, collapseOut, reflow, rowIn, rowOut } from "../../lib/motion";
@@ -182,10 +184,14 @@
 					{#if !folded[g.cwd]}
 						<ul in:collapseIn out:collapseOut>
 							{#each g.list as s (s.id)}
+								{@const who = peerLabel(s)}
 								<li class:on={picked[s.id]} animate:reflow in:rowIn out:rowOut>
 									<label>
 										<input type="checkbox" checked={!!picked[s.id]} onchange={() => toggleOne(s.id)} aria-label={s.title} />
-										<span class="title">{s.title ? sessionTitle(s.title) : t("제목 없음")}</span>
+										<span class="name" title={who?.title}>
+											{#if who}<Handle text={who.text} />{/if}
+											<span class="title">{s.title ? sessionTitle(s.title) : t("제목 없음")}</span>
+										</span>
 									</label>
 									{#if s.closed}<Badge size="sm">{t("닫음")}</Badge>{/if}
 									<span class="age" title={fullTime(s.updatedAt)}>{livePast(s.updatedAt, { time: false })}</span>
@@ -291,6 +297,14 @@
 		align-items: center;
 		gap: 12px;
 		cursor: pointer;
+	}
+	/* the `@name` handle before the title, as in the sidebar row (4px apart, centred on the title's line): the handle keeps
+	   its width, the title gives way */
+	.name {
+		min-width: 0;
+		display: flex;
+		align-items: center;
+		gap: 4px;
 	}
 	.title {
 		min-width: 0;
