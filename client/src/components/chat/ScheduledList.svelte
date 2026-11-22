@@ -14,7 +14,7 @@
 	/**
 	 * The scheduled tasks of one conversation, above its input like the message queue (QueuedList). Folded by default:
 	 * the soonest task and a "+N" that unfolds the rest. A row opens the task in Settings > Scheduled tasks; the button
-	 * at its end pauses (asking whether to pause or delete) or switches a paused task back on. Paused tasks stay, dimmed.
+	 * at its end (✕, like the queue's) asks whether to pause or delete it, or switches a paused task back on. Paused tasks stay, dimmed.
 	 * `divided`: the message queue follows, so a hairline separates the two lists.
 	 */
 	let { items, serverId, sessionId, divided = false }: { items: Schedule[]; serverId: string; sessionId: string; divided?: boolean } = $props();
@@ -109,7 +109,7 @@
 					<button type="button" class="tog" onclick={() => (open = true)} aria-expanded="false" title={t("펼치기")} aria-label={t("펼치기")}><span class="plus">+{more}</span><Icon name="chevron-down" /></button>
 				{/if}
 				{#if s.enabled}
-					<button type="button" class="sx" onclick={() => (asking = s)} disabled={busy} aria-label={t("{name} 일시정지", { name: labelOf(s) })} title={t("일시정지")}><Icon name="pause" /></button>
+					<button type="button" class="sx" onclick={() => (asking = s)} disabled={busy} aria-label={t("{name} 멈추기", { name: labelOf(s) })} title={t("일시정지 또는 삭제")}><Icon name="x" /></button>
 				{:else}
 					<button type="button" class="sx" onclick={() => resume(s)} disabled={busy} aria-label={t("{name} 켜기", { name: labelOf(s) })} title={t("켜기")}><Icon name="play" /></button>
 				{/if}
@@ -298,7 +298,7 @@
 		height: 14px;
 		stroke-width: 2;
 	}
-	/* the play triangle is a filled shape: the line icon's stroke alone reads too thin beside the pause bars */
+	/* the play triangle is a filled shape: the line icon's stroke alone reads too thin beside the ✕ of the rows above */
 	.off .sx :global(svg) {
 		fill: currentColor;
 	}
