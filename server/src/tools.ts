@@ -637,13 +637,13 @@ export const DELEGATE_TOOL = "delegate";
 const DELEGATE_DESCRIPTION =
 	"Hand a self-contained task to a short-lived subagent (a role defined in ~/.agents/subagents or the project's .agents/subagents) and get its final answer back as text. " +
 	"The subagent does not see this conversation: put the goal, paths and the exact question in `task`. It runs once, is not a session (nothing appears in the session list; use peer (action create) for a lasting chat) and cannot delegate further or ask the user. " +
-	"Use it like a tool, to save your own context on searches or noisy commands, when only the result matters; if the user may want to open the work, or it edits files or runs long, use peer (action create) instead. Limits apply (concurrent subagents, calls per run). An unknown role is rejected with the list of roles.";
+	"Use it like a tool, to save your own context on searches or noisy commands, when only the result matters; if the user may want to open the work, or it edits files or runs long, use peer (action create) instead. Limits apply (model calls, concurrent subagents, calls per run and elapsed time). An unknown role is rejected with the list of roles.";
 /** Free role policy: `role` may name no file; the subagent is a general read-only one that takes `task` as its instructions. */
 const DELEGATE_DESCRIPTION_FREE =
 	"Hand a self-contained task to a short-lived subagent and get its final answer back as text. " +
 	"`role` may be a role defined in ~/.agents/subagents or the project's .agents/subagents (its own model and tools), or any other short name (e.g. explore, summarize): then the subagent is a general one with read-only tools (read, grep, ls) and no write, edit or shell access, and `task` is its whole instruction. " +
 	"The subagent does not see this conversation: put the goal, paths and the exact question in `task`. It runs once, is not a session (nothing appears in the session list; use peer (action create) for a lasting chat) and cannot delegate further or ask the user. " +
-	"Use it like a tool, to save your own context on searches or noisy commands, when only the result matters; if the user may want to open the work, or it edits files or runs long, use peer (action create) instead. Limits apply (concurrent subagents, calls per run).";
+	"Use it like a tool, to save your own context on searches or noisy commands, when only the result matters; if the user may want to open the work, or it edits files or runs long, use peer (action create) instead. Limits apply (model calls, concurrent subagents, calls per run and elapsed time).";
 
 const MODEL_HINT = "Pick a fast, cheap model for searches, summaries and simple checks, a strong one for root-cause analysis or design judgement; the subagent thinks at that model's default level. Omit `model` to use the role's own model, else this session's.";
 /** What the tool text says about `model` under the model policy (the ids only in the parameter, not twice); `null` = the argument is not offered (the role decides). */
