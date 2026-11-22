@@ -137,14 +137,45 @@ describe("delegate tool", () => {
 		const text = await res.text();
 		return { status: res.status, json: text ? JSON.parse(text) : undefined };
 	};
-	const idle = async (id: string) => { for (let i = 0; i < 400; i++) { if (!(await api("GET", `/sessions/${id}/status`)).json.running) return; await Bun.sleep(25); } };
+	const idle = async (id: string) => {
+		for (let i = 0; i < 400; i++) { if (!(await api("GET", `/sessions/${id}/status`)).json.running) return; await Bun.sleep(25); }
+		throw new Error(`session ${id} did not become idle`);
+	};
 	const call = async (id: string, args: unknown) => { await api("POST", `/sessions/${id}/messages`, { text: `!delegate ${JSON.stringify(args)}` }); await idle(id); return JSON.stringify((await api("GET", `/sessions/${id}/messages`)).json); };
 
+	const delegateResult = async (role: string, task: string, session?: string) => {
+		const id = session ?? (await api("POST", "/sessions", { cwd: join(dir, "ws") })).json.id as string;
+		await call(id, { role, task });
+		const msgs = (await api("GET", `/sessions/${id}/messages`)).json.messages as any[];
+		return msgs.map((m) => m.message).findLast((m) => m.role === "toolResult" && m.toolName === "delegate");
+	};
+	const budgetTask = (variant: string) => `budget fixture: ${variant}`;
+	const textOf = (content: any) => typeof content === "string" ? content : Array.isArray(content) ? content.map((c) => c.text ?? "").join("") : "";
+	const taskOf = (body: any) => textOf(body?.messages?.find((m: any) => m.role === "user")?.content);
+	const budgetRequests = (variant: string) => upstream.requests.map((r) => r.body).filter((b) => taskOf(b) === budgetTask(variant));
+	let startReport: (() => void) | undefined, unblockReport: (() => void) | undefined;
 	beforeAll(async () => {
 		dir = mkdtempSync(join(tmpdir(), "pipaya-delegate-"));
 		mkdirSync(join(dir, "ws"), { recursive: true });
 		def(join(dir, "home", ".agents", "subagents"), "explore", `description: finds\nmodel: echo/${ECHO_MODEL.id}\ntools: [read]\nmaxTurns: 3`);
-		upstream = startEchoUpstream();
+		writeFileSync(join(dir, "ws", "budget.txt"), "verified fixture evidence");
+		def(join(dir, "home", ".agents", "subagents"), "two", "tools: [read]\nmaxTurns: 2");
+		def(join(dir, "home", ".agents", "subagents"), "loop", "tools: [read]\nmaxTurns: 12");
+		upstream = startEchoUpstream(async (body) => {
+			const task = taskOf(body);
+			if (!task.startsWith("budget fixture: ")) return;
+			const variant = task.slice("budget fixture: ".length);
+			const results = body.messages.filter((m: any) => m.role === "tool");
+			const tool = { name: "read", args: JSON.stringify({ path: variant === "failed reads" ? "missing.txt" : variant === "changing reads" ? "changing.txt" : "budget.txt" }) };
+			if (variant === "changing reads") writeFileSync(join(dir, "ws", "changing.txt"), `version ${results.length}`);
+			if (variant === "early failure" || (variant === "final failure" && results.length)) return Response.json({ error: { message: "mock provider rejected the request" } }, { status: 400 });
+			if (body.tools?.length) return { text: variant === "empty report" || variant === "final failure" ? "The read is queued." : "", tool };
+			if (variant === "empty report" || variant === "no text at all") return { text: "" };
+			if (variant === "ignore removed tools") return { text: "", tool };
+			if (variant === "cancel report") await new Promise<void>((resolve) => { unblockReport = resolve; startReport?.(); });
+			if (variant === "one call") return { text: "No tools were available, so I could not verify the file." };
+			return { text: `Report based on evidence: ${textOf(results.at(-1)?.content)}` };
+		});
 		app = await buildApp({ host: "0.0.0.0", port: 0, dataDir: dir, dbPath: join(dir, "t.db"), token: "t", workspaceRoot: join(dir, "ws"), logLevel: "silent" }, { strictResponses: true, extensionDirs: [], home: join(dir, "home") });
 		await app.server.listen({ host: "0.0.0.0", port: 0 });
 		base = `http://127.0.0.1:${(app.server.server.address() as { port: number }).port}`;
@@ -219,10 +250,92 @@ describe("delegate tool", () => {
 		expect(denied).not.toContain("\\nhi");
 	});
 
-	test("a subagent that keeps calling tools is stopped at maxTurns and says so", async () => {
-		def(join(dir, "home", ".agents", "subagents"), "short", `model: echo/${ECHO_MODEL.id}\ntools: [read]\nmaxTurns: 1`);
+	test("the policy cap includes a final tool-free request with the earlier tool result", async () => {
+		const put = (maxTurns: number) => api("PUT", "/configuration/delegate", { policy: "defined", models: [], maxConcurrent: 4, maxCalls: 12, maxTurns });
+		await put(2);
+		try {
+			const result = await delegateResult("explore", budgetTask("normal report"));
+			const reqs = budgetRequests("normal report");
+			expect(reqs).toHaveLength(2);
+			expect(reqs[0].tools.map((t: any) => t.function.name)).toEqual(["read"]);
+			expect(reqs[1].tools ?? []).toEqual([]);
+			expect(reqs[1].messages.some((m: any) => m.role === "system" && textOf(m.content).includes("final model call"))).toBe(true);
+			expect(result.content[0].text).toContain("Report based on evidence: verified fixture evidence");
+			expect(result.content[0].text).toContain("may be incomplete");
+			expect(result.details).toMatchObject({ turns: 2, limited: true, limit: "maxTurns", usage: { input: 8 } });
+		} finally { await put(30); }
+	});
+
+	test("a one-call role gets a useful answer without spending an extra call or executing tools", async () => {
+		def(join(dir, "home", ".agents", "subagents"), "one", "tools: [read]\nmaxTurns: 1");
+		const result = await delegateResult("one", budgetTask("one call"));
+		const reqs = budgetRequests("one call");
+		expect(reqs).toHaveLength(1);
+		expect(reqs[0].tools ?? []).toEqual([]);
+		expect(result.content[0].text).toContain("so I could not verify the file");
+		expect(result.details).toMatchObject({ turns: 1, limited: false });
+	});
+
+	test("ordinary early answers are returned without a limit warning or extra call", async () => {
+		const result = await delegateResult("explore", "finished early");
+		expect(result.content[0].text).toBe("Echo: finished early");
+		expect(result.details).toMatchObject({ turns: 1, limited: false });
+	});
+
+	test("empty or rejected wrap-up preserves earlier text, but an ordinary upstream failure is still an error", async () => {
+		for (const [variant, reason] of [["empty report", "returned no text"], ["final failure", "failed"]] as const) {
+			const result = await delegateResult("two", budgetTask(variant));
+			expect(result.content[0].text).toContain(`The final model call ${reason}.`);
+			expect(result.content[0].text).toContain("Partial assistant text (not a final answer):\nThe read is queued.");
+			expect(result.content[0].text).not.toContain("verified fixture evidence");
+			expect(result.details).toMatchObject({ turns: 2, limited: true, limit: "maxTurns" });
+		}
+		const empty = await delegateResult("two", budgetTask("no text at all"));
+		expect(empty.content[0].text).toContain("The final model call returned no text.");
+		expect(empty.content[0].text).not.toContain("Partial assistant text");
+		const error = await delegateResult("two", budgetTask("early failure"));
+		expect(error.isError).toBe(true);
+		expect(error.content[0].text).toContain("mock provider rejected the request");
+	});
+
+	test("a tool call hallucinated during wrap-up cannot run or trigger another model call", async () => {
+		const result = await delegateResult("two", budgetTask("ignore removed tools"));
+		expect(budgetRequests("ignore removed tools")).toHaveLength(2);
+		expect(result.content[0].text).toContain("requested unavailable tools");
+		expect(result.details).toMatchObject({ turns: 2, limited: true, limit: "maxTurns" });
+	});
+
+	test("repeated identical built-in reads with unchanged output switch to reporting early", async () => {
+		const result = await delegateResult("loop", budgetTask("loop"));
+		const reqs = budgetRequests("loop");
+		expect(reqs).toHaveLength(7);
+		expect(reqs.slice(0, -1).every((r) => r.tools?.length === 1)).toBe(true);
+		expect(reqs.at(-1).tools ?? []).toEqual([]);
+		expect(result.content[0].text).toContain("unchanged results 6 times in a row");
+		expect(result.details).toMatchObject({ turns: 7, limited: true, limit: "repeatedTools" });
+	});
+
+	test("changing or failed reads do not count as unchanged successful results", async () => {
+		for (const variant of ["changing reads", "failed reads"]) {
+			const result = await delegateResult("loop", budgetTask(variant));
+			expect(budgetRequests(variant)).toHaveLength(12);
+			expect(result.details).toMatchObject({ turns: 12, limited: true, limit: "maxTurns" });
+		}
+	});
+
+	test("parent cancellation also interrupts the report", async () => {
 		const id = (await api("POST", "/sessions", { cwd: join(dir, "ws") })).json.id as string;
-		expect(await call(id, { role: "short", task: `!read ${JSON.stringify({ path: "note.txt" })}` })).toContain("subagent stopped after 1 model calls");
+		const task = budgetTask("cancel report");
+		const reporting = new Promise<void>((resolve) => { startReport = resolve; });
+		try {
+			await api("POST", `/sessions/${id}/messages`, { text: `!delegate ${JSON.stringify({ role: "two", task })}` });
+			await Promise.race([reporting, Bun.sleep(3000).then(() => { throw new Error("report did not start"); })]);
+			await api("POST", `/sessions/${id}/abort`);
+			await idle(id);
+			const out = JSON.stringify((await api("GET", `/sessions/${id}/messages`)).json);
+			expect(out).not.toContain("Report based on evidence");
+			expect(budgetRequests("cancel report")).toHaveLength(2);
+		} finally { unblockReport?.(); startReport = unblockReport = undefined; }
 	});
 
 	test("aborting the parent stops the subagent and what it started", async () => {

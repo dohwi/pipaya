@@ -93,7 +93,7 @@ function chunks(p: Plan, callId: string): object[] {
 	return out;
 }
 
-export function startEchoUpstream(): EchoUpstream {
+export function startEchoUpstream(respond?: (body: any) => Plan | Response | undefined | Promise<Plan | Response | undefined>): EchoUpstream {
 	const requests: UpstreamRequest[] = [];
 	/** User texts whose stream was cut once already (see "!drop"): the retried request answers normally. */
 	const dropped = new Set<string>();
@@ -116,7 +116,9 @@ export function startEchoUpstream(): EchoUpstream {
 			const dropText = textOf(lastUser?.content);
 			const drop = dropText.startsWith("!drop") && !dropped.has(dropText);
 			if (drop) dropped.add(dropText);
-			const frames = chunks(plan(body.messages ?? []), `call_echo_${++calls}`);
+			const response = await respond?.(body);
+			if (response instanceof Response) return response;
+			const frames = chunks(response ?? plan(body.messages ?? []), `call_echo_${++calls}`);
 			let cancelled = false;
 			const enc = new TextEncoder();
 			return new Response(new ReadableStream({
