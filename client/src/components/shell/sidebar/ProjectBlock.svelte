@@ -2,7 +2,7 @@
 	import { collapseIn, collapseOut } from "../../../lib/motion";
 	import { t } from "../../../lib/i18n";
 	import { ACTIVITY_LABEL, ACTIVITY_TONE, mostUrgent } from "../../../lib/activity";
-	import { tabPanes, type DirBlock as Dir } from "../../../lib/nav";
+	import { dirPaneCount, tabPanes, type DirBlock as Dir } from "../../../lib/nav";
 	import { app } from "../../../lib/store.svelte";
 	import { isManualRoot, projectKey } from "../../../lib/projects";
 	import { asWorkdir } from "../../../lib/sidebar-model";
@@ -28,7 +28,7 @@
 	/** Where "+" starts: the repository's main checkout, or a hand-made project's first folder */
 	const home = $derived(manual ? (dirs[0]?.path ?? n.root ?? ".") : root);
 	const workdir = $derived(asWorkdir(home, n.root));
-	const total = $derived(dirs.reduce((k, d) => k + d.tabs.length, 0));
+	const total = $derived(dirs.reduce((k, d) => k + dirPaneCount(d), 0));
 	const pstate = $derived(mostUrgent(dirs.flatMap((d) => d.tabs.flatMap((x) => tabPanes(x))).map((id) => sb.stateOfId(n, id))));
 	/** One of its folders is the open one: the header reads as current, like a folder's */
 	const cur = $derived(!app.graphOpen && n.current && dirs.some((d) => d.path === (app.activeTab?.dir.path ?? app.workdirAbs)));

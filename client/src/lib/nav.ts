@@ -29,6 +29,9 @@ export interface DirBlock {
 /** The panes a tab shows, in layout order. */
 export const tabPanes = (t: Tab): string[] => (t.kind === "group" ? t.members.map((m) => m.id) : [t.id]);
 
+/** How many panes (conversations and terminals) a directory lists, counting each member of a group. */
+export const dirPaneCount = (d: DirBlock): number => d.tabs.reduce((n, t) => n + tabPanes(t).length, 0);
+
 export interface BlockOpts {
 	/** search on conversations */
 	match?: (s: Session) => boolean;
