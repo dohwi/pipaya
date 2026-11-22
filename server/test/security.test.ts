@@ -1,4 +1,9 @@
 import { describe, expect, test } from "bun:test";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, rmSync, statSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { loadConfig } from "../src/config.ts";
+import { openDb } from "../src/db.ts";
 import { createCorsPolicy, redactUrl } from "../src/security.ts";
 
 describe("redactUrl", () => {
@@ -35,5 +40,30 @@ describe("createCorsPolicy", () => {
 		expect(createCorsPolicy("*").allowsAll).toBe(true);
 		expect(extra.allowsAll).toBe(false);
 		expect(policy.allowsAll).toBe(false);
+	});
+});
+
+describe.skipIf(process.platform === "win32")("filesystem permissions", () => {
+	test("loadConfig and openDb tighten permissive existing data directories and SQLite WAL/SHM files", () => {
+		const root = mkdtempSync(join(tmpdir(), "pipaya-perms-"));
+		try {
+			const dataDir = join(root, "data");
+			mkdirSync(dataDir, { mode: 0o755 });
+			chmodSync(dataDir, 0o755);
+			const cfg = loadConfig({ PIPAYA_DATA_DIR: dataDir });
+			expect(statSync(dataDir).mode & 0o777).toBe(0o700);
+			expect(statSync(join(dataDir, "token")).mode & 0o777).toBe(0o600);
+
+			const db1 = openDb(cfg.dbPath);
+			db1.close();
+			chmodSync(cfg.dbPath, 0o644);
+			const db2 = openDb(cfg.dbPath);
+			for (const f of [cfg.dbPath, `${cfg.dbPath}-wal`, `${cfg.dbPath}-shm`]) {
+				if (existsSync(f)) expect(statSync(f).mode & 0o777).toBe(0o600);
+			}
+			db2.close();
+		} finally {
+			rmSync(root, { recursive: true, force: true });
+		}
 	});
 });

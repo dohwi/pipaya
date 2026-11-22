@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { existsSync, mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { allowedGitHosts, installFromGit } from "../src/extensions/install.ts";
+import { allowedGitHosts, assertNoSymlinks, installFromGit } from "../src/extensions/install.ts";
 
 const dirs: string[] = [];
 const dest = () => {
@@ -53,5 +53,17 @@ describe("git hosts", () => {
 	test("a listed host passes the host check (and fails later, on the clone, with a different error)", async () => {
 		const to = dest();
 		await expect(installFromGit("ok", { ...good, host: "git.example.invalid" }, to, ["github.com", "git.example.invalid"])).rejects.toThrow(/clone failed/);
+	});
+
+	test("assertNoSymlinks rejects symlinks inside copied extension files while ignoring skipped folders", () => {
+		const pkg = dest();
+		writeFileSync(join(pkg, "package.json"), "{}");
+		mkdirSync(join(pkg, "node_modules"), { recursive: true });
+		symlinkSync("/etc/hosts", join(pkg, "node_modules", "ignored"));
+		expect(() => assertNoSymlinks(pkg)).not.toThrow();
+
+		mkdirSync(join(pkg, "sub"), { recursive: true });
+		symlinkSync("/etc/hosts", join(pkg, "sub", "escape.ts"));
+		expect(() => assertNoSymlinks(pkg)).toThrow(/symlinks/);
 	});
 });

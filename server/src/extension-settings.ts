@@ -62,6 +62,10 @@ function mergeKeys(base: ExtensionSettingsValue, incoming: ExtensionSettingsValu
 		if (Object.hasOwn(incoming, key)) Object.defineProperty(out, key, { value: incoming[key], enumerable: true, writable: true, configurable: true });
 		else delete out[key];
 	}
+	// Changing `httpOrigin` without supplying `httpToken` must not redirect a stored Bearer token to a new server.
+	if (keys.includes("httpOrigin") && !keys.includes("httpToken") && out.httpOrigin !== base.httpOrigin) {
+		delete out.httpToken;
+	}
 	return out;
 }
 

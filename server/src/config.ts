@@ -68,6 +68,7 @@ function resolveToken(env: Record<string, string | undefined>, dataDir: string):
 export function loadConfig(env: Record<string, string | undefined> = process.env): Config {
 	const dataDir = resolve(env.PIPAYA_DATA_DIR ?? join(homedir(), ".pipaya"));
 	mkdirSync(dataDir, { recursive: true, mode: 0o700 });
+	try { chmodSync(dataDir, 0o700); } catch { /* read-only mount or unsupported FS */ }
 
 	return {
 		// Loopback unless the operator says otherwise: the API is plain HTTP and its token runs commands, so a server

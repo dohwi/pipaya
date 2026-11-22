@@ -4,7 +4,7 @@ import { Window } from "happy-dom";
 // DOMPurify needs a window when the module loads.
 const dom = new Window();
 Object.assign(globalThis, { window: dom, document: dom.document });
-const { awaitsHighlight, parseRuns, renderMarkdown, renderStreaming } = await import("../src/lib/markdown");
+const { awaitsHighlight, isSafeExternalUrl, parseRuns, renderMarkdown, renderStreaming } = await import("../src/lib/markdown");
 const { onHighlightReady } = await import("../src/lib/code-highlight");
 
 const ready = () => new Promise<void>((resolve) => { const off = onHighlightReady(() => { off(); resolve(); }); });
@@ -96,5 +96,24 @@ describe("code blocks in answers", () => {
 		const second = renderStreaming(src);
 		expect(awaitsHighlight(second)).toBe(false);
 		expect(second).toContain("hljs-");
+	});
+});
+
+describe("external link schemes in markdown", () => {
+	test("allows http, https, mailto and workdir file links while disarming custom or dangerous schemes", () => {
+		expect(isSafeExternalUrl("https://example.com/path")).toBe(true);
+		expect(isSafeExternalUrl("http://100.85.51.107:8080/")).toBe(true);
+		expect(isSafeExternalUrl("mailto:team@example.com")).toBe(true);
+		for (const bad of ["javascript:alert(1)", "data:text/html,hi", "pipaya://connect?u=http://evil&c=12345678", "vscode://file/etc/passwd", "smb://host/share"]) {
+			expect(isSafeExternalUrl(bad)).toBe(false);
+			const out = renderMarkdown(`[open](${bad})`);
+			expect(out).not.toContain("data-ext");
+			expect(out).not.toContain("href=");
+			expect(out).toContain("open");
+		}
+
+		const good = renderMarkdown("[site](https://example.com) and [doc](out/report.pdf)");
+		expect(good).toContain('href="https://example.com"');
+		expect(good).toContain('data-file="out/report.pdf"');
 	});
 });

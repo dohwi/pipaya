@@ -357,6 +357,9 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 		};
 		// Browser EventSource/WebSocket cannot set headers. REST requires a Bearer header.
 		const browserStream = req.method === "GET" && (path === "/ws" || path === "/events" || path === REALTIME_SOCKET || TERMINAL_SOCKET.test(path ?? "") || /^\/sessions\/[^/]+\/events$/.test(path ?? ""));
+		if ((browserStream || req.headers.upgrade !== undefined) && req.headers.origin !== undefined && !corsPolicy.allows(req.headers.origin)) {
+			throw new HttpError(403, "forbidden_origin", "origin not allowed");
+		}
 		const query = browserStream ? (req.query as { token?: string; ticket?: string } | undefined) : undefined;
 		let device: string | null;
 		if (bearer === undefined && typeof query?.ticket === "string") {

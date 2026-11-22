@@ -115,11 +115,14 @@ describe("per-device tokens over HTTP", () => {
 		expect((await as(token, "GET", "/devices/tokens")).status).toBe(403);
 		expect((await as(token, "DELETE", "/devices/tokens/anything")).status).toBe(403);
 	});
-	test("a device token cannot reload or install server extensions", async () => {
+	test("a device token cannot reload or install server extensions or reconfigure MCP servers", async () => {
 		const token = await pair();
 		expect((await as(token, "POST", "/server-extensions/reload")).status).toBe(403);
 		expect((await as(token, "DELETE", "/server-extensions/x")).status).toBe(403);
 		expect((await as(token, "POST", "/server-extensions/install", { id: "x", repo: "a/b", ref: "v1", commit: "a".repeat(40) })).status).toBe(403);
+		expect((await as(token, "PUT", "/mcp", { servers: [] })).status).toBe(403);
+		expect((await as(token, "POST", "/mcp/reload", {})).status).toBe(403);
+		expect((await as(token, "GET", "/mcp")).status).toBe(200);
 	});
 	test("percent-escapes in the path do not get a device token past the admin-only rules", async () => {
 		// The router decodes these to the admin-only routes; the check must see the same route the router does.
@@ -129,6 +132,7 @@ describe("per-device tokens over HTTP", () => {
 			["GET", "/devices/token%73"], ["GET", "/%64evices/tokens"], ["DELETE", "/devices/tokens/%61ny"], ["DELETE", "/devices/token%73/any"],
 			["POST", "/pairin%67"], ["DELETE", "/pairin%67"],
 			["POST", "/server-extensions/reloa%64"], ["POST", "/server-extensions/instal%6c", install], ["DELETE", "/server-extension%73/x"],
+			["PUT", "/mc%70", { servers: [] }], ["POST", "/mcp/reloa%64", {}],
 			["POST", "/server/updat%65", {}], ["GET", "/server/updat%65"],
 		];
 		for (const [method, url, body] of cases) expect([method, url, (await as(token, method, url, body)).status]).toEqual([method, url, 403]);
