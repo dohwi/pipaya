@@ -1,7 +1,8 @@
 <script lang="ts">
 	import { untrack } from "svelte";
 	import { t } from "../../lib/i18n";
-	import { ago } from "../../lib/format";
+	import { fullTime, pastLabel } from "../../lib/format";
+	import { minuteClock } from "../../lib/minute-clock.svelte";
 	import { app } from "../../lib/store.svelte";
 	import { sessionTitle } from "../../lib/session-title";
 	import { activityOf, ACTIVITY_LABEL, ACTIVITY_TONE, URGENCY, type Activity } from "../../lib/activity";
@@ -67,12 +68,6 @@
 		const chat = app.chatOf(id);
 		return chat?.ready ? previewOfItems(chat.items) : (fetched[id] ?? null);
 	};
-
-	let now = $state(Date.now());
-	$effect(() => {
-		const timer = setInterval(() => (now = Date.now()), 30_000);
-		return () => clearInterval(timer);
-	});
 
 	function open(x: Tab) {
 		app.openTab(x.id);
@@ -244,7 +239,7 @@
 									<span class="info">
 										{#if x.kind === "group"}{t("대화 {n}개", { n: x.members.length })}
 										{:else if x.kind === "terminal"}{t("터미널")} · <span class="mono">{shortPath(x.terminal.cwd)}</span>
-										{:else}{ago(x.session.updatedAt, now)}{/if}
+										{:else}<span title={fullTime(x.session.updatedAt)}>{pastLabel(x.session.updatedAt, minuteClock.now, { time: false })}</span>{/if}
 									</span>
 								</div>
 							</div>

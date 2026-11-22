@@ -17,7 +17,7 @@
 	import { recentreOn } from "../../lib/dialog";
 	import { Api, errorText } from "../../lib/api";
 	import { t } from "../../lib/i18n";
-	import { fullTime, shortDate } from "../../lib/format";
+	import { fullTime, pastLabel, shortDate } from "../../lib/format";
 	import { nameInLang } from "../../lib/member-names";
 	import { reflow, rowIn, rowOut } from "../../lib/motion";
 	import {
@@ -39,7 +39,7 @@
 		toLocalInput,
 		type EveryUnit,
 	} from "../../lib/schedules";
-	import { NextRunClock } from "../../lib/next-run-clock.svelte";
+	import { minuteClock } from "../../lib/minute-clock.svelte";
 	import { app } from "../../lib/store.svelte";
 	import type { Schedule, Session } from "../../lib/types";
 
@@ -84,10 +84,6 @@
 			error = errorText(e);
 		}
 	}
-
-	// "(12분 후)" beside a full next-run time within the 6-hour countdown (a later one is a date already), moving on the minute.
-	const clock = new NextRunClock();
-	$effect(() => clock.follow((list ?? []).flatMap((x) => (x.enabled && x.nextRunAt ? [x.nextRunAt] : []))));
 
 	const split = $derived(splitSchedules((list ?? []).filter((s) => !hidden.includes(s.id))));
 	const pending = $derived(split.pending);
@@ -348,9 +344,9 @@
 							<p class="desc">{s.prompt}</p>
 							<p class="meta">{sessionLabel(s.sessionId)}</p>
 							<p class="meta">
-								{#if s.enabled && s.nextRunAt}{t("다음 실행 {when}", { when: fullTime(s.nextRunAt) })}{#if s.nextRunAt - clock.now < 6 * 3_600_000}{` (${nextRunLabel(s.nextRunAt, clock.now)})`}{/if}
+								{#if s.enabled && s.nextRunAt}<span title={fullTime(s.nextRunAt)}>{t("다음 실행 {when}", { when: nextRunLabel(s.nextRunAt, minuteClock.now) })}</span>
 								{:else}{t("꺼져 있음")}{/if}
-								{#if s.lastRunAt} · {t("마지막 {when}", { when: fullTime(s.lastRunAt) })}{/if}
+								{#if s.lastRunAt} · <span title={fullTime(s.lastRunAt)}>{t("마지막 {when}", { when: pastLabel(s.lastRunAt, minuteClock.now) })}</span>{/if}
 							</p>
 							{#if s.lastStatus === "error" && s.lastError}<p class="meta err">{s.lastError}</p>{/if}
 						</ListItem>
@@ -389,7 +385,7 @@
 									<p class="desc">{s.prompt}</p>
 									<p class="meta">{sessionLabel(s.sessionId)}</p>
 									<p class="meta">
-										{#if s.lastRunAt}{s.lastStatus?.startsWith("skipped") ? t("{when}에 건너뜀 · {day}에 지워짐", { when: fullTime(s.lastRunAt), day: shortDate(purgeAt(s)) }) : t("{when}에 실행 · {day}에 지워짐", { when: fullTime(s.lastRunAt), day: shortDate(purgeAt(s)) })}
+										{#if s.lastRunAt}<span title={fullTime(s.lastRunAt)}>{s.lastStatus?.startsWith("skipped") ? t("{when} 건너뜀 · {day}에 지워짐", { when: pastLabel(s.lastRunAt, minuteClock.now), day: shortDate(purgeAt(s)) }) : t("{when} 실행 · {day}에 지워짐", { when: pastLabel(s.lastRunAt, minuteClock.now), day: shortDate(purgeAt(s)) })}</span>
 										{:else}{t("{day}에 지워짐", { day: shortDate(purgeAt(s)) })}{/if}
 									</p>
 									{#if s.lastStatus === "error" && s.lastError}<p class="meta err">{s.lastError}</p>{/if}

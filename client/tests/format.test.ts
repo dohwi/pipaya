@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { ago, dayLabel, dayStart, fileStamp, fullTime, shortDate, shortDateTime, timeOfDay } from "../src/lib/format";
+import { clockMinutes, dayLabel, dayStart, fileStamp, fullTime, messageTime, pastLabel, shortDate, shortDateTime, timeOfDay } from "../src/lib/format";
 import { setLang } from "../src/lib/i18n";
 
 describe("fileStamp", () => {
@@ -52,35 +52,49 @@ describe("fullTime / shortDate / shortDateTime", () => {
 	});
 });
 
-describe("ago", () => {
-	const now = new Date(2026, 10, 17, 12, 0, 0).getTime();
-	test("59 seconds -> '방금' (no seconds option)", () => {
-		setLang("ko");
-		expect(ago(now - 59_000, now)).toBe("방금");
+
+describe("pastLabel / messageTime", () => {
+	const now = new Date(2026, 10, 22, 15, 0, 30).getTime(); // a Sunday, half a minute past 3 PM
+	const at = (m: number, d: number, h: number, mi = 0, s = 0) => new Date(2026, m, d, h, mi, s).getTime();
+	test("clock minutes: what the clocks beside it show, so every label turns over on the same minute", () => {
+		expect(clockMinutes(at(10, 22, 14, 59, 59), at(10, 22, 15, 0, 1))).toBe(1);
+		expect(clockMinutes(at(10, 22, 15, 0, 0), at(10, 22, 15, 0, 59))).toBe(0);
 	});
-	test("59 seconds -> '59초 전' (seconds option)", () => {
+	test("recent: 방금, minutes, then hours", () => {
 		setLang("ko");
-		expect(ago(now - 59_000, now, { seconds: true })).toBe("59초 전");
+		const ko = (ts: number) => pastLabel(ts, now, { locale: "ko-KR" });
+		expect(ko(at(10, 22, 15, 0, 0))).toBe("방금");
+		expect(ko(now + 5_000)).toBe("방금"); // a server clock slightly ahead of this one
+		expect(ko(at(10, 22, 14, 59, 59))).toBe("1분 전");
+		expect(ko(at(10, 22, 14, 1))).toBe("59분 전");
+		expect(ko(at(10, 22, 14, 0))).toBe("1시간 전");
+		expect(ko(at(10, 22, 9, 1))).toBe("5시간 전");
 	});
-	test("60 seconds -> '1분 전'", () => {
+	test("older: the time today, then 어제, the weekday, the date, the year", () => {
 		setLang("ko");
-		expect(ago(now - 60_000, now)).toBe("1분 전");
+		const ko = (ts: number, time = true) => pastLabel(ts, now, { locale: "ko-KR", time });
+		expect(ko(at(10, 22, 9, 0))).toBe("오전 9:00"); // 6 hours: the time
+		expect(ko(at(10, 22, 0, 5))).toBe("오전 12:05");
+		expect(ko(at(10, 21, 23, 30))).toBe("어제 오후 11:30");
+		expect(ko(at(10, 21, 23, 30), false)).toBe("어제");
+		expect(ko(at(10, 18, 14, 5))).toBe("수 오후 2:05");
+		expect(ko(at(10, 16, 14, 5), false)).toBe("월");
+		expect(ko(at(10, 15, 14, 5))).toBe("11월 15일"); // 7 days back: the date
+		expect(ko(new Date(2025, 10, 15, 12).getTime())).toBe("2025년 11월 15일");
+		expect(ko(new Date(2025, 10, 15, 12).getTime(), false)).toBe("2025년 11월");
+		setLang("en");
+		const en = (ts: number) => pastLabel(ts, now, { locale: "en-US" });
+		expect(en(at(10, 22, 14, 48))).toBe("12m ago");
+		expect(en(at(10, 21, 21, 30))).toBe("yesterday 9:30 PM");
+		expect(en(at(10, 18, 14, 5))).toBe("Wed 2:05 PM");
+		expect(en(at(10, 15, 14, 5))).toBe("Nov 15");
+		setLang("ko");
 	});
-	test("59 minutes -> '59분 전'", () => {
+	test("a message: relative while recent, then the time of day (the day heading says which day)", () => {
 		setLang("ko");
-		expect(ago(now - 59 * 60_000, now)).toBe("59분 전");
-	});
-	test("23 hours -> '23시간 전'", () => {
-		setLang("ko");
-		expect(ago(now - 23 * 3_600_000, now)).toBe("23시간 전");
-	});
-	test("24 hours -> '1일 전'", () => {
-		setLang("ko");
-		expect(ago(now - 24 * 3_600_000, now)).toBe("1일 전");
-	});
-	test("now defaults to Date.now() (at = now → '방금')", () => {
-		setLang("ko");
-		const at = Date.now();
-		expect(ago(at)).toBe("방금");
+		expect(messageTime(at(10, 22, 14, 48), now, "ko-KR")).toBe("12분 전");
+		expect(messageTime(at(10, 22, 12, 30), now, "ko-KR")).toBe("2시간 전");
+		expect(messageTime(at(10, 22, 9, 0), now, "ko-KR")).toBe("오전 9:00");
+		expect(messageTime(at(10, 18, 14, 5), now, "ko-KR")).toBe("오후 2:05"); // not "수 오후 2:05": the heading has it
 	});
 });

@@ -1,3 +1,4 @@
+import { clockMinutes } from "./format";
 import { localeTag, t } from "./i18n";
 import type { Schedule, ScheduleStatus } from "./types";
 
@@ -148,29 +149,26 @@ export const composerSchedules = (list: readonly Schedule[], sessionId: string):
 export const lastRunTone = (s: Pick<Schedule, "lastStatus">): "warn" | "danger" | null =>
 	s.lastStatus === "error" ? "danger" : s.lastStatus?.startsWith("skipped") ? "warn" : null;
 
-const MIN = 60_000;
-const HOUR = 60 * MIN;
-const DAY = 24 * HOUR;
 const sameDay = (a: Date, b: Date) => a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
 
 /**
- * When a task runs next, as short as it can be read at a glance (the queue rows and the settings list):
- *  - under 1 minute (or already due): "곧"
- *  - under 1 hour: "N분 후", counted down minute by minute (rounded up: 30 s left still reads "1분 후" until "곧")
+ * When a task runs next, as short as it can be read at a glance (the queue rows and the settings list). The mirror of
+ * pastLabel (lib/format.ts), counted in clock minutes like it, so it turns over on the minute with every other label:
+ *  - this clock minute (or already due): "곧"
+ *  - under 1 hour: "N분 후" ("오후 12:12" at 12:00 reads "12분 후")
  *  - under 6 hours: "N시간 M분 후" ("2시간 후" on the hour)
  *  - later today: the time, "오후 2:05"
  *  - tomorrow: "내일 오전 9:00"
  *  - within a week: the weekday and time, "토 오후 2:05"
  *  - further: the date, "11월 29일"
  * Close times read as a countdown, far ones as a date: "6일 후" says less than the date it stands for.
- * The full date and time stay in the tooltip (fullTime). `now` and `locale` are for tests.
+ * The full date and time stay in the tooltip (fullTime). `now` and `locale` are for tests and the caller's clock.
  */
 export function nextRunLabel(ts: number, now: number = Date.now(), locale: string = localeTag()): string {
-	const left = ts - now;
-	if (left < MIN) return t("곧");
-	if (left < HOUR) return t("{n}분 후", { n: Math.ceil(left / MIN) });
-	if (left < 6 * HOUR) {
-		const mins = Math.ceil(left / MIN);
+	const mins = clockMinutes(now, ts);
+	if (mins < 1) return t("곧");
+	if (mins < 60) return t("{n}분 후", { n: mins });
+	if (mins < 6 * 60) {
 		const h = Math.floor(mins / 60);
 		const m = mins % 60;
 		return m ? t("{h}시간 {m}분 후", { h, m }) : t("{h}시간 후", { h });
@@ -180,26 +178,6 @@ export function nextRunLabel(ts: number, now: number = Date.now(), locale: strin
 	const today = new Date(now);
 	if (sameDay(at, today)) return time;
 	if (sameDay(at, new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1))) return t("내일 {time}", { time });
-	if (left < 6 * DAY) return `${at.toLocaleDateString(locale, { weekday: "short" })} ${time}`;
+	if (ts - now < 6 * 86_400_000) return `${at.toLocaleDateString(locale, { weekday: "short" })} ${time}`;
 	return at.toLocaleDateString(locale, { month: "short", day: "numeric" });
-}
-
-/**
- * How long until the next soonest-run label changes, so a view redraws exactly when the text would: on the minute
- * boundary while some task counts down in minutes (the label is rounded up, so it flips when `left` crosses a whole
- * minute), else when the closest task enters the 6-hour countdown or the day turns. null: nothing to wait for.
- */
-export function nextLabelChange(times: readonly number[], now: number = Date.now()): number | null {
-	let wait = Infinity;
-	for (const ts of times) {
-		const left = ts - now;
-		if (left < 0) continue; // already "곧": changes only when the server moves the task on
-		if (left < 6 * HOUR) {
-			const into = left % MIN; // ms past the last whole minute: the label flips when that reaches 0
-			wait = Math.min(wait, into === 0 ? MIN : into);
-		} else wait = Math.min(wait, left - 6 * HOUR + 1);
-	}
-	const d = new Date(now);
-	wait = Math.min(wait, new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1).getTime() - now); // "내일" becomes today
-	return Number.isFinite(wait) ? Math.max(250, wait + 50) : null; // a little after the boundary, never a tight loop
 }

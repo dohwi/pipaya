@@ -7,7 +7,8 @@
 	import ConfirmButton from "../ui/ConfirmButton.svelte";
 	import { onDestroy, onMount } from "svelte";
 	import { t } from "../../lib/i18n";
-	import { ago } from "../../lib/format";
+	import { pastLabel } from "../../lib/format";
+	import { minuteClock } from "../../lib/minute-clock.svelte";
 	import { Api, errorText } from "../../lib/api";
 	import { app } from "../../lib/store.svelte";
 	import { notifications } from "../../lib/notifications";
@@ -30,7 +31,6 @@
 	let busy = $state<string | null>(null);
 	/** The QR is a key to the server: its code is only made while this is open, and dropped when it closes. */
 	let adding = $state(false);
-	let now = $state(Date.now());
 	let sharing = $state(false);
 
 	const api = () => (server ? new Api({ baseUrl: server.baseUrl, token: server.token }) : null);
@@ -51,7 +51,6 @@
 		} catch {
 			paired = null; // a paired device's token cannot manage tokens: nothing to show here
 		}
-		now = Date.now();
 	}
 
 	const refresh = setInterval(() => void load(), 10_000);
@@ -179,7 +178,7 @@
 						</span>
 						<span class="sub">{[d.os ?? platformName(d.platform), d.app].filter(Boolean).join(" · ")}</span>
 						<span class="sub">
-							{d.live ? t("접속 중") : d.lastSeen ? t("마지막 접속 {ago}", { ago: ago(d.lastSeen, now, { seconds: true }) }) : t("기록 없음")}{d.push ? ` · ${t("모바일 푸시")}` : ""}{d.enabled ? "" : ` · ${t("알림 꺼짐")}`}
+							{d.live ? t("접속 중") : d.lastSeen ? t("마지막 접속 {ago}", { ago: pastLabel(d.lastSeen, minuteClock.now) }) : t("기록 없음")}{d.push ? ` · ${t("모바일 푸시")}` : ""}{d.enabled ? "" : ` · ${t("알림 꺼짐")}`}
 						</span>
 					</div>
 					<ConfirmButton size="sm" confirmLabel={t("정말 해지")} disabled={busy === d.id} onconfirm={() => remove(d)}>{t("해지")}</ConfirmButton>
@@ -198,7 +197,7 @@
 						<span class="kind"><Icon name="phone" /></span>
 						<div class="meta">
 							<span class="name">{p.name}</span>
-							<span class="sub">{p.lastUsedAt ? t("마지막 사용 {ago}", { ago: ago(p.lastUsedAt, now, { seconds: true }) }) : t("아직 사용하지 않음")}</span>
+							<span class="sub">{p.lastUsedAt ? t("마지막 사용 {ago}", { ago: pastLabel(p.lastUsedAt, minuteClock.now) }) : t("아직 사용하지 않음")}</span>
 						</div>
 						<ConfirmButton size="sm" confirmLabel={t("정말 취소")} disabled={revoking === p.id} onconfirm={() => revoke(p.id)}>{t("접속 취소")}</ConfirmButton>
 					</li>

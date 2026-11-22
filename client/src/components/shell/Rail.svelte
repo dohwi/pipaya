@@ -1,12 +1,14 @@
 <script lang="ts">
 	import { t } from "../../lib/i18n";
+	import { nextRunLabel } from "../../lib/schedules";
+	import { minuteClock } from "../../lib/minute-clock.svelte";
 	import { slidingIndicator } from "../../lib/sliding-indicator";
 	import { formatCombo } from "../../lib/keys";
 	import IconButton from "../ui/IconButton.svelte";
 	import PipayaMark from "../ui/PipayaMark.svelte";
 	import Pin from "../ui/Pin.svelte";
 	import { app } from "../../lib/store.svelte";
-	import { shortDateTime, tilde } from "../../lib/format";
+	import { tilde } from "../../lib/format";
 	import { tabPanes, type DirBlock } from "../../lib/nav";
 	import type { Server } from "../../lib/store.svelte";
 	import { ACTIVITY_LABEL, activityOf, URGENCY, type Activity } from "../../lib/activity";
@@ -21,7 +23,7 @@
 	const graphTip = $derived(app.prefs.bindings.openGraph ? `${t("그래프 뷰")} (${formatCombo(app.prefs.bindings.openGraph)})` : t("그래프 뷰"));
 	const scheduled = $derived(app.schedules.all(app.serverId));
 	const schedulesShown = $derived(!!app.serverId && app.schedules.supported(app.serverId));
-	const schedulesTip = $derived(scheduled.next === null ? t("예약 작업") : `${t("예약 작업")} · ${t("다음 실행: {when}", { when: shortDateTime(scheduled.next) })}`);
+	const schedulesTip = $derived(scheduled.next === null ? t("예약 작업") : `${t("예약 작업")} · ${t("다음 실행: {when}", { when: nextRunLabel(scheduled.next, minuteClock.now) })}`);
 
 	interface Section {
 		server: Server;
