@@ -1,9 +1,6 @@
 import cors from "@fastify/cors";
 import Fastify, { type FastifyInstance } from "fastify";
-import { timingSafeEqual } from "node:crypto";
-import { homedir } from "node:os";
-import { isAbsolute, relative } from "node:path";
-import Type from "typebox";
+import { join, resolve } from "node:path";
 import { QuestionManager } from "./questions.ts";
 import type { Config } from "./config.ts";
 import { Configuration } from "./configuration.ts";
@@ -22,42 +19,37 @@ import { registerSystemModelRoutes } from "./system-model-routes.ts";
 import { TOGGLEABLE_TOOLS } from "./tools.ts";
 import { IMAGE_TOOL, ImageModelSettings } from "./image-generation.ts";
 import { registerImageModelRoutes } from "./image-model-routes.ts";
-import { VoiceSettings } from "./voice-input.ts";
+import { VoiceSettings, realtimeSocketOf, VOICE_REALTIME_CREDENTIAL_ID, type RealtimeSettingsValue } from "./voice-input.ts";
 import { registerVoiceRoutes } from "./voice-routes.ts";
-import { probeRealtime, REALTIME_SOCKET, registerRealtimeVoice, type RealtimeTarget } from "./voice-realtime.ts";
-import { realtimeSocketOf, VOICE_REALTIME_CREDENTIAL_ID, type RealtimeSettingsValue } from "./voice-input.ts";
+import { probeRealtime, registerRealtimeVoice, type RealtimeTarget } from "./voice-realtime.ts";
 import { ExtensionSettings } from "./extension-settings.ts";
 import { registerExtensionSettingsRoutes } from "./extension-settings-routes.ts";
 import { ClientSettings } from "./client-settings.ts";
 import { registerClientSettingsRoutes } from "./client-settings-routes.ts";
 import { DeviceTokens } from "./device-tokens.ts";
 import { Pairing } from "./pairing.ts";
-import { isAdminOnlyRoute, PUBLIC_PAIRING_PATH, registerPairingRoutes } from "./pairing-routes.ts";
+import { registerPairingRoutes } from "./pairing-routes.ts";
 import { registerFsRoutes } from "./fs-routes.ts";
 import { registerFileRoutes } from "./file-routes.ts";
 import { workDirOf } from "./work-tree.ts";
 import { GroupManager, panesOf, peerGroupOps, type GroupRecord } from "./groups.ts";
 import { registerGroupRoutes } from "./groups-routes.ts";
 import { isTerminalId, TerminalManager } from "./terminals.ts";
-import { registerTerminalRoutes, TERMINAL_SOCKET } from "./terminal-routes.ts";
+import { registerTerminalRoutes } from "./terminal-routes.ts";
 import { LocaleStore } from "./locales.ts";
 import { registerLocaleRoutes } from "./locales-routes.ts";
 import { openDb } from "./db.ts";
 import { badRequest, HttpError, notFound } from "./errors.ts";
 import { EventBus } from "./events.ts";
-import { builtinProvider, createModelRegistry, describeModels } from "./models.ts";
-import { AccountEmails } from "./account-email.ts";
-import { deviceId, ProviderLogins } from "./provider-login.ts";
-import * as S from "./schemas.ts";
+import { createModelRegistry, describeModels } from "./models.ts";
 import { SessionManager } from "./sessions.ts";
 import { McpManager } from "./mcp.ts";
 import { registerMcpRoutes } from "./mcp-routes.ts";
 import { SkillService } from "./skills.ts";
 import { registerSkillRoutes } from "./skills-routes.ts";
 import { AgentsWatcher } from "./agents-watch.ts";
-import { streamEvents } from "./sse.ts";
 import { SessionStore, SqliteCredentialStore, THINKING_LEVELS, type ThinkingLevel } from "./store.ts";
-import { makeSerializerCompiler, validatorCompiler, type TypeBoxProvider } from "./typebox-provider.ts";
+import { makeSerializerCompiler, validatorCompiler } from "./typebox-provider.ts";
 import { registerWebSocket, type WebSocketOptions } from "./ws.ts";
 import { NotificationService, type PushTransports } from "./notifications.ts";
 import { UnreadTracker } from "./unread.ts";
@@ -68,12 +60,16 @@ import { StreamTickets } from "./stream-tickets.ts";
 import { AuthThrottle } from "./auth-throttle.ts";
 import { createPushTransports } from "./push.ts";
 import { reachableUrls } from "./server-address.ts";
-import { ExtensionHost, ROUTE_PREFIX } from "./extensions/host.ts";
+import { ExtensionHost } from "./extensions/host.ts";
 import { registerExtensionHttpRoutes, registerServerExtensionRoutes } from "./extensions/routes.ts";
-import { MIN_CLIENT_PROTOCOL, PROTOCOL_HEADER, PROTOCOL_QUERY, PROTOCOL_VERSION, REPO_ROOT, SERVER_VERSION } from "./version.ts";
+import { REPO_ROOT } from "./version.ts";
 import { restartSoon, SelfUpdater, type SelfUpdateOptions } from "./self-update.ts";
-import { join, resolve } from "node:path";
 import { IdleSockets } from "./idle-sockets.ts";
+import { isStreamPath } from "./auth-policy.ts";
+import { registerHttpHooks } from "./http-hooks.ts";
+import { registerMetaRoutes } from "./routes/meta-routes.ts";
+import { registerProviderRoutes } from "./routes/providers-routes.ts";
+import { registerSessionRoutes } from "./routes/sessions-routes.ts";
 
 /** How long persisted events are kept for a client that reconnects with a cursor. */
 export const EVENT_RETENTION_MS = 3 * 24 * 3600_000;
@@ -296,7 +292,6 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 	// Bun ignores keepAliveTimeout: sockets left by sleeping or vanished devices are closed here instead.
 	const idleSockets = new IdleSockets();
 	idleSockets.attach(server.server);
-	server.addHook("onRequest", async (req) => idleSockets.requestStarted(req.raw.socket, req.raw));
 	server.addContentTypeParser("multipart/form-data", { parseAs: "buffer" }, (_req, body, done) => done(null, body));
 	server.setValidatorCompiler(validatorCompiler);
 	server.setSerializerCompiler(makeSerializerCompiler(opts.strictResponses ?? false));
@@ -310,96 +305,23 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 	const deviceTokens = new DeviceTokens(db, Date.now, cfg.deviceTokenIdleDays);
 	const streamTickets = new StreamTickets();
 	const authThrottle = new AuthThrottle();
-	/** The paired device a request was made by; absent for the admin token. */
-	const deviceOf = new WeakMap<object, string>();
-	/** Requests to a public extension route that still carried a valid token. */
-	const publicAuthed = new WeakSet<object>();
-	const expected = Buffer.from(cfg.token);
-	const tokenMatches = (given: string | undefined) => {
-		if (!given) return false;
-		const token = Buffer.from(given);
-		return token.length === expected.length && timingSafeEqual(token, expected);
-	};
-	const bearerOf = (header: string | undefined) => (header?.startsWith("Bearer ") ? header.slice(7) : undefined);
-	server.addHook("onRequest", async (req, reply) => {
-		if (req.method === "OPTIONS") return;
-		const path = req.url.split("?")[0];
-		if (req.method === "GET" && path === "/health") return;
-		// A client that declares a protocol older than the oldest this server serves is told so before anything else, so it can
-		// ask its user to update instead of failing on a changed response. A client that declares nothing is not judged.
-		const raw = req.headers[PROTOCOL_HEADER] ?? (req.query as Record<string, unknown> | undefined)?.[PROTOCOL_QUERY];
-		const declared = typeof raw === "string" && /^\d{1,6}$/.test(raw) ? Number(raw) : null;
-		if (declared !== null && declared < MIN_CLIENT_PROTOCOL) {
-			throw new HttpError(426, "client_too_old", `this server needs a client with protocol ${MIN_CLIENT_PROTOCOL} or newer (yours is ${declared}); update the app`);
-		}
-		if (req.method === "POST" && path === PUBLIC_PAIRING_PATH) return; // the one-time code is the credential
-		const bearer = bearerOf(req.headers.authorization);
-		// An extension route marked public (a webhook, a page) is open; the extension checks its own secret. A token that
-		// comes along anyway is still recognised, so the handler can tell the owner from a stranger.
-		if (path?.startsWith(ROUTE_PREFIX) && extensions.isPublicRoute(req.method, path)) {
-			if (tokenMatches(bearer)) publicAuthed.add(req.raw);
-			else {
-				const device = bearer ? deviceTokens.verify(bearer) : null;
-				if (device) { publicAuthed.add(req.raw); deviceOf.set(req.raw, device); }
-			}
-			return;
-		}
-		// Too many wrong tokens from this address: nothing is checked until its minute has passed (auth-throttle.ts).
-		const wait = authThrottle.blockedFor(req.ip);
-		if (wait > 0) {
-			void reply.header("retry-after", Math.ceil(wait / 1000));
-			throw new HttpError(429, "auth_throttled", "too many wrong tokens from this address; wait a minute");
-		}
-		// A request that carries no credential at all is not a guess (a scanner, a monitor, a page without a server yet).
-		const refuse = (wrong: string | undefined) => {
-			if (wrong !== undefined) authThrottle.fail(req.ip, wrong);
-			return new HttpError(401, "unauthorized", "missing or invalid token");
-		};
-		// Browser EventSource/WebSocket cannot set headers. REST requires a Bearer header.
-		const browserStream = req.method === "GET" && (path === "/ws" || path === "/events" || path === REALTIME_SOCKET || TERMINAL_SOCKET.test(path ?? "") || /^\/sessions\/[^/]+\/events$/.test(path ?? ""));
-		if ((browserStream || req.headers.upgrade !== undefined) && req.headers.origin !== undefined && !corsPolicy.allows(req.headers.origin)) {
-			throw new HttpError(403, "forbidden_origin", "origin not allowed");
-		}
-		const query = browserStream ? (req.query as { token?: string; ticket?: string } | undefined) : undefined;
-		let device: string | null;
-		if (bearer === undefined && typeof query?.ticket === "string") {
-			// A one-time ticket (stream-tickets.ts) keeps the access token itself out of the URL.
-			const holder = streamTickets.redeem(query.ticket);
-			if (!holder) throw refuse(query.ticket);
-			if (holder.device === null) return; // asked for with the admin token
-			// The device may have been revoked between asking for the ticket and using it.
-			if (!deviceTokens.has(holder.device)) throw refuse(query.ticket);
-			device = holder.device;
-		} else {
-			const given = bearer ?? query?.token;
-			if (tokenMatches(given)) return; // the admin token
-			device = deviceTokens.verify(given);
-			if (!device) throw refuse(given);
-		}
-		// Judge by the route the router matched, not the raw URL: it decodes percent-escapes the raw text still carries.
-		// No match (undefined) ends in a 404 anyway; the raw path is the safe stand-in for it.
-		if (isAdminOnlyRoute(req.method, req.routeOptions.url ?? path ?? "")) throw new HttpError(403, "admin_only", "this needs the server's admin token, not a paired device's");
-		deviceTokens.track(device, req.raw.socket);
-		deviceOf.set(req.raw, device);
+	const auth = registerHttpHooks(server, {
+		token: cfg.token,
+		corsPolicy,
+		idleSockets,
+		deviceTokens,
+		streamTickets,
+		authThrottle,
+		extensions,
 	});
-
-	server.setErrorHandler((err: Error & { statusCode?: number; code?: string }, req, reply) => {
-		if (err instanceof HttpError) return reply.status(err.status).send({ error: { code: err.code, message: err.message, ...(err.data ?? {}) } });
-		const status = err.statusCode && err.statusCode < 500 ? err.statusCode : 500;
-		if (status >= 500) req.log.error(err);
-		return reply.status(status).send({
-			error: { code: status === 500 ? "internal_error" : (err.code ?? "error"), message: status === 500 ? "internal server error" : err.message },
-		});
-	});
-	server.setNotFoundHandler((_req, reply) => reply.status(404).send({ error: { code: "not_found", message: "route not found" } }));
-	const app = server.withTypeProvider<TypeBoxProvider>();
+	const { deviceOf, publicAuthed } = auth;
 
 	// `pi.api.request`: an extension calls the REST API in-process with the admin token, through the same hooks, schemas,
 	// body limits and handlers as a client's request. Streams never end, so they are refused (extensions have `pi.subscribe`).
 	extensions.attachServer({
 		request: async ({ extension, method, url, body, signal }) => {
 			const path = url.split("?")[0] ?? "";
-			if (path === "/ws" || path === "/events" || path === REALTIME_SOCKET || TERMINAL_SOCKET.test(path) || /^\/sessions\/[^/]+\/events$/.test(path)) throw new Error(`${path} is a stream; use pi.subscribe for events`);
+			if (isStreamPath(path)) throw new Error(`${path} is a stream; use pi.subscribe for events`);
 			server.log.info({ extension, method, url: redactUrl(url) }, "extension api request");
 			const res = await server.inject({
 				method, url, signal,
@@ -417,23 +339,7 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 		},
 	});
 
-	// ── meta ──
-	app.get("/health", {
-		schema: { response: { 200: S.Health } },
-		handler: async (req) =>
-			tokenMatches(bearerOf(req.headers.authorization)) || deviceTokens.verify(bearerOf(req.headers.authorization))
-				? { ok: true, version: SERVER_VERSION, protocol: PROTOCOL_VERSION, minClientProtocol: MIN_CLIENT_PROTOCOL, uptimeMs: Date.now() - startedAt, runningSessions: sessions.runningCount, subscribers: bus.subscriberCount }
-				: { ok: true, version: SERVER_VERSION, protocol: PROTOCOL_VERSION, minClientProtocol: MIN_CLIENT_PROTOCOL },
-	});
-
-	// A browser cannot send the Authorization header on EventSource/WebSocket: it asks for a one-time ticket here and
-	// puts that in the URL instead of the token.
-	app.post("/stream-tickets", {
-		schema: { response: { 200: Type.Object({ ticket: Type.String(), expiresAt: Type.Integer() }), ...S.errors(401) } },
-		handler: async (req) => streamTickets.issue({ device: deviceOf.get(req.raw) ?? null }),
-	});
-
-	// ── self-update: the client offers "update the server too" when it updates itself ──
+	// ── core routes (meta, providers, sessions, events) ──
 	const updater = new SelfUpdater({
 		root: REPO_ROOT,
 		serverDir: join(REPO_ROOT, "server"),
@@ -441,263 +347,30 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 		restart: restartSoon,
 		...opts.selfUpdate,
 	});
-	app.get("/server/update", {
-		schema: { response: { 200: S.UpdateStatus, ...S.errors(401, 403) } },
-		handler: async () => updater.status(),
+	registerMetaRoutes(server, {
+		startedAt,
+		auth,
+		deviceTokens,
+		streamTickets,
+		updater,
+		sessions,
+		bus,
+		extensions,
+		configuration,
+		registry,
+		corsPolicy,
 	});
-	app.post("/server/update", {
-		schema: { body: S.UpdateBody, response: { 200: S.UpdateResult, ...S.errors(400, 401, 403, 409, 502) } },
-		handler: async (req) => {
-			const done = await updater.apply(req.body?.force === true);
-			return { ok: true, ...done, restarting: true };
-		},
-	});
-	app.get("/tools", {
-		schema: { response: { 200: S.ToolList, ...S.errors(401) } },
-		handler: async () => ({
-			tools: Object.values(sessions.toolDefs()).map((t) => ({ name: t.name, description: t.description })),
-			defaults: extensions.defaultTools(),
-		}),
-	});
-	app.get("/models", {
-		schema: { querystring: S.ModelsQuery, response: { 200: S.ModelList, ...S.errors(400, 401) } },
-		handler: async (req) => {
-			configuration.refreshStale();
-			const all = await describeModels(registry, req.query.provider, (p, id) => configuration.isUnavailable(p, id), configuration.icons());
-			return { models: req.query.configured ? all.filter((m) => m.configured) : all };
-		},
-	});
-	app.get("/providers", {
-		schema: { response: { 200: S.ProviderList, ...S.errors(401) } },
-		handler: async () => {
-			const stored = new Map((await credentials.list()).map((c) => [c.providerId, c.type]));
-			const custom = new Set(configuration.list().map((c) => c.id));
-			return { providers: await Promise.all(registry.models.getProviders().map(async (p) => ({
-				id: p.id, name: p.name ?? p.id,
-				configured: Boolean(await registry.models.checkAuth(p.id).catch(() => undefined)), storedCredential: stored.get(p.id) ?? null,
-				...(stored.get(p.id) === "oauth" ? await accountEmails.backfill(p.id, () => credentials.read(p.id)).then((email) => (email ? { accountEmail: email } : {})) : {}),
-				loginMethods: [...(p.auth.apiKey?.login ? ["api_key" as const] : []), ...(p.auth.oauth ? ["oauth" as const] : [])],
-				...(p.auth.oauth ? { oauthLabel: p.auth.oauth.loginLabel ?? p.auth.oauth.name } : {}),
-				builtin: !custom.has(p.id) && builtinProvider(p.id) !== undefined,
-			}))) };
-		},
-	});
-	const accountEmails = new AccountEmails(db);
-	const logins = new ProviderLogins(registry.models, async (id) => {
-		const credential = await credentials.read(id).catch(() => undefined);
-		if (credential) await accountEmails.refresh(id, credential);
-		bus.publish(null, "provider_updated", { id, configured: Boolean(await registry.models.checkAuth(id).catch(() => undefined)) });
-	}, { agentName: "Pipaya", deviceId: () => deviceId(db) });
-	app.post("/providers/:id/login", {
-		schema: { params: S.IdParams, body: S.LoginStartBody, response: { 200: S.LoginState, ...S.errors(400, 401, 404) } },
-		handler: async (req) => logins.start(req.params.id, req.body.type),
-	});
-	app.get("/logins/:id", {
-		schema: { params: S.IdParams, response: { 200: S.LoginState, ...S.errors(401, 404) } },
-		handler: async (req) => logins.get(req.params.id),
-	});
-	app.post("/logins/:id/answer", {
-		schema: { params: S.IdParams, body: S.LoginAnswerBody, response: { 200: S.LoginState, ...S.errors(401, 404, 409) } },
-		handler: async (req) => logins.answer(req.params.id, req.body.promptId, req.body.value),
-	});
-	app.post("/logins/:id/cancel", {
-		schema: { params: S.IdParams, response: { 200: S.LoginState, ...S.errors(401, 404) } },
-		handler: async (req) => logins.cancel(req.params.id),
-	});
-	app.put("/providers/:id/credential", {
-		schema: { params: S.IdParams, body: S.CredentialBody, response: { 200: S.Ok, ...S.errors(400, 401, 404) } },
-		handler: async (req) => {
-			const { id } = req.params;
-			if (!registry.models.getProvider(id)) throw notFound("provider");
-			await credentials.modify(id, async () => ({ type: "api_key", key: req.body.key }));
-			accountEmails.clear(id);
-			bus.publish(null, "provider_updated", { id, configured: true });
-			return { ok: true };
-		},
-	});
-	app.delete("/providers/:id/credential", {
-		schema: { params: S.IdParams, response: { 200: S.Ok, ...S.errors(401) } },
-		handler: async (req) => {
-			const { id } = req.params;
-			await credentials.delete(id);
-			accountEmails.clear(id);
-			bus.publish(null, "provider_updated", { id, configured: Boolean(await registry.models.checkAuth(id)) });
-			return { ok: true };
-		},
-	});
-
-	// ── sessions ──
-	app.get("/workspace", {
-		schema: { response: { 200: S.WorkspaceInfo, ...S.errors(401) } },
-		handler: async () => {
-			const root = configuration.defaultWorkdir();
-			const label = (cwd: string) => {
-				const r = relative(root, cwd);
-				return r === "" ? "." : r === ".." || r.startsWith("../") || r.startsWith("..\\") || isAbsolute(r) ? cwd : r.replaceAll("\\", "/");
-			};
-			return { root, home: homedir(), workdirs: store.workdirs().map((w) => ({ ...w, path: label(w.cwd) })) };
-		},
-	});
-	app.get("/activity", {
-		schema: { response: { 200: S.ActivityInfo, ...S.errors(401) } },
-		handler: async () => ({ sessions: sessions.activity(), unread: unread.list() }),
-	});
-	app.get("/delegates", {
-		schema: { response: { 200: S.DelegateRuns, ...S.errors(401) } },
-		handler: async () => ({ runs: sessions.delegateRuns() }),
-	});
-	app.post("/sessions/:id/read", {
-		schema: { params: S.IdParams, response: { 200: Type.Object({ ok: Type.Boolean() }), ...S.errors(401) } },
-		handler: async (req) => { unread.read([req.params.id]); return { ok: true }; },
-	});
-	app.post("/sessions", {
-		schema: { body: S.CreateSessionBody, response: { 201: S.Session, ...S.errors(400, 401, 502) } },
-		handler: async (req, reply) => reply.status(201).send(await sessions.create(req.body)),
-	});
-	app.get("/sessions", {
-		schema: { querystring: S.ListSessionsQuery, response: { 200: S.SessionList, ...S.errors(400, 401) } },
-		handler: async (req) => {
-			const limit = req.query.limit ?? 50;
-			const list = store.list({ limit: limit + 1, before: req.query.before, beforeId: req.query.beforeId, closed: req.query.closed });
-			const cursor = list.length > limit ? list[limit - 1] : null;
-			return { sessions: list.slice(0, limit), nextBefore: cursor?.updatedAt ?? null, nextBeforeId: cursor?.id ?? null };
-		},
-	});
-	app.post("/sessions/delete", {
-		schema: { body: S.DeleteSessionsBody, response: { 200: S.DeleteSessionsResult, ...S.errors(400, 401) } },
-		handler: async (req) => {
-			const deleted: string[] = [], skipped: string[] = [];
-			for (const id of new Set(req.body.ids)) {
-				if (!store.get(id) || busy(id)) skipped.push(id);
-				else { sessions.delete(id); deleted.push(id); }
-			}
-			return { deleted, skipped };
-		},
-	});
-	app.get("/sessions/:id", {
-		schema: { params: S.IdParams, response: { 200: S.SessionDetail, ...S.errors(401, 404) } },
-		handler: async (req) => ({
-			...sessions.get(req.params.id), status: sessions.status(req.params.id), usage: store.usage(req.params.id),
-			context: sessions.contextUsage(req.params.id) ?? undefined,
-			compaction: { supported: true, autoEnabled: compactionSettings.get().auto },
-		}),
-	});
-	app.post("/sessions/:id/compact", {
-		schema: { params: S.IdParams, body: S.CompactBody, response: { 200: S.CompactResult, ...S.errors(400, 401, 404, 409, 501, 502) } },
-		handler: async (req) => {
-			const r = await sessions.compact(req.params.id, req.body?.customInstructions);
-			return { tokensBefore: r.tokensBefore, context: r.context, model: r.model };
-		},
-	});
-	app.get("/sessions/:id/context", {
-		schema: { params: S.IdParams, response: { 200: S.SessionContext, ...S.errors(401, 404) } },
-		handler: async (req) => {
-			// The Claude Code identity line is only added for a subscription (OAuth) sign-in, not an API key.
-			const provider = sessions.get(req.params.id).provider;
-			const credential = await credentials.read(provider).catch(() => undefined);
-			await sessions.refreshChatModels();
-			return sessions.context(req.params.id, { anthropicOAuth: credential?.type === "oauth" });
-		},
-	});
-	app.get("/context", {
-		schema: { querystring: Type.Object({ cwd: Type.Optional(Type.String({ maxLength: 4096 })) }), response: { 200: S.SessionContext, ...S.errors(400, 401) } },
-		handler: async (req) => { await sessions.refreshChatModels(); return sessions.previewContext(req.query.cwd); },
-	});
-	app.patch("/sessions/:id", {
-		schema: { params: S.IdParams, body: S.PatchSessionBody, response: { 200: S.Session, ...S.errors(400, 401, 404, 409, 502) } },
-		handler: async (req) => {
-			const { workDir, ...rest } = req.body;
-			if (workDir !== undefined) sessions.moveWorkdir(req.params.id, workDir === null || workDir === "" ? null : workDir, "user");
-			return Object.keys(rest).length || workDir === undefined ? sessions.configureSession(req.params.id, rest) : sessions.get(req.params.id);
-		},
-	});
-	app.get("/sessions/:id/workdirs", {
-		schema: {
-			description: "The working trees (main checkout, git worktrees) of the session's repository it may be moved to (PATCH workDir), its own first; empty outside a repository",
-			params: S.IdParams,
-			response: { 200: Type.Object({ workdirs: Type.Array(Type.Object({ path: Type.String(), branch: Type.Union([Type.String(), Type.Null()]), home: Type.Boolean({ description: "The working tree of the session's own cwd" }), current: Type.Boolean({ description: "Where the session works now" }) })) }), ...S.errors(401, 404) },
-		},
-		handler: async (req) => ({ workdirs: sessions.workdirs(req.params.id) }),
-	});
-	app.delete("/sessions/:id", {
-		schema: { params: S.IdParams, response: { 204: Type.Null(), ...S.errors(401, 404) } },
-		handler: async (req, reply) => { sessions.delete(req.params.id); return reply.status(204).send(); },
-	});
-	app.get("/sessions/:id/status", {
-		schema: { params: S.IdParams, response: { 200: S.SessionStatus, ...S.errors(401, 404) } },
-		handler: async (req) => sessions.status(req.params.id),
-	});
-	app.get("/sessions/:id/usage", {
-		schema: { params: S.IdParams, response: { 200: S.Usage, ...S.errors(401, 404) } },
-		handler: async (req) => { sessions.get(req.params.id); return store.usage(req.params.id); },
-	});
-	app.post("/sessions/:id/abort", {
-		schema: { params: S.IdParams, response: { 200: Type.Object({ aborted: Type.Boolean() }), ...S.errors(401, 404) } },
-		handler: async (req) => ({ aborted: sessions.abort(req.params.id) }),
-	});
-	app.post("/sessions/:id/queue/cancel", {
-		schema: { params: S.IdParams, body: S.CancelQueuedBody, response: { 200: Type.Object({ cancelled: Type.Boolean() }), ...S.errors(400, 401, 404) } },
-		handler: async (req) => ({ cancelled: sessions.cancelQueued(req.params.id, req.body.mode, req.body.text, req.body.deferred) }),
-	});
-	app.post("/sessions/:id/retry", {
-		schema: { params: S.IdParams, response: { 202: Type.Object({ accepted: Type.Literal("retry") }), ...S.errors(401, 404, 409) } },
-		handler: async (req, reply) => { sessions.retry(req.params.id); return reply.status(202).send({ accepted: "retry" }); },
-	});
-	app.post("/sessions/:id/fork", {
-		schema: { params: S.IdParams, body: S.ForkBody, response: { 201: S.Session, ...S.errors(400, 401, 404) } },
-		handler: async (req, reply) => reply.status(201).send(await sessions.fork(req.params.id, req.body.atSeq, req.body.title)),
-	});
-
-	// ── messages & questions ──
-	app.post("/sessions/:id/messages", {
-		bodyLimit: IMAGE_BODY_LIMIT, // a route option, not part of `schema`
-		schema: { params: S.IdParams, body: S.SendBody, response: { 202: S.SendResult, ...S.errors(400, 401, 404, 409, 413) } },
-		handler: async (req, reply) => reply.status(202).send(await sessions.send(req.params.id, req.body)),
-	});
-	app.get("/sessions/:id/messages", {
-		schema: { params: S.IdParams, querystring: S.MessagesQuery, response: { 200: S.MessageList, ...S.errors(400, 401, 404) } },
-		handler: async (req) => {
-			sessions.get(req.params.id);
-			const { after, limit, tail, before, turn } = req.query;
-			return { messages: store.messages(req.params.id, tail ? { after, tail, before, wholeTurn: turn === true } : { after, limit: limit ?? 1000 }) };
-		},
-	});
-	app.get("/questions", {
-		schema: { querystring: S.QuestionsQuery, response: { 200: S.QuestionList, ...S.errors(400, 401) } },
-		handler: async (req) => ({ questions: questions.list(req.query.sessionId) }),
-	});
-	app.post("/sessions/:id/questions/:toolCallId", {
-		schema: { params: S.DecisionParams, body: S.QuestionAnswerBody, response: { 200: S.Ok, ...S.errors(400, 401, 404) } },
-		handler: async (req) => {
-			const { id, toolCallId } = req.params;
-			sessions.get(id);
-			const r = questions.answer(id, toolCallId, req.body);
-			if (r === "not_found") throw notFound("pending question");
-			if (r === "invalid") throw badRequest("the answer is empty or not one of the options");
-			return { ok: true };
-		},
-	});
-
-	// ── events ──
-	const parseTypes = (raw?: string) => raw ? new Set(raw.split(",").map((s) => s.trim()).filter(Boolean)) : undefined;
-	app.get("/events", {
-		schema: { querystring: S.StreamQuery, response: S.errors(400, 401) },
-		handler: async (req, reply) => streamEvents(req, reply, bus, { types: parseTypes(req.query.types), corsPolicy }),
-	});
-	app.get("/sessions/:id/events", {
-		schema: { params: S.IdParams, querystring: S.StreamQuery, response: S.errors(400, 401, 404) },
-		handler: async (req, reply) => {
-			sessions.get(req.params.id);
-			streamEvents(req, reply, bus, { sessionId: req.params.id, types: parseTypes(req.query.types), corsPolicy });
-		},
-	});
-	app.get("/events/history", {
-		schema: { querystring: S.HistoryQuery, response: { 200: S.HistoryResult, ...S.errors(400, 401) } },
-		handler: async (req) => ({ events: bus.history({ sessionId: req.query.sessionId, after: req.query.after ?? 0, limit: req.query.limit ?? 200 }), latestId: bus.latestId() }),
-	});
-	app.get("/events/types", {
-		schema: { response: { 200: S.EventTypeList, ...S.errors(401) } },
-		handler: async () => ({ events: S.EVENTS.map((e) => ({ type: e.type, persisted: e.persisted, description: e.description, data: e.data })) }),
+	registerProviderRoutes(server, { db, registry, credentials, configuration, bus });
+	registerSessionRoutes(server, {
+		sessions,
+		store,
+		unread,
+		questions,
+		credentials,
+		configuration,
+		compactionSettings,
+		busy,
+		imageBodyLimit: IMAGE_BODY_LIMIT,
 	});
 	await registerExtensionHttpRoutes(server, extensions, (raw) => ({ device: deviceOf.get(raw) ?? null, authenticated: publicAuthed.has(raw) }));
 	registerServerExtensionRoutes(server, extensions, (id) => store.get(id) !== undefined, join(cfg.dataDir, "extensions"), (cwd) => resolve(configuration.defaultWorkdir(), cwd?.trim() || "."));
