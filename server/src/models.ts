@@ -46,6 +46,32 @@ export function withServiceTier(opts: SimpleStreamOptions | undefined, tier: Ser
 	} };
 }
 
+/** Hosts that reject request fields they do not know (`include_reasoning` would fail the whole call). */
+const STRICT_OPENAI_HOST = /(?:^|\.)(?:api\.openai\.com|openai\.azure\.com)$/i;
+
+/**
+ * Whether a call to this model asks for its thoughts to be streamed. Only the owner's own Chat Completions connections
+ * (configuration marks them): a proxy like CLIProxyAPI reads `reasoning_effort` as depth only and leaves Claude's thinking
+ * hidden unless the request says to show it, so the thinking line would stay empty until the answer starts.
+ */
+export function showsReasoning(m: Pick<Model<Api>, "api" | "baseUrl"> | undefined): boolean {
+	if (!m || m.api !== "openai-completions" || isOpenRouterChat(m) || !(m as { streamReasoning?: unknown }).streamReasoning) return false;
+	try {
+		return !STRICT_OPENAI_HOST.test(new URL(m.baseUrl).hostname);
+	} catch {
+		return false;
+	}
+}
+
+/** Adds `include_reasoning: true` to a reasoning call on such a connection, so the thinking arrives as it is written. */
+export function withVisibleReasoning(opts: SimpleStreamOptions | undefined, m: Model<Api>): SimpleStreamOptions | undefined {
+	if (!opts?.reasoning || !m.reasoning || !showsReasoning(m)) return opts;
+	return { ...opts, onPayload: async (body, target) => {
+		const payload = await opts.onPayload?.(body, target) ?? body;
+		return showsReasoning(target) ? { ...(payload as object), include_reasoning: true } : payload;
+	} };
+}
+
 /** A proxy model takes standard and its own speeds, else the speeds OpenRouter lists for the model it is matched to. */
 export async function checkServiceTier(reg: ModelRegistry, provider: string, id: string, tier: ServiceTier) {
 	const m = reg.models.getModel(provider, id);

@@ -596,8 +596,10 @@ export class Configuration {
 	}
 
 	private buildProvider(p: CustomProvider) {
-		const models: (Model<CustomProvider["api"]> & { defaultThinkingLevel?: ThinkingLevel; imageApi?: ImageApi; serviceTiers?: string[]; tierCatalogId?: string })[] = p.models.filter((m) => !m.disabled).map((m) => ({
+		const models: (Model<CustomProvider["api"]> & { defaultThinkingLevel?: ThinkingLevel; imageApi?: ImageApi; serviceTiers?: string[]; tierCatalogId?: string; streamReasoning?: true })[] = p.models.filter((m) => !m.disabled).map((m) => ({
 			id: m.id, name: m.name ?? m.id, api: p.api, provider: p.id, baseUrl: p.baseUrl,
+			// read by showsReasoning (models.ts): the owner's own connection, so it may ask a proxy to stream its thinking
+			streamReasoning: true as const,
 			...(m.defaultServiceTier ? { defaultServiceTier: m.defaultServiceTier } : {}),
 			// read by ownTiers / tierCatalogId (models.ts), which ignore them unless the transport is an OpenAI-format proxy:
 			// the owner's own speeds (empty = none), else the OpenRouter model it is matched to

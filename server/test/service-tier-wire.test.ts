@@ -178,3 +178,26 @@ test("a proxy model matched to OpenRouter takes the speeds the catalog lists for
 	const off = { ...proxy, serviceTiers: [] } as Model<Api>;
 	await expect(streamAtTier(registry(off, async () => ["priority"]), off, ctx, opts, "priority")).rejects.toBeInstanceOf(HttpError);
 });
+
+test("the owner's own Chat Completions proxy is asked to stream its thinking; other transports and reasoning-off calls are not", async () => {
+	const base = routerModel("openai-completions");
+	const bodies: Record<string, unknown>[] = [];
+	const opts: SimpleStreamOptions = { apiKey: "fixture", maxRetries: 0, reasoning: "high",
+		fetch: (async (_url, init) => { bodies.push(JSON.parse(String(init?.body))); return new Response(sse("openai-completions", "default"), { headers: { "content-type": "text/event-stream" } }); }) as typeof fetch };
+	const proxy = { ...base, reasoning: true, baseUrl: "https://proxy.invalid/v1", streamReasoning: true } as Model<Api>;
+	const reg = (m: Model<Api>) => registry(m, async () => []);
+	await (await streamAtTier(reg(proxy), proxy, ctx, opts, null)).result();
+	expect(bodies.at(-1)).toMatchObject({ include_reasoning: true });
+	// it also travels next to a chosen speed
+	const fast = { ...proxy, serviceTiers: ["priority"] } as Model<Api>;
+	await (await streamAtTier(reg(fast), fast, ctx, opts, "priority")).result();
+	expect(bodies.at(-1)).toMatchObject({ include_reasoning: true, service_tier: "priority" });
+	await (await streamAtTier(reg(proxy), proxy, ctx, { ...opts, reasoning: undefined }, null)).result();
+	expect(bodies.at(-1)).not.toHaveProperty("include_reasoning");
+	const strict = { ...proxy, baseUrl: "https://api.openai.com/v1" } as Model<Api>;
+	const builtin = { ...proxy, streamReasoning: undefined } as Model<Api>;
+	for (const other of [strict, builtin, base]) {
+		await (await streamAtTier(reg(other), other, ctx, opts, null)).result();
+		expect(bodies.at(-1)).not.toHaveProperty("include_reasoning");
+	}
+});
