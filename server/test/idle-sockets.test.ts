@@ -78,3 +78,14 @@ test("an aborted resize resolves to null and the worker keeps serving", async ()
 	expect(await gone).toBeNull();
 	expect(await resizeImage(png, { maxWidth: 8, maxHeight: 8 })).not.toBeNull();
 });
+
+test("ignores synthetic or missing sockets without destroy() (e.g. Fastify inject)", () => {
+	let t = 0;
+	const local = new IdleSockets(1000, () => t);
+	const done = { once: (_ev: "close", fn: () => void) => fn() };
+	local.requestStarted(undefined, done);
+	local.requestStarted({} as Socket, done);
+	t += 2000;
+	expect(() => local.sweep()).not.toThrow();
+	expect(local.size).toBe(0);
+});

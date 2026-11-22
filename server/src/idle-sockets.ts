@@ -6,6 +6,9 @@ export const IDLE_SOCKET_MS = 75_000;
 
 type Tracked = { busy: number; idleSince: number };
 
+const isRealSocket = (socket: Socket | null | undefined): socket is Socket =>
+	Boolean(socket && typeof socket.destroy === "function");
+
 /**
  * Closes keep-alive sockets that sit with no request in flight. Under Bun `server.keepAliveTimeout` and socket timeouts
  * are not applied, so every device that went to sleep or off the network leaves its sockets open for the server's life.
@@ -22,13 +25,15 @@ export class IdleSockets {
 
 	attach(server: Server): void {
 		server.on("connection", (socket: Socket) => {
+			if (!isRealSocket(socket)) return;
 			this.sockets.set(socket, { busy: 0, idleSince: this.now() });
 			socket.once("close", () => this.sockets.delete(socket));
 		});
 	}
 
 	/** Call at the start of every request; the socket counts as busy until the request's connection side closes. */
-	requestStarted(socket: Socket, done: { once(event: "close", fn: () => void): unknown }): void {
+	requestStarted(socket: Socket | null | undefined, done: { once(event: "close", fn: () => void): unknown }): void {
+		if (!isRealSocket(socket)) return;
 		let t = this.sockets.get(socket);
 		if (!t) {
 			t = { busy: 0, idleSince: this.now() };
@@ -46,7 +51,7 @@ export class IdleSockets {
 		const now = this.now();
 		let closed = 0;
 		for (const [socket, t] of this.sockets) {
-			if (socket.destroyed) {
+			if (!isRealSocket(socket) || socket.destroyed) {
 				this.sockets.delete(socket);
 				continue;
 			}
