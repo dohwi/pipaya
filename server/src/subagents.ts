@@ -3,6 +3,7 @@
  * the project one wins) and the limits that keep delegation from running away. Loading is pure over the file system, so it is
  * testable without a session.
  */
+import type { AgentMessage, AgentTurnContext } from "@earendil-works/pi-agent-core";
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import { badRequest, conflict, notFound } from "./errors.ts";
@@ -138,12 +139,40 @@ export function removeSubagent(scope: SubagentDef["scope"], cwd: string, home: s
 export const subagentSystem = (def: SubagentDef, cwd: string) =>
 	`${def.prompt || `You are the "${def.name}" subagent.`}\n\nYou work for another agent and cannot ask questions: you get one task and answer with your final message only. Working directory: ${cwd}`;
 
+export const SUBAGENT_WRAP_UP = "This is your final model call. No tools are available. Return a concise answer based only on the evidence already available. Say what you verified, what remains unverified, and what the calling agent should do next if the work is incomplete. Do not imply that you performed work that you could not do.";
+
+export type SubagentLimit = "maxTurns" | "repeatedTools";
+
+/** Only detect a repeated successful built-in read with unchanged text output. Stateful tools and batches keep the normal budget. */
+export function repeatedReadSignature({ message, toolResults }: AgentTurnContext, readOnly: ReadonlySet<string>): string | undefined {
+	if (message.stopReason !== "toolUse" || toolResults.length !== 1) return;
+	const calls = message.content.filter((block) => block.type === "toolCall");
+	const [call] = calls;
+	const [result] = toolResults;
+	if (calls.length !== 1 || !call || !result || result.isError || !readOnly.has(call.name) || result.content.some((block) => block.type !== "text")) return;
+	return JSON.stringify([call.name, call.arguments, result.content]);
+}
+
 /** The text of the last assistant message of a subagent run. */
-export function finalText(messages: readonly { role: string; content?: unknown; stopReason?: string; errorMessage?: string }[]): { text: string; error?: string } {
-	const last = [...messages].reverse().find((m) => m.role === "assistant");
+export function finalText(messages: readonly AgentMessage[]): { text: string; error?: string } {
+	const last = messages.findLast((m) => m.role === "assistant");
 	if (!last) return { text: "" };
-	const text = Array.isArray(last.content) ? last.content.map((c: any) => (c?.type === "text" ? c.text : "")).join("").trim() : typeof last.content === "string" ? last.content.trim() : "";
-	return { text, ...(last.stopReason === "error" ? { error: last.errorMessage ?? "the model call failed" } : {}) };
+	const text = last.content.map((c) => (c.type === "text" ? c.text : "")).join("").trim();
+	return { text, ...(last.stopReason === "error" || last.stopReason === "aborted" ? { error: last.errorMessage ?? `model call ${last.stopReason}` } : {}) };
+}
+
+/** Fallback for an empty or failed wrap-up: preserve earlier text without exposing raw tool results. */
+export function subagentReport(messages: readonly AgentMessage[], limit: SubagentLimit, turns: number, maxRepeated: number): string {
+	const last = messages.findLast((m) => m.role === "assistant");
+	const { text, error } = finalText(messages);
+	const askedForTools = last?.content.some((c) => c.type === "toolCall");
+	const reason = limit === "maxTurns" ? `the ${turns}-call model budget was reached (maxTurns)` : `the same read-only tool call returned unchanged results ${maxRepeated} times in a row`;
+	const note = `[Subagent ended after ${turns} model call${turns === 1 ? "" : "s"}: ${reason}. The answer may be incomplete.]`;
+	if (text && !error && !askedForTools) return `${text}\n\n${note}`;
+	const assistants = messages.filter((m) => m.role === "assistant");
+	const earlier = (!error && text) || assistants.slice(0, -1).map((m) => finalText([m])).findLast((m) => m.text && !m.error)?.text;
+	const problem = error ? "The final model call failed." : askedForTools ? "The final model call requested unavailable tools." : "The final model call returned no text.";
+	return `${note}\n${problem}${earlier ? `\n\nPartial assistant text (not a final answer):\n${earlier}` : ""}`;
 }
 
 /** Per-session bookkeeping of the limits: calls in the current run and subagents running now. Throws a conflict when one is hit. */
