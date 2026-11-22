@@ -1374,7 +1374,8 @@ dialog[data-closing]::backdrop {
 }
 
 /*
- * Working glow: the outline of a box breathes softly in the thinking colour (--lv) while the agent works.
+ * Working glow: the outline of a box breathes softly in the thinking colour (--lv) while the agent works. Only the
+ * border: no blurred halo outside the box (a decorative glow read as dated and bled over neighbours).
  * Used on the user's prompt bubble and the composer box. --glow-base is the resting border colour.
  */
 .glow-working {
@@ -1394,11 +1395,9 @@ html .glow-working.glow-working {
 	0%,
 	100% {
 		border-color: color-mix(in srgb, var(--glow) 30%, var(--glow-base));
-		box-shadow: 0 0 0 0 color-mix(in srgb, var(--glow) 0%, transparent);
 	}
 	50% {
 		border-color: color-mix(in srgb, var(--glow) 70%, var(--glow-base));
-		box-shadow: 0 0 14px 0 color-mix(in srgb, var(--glow) 22%, transparent);
 	}
 }
 
