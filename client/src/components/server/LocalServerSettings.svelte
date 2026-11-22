@@ -3,6 +3,7 @@
 	import { settingsDrafts } from "../../lib/settings-drafts.svelte";
 	import { onMount } from "svelte";
 	import Button from "../ui/Button.svelte";
+	import NumberField from "../ui/NumberField.svelte";
 	import Switch from "../ui/Switch.svelte";
 	import SettingRow from "../ui/SettingRow.svelte";
 	import { collapseIn, collapseOut } from "../../lib/motion";
@@ -70,10 +71,10 @@
 		</div>
 	{/if}
 	<SettingRow label={t("포트")} for="local-port" hint={t("비워 두면 8788을 쓰고, 사용 중이면 빈 포트를 고릅니다")}>
-		<input id="local-port" type="number" min="1" max="65535" placeholder="8788" bind:value={port} />
+		<NumberField id="local-port" width="160px" min={1} max={65535} placeholder="8788" bind:value={port} />
 	</SettingRow>
 	<div class="actions">
-		<Button size="sm" disabled={!dirty || busy || badPort} onclick={apply}>{busy ? t("적용 중…") : t("적용")}</Button>
+		<Button size="sm" {busy} disabled={!dirty || badPort} onclick={apply}>{busy ? t("적용 중…") : t("적용")}</Button>
 	</div>
 	{#if error}<Notice tone="danger" size="sm" animated>{error}</Notice>{/if}
 	<p class="hint">{t("적용하면 내장 서버가 다시 시작됩니다. 진행 중인 작업은 중지됩니다")}</p>

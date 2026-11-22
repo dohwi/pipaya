@@ -7,6 +7,7 @@
 	import { buildPairingLink, isLoopbackUrl } from "../../lib/pairing";
 	import { copyText } from "../../lib/clipboard";
 	import QrCode from "./QrCode.svelte";
+	import FormField from "../ui/FormField.svelte";
 	import Icon from "../ui/Icon.svelte";
 	import Notice from "../ui/Notice.svelte";
 
@@ -89,10 +90,9 @@
 <div class="pair">
 	<p class="lead">{t("폰에서 앱을 열고 이 QR을 카메라로 스캔하면 서버가 바로 등록됩니다.")}</p>
 
-	<label class="addr">
-		<span>{t("폰이 접속할 주소")}</span>
+	<FormField label={t("폰이 접속할 주소")}>
 		<input class="field mono" bind:value={address} oninput={addressChanged} inputmode="url" autocapitalize="off" autocomplete="off" spellcheck="false" placeholder="http://100.x.x.x:8787" />
-	</label>
+	</FormField>
 	{#if loopback}
 		<Notice tone="warn">{t("localhost 주소는 폰에서 이 PC가 아니라 폰 자신을 가리킵니다. Tailscale 주소나 PC의 LAN 주소로 바꿔 주세요.")}</Notice>
 	{/if}
@@ -133,14 +133,6 @@
 		line-height: 1.55;
 		color: var(--text-dim);
 		word-break: keep-all;
-	}
-	.addr {
-		display: flex;
-		flex-direction: column;
-		gap: 4px;
-		font-size: var(--fs-sm);
-		font-weight: 600;
-		color: var(--text-dim);
 	}
 	.code {
 		display: flex;

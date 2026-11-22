@@ -3,6 +3,7 @@
 	import { collapseIn, collapseOut } from "../../lib/motion";
 	import type { ApiFormat } from "../../lib/types";
 	import type { Form } from "../../lib/connection-form";
+	import FormField from "../ui/FormField.svelte";
 	import Select from "../ui/Select.svelte";
 	import Switch from "../ui/Switch.svelte";
 
@@ -21,18 +22,15 @@
 
 <section class="fsec">
 	<div class="section-label">{t("연결 정보")}</div>
-	<label>
-		<span>{t("이름")}</span>
+	<FormField label={t("이름")}>
 		<input class="field" value={form.name} oninput={(e) => onname(e.currentTarget.value)} placeholder={t("예: 내 프록시")} autocomplete="off" />
-	</label>
-	<label>
-		<span>Endpoint (Base URL)</span>
+	</FormField>
+	<FormField label="Endpoint (Base URL)">
 		<input class="field mono" bind:value={form.baseUrl} placeholder="https://host.example/v1" autocomplete="off" autocapitalize="off" spellcheck="false" inputmode="url" />
-	</label>
-	<label>
-		<span>{t("API 형식")}</span>
+	</FormField>
+	<FormField label={t("API 형식")}>
 		<Select value={form.api} onchange={(api) => { form.api = api; }} options={formats.map((f) => ({ value: f.id, label: t(f.label) }))} />
-	</label>
+	</FormField>
 	<div class="switchrow">
 		<span class="swtext">
 			<b id="auth-req-l">{t("API 키 필요")}</b>
@@ -41,13 +39,13 @@
 		<Switch checked={form.authRequired} label={t("API 키 필요")} describedby="auth-req-d" onchange={(on) => { form.authRequired = on; }} />
 	</div>
 	{#if form.isNew && form.authRequired}
-		<label in:collapseIn out:collapseOut>
-			<span>{t("API 키")}</span>
-			<input class="field mono" type="password" bind:value={form.apiKey} placeholder={t("API 키")} autocomplete="off" autocapitalize="off" spellcheck="false" />
-		</label>
+		<div in:collapseIn out:collapseOut>
+			<FormField label={t("API 키")}>
+				<input class="field mono" type="password" bind:value={form.apiKey} placeholder={t("API 키")} autocomplete="off" autocapitalize="off" spellcheck="false" />
+			</FormField>
+		</div>
 	{/if}
-	<label>
-		<span>ID</span>
+	<FormField label="ID">
 		<input
 			class="field mono"
 			value={form.id}
@@ -58,22 +56,11 @@
 			autocapitalize="off"
 			spellcheck="false"
 		/>
-	</label>
+	</FormField>
 	{#if form.isNew}<p class="hint note">{t("모델이 없어도 저장할 수 있습니다. 비워 두면 저장할 때 이 주소에서 모델 목록을 불러오고, 불러오지 못해도 연결은 저장됩니다.")}</p>{/if}
 </section>
 
 <style>
-	label {
-		display: flex;
-		flex-direction: column;
-		gap: 4px;
-		min-width: 0;
-	}
-	label > span {
-		font-size: var(--fs-xs);
-		font-weight: 600;
-		color: var(--text-dim);
-	}
 	.switchrow {
 		display: flex;
 		flex-direction: row;

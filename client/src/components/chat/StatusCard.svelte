@@ -29,7 +29,7 @@
 	} = $props();
 </script>
 
-<Modal {onclose} {dismissible} {label} live="polite" width="360px" gutter="32px" layer={4} sheet={false}>
+<Modal {onclose} {dismissible} {label} live="polite" width="xs" gutter="32px" layer={4} sheet={false}>
 	<div class="card">
 		<div class="mark {tone}">{@render mark()}</div>
 		<h2>{title}</h2>

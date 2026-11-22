@@ -4,9 +4,9 @@
 	 * in a closed shadow root, so no theme font, colour or extension style can change it (lib/pipaya-logo.ts).
 	 */
 	import { logo, wordmarkMarkup } from "../../lib/pipaya-logo";
-	import { app } from "../../lib/store.svelte";
+	import { uiEnv } from "../../lib/ui-env.svelte";
 
 	let { size = 14 }: { size?: number } = $props();
 </script>
 
-<span data-pipaya-logo {@attach logo((dark) => wordmarkMarkup({ size, dark }), () => app.prefs.resolvedDark)}></span>
+<span data-pipaya-logo {@attach logo((dark) => wordmarkMarkup({ size, dark }), () => uiEnv.dark())}></span>

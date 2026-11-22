@@ -8,10 +8,10 @@
 	 * Drawn in a closed shadow root so no extension can change it (lib/pipaya-logo.ts).
 	 */
 	import { logo, markMarkup, type MarkTone } from "../../lib/pipaya-logo";
-	import { app } from "../../lib/store.svelte";
+	import { uiEnv } from "../../lib/ui-env.svelte";
 
 	let { tone = "current", size = 22 }: { tone?: MarkTone; size?: number } = $props();
 </script>
 
 <!-- a brand placement (not `current`, which is an icon) is marked so extension styles keep off it (extensions/style.ts) -->
-<span data-pipaya-logo={tone === "current" ? undefined : ""} {@attach logo((dark) => markMarkup({ size, tone, dark }), () => app.prefs.resolvedDark)}></span>
+<span data-pipaya-logo={tone === "current" ? undefined : ""} {@attach logo((dark) => markMarkup({ size, tone, dark }), () => uiEnv.dark())}></span>

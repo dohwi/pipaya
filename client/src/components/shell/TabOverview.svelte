@@ -180,7 +180,7 @@
 </script>
 
 <!-- Esc while a card is in the air puts it back (the dialog takes the key before the drag's own listener could) -->
-<Modal closeShortcut="tabOverview" {onclose} onescape={() => (drag.id ? drag.end(false) : onclose())} {title} {sub} subMono label={t("탭 {n}개 모두 보기", { n: tabs.length })} width="1040px" maxHeight="760px" full {titleExtra} {headerActions}>
+<Modal closeShortcut="tabOverview" {onclose} onescape={() => (drag.id ? drag.end(false) : onclose())} {title} {sub} subMono label={t("탭 {n}개 모두 보기", { n: tabs.length })} width="3xl" maxHeight="760px" full {titleExtra} {headerActions}>
 	<div class="body">
 		{#if tabs.length}
 			<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->

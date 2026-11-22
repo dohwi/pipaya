@@ -886,7 +886,7 @@
 			border-color var(--motion-fast) var(--ease-std),
 			box-shadow var(--motion-fast) var(--ease-std),
 			opacity var(--motion-fast) var(--ease-std);
-		box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+		box-shadow: var(--shadow-sm);
 	}
 	.box:focus-within {
 		border-color: var(--text-faint);

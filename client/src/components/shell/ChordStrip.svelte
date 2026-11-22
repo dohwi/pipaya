@@ -51,7 +51,7 @@
 		background: var(--bg-elev);
 		color: var(--text);
 		border-top: 1px solid var(--border-strong);
-		box-shadow: 0 -6px 20px rgba(0, 0, 0, 0.35);
+		box-shadow: var(--shadow-up);
 	}
 	:global(:root[data-theme="dark"]) .strip kbd {
 		background: var(--bg-active);

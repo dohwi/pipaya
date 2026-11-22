@@ -3,7 +3,7 @@
 	import type { Snippet } from "svelte";
 	import { fadeIn, fadeOut, modalIn, modalOut, modalQuickIn } from "../../lib/motion";
 	import { RECENTRE, modalLayer, portal as lift } from "../../lib/dialog";
-	import { app } from "../../lib/store.svelte";
+	import { uiEnv } from "../../lib/ui-env.svelte";
 	import type { ActionId } from "../../lib/keys";
 	import ModalHeader from "./ModalHeader.svelte";
 
@@ -16,7 +16,7 @@
 	 * Transitions are `|global`: a component whose root is this modal is shown by its parent's `{#if}`, and a local
 	 * transition would only play for a block inside this file (see tests/motion.test.ts).
 	 */
-	type Width = "s" | "m" | "l" | "xl" | (string & {});
+	type Width = "xs" | "s" | "m" | "l" | "xl" | "2xl" | "3xl" | (string & {});
 	let {
 		onclose,
 		onescape,
@@ -102,7 +102,7 @@
 	} = $props();
 	const enter = (node: Element) => (quick ? modalQuickIn(node) : modalIn(node));
 
-	const tokens = ["s", "m", "l", "xl"];
+	const tokens = ["xs", "s", "m", "l", "xl", "2xl", "3xl"];
 	const w = $derived(tokens.includes(width) ? `var(--modal-w-${width})` : width);
 	/**
 	 * The backdrop closes on a press that starts on it. A dialog opened on `pointerup` (a tap on a graph card) is followed
@@ -222,7 +222,7 @@
 		style:--modal-max-h={maxHeight}
 		style:--modal-gut={gutter}
 		use:whole
-		use:modalLayer={{ onclose: onescape ?? onclose, onshortcutclose: onclose, closeBinding: closeShortcut && !app.prefs.recordingKey ? app.prefs.bindings[closeShortcut] : undefined, dismissible, opener }}
+		use:modalLayer={{ onclose: onescape ?? onclose, onshortcutclose: onclose, closeBinding: closeShortcut ? uiEnv.closeBinding(closeShortcut) : undefined, dismissible, opener }}
 		in:enter|global
 		out:modalOut|global
 	>

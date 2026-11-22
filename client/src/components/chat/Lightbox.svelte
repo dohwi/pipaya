@@ -315,7 +315,7 @@
 		position: fixed;
 		inset: 0;
 		z-index: var(--z-lightbox);
-		background: color-mix(in srgb, #000 82%, transparent);
+		background: var(--lb-scrim);
 		-webkit-backdrop-filter: blur(10px);
 		backdrop-filter: blur(10px);
 		outline: none;
@@ -340,7 +340,7 @@
 		max-height: calc(var(--dvh) * 0.88);
 		object-fit: contain;
 		border-radius: var(--radius-sm);
-		box-shadow: 0 20px 80px rgba(0, 0, 0, 0.55);
+		box-shadow: var(--lb-shadow);
 		user-select: none;
 		-webkit-user-drag: none;
 		-webkit-touch-callout: none;
@@ -364,7 +364,7 @@
 	}
 	.top {
 		top: 0;
-		background: linear-gradient(to bottom, rgba(0, 0, 0, 0.5), transparent);
+		background: linear-gradient(to bottom, var(--lb-top-fade), transparent);
 	}
 	.grow {
 		flex: 1;
@@ -372,7 +372,7 @@
 	}
 	.count {
 		font-size: var(--fs-xs);
-		color: rgba(255, 255, 255, 0.8);
+		color: var(--lb-ink-dim);
 	}
 	.ctl {
 		display: grid;
@@ -382,14 +382,14 @@
 		padding: 0 8px;
 		font-size: var(--fs-xl);
 		line-height: 1;
-		color: #fff;
-		background: rgba(255, 255, 255, 0.12);
+		color: var(--lb-ink);
+		background: var(--lb-ctrl-bg);
 		border-radius: var(--radius);
 		transition: background var(--motion-fast) var(--ease-std);
 	}
 	@media (hover: hover) {
 		.ctl:hover:not(:disabled) {
-			background: rgba(255, 255, 255, 0.22);
+			background: var(--lb-ctrl-hover);
 		}
 	}
 	.ctl:disabled {
@@ -416,16 +416,16 @@
 		gap: 8px;
 		padding: 8px 16px;
 		font-size: var(--fs-md, 14px);
-		color: #fff;
-		background: rgba(20, 20, 20, 0.88);
+		color: var(--lb-ink);
+		background: var(--lb-note-bg);
 		border-radius: min(var(--radius-pill), 18px); /* a one-line note: a pill (18 = half its 36px height) */
 		line-height: 1.35;
-		box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5);
+		box-shadow: var(--lb-note-shadow);
 		pointer-events: none;
 		animation: note-in var(--motion-fast) var(--ease-std);
 	}
 	.note.err {
-		background: rgba(150, 30, 30, 0.92);
+		background: var(--lb-note-err);
 	}
 	.note :global(svg) {
 		flex: none;
@@ -453,11 +453,11 @@
 		width: 6px;
 		height: 6px;
 		border-radius: 50%;
-		background: rgba(255, 255, 255, 0.35);
+		background: var(--lb-dot);
 		transition: background var(--motion-fast) var(--ease-std), scale var(--motion-fast) var(--ease-std);
 	}
 	.dots span.on {
-		background: #fff;
+		background: var(--lb-ink);
 		scale: 1.25;
 	}
 	.nav {
@@ -468,14 +468,14 @@
 		place-items: center;
 		width: 44px;
 		height: 44px;
-		color: #fff;
-		background: rgba(255, 255, 255, 0.12);
+		color: var(--lb-ink);
+		background: var(--lb-ctrl-bg);
 		border-radius: 50%;
 		transition: background var(--motion-fast) var(--ease-std);
 	}
 	@media (hover: hover) {
 		.nav:hover {
-			background: rgba(255, 255, 255, 0.24);
+			background: var(--lb-nav-hover);
 		}
 	}
 	.nav :global(svg) {
