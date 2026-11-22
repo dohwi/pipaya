@@ -194,3 +194,22 @@ test("new-chat speed round-trips only for direct OpenRouter text models, indepen
 	f.rows[0]!.imageGeneration = false; f.baseUrl = "https://openrouter.ai.proxy.invalid/api/v1";
 	expect(render()[0]).not.toHaveProperty("defaultServiceTier");
 });
+
+test("a proxy model's speeds round-trip only on an OpenAI-format connection that is not OpenRouter", () => {
+	const f = filled({ baseUrl: "http://127.0.0.1:8317/v1", rows: [row({ serviceTiers: ["priority"], defaultServiceTier: "priority" })] });
+	const render = () => (collectModels(f, true, none, false) as { out: CustomProvider["models"] }).out[0];
+	expect(render()).toMatchObject({ serviceTiers: ["priority"], defaultServiceTier: "priority" });
+	expect(formFromProvider({ ...f, models: [render()] } as unknown as CustomProvider).rows[0]).toMatchObject({ serviceTiers: ["priority"], defaultServiceTier: "priority" });
+	// a starting speed the model does not list would never be reachable
+	f.rows[0]!.defaultServiceTier = "ultrafast";
+	expect(render()).not.toHaveProperty("defaultServiceTier");
+	f.rows[0]!.defaultServiceTier = "default";
+	expect(render()?.defaultServiceTier).toBe("default");
+	f.api = "anthropic-messages";
+	expect(render()).not.toHaveProperty("serviceTiers");
+	expect(render()).not.toHaveProperty("defaultServiceTier");
+	f.api = "openai-completions"; f.baseUrl = "https://openrouter.ai/api/v1";
+	expect(render()).not.toHaveProperty("serviceTiers");
+	f.baseUrl = "http://127.0.0.1:8317/v1"; f.rows[0]!.imageGeneration = true;
+	expect(render()).not.toHaveProperty("serviceTiers");
+});

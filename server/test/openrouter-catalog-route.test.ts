@@ -166,6 +166,35 @@ test("new chats snapshot the chosen speed: explicit session > new-chat setting >
 	expect((await call("POST", "/sessions", { provider: shadow, model: id, serviceTier: "default" })).statusCode).toBe(400);
 });
 
+test("a proxy model takes only the speeds its owner listed; other connections and formats refuse a list", async () => {
+	const call = async (method: "POST" | "PUT" | "PATCH", url: string, payload: object) => app.server.inject({ method, url, headers: auth, payload });
+	const model = { id: "gpt-proxy", contextWindow: 10000, maxTokens: 200, reasoning: true, vision: false };
+	const conn = (models: object[], extra: object = {}) => ({ name: "Proxy", baseUrl: "http://127.0.0.1:9/v1", api: "openai-completions", authRequired: false, models, ...extra });
+	const save = (body: object) => call("PUT", "/configuration/providers/tier-cpa", body);
+	const saved = await save(conn([{ ...model, serviceTiers: ["priority"], defaultServiceTier: "priority" }]));
+	expect(saved.statusCode).toBe(200);
+	expect(saved.json().models[0]).toMatchObject({ serviceTiers: ["priority"], defaultServiceTier: "priority" });
+	expect((await get("/models?provider=tier-cpa")).models[0]).toMatchObject({ serviceTiers: ["priority"], defaultServiceTier: "priority" });
+	const session = (await call("POST", "/sessions", { provider: "tier-cpa", model: model.id })).json();
+	expect(session.serviceTier).toBe("priority");
+	const path = `/sessions/${session.id}`;
+	expect((await call("PATCH", path, { serviceTier: "default" })).json().serviceTier).toBe("default");
+	expect((await call("PATCH", path, { serviceTier: "ultrafast" })).statusCode).toBe(400);
+	expect((await call("PUT", "/configuration/defaults", { provider: "tier-cpa", model: model.id, serviceTier: "priority" })).statusCode).toBe(200);
+	for (const body of [
+		conn([{ ...model, defaultServiceTier: "priority" }]),
+		conn([{ ...model, serviceTiers: ["priority"], defaultServiceTier: "ultrafast" }]),
+		conn([{ ...model, serviceTiers: ["priority"], imageGeneration: true }]),
+		conn([{ ...model, serviceTiers: ["priority"] }], { api: "anthropic-messages" }),
+		conn([{ ...model, serviceTiers: ["priority"] }], { baseUrl: "https://openrouter.ai/api/v1" }),
+	]) expect((await save(body)).statusCode).toBe(400);
+	await call("PUT", "/configuration/defaults", { provider: "tier-cpa", model: model.id });
+	// Dropping the list takes the speed back: the chat keeps its record but the model no longer takes one.
+	expect((await save(conn([model]))).statusCode).toBe(200);
+	expect((await get("/models?provider=tier-cpa")).models[0]).not.toHaveProperty("serviceTiers");
+	expect((await call("PATCH", path, { serviceTier: "default" })).statusCode).toBe(400);
+});
+
 test("a subagent runs at its session's speed on the same model, else at its own model's default, never at a proxy's", async () => {
 	const call = async (method: "POST" | "PUT", url: string, payload: object) => app.server.inject({ method, url, headers: auth, payload });
 	const id = "anthropic/claude-fable-5.2";

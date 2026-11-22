@@ -136,3 +136,26 @@ test("explicit standard does not require catalog availability; advertised tiers 
 	await expect(checkAdvertisedTier(offline, "openai/test", "priority")).rejects.toThrow("OpenRouter endpoint information unavailable");
 	expect(lookups).toBe(1);
 });
+
+test("a proxy model with listed speeds gets service_tier on the OpenAI formats; the reply records only the tier asked for", async () => {
+	const base = routerModel("openai-completions");
+	const bodies: Record<string, unknown>[] = [];
+	const opts: SimpleStreamOptions = { apiKey: "fixture", maxRetries: 0,
+		fetch: (async (_url, init) => { bodies.push(JSON.parse(String(init?.body))); return new Response(sse("openai-completions", "default"), { headers: { "content-type": "text/event-stream" } }); }) as typeof fetch };
+	const proxy = { ...base, baseUrl: "https://proxy.invalid/v1", serviceTiers: ["priority"] } as Model<Api>;
+	const reg = registry(proxy, async () => { throw new Error("the catalog is never asked about a proxy"); });
+	// CLIProxyAPI echoes the upstream's "default" even at Fast: no served tier, so no fallback is shown.
+	const reply = await (await streamAtTier(reg, proxy, ctx, opts, "priority")).result();
+	expect(reply).toMatchObject({ stopReason: "stop", requestedTier: "priority" });
+	expect(reply).not.toHaveProperty("servedTier");
+	expect(bodies.at(-1)).toMatchObject({ service_tier: "priority" });
+	await (await streamAtTier(reg, proxy, ctx, opts, "default")).result();
+	expect(bodies.at(-1)).toMatchObject({ service_tier: "default" });
+	await (await streamAtTier(reg, proxy, ctx, opts, null)).result();
+	expect(bodies.at(-1)).not.toHaveProperty("service_tier");
+	await expect(streamAtTier(reg, proxy, ctx, opts, "ultrafast")).rejects.toThrow("not available");
+	// Messages format and OpenRouter-shaped transports never read the owner's list.
+	for (const other of [{ ...proxy, api: "anthropic-messages" }, { ...proxy, serviceTiers: [] }] as Model<Api>[]) {
+		await expect(streamAtTier(registry(other, async () => ["priority"]), other, ctx, opts, "priority")).rejects.toBeInstanceOf(HttpError);
+	}
+});

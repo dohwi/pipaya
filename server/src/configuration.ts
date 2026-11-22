@@ -12,7 +12,7 @@ import { openAIImages } from "./openai-images.ts";
 import { sniffImage } from "./image-file.ts";
 import { type Config } from "./config.ts";
 import { badRequest, conflict, notFound } from "./errors.ts";
-import { builtinProvider, checkAdvertisedTier, checkServiceTier, isOpenRouterChat, modelDefaultTier, type ModelRegistry } from "./models.ts";
+import { builtinProvider, checkAdvertisedTier, checkServiceTier, isOpenRouterChat, modelDefaultTier, PROXY_TIER_APIS, type ModelRegistry } from "./models.ts";
 import { OptionalTier, Thinking, Tier } from "./schemas.ts";
 import { createOpenRouterCatalog, type OpenRouterCatalog } from "./openrouter-catalog.ts";
 import { ModelIcons } from "./model-icons.ts";
@@ -42,6 +42,7 @@ export const CustomProviderBody = Type.Object({
 		catalogId: Type.Optional(Type.Union([Type.String({ minLength: 1, maxLength: 200 }), Type.Null()], { description: "The OpenRouter catalog model this upstream model corresponds to. null = deliberately none (manual values); left out = match by name." })),
 		defaultThinkingLevel: Type.Optional(Thinking),
 		defaultServiceTier: Type.Optional(Tier),
+		serviceTiers: Type.Optional(Type.Array(Type.Union([Type.Literal("flex"), Type.Literal("priority"), Type.Literal("ultrafast")]), { uniqueItems: true, description: "Speeds besides standard this model accepts as `service_tier`, on a proxy that passes it on (CLIProxyAPI: priority for GPT models). Only for OpenAI-format connections that are not OpenRouter, whose speeds come from its catalog." })),
 	}), { maxItems: 100, description: "May be empty: a connection can be saved first and its models added afterwards." }),
 }, { additionalProperties: false });
 /**
@@ -408,9 +409,15 @@ export class Configuration {
 		if (input.models.some((m) => m.icon?.startsWith("img:") && !this.images.has(m.icon))) throw badRequest("icon image not found: upload it first");
 		for (const m of input.models) {
 			if (m.imageApi && !m.imageGeneration) throw badRequest(`${m.id.trim()}: only an image model can have an image API`);
+			const router = isOpenRouterChat({ baseUrl: url.toString(), api: input.api });
+			if (m.serviceTiers?.length && (m.imageGeneration || router || !PROXY_TIER_APIS.includes(input.api))) {
+				throw badRequest(`${m.id.trim()}: listed speeds need an OpenAI-format chat model on a connection that is not OpenRouter`);
+			}
 			if (m.defaultServiceTier) {
-				if (m.imageGeneration || !isOpenRouterChat({ baseUrl: url.toString(), api: input.api })) throw badRequest("a default service tier requires an OpenRouter chat model");
-				await checkAdvertisedTier(this.registry.serviceTiers, m.id.trim(), m.defaultServiceTier);
+				if (m.imageGeneration) throw badRequest("a default service tier requires a chat model");
+				if (router) await checkAdvertisedTier(this.registry.serviceTiers, m.id.trim(), m.defaultServiceTier);
+				else if (!m.serviceTiers?.length) throw badRequest("a default service tier requires an OpenRouter chat model or listed speeds");
+				else if (m.defaultServiceTier !== "default" && !m.serviceTiers.includes(m.defaultServiceTier)) throw badRequest(`${m.id.trim()}: the default service tier must be standard or one of the listed speeds`);
 			}
 			if (!m.defaultThinkingLevel) continue;
 			if (!m.reasoning || m.imageGeneration) throw badRequest(`${m.id.trim()}: only a reasoning model can have a default thinking level`);
@@ -586,9 +593,11 @@ export class Configuration {
 	}
 
 	private buildProvider(p: CustomProvider) {
-		const models: (Model<CustomProvider["api"]> & { defaultThinkingLevel?: ThinkingLevel; imageApi?: ImageApi })[] = p.models.filter((m) => !m.disabled).map((m) => ({
+		const models: (Model<CustomProvider["api"]> & { defaultThinkingLevel?: ThinkingLevel; imageApi?: ImageApi; serviceTiers?: string[] })[] = p.models.filter((m) => !m.disabled).map((m) => ({
 			id: m.id, name: m.name ?? m.id, api: p.api, provider: p.id, baseUrl: p.baseUrl,
 			...(m.defaultServiceTier ? { defaultServiceTier: m.defaultServiceTier } : {}),
+			// read by proxyTiers (models.ts), which ignores it unless the transport is an OpenAI-format proxy
+			...(m.serviceTiers?.length && !m.imageGeneration ? { serviceTiers: m.serviceTiers } : {}),
 			...(m.imageApi ? { imageApi: m.imageApi } : {}),
 			reasoning: m.imageGeneration ? false : m.reasoning, input: m.vision ? ["text", "image"] : ["text"],
 			// Strengths the owner listed win; otherwise they are looked up by name in the OpenRouter catalog, and unknown names keep the defaults.

@@ -15,7 +15,7 @@
 	import ImageModelSection from "./ImageModelSection.svelte";
 	import ProviderAccounts from "./ProviderAccounts.svelte";
 	import ConnectModal from "../server/ConnectModal.svelte";
-	import { tierLabel } from "../../lib/service-tier";
+	import { takesTier, tierLabel } from "../../lib/service-tier";
 	import { modelDisplayName } from "../../lib/model-name";
 	import { flash } from "../../lib/settings-focus";
 	import type {
@@ -341,8 +341,8 @@
 					{t("추론 강도를 지정하지 않아 새 대화는 이 기기의 마지막 설정으로 시작합니다.")}
 				{/if}
 			</p>
-			{#if shownInfo?.openRouterTiers}
-				<p class="hint note">{cfg?.effectiveDefaults?.serviceTier ? t("새 대화는 {tier} 속도로 시작합니다.", { tier: tierLabel(cfg.effectiveDefaults.serviceTier) }) : t("새 대화의 응답 속도는 OpenRouter 설정을 따릅니다.")}</p>
+			{#if takesTier(shownInfo)}
+				<p class="hint note">{cfg?.effectiveDefaults?.serviceTier ? t("새 대화는 {tier} 속도로 시작합니다.", { tier: tierLabel(cfg.effectiveDefaults.serviceTier) }) : shownInfo?.openRouterTiers ? t("새 대화의 응답 속도는 OpenRouter 설정을 따릅니다.") : t("새 대화는 속도를 지정하지 않고 시작합니다.")}</p>
 				{#if saved && saved.serviceTier !== undefined}
 					<Button variant="ghost" size="sm" disabled={busy} onclick={() => { if (saved) { const { serviceTier: _tier, ...inherited } = saved; void saveDefault(inherited); } }}>{t("모델의 기본 속도 따르기")}</Button>
 				{/if}

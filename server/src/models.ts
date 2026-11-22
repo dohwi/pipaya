@@ -8,18 +8,42 @@ import { badRequest, HttpError } from "./errors.ts";
 /** Match the actual transport destination, not the provider name (custom connections can shadow built-ins). */
 export const isOpenRouterChat = (m: Pick<Model<Api>, "api" | "baseUrl"> | undefined) => !!m && /^https:\/\/(?:us\.|eu\.)?openrouter\.ai\/api(?:\/v1)?\/?$/.test(m.baseUrl) && ["openai-completions", "openai-responses", "anthropic-messages"].includes(m.api);
 
-/** OpenRouter accepts service_tier on all three chat APIs. Check the final, auth-resolved target too. */
+/** The OpenAI request formats that carry `service_tier` as is; a proxy speaking Anthropic Messages would read it differently. */
+export const PROXY_TIER_APIS: readonly string[] = ["openai-completions", "openai-responses"];
+
+/**
+ * The faster or slower speeds the owner said this proxy model accepts (a CLIProxyAPI GPT model takes `priority`).
+ * pi-ai's `Model` has no slot for it, so the configuration carries it on the model object; an OpenRouter model reads its
+ * speeds from the catalog instead, so it never has one.
+ */
+export function proxyTiers(m: Pick<Model<Api>, "api" | "baseUrl"> | undefined): ServiceTier[] {
+	if (!m || isOpenRouterChat(m) || !PROXY_TIER_APIS.includes(m.api)) return [];
+	const v = (m as { serviceTiers?: unknown }).serviceTiers;
+	return Array.isArray(v) ? v.filter((t): t is ServiceTier => t === "flex" || t === "priority" || t === "ultrafast") : [];
+}
+
+/** A model a speed can be sent to: a direct OpenRouter chat, or a proxy model whose owner listed the speeds it takes. */
+export const takesServiceTier = (m: Pick<Model<Api>, "api" | "baseUrl"> | undefined) => isOpenRouterChat(m) || proxyTiers(m).length > 0;
+
+/** Standard is always allowed where any speed is; a proxy model takes only the speeds its owner listed. */
+const proxyAllows = (m: Pick<Model<Api>, "api" | "baseUrl"> | undefined, tier: ServiceTier) => proxyTiers(m).length > 0 && (tier === "default" || proxyTiers(m).includes(tier));
+
+const NO_TIER = "service tier requires an OpenRouter connection or a model with listed speeds";
+
+/** OpenRouter accepts service_tier on all three chat APIs; a proxy model on the OpenAI formats. Check the final, auth-resolved target too. */
 export function withServiceTier(opts: SimpleStreamOptions | undefined, tier: ServiceTier): SimpleStreamOptions {
 	return { ...opts, onPayload: async (body, target) => {
-		if (!isOpenRouterChat(target)) throw badRequest("service tier requires an OpenRouter connection");
+		if (!isOpenRouterChat(target) && !proxyAllows(target, tier)) throw badRequest(NO_TIER);
 		const payload = await opts?.onPayload?.(body, target) ?? body;
 		return { ...(payload as object), service_tier: tier };
 	} };
 }
 
 export async function checkServiceTier(reg: ModelRegistry, provider: string, id: string, tier: ServiceTier) {
-	if (!isOpenRouterChat(reg.models.getModel(provider, id))) throw badRequest("service tier requires an OpenRouter connection");
-	await checkAdvertisedTier(reg.serviceTiers, id, tier);
+	const m = reg.models.getModel(provider, id);
+	if (isOpenRouterChat(m)) return checkAdvertisedTier(reg.serviceTiers, id, tier);
+	if (!proxyTiers(m).length) throw badRequest(NO_TIER);
+	if (!proxyAllows(m, tier)) throw badRequest("service tier is not available for this model");
 }
 
 /** Standard is an explicit routing instruction, not an optional paid endpoint in the catalog. */
@@ -55,9 +79,9 @@ export function modelDefaultLevel(m: Model<Api>): ThinkingLevel | undefined {
 	return typeof v === "string" && (THINKING_LEVELS as readonly string[]).includes(v) ? (v as ThinkingLevel) : undefined;
 }
 
-/** Only a direct OpenRouter connection can declare a starting tier. */
+/** Only a model a speed can be sent to (see `takesServiceTier`) can declare a starting tier. */
 export function modelDefaultTier(m: Model<Api> | undefined): ServiceTier | undefined {
-	return isOpenRouterChat(m) ? (m as Model<Api> & { defaultServiceTier?: ServiceTier }).defaultServiceTier : undefined;
+	return takesServiceTier(m) ? (m as Model<Api> & { defaultServiceTier?: ServiceTier }).defaultServiceTier : undefined;
 }
 
 /** Starts with every pi-ai built-in provider (OpenAI, Anthropic, Google, OpenRouter, Copilot …); Configuration adds the user's own endpoints on top. */
@@ -79,6 +103,8 @@ export interface ModelInfo {
 	/** Reasoning strengths this model accepts, weakest first. Empty when it has no reasoning. */
 	thinkingLevels: ThinkingLevel[];
 	openRouterTiers?: boolean;
+	/** A proxy model's own speeds besides standard (absent on OpenRouter models, which list theirs from the catalog) */
+	serviceTiers?: ServiceTier[];
 	contextWindow: number;
 	maxTokens: number;
 	vision: boolean;
@@ -102,6 +128,7 @@ export async function describeModels(reg: ModelRegistry, provider?: string, unav
 		name: m.name,
 		api: m.api,
 		...(isOpenRouterChat(m) ? { openRouterTiers: true, defaultServiceTier: modelDefaultTier(m) } : {}),
+		...(proxyTiers(m).length ? { serviceTiers: proxyTiers(m), ...(modelDefaultTier(m) ? { defaultServiceTier: modelDefaultTier(m) } : {}) } : {}),
 		reasoning: m.reasoning,
 		// Every strength the model accepts, `off` included: "empty" means the model has no reasoning at all.
 		thinkingLevels: m.reasoning ? getSupportedThinkingLevels(m).filter((l): l is ThinkingLevel => THINKING_LEVELS.includes(l as ThinkingLevel)) : [],

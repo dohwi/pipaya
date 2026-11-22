@@ -319,6 +319,8 @@ export interface ModelInfo {
 	/** Reasoning strengths the model accepts, weakest first; empty without reasoning. */
 	thinkingLevels: ThinkingLevel[];
 	openRouterTiers?: boolean;
+	/** A proxy model's speeds besides standard, as its owner listed them (OpenRouter models: openRouterTiers + the catalog) */
+	serviceTiers?: ServiceTier[];
 	/** Where a new chat with this model starts, when its owner chose one */
 	defaultThinkingLevel?: ThinkingLevel;
 	defaultServiceTier?: ServiceTier;
@@ -402,6 +404,8 @@ export interface CustomModel {
 	/** Where a new chat with this model starts; absent = this device's last choice */
 	defaultThinkingLevel?: ThinkingLevel;
 	defaultServiceTier?: ServiceTier;
+	/** Speeds besides standard a proxy passes on as `service_tier` (not on OpenRouter, whose speeds come from its catalog) */
+	serviceTiers?: Exclude<ServiceTier, "default">[];
 	/** Response only: the upstream's model list no longer contains this model */
 	unavailable?: boolean;
 	/** Response only: where the strengths come from. */

@@ -1,5 +1,5 @@
 import { t } from "./i18n";
-import { directRouter } from "./service-tier";
+import { directRouter, proxyTierApi } from "./service-tier";
 import { compact } from "./format";
 import { THINKING_LEVELS, type ApiFormat, type CatalogModel, type CustomModel, type CustomProvider, type ThinkingLevel } from "./types";
 
@@ -27,6 +27,8 @@ export interface Row {
 	/** Where a new chat with this model starts; undefined = this device's last choice */
 	defaultThinkingLevel?: ThinkingLevel;
 	defaultServiceTier?: CustomModel["defaultServiceTier"];
+	/** Speeds besides standard this proxy model passes on; empty = none (no speed is sent) */
+	serviceTiers?: NonNullable<CustomModel["serviceTiers"]>;
 	/** What the server matched this model to, for display only */
 	thinkingSource?: CustomModel["thinkingSource"];
 	/** The upstream's model list no longer contains it */
@@ -140,6 +142,7 @@ export function formFromProvider(p: CustomProvider): Form {
 			catalogId: m.catalogId,
 			defaultThinkingLevel: m.defaultThinkingLevel,
 			defaultServiceTier: m.defaultServiceTier,
+			...(m.serviceTiers?.length ? { serviceTiers: [...m.serviceTiers] } : {}),
 			thinkingSource: m.thinkingSource,
 			unavailable: m.unavailable,
 		})),
@@ -202,6 +205,11 @@ export function collectModels(
 		const hit = matchedId(r);
 		// A default the model does not offer would never be reachable, so it is dropped along with the strengths.
 		const def = r.reasoning && !r.imageGeneration && r.defaultThinkingLevel && (!r.thinkingLevels.length || r.thinkingLevels.includes(r.defaultThinkingLevel)) ? r.defaultThinkingLevel : undefined;
+		// A proxy model's speeds only on an OpenAI-format connection that is not OpenRouter (the server refuses the rest);
+		// its starting speed must be standard or one of them, else it would never be reachable.
+		const router = directRouter(f.baseUrl);
+		const tiers = !r.imageGeneration && !router && proxyTierApi(f.api) ? (r.serviceTiers ?? []) : [];
+		const defTier = r.imageGeneration || !r.defaultServiceTier ? undefined : router ? r.defaultServiceTier : tiers.length && (r.defaultServiceTier === "default" || (tiers as string[]).includes(r.defaultServiceTier)) ? r.defaultServiceTier : undefined;
 		out.push({
 			id: r.id.trim(),
 			...(r.fromUpstream && !r.unavailable ? { fromUpstream: true } : {}),
@@ -217,7 +225,8 @@ export function collectModels(
 			...(r.reasoning && !r.imageGeneration && r.thinkingLevels.length ? { thinkingLevels: ALL_LEVELS.filter((l) => r.thinkingLevels.includes(l)) } : {}),
 			// A default outside the strengths this model offers would never be reachable, so it is dropped with them.
 			...(def ? { defaultThinkingLevel: def } : {}),
-			...(!r.imageGeneration && directRouter(f.baseUrl) && r.defaultServiceTier ? { defaultServiceTier: r.defaultServiceTier } : {}),
+			...(tiers.length ? { serviceTiers: tiers } : {}),
+			...(defTier ? { defaultServiceTier: defTier } : {}),
 		} as CustomModel);
 	}
 	if (new Set(out.map((m) => m.id)).size !== out.length) return { error: t("모델 ID가 중복되었습니다.") };
