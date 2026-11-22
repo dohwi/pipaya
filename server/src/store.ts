@@ -17,7 +17,7 @@ import { nameKey } from "./member-names.ts";
 export interface SessionRecord {
 	id: string;
 	title: string;
-	/** How other sessions address this one (`@name`); unique among active sessions, "" for a closed one that had none. */
+	/** How other sessions address this one (`@name`); unique among all sessions, closed ones included (a closed one keeps its name for when it is reopened); "" for a closed one that never had one. */
 	name: string;
 	/** What this session's agent works on, written by the system model; "" until then. */
 	purpose: string;
@@ -165,14 +165,14 @@ export class SessionStore {
 		return rows.map(toRecord);
 	}
 
-	/** `nameKey`s of the active sessions' names (closed ones give theirs up): 철수 and Cheolsu are one key. */
+	/** `nameKey`s of the open sessions' names (only these answer to them): 철수 and Cheolsu are one key. */
 	activeNames(): Set<string> {
 		return new Set((this.db.query("SELECT name FROM sessions WHERE closed = 0 AND name != ''").all() as { name: string }[]).map((r) => nameKey(r.name)));
 	}
 
-	/** `nameKey`s of the names closed sessions still carry: a new name avoids them while it can, so the chats list rarely shows one name twice. */
-	closedNames(): Set<string> {
-		return new Set((this.db.query("SELECT DISTINCT name FROM sessions WHERE closed = 1 AND name != ''").all() as { name: string }[]).map((r) => nameKey(r.name)));
+	/** `nameKey`s of every session's name, closed ones included: a closed session keeps its name, so nobody else may take it. */
+	allNames(): Set<string> {
+		return new Set((this.db.query("SELECT DISTINCT name FROM sessions WHERE name != ''").all() as { name: string }[]).map((r) => nameKey(r.name)));
 	}
 
 	/** `watcher` wants a report about `target` (its end, its questions). */
