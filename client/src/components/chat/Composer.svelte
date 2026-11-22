@@ -770,7 +770,7 @@
 			<FileStrip files={attached.files} onremove={(id) => attached.removeFile(id)} />
 		{/if}
 
-		<div class="field-wrap" class:calm={voiceActive && !!text}>
+		<div class="field-wrap" class:calm={voiceActive && !!text && !voice.realtime}>
 		{#if promptHint && !voiceActive}
 			<div class="prompt-hint" aria-hidden="true" title={promptHint}>↑ {promptHint}</div>
 		{/if}
@@ -791,7 +791,7 @@
 			oncompositionend={onCompositionEnd}
 			rows="1"
 			readonly={voiceActive}
-			placeholder={promptHint ? "" : voice.recording && voiceActive ? t("말씀하세요… 끝나면 ✓를 누르세요") : voiceActive ? t("글로 바꾸는 중…") : running ? runningHint : t("에이전트에게 메시지 보내기 · / 명령")}
+			placeholder={promptHint ? "" : voice.recording && voiceActive ? (voice.realtime ? t("말씀하세요… 잠깐 멈출 때마다 글이 들어갑니다") : t("말씀하세요… 끝나면 ✓를 누르세요")) : voiceActive ? t("글로 바꾸는 중…") : running ? runningHint : t("에이전트에게 메시지 보내기 · / 명령")}
 			aria-label={running ? runningHint : t("에이전트에게 메시지 보내기 · / 명령")}
 			enterkeyhint="enter"
 			autocapitalize="sentences"

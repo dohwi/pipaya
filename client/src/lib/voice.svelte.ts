@@ -12,6 +12,7 @@ import { app } from "./store.svelte";
 import { t } from "./i18n";
 import { swallowClick } from "./press-menu";
 import { REC_START_MS } from "./sound";
+import { capturePcm, realtimeSocketUrl, type RealtimeMessage } from "./voice-realtime";
 import {
 	AVAILABILITY_TEXT, MAX_RECORD_MS, MAX_UPLOAD_BYTES, MIN_RECORD_MS, FAILURE_TEXT, failureHasFix, failureTone, isConfigFailure, micAvailability, micFailure, pickMimeType, upstreamDetail,
 	PressToTalk, serverFailure, voiceState, type VoiceFailure, type VoiceState,
@@ -25,6 +26,10 @@ export type Tested = { at: number; ok: boolean; reason?: VoiceFailure };
 
 class VoiceStore {
 	settings = $state<VoiceSettings>({ enabled: false, baseUrl: "", path: "", model: "", language: "" });
+	/** Realtime mode: the server relays the microphone to a chat connection's Realtime API, phrase by phrase. */
+	get realtime() {
+		return this.settings.mode === "realtime";
+	}
 	hasKey = $state(false);
 	endpoint = $state<string | null>(null);
 	/** The settings came from the server at least once. */
@@ -55,6 +60,11 @@ class VoiceStore {
 	transcribeStartedAt = 0;
 	private timer: ReturnType<typeof setInterval> | undefined;
 	private stream: MediaStream | null = null;
+	/** Realtime mode: the socket to the server and the microphone tap that feeds it. */
+	private socket: WebSocket | null = null;
+	private stopCapture: (() => void) | null = null;
+	/** Realtime mode: phrases that landed in the composer during this recording (0 at the end = nothing was heard). */
+	private phrases = 0;
 	/** The microphone is being opened (a permission prompt may be up); `recording` follows once it is. */
 	private opening = false;
 	/** A stop or cancel came while the microphone was still opening: close it as soon as it opens instead of recording. */
@@ -110,7 +120,7 @@ class VoiceStore {
 	get state(): VoiceState {
 		return voiceState({
 			enabled: this.settings.enabled,
-			usable: !!this.endpoint && this.hasKey,
+			usable: this.realtime ? !!this.settings.realtime?.provider : !!this.endpoint && this.hasKey,
 			// a test that has not run yet is not a failure: the settings alone are enough to try the microphone
 			failed: this.tested?.ok === false,
 			available: this.availability === null,
@@ -136,8 +146,12 @@ class VoiceStore {
 	get blockedReason(): string | null {
 		if (this.availability) return t(AVAILABILITY_TEXT[this.availability]);
 		if (!this.settings.enabled) return null;
-		if (!this.settings.baseUrl) return t("변환 서버 주소를 입력하세요.");
-		if (!this.hasKey) return t("변환 API 키를 입력하세요.");
+		if (this.realtime) {
+			if (!this.settings.realtime?.provider) return t("실시간 변환에 쓸 연결을 고르세요.");
+		} else {
+			if (!this.settings.baseUrl) return t("변환 서버 주소를 입력하세요.");
+			if (!this.hasKey) return t("변환 API 키를 입력하세요.");
+		}
 		// only a test that failed blocks it; an untested setup is offered and the first recording reports the problem
 		if (this.tested && !this.tested.ok) return (this.tested.reason && FAILURE_TEXT[this.tested.reason] && t(FAILURE_TEXT[this.tested.reason])) || t("연결 확인에 실패했습니다.");
 		return null;
@@ -203,6 +217,7 @@ class VoiceStore {
 			for (const track of stream.getTracks()) track.stop();
 			return null;
 		}
+		if (this.realtime) return this.startRealtime(stream);
 		const mimeType = pickMimeType((type) => MediaRecorder.isTypeSupported(type));
 		const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
 		this.stream = stream;
@@ -221,10 +236,109 @@ class VoiceStore {
 		return null;
 	}
 
+	/**
+	 * Realtime mode: the microphone streams to the server while the user speaks, and every phrase the Realtime API
+	 * finishes (at a pause) goes into the composer at once. Stopping sends what is left as the last phrase.
+	 */
+	private async startRealtime(stream: MediaStream): Promise<VoiceFailure | null> {
+		if (!this.api) {
+			for (const track of stream.getTracks()) track.stop();
+			this.fail("network");
+			return "network";
+		}
+		this.stream = stream;
+		this.phrases = 0;
+		this.recording = true;
+		this.startedAt = performance.now();
+		this.elapsed = 0;
+		this.timer = setInterval(() => {
+			this.elapsed = performance.now() - this.startedAt;
+			if (this.elapsed >= MAX_RECORD_MS) this.stop();
+		}, 200);
+		let credential: string;
+		try {
+			credential = await this.api.streamCredential();
+		} catch {
+			this.endRealtime();
+			this.fail("network");
+			return "network";
+		}
+		if (!this.recording) return null; // cancelled while the ticket was on its way
+		const socket = new WebSocket(realtimeSocketUrl(this.api.baseUrl, credential, this.settings.language));
+		socket.binaryType = "arraybuffer";
+		this.socket = socket;
+		const paneId = this.paneId;
+		let failed = false;
+		// the audio flows from the first moment: the server holds it until the upstream session is ready
+		this.stopCapture = capturePcm(stream, (pcm) => {
+			if (socket.readyState === WebSocket.OPEN && this.recording) socket.send(pcm.buffer);
+		});
+		socket.onmessage = (m) => {
+			let msg: RealtimeMessage;
+			try {
+				msg = JSON.parse(String(m.data)) as RealtimeMessage;
+			} catch {
+				return;
+			}
+			if (msg.type === "phrase" && msg.text) {
+				this.phrases++;
+				app.insertIntoComposer(paneId ?? "", msg.text);
+			} else if (msg.type === "error") {
+				failed = true;
+				this.endRealtime();
+				this.fail(serverFailure(msg.code), msg.message);
+			} else if (msg.type === "done") {
+				const heard = this.phrases;
+				this.endRealtime();
+				if (!heard && !failed) this.fail("empty");
+			}
+		};
+		socket.onclose = () => {
+			if (this.socket !== socket) return;
+			const wasLive = this.recording;
+			this.endRealtime();
+			if (wasLive && !failed) this.fail("network");
+		};
+		return null;
+	}
+
+	/** Realtime mode: everything of this session is over (done, failed or cancelled). */
+	private endRealtime() {
+		this.recording = false;
+		this.transcribing = false;
+		clearInterval(this.timer);
+		this.timer = undefined;
+		this.stopCapture?.();
+		this.stopCapture = null;
+		const socket = this.socket;
+		this.socket = null;
+		if (socket) {
+			socket.onmessage = socket.onclose = null;
+			if (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING) socket.close(1000);
+		}
+		this.releaseStream();
+	}
+
 	/** Stops recording; what was recorded is transcribed and inserted into the composer it started from. */
 	stop() {
 		if (this.opening) this.stopRequested = true;
 		if (!this.recording) return;
+		if (this.socket || this.realtime) {
+			// realtime: the microphone stops now; the last phrase is still on its way, so the row says so until "done"
+			this.recording = false;
+			clearInterval(this.timer);
+			this.timer = undefined;
+			this.stopCapture?.();
+			this.stopCapture = null;
+			this.releaseStream();
+			app.prefs.cue("recStop");
+			const socket = this.socket;
+			if (!socket || socket.readyState !== WebSocket.OPEN) return this.endRealtime();
+			this.transcribing = true;
+			this.transcribeStartedAt = performance.now();
+			socket.send(JSON.stringify({ type: "stop" }));
+			return;
+		}
 		this.recording = false;
 		clearInterval(this.timer);
 		this.timer = undefined;
@@ -241,10 +355,15 @@ class VoiceStore {
 		app.prefs.cue("recStop"); // after the recorder stopped, so the cue is not in the recording
 	}
 
-	/** Throws the recording away (the pill's cancel). */
+	/** Throws the recording away (the pill's cancel). Realtime: the phrases already in the composer stay, the rest is dropped. */
 	cancel() {
 		if (this.opening) this.stopRequested = true;
 		if (!this.recording) return;
+		if (this.socket || this.realtime) {
+			this.endRealtime();
+			app.prefs.cue("recStop");
+			return;
+		}
 		this.recording = false;
 		clearInterval(this.timer);
 		this.timer = undefined;
@@ -304,6 +423,7 @@ class VoiceStore {
 
 	/** Gives up on the transcription in flight (the panel's cancel): nothing is inserted. */
 	cancelTranscribe() {
+		if (this.socket) return this.endRealtime();
 		this.transcribeAbort?.abort();
 	}
 

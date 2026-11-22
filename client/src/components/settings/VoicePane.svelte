@@ -3,10 +3,13 @@
 	import Notice from "../ui/Notice.svelte";
 	import SettingRow from "../ui/SettingRow.svelte";
 	import Switch from "../ui/Switch.svelte";
+	import Segmented from "../ui/Segmented.svelte";
+	import Select from "../ui/Select.svelte";
+	import { app } from "../../lib/store.svelte";
 	import { t, getLang } from "../../lib/i18n";
 	import { extensions } from "../../lib/extensions/host.svelte";
 	import { voice } from "../../lib/voice.svelte";
-	import type { VoiceSettings } from "../../lib/api";
+	import type { RealtimeVoiceSettings, VoiceSettings } from "../../lib/api";
 
 	/**
 	 * Settings > Voice. The connection lives on the server (so every device shares it) and the key is written once and
@@ -16,7 +19,10 @@
 	 * The page reads in the order the setup happens: switch it on, fill the connection top to bottom (address, model,
 	 * key, then the optional path and language), then check it. The status block at the bottom only reports.
 	 */
-	let draft = $state<VoiceSettings>({ enabled: false, baseUrl: "", path: "", model: "", language: "" });
+	const REALTIME_DEFAULTS: RealtimeVoiceSettings = { provider: "", model: "gpt-realtime-2.1", transcribeModel: "gpt-transcribe", keywords: [], prompt: "" };
+	let draft = $state<VoiceSettings>({ enabled: false, baseUrl: "", path: "", model: "", language: "", mode: "file", realtime: { ...REALTIME_DEFAULTS } });
+	/** The keywords as the user types them, one per line; turned into the list when saved. */
+	let keywordText = $state("");
 	let key = $state("");
 	let keyTouched = $state(false);
 	let saving = $state(false);
@@ -25,7 +31,8 @@
 	// The server's settings arrive after the first render (and again when the server changes).
 	$effect(() => {
 		if (!voice.loaded) return;
-		draft = { ...voice.settings };
+		draft = { ...voice.settings, mode: voice.settings.mode ?? "file", realtime: { ...REALTIME_DEFAULTS, ...voice.settings.realtime } };
+		keywordText = (voice.settings.realtime?.keywords ?? []).join("\n");
 		key = "";
 		keyTouched = false;
 	});
@@ -39,8 +46,23 @@
 	/** The language the UI is in, as the hint a person most likely wants ("ko" for Korean). Only a placeholder, never a value. */
 	const uiLang = $derived(getLang().slice(0, 2));
 
+	/** An older server knows only the file mode: the choice is not offered there. */
+	const hasModes = $derived(voice.settings.mode !== undefined);
+	const realtime = $derived(draft.mode === "realtime");
+	const rt = $derived(draft.realtime ?? REALTIME_DEFAULTS);
+	const keywords = $derived([...new Set(keywordText.split("\n").map((k) => k.trim()).filter(Boolean))]);
+	const providerOptions = $derived(app.providers.filter((p) => p.configured).map((p) => ({ value: p.id, label: p.name })));
+	const setRt = (patch: Partial<RealtimeVoiceSettings>) => (draft = { ...draft, realtime: { ...rt, ...patch } });
+	const savedRt = $derived({ ...REALTIME_DEFAULTS, ...voice.settings.realtime });
+
 	const dirty = $derived(
 		keyTouched ||
+			(draft.mode ?? "file") !== (voice.settings.mode ?? "file") ||
+			rt.provider !== savedRt.provider ||
+			rt.model !== savedRt.model ||
+			rt.transcribeModel !== savedRt.transcribeModel ||
+			rt.prompt !== savedRt.prompt ||
+			keywords.join("\n") !== savedRt.keywords.join("\n") ||
 			draft.enabled !== voice.settings.enabled ||
 			draft.baseUrl !== voice.settings.baseUrl ||
 			draft.path !== voice.settings.path ||
@@ -51,7 +73,8 @@
 	async function save(): Promise<boolean> {
 		saving = true;
 		message = null;
-		const error = await voice.save(draft, keyTouched ? key : undefined);
+		const next: VoiceSettings = hasModes ? { ...draft, realtime: { ...rt, keywords } } : { enabled: draft.enabled, baseUrl: draft.baseUrl, path: draft.path, model: draft.model, language: draft.language };
+		const error = await voice.save(next, keyTouched ? key : undefined);
 		saving = false;
 		if (error) {
 			message = { ok: false, text: error };
@@ -89,6 +112,55 @@
 	{/if}
 </section>
 
+{#if hasModes}
+	<section class="set-group">
+		<div class="section-label">{t("변환 방식")}</div>
+		<Segmented
+			label={t("변환 방식")}
+			value={draft.mode ?? "file"}
+			options={[{ id: "file", label: t("녹음 후 변환") }, { id: "realtime", label: t("실시간") }]}
+			onchange={(id) => (draft = { ...draft, mode: id })}
+		/>
+		<span class="hint">{realtime ? t("말하는 동안 소리를 보내고, 말을 잠깐 멈출 때마다 그 구간이 입력창에 바로 들어갑니다. 키워드로 이름 표기를 맞출 수 있습니다.") : t("녹음을 끝내면 한 번에 보내 글로 바꿉니다. OpenAI 호환 변환 서버면 어디든 됩니다.")}</span>
+	</section>
+{/if}
+
+{#if realtime}
+<section class="set-group">
+	<div class="section-label">{t("실시간 변환")}</div>
+	<span class="hint">{t("채팅 연결 중 Realtime API(/v1/realtime)를 제공하는 연결을 고릅니다. 주소와 키는 그 연결의 것을 씁니다.")}</span>
+	<div class="row">
+		<span>{t("연결")}</span>
+		<Select label={t("실시간 변환 연결")} value={rt.provider} options={providerOptions} placeholder={t("연결을 고르세요")} onchange={(id) => setRt({ provider: id })} />
+	</div>
+	<label class="row">
+		<span>{t("세션 모델")}</span>
+		<input class="field" type="text" autocomplete="off" spellcheck="false" placeholder={REALTIME_DEFAULTS.model} value={rt.model} oninput={(e) => setRt({ model: e.currentTarget.value })} aria-label={t("실시간 세션 모델")} />
+	</label>
+	<label class="row">
+		<span>{t("변환 모델")}</span>
+		<input class="field" type="text" autocomplete="off" spellcheck="false" placeholder={REALTIME_DEFAULTS.transcribeModel} value={rt.transcribeModel} oninput={(e) => setRt({ transcribeModel: e.currentTarget.value })} aria-label={t("실시간 변환 모델")} />
+	</label>
+	<label class="row">
+		<span>{t("언어 (선택)")}</span>
+		<input class="field" type="text" autocomplete="off" spellcheck="false" placeholder={uiLang} bind:value={draft.language} aria-label={t("변환 언어")} />
+	</label>
+	<label class="row">
+		<span>{t("키워드 (선택)")}</span>
+		<textarea class="field area" rows="4" spellcheck="false" placeholder={"Pipaya\nTailscale\nCLIProxyAPI"} bind:value={keywordText} aria-label={t("키워드")}></textarea>
+	</label>
+	<span class="hint" class:bad={keywords.length > 20}>{t("한 줄에 하나씩, 최대 20개. 제품·서비스 이름처럼 표기를 지켜야 하는 말을 넣습니다. ({n}/20)", { n: keywords.length })}</span>
+	<label class="row">
+		<span>{t("문맥 (선택)")}</span>
+		<textarea class="field area" rows="2" maxlength="300" placeholder={t("예: 한국어로 말하는 개발 작업 지시")} value={rt.prompt} oninput={(e) => setRt({ prompt: e.currentTarget.value })} aria-label={t("문맥")}></textarea>
+	</label>
+	<div class="actions">
+		<Button size="sm" disabled={!dirty || saving || keywords.length > 20} onclick={save}>{t("저장")}</Button>
+		<Button size="sm" variant="ghost" disabled={voice.testing || voice.loading} onclick={test}>{voice.testing ? t("확인 중…") : t("연결 확인")}</Button>
+	</div>
+	{#if message}<span class="note" class:bad={!message.ok} role="status">{message.text}</span>{/if}
+</section>
+{:else}
 <section class="set-group">
 	<div class="section-label">{t("변환 서버")}</div>
 	<span class="hint">{t("위에서부터 채웁니다: 주소 · 모델 · API 키만 있으면 되고, 경로와 언어는 비워 두어도 됩니다. 다 채운 뒤 연결을 확인하세요.")}</span>
@@ -133,13 +205,14 @@
 	</div>
 	{#if message}<span class="note" class:bad={!message.ok} role="status">{message.text}</span>{/if}
 </section>
+{/if}
 
 <section class="set-group">
 	<div class="section-label">{t("상태")}</div>
 	<SettingRow label={t("입력창의 마이크")} hint={voice.blockedReason ?? t("사용할 수 있습니다")}>
 		<span class="state" class:on={voice.state === "ready"} class:blocked={voice.state === "unusable"}>{voice.state === "ready" ? t("사용 가능") : voice.state === "off" ? t("꺼짐") : t("사용 안 함")}</span>
 	</SettingRow>
-	{#if voice.endpoint}<span class="hint mono">{voice.endpoint}</span>{/if}
+	{#if !voice.realtime && voice.endpoint}<span class="hint mono">{voice.endpoint}</span>{/if}
 	{#if voice.failure}<span class="note bad" role="status">{t("마지막 오류")}: {t("녹음 또는 변환에 실패했습니다. 위의 연결 확인으로 상태를 다시 확인하세요.")}</span>{/if}
 </section>
 
@@ -169,8 +242,16 @@
 		font-size: var(--fs-xs);
 		color: var(--text-dim);
 	}
-	.note.bad {
+	.note.bad,
+	.hint.bad {
 		color: var(--danger);
+	}
+	/* the schedules form's text area: a field that grows, padded like the one-line field, whole-pixel lines */
+	.area {
+		height: auto;
+		padding: 8px 12px;
+		resize: vertical;
+		line-height: 20px;
 	}
 	.state {
 		font-size: var(--fs-sm);

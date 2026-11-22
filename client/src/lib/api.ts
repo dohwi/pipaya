@@ -62,6 +62,18 @@ export interface VoiceSettings {
 	path: string;
 	model: string;
 	language: string;
+	/** `file`: upload once the recording ends; `realtime`: stream through a chat connection's Realtime API. Absent on an older server. */
+	mode?: "file" | "realtime";
+	realtime?: RealtimeVoiceSettings;
+}
+
+/** The realtime mode's connection and hints (server/src/voice-input.ts `RealtimeSettingsSchema`). */
+export interface RealtimeVoiceSettings {
+	provider: string;
+	model: string;
+	transcribeModel: string;
+	keywords: string[];
+	prompt: string;
 }
 
 /** What GET/PUT /voice answers: the settings, whether a key is stored, and the last connection test (kept on the server). */

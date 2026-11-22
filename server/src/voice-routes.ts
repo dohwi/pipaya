@@ -169,7 +169,10 @@ export async function audioPart(form: FormData): Promise<{ bytes: Uint8Array; ty
 	return { bytes, type, name: `voice.${extension}` };
 }
 
-export function registerVoiceRoutes(server: FastifyInstance, settings: VoiceSettings, credentials: SqliteCredentialStore, bus: EventBus): void {
+/** The realtime mode's connection test (see `probeRealtime`), given by the app; absent means the mode cannot be tested. */
+export type RealtimeProbe = (settings: Required<VoiceSettingsValue>) => Promise<void>;
+
+export function registerVoiceRoutes(server: FastifyInstance, settings: VoiceSettings, credentials: SqliteCredentialStore, bus: EventBus, probe?: RealtimeProbe): void {
 	const app = server.withTypeProvider<TypeBoxProvider>();
 	const keyOf = async (): Promise<string> => {
 		const credential = await credentials.read(VOICE_CREDENTIAL_ID);
@@ -244,9 +247,13 @@ export function registerVoiceRoutes(server: FastifyInstance, settings: VoiceSett
 		handler: async (req) => {
 			const controller = new AbortController();
 			req.raw.on("close", () => { if (!req.raw.complete) controller.abort(); });
-			let text: string;
+			let text = "";
+			const current = settings.get();
 			try {
-				text = await transcribe({ settings: settings.get(), key: await keyOf(), audio: { bytes: SILENCE_WAV, type: "audio/wav", name: "test.wav" }, signal: controller.signal });
+				if (current.mode === "realtime") {
+					if (!probe) throw new HttpError(400, "not_configured", "this server cannot test the realtime mode");
+					await probe(current);
+				} else text = await transcribe({ settings: current, key: await keyOf(), audio: { bytes: SILENCE_WAV, type: "audio/wav", name: "test.wav" }, signal: controller.signal });
 			} catch (cause) {
 				const reason = cause instanceof HttpError ? cause.code : "upstream_error";
 				settings.setTest({ ok: false, at: Date.now(), reason });
