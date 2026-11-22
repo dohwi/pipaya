@@ -266,6 +266,9 @@ export interface GuardSettings {
 	disk: boolean;
 	fork: boolean;
 	permissions: boolean;
+	remoteExec: boolean;
+	systemPower: boolean;
+	forcePush: boolean;
 }
 
 export interface GuardInfo {

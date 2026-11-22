@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import type { EventBus } from "./events.ts";
-import { DEFAULT_GUARD_SETTINGS, GuardInfoSchema, GuardSettingsSchema, type GuardSettings } from "./guard.ts";
+import { DEFAULT_GUARD_SETTINGS, GuardInfoSchema, GuardUpdateSchema, type GuardSettings } from "./guard.ts";
 import { errors } from "./schemas.ts";
 import type { TypeBoxProvider } from "./typebox-provider.ts";
 
@@ -13,7 +13,7 @@ export function registerGuardRoutes(server: FastifyInstance, guard: GuardSetting
 		handler: async () => view(),
 	});
 	app.put("/guard", {
-		schema: { body: GuardSettingsSchema, response: { 200: GuardInfoSchema, ...errors(400, 401) } },
+		schema: { body: GuardUpdateSchema, response: { 200: GuardInfoSchema, ...errors(400, 401) } },
 		handler: async (req) => {
 			guard.set(req.body);
 			bus.publish(null, "configuration_updated", { scope: "guard" });
