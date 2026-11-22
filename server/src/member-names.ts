@@ -1,7 +1,7 @@
 // Names for sessions (`@name`). Stored once, in Korean: the UI language only decides which form is shown (민수 / Minsu),
 // so switching the language never renames anything and two clients in different languages still agree on the name.
 
-/** Korean names, given to sessions in order; the first one not taken by an active session is used. */
+/** Korean names, given to sessions in order; the first one no session carries (an open one, or a closed one that kept it) is used. */
 export const MEMBER_NAMES_KO = [
 	"철수", "미나", "가온", "영희", "민준", "나린", "지우", "도하", "하준", "라희",
 	"서연", "도윤", "서준", "예준", "시우", "주원", "지호", "지후", "준우", "현우",
@@ -44,11 +44,16 @@ export const MEMBER_NAMES_EN = MEMBER_NAMES_KO.map(romanize);
 
 const SUFFIX = /\d+$/;
 
-/** The next free name given the lower-cased names in use, then 철수2, 철수3, ... (the pool is always the stored, Korean one). */
-export function nextMemberName(taken: ReadonlySet<string>, pool: readonly string[] = MEMBER_NAMES_KO): string {
-	const free = pool.find((n) => !taken.has(n.toLowerCase()));
-	if (free) return free;
-	for (let n = 2; ; n++) if (!taken.has(`${pool[0]}${n}`.toLowerCase())) return `${pool[0]}${n}`;
+/**
+ * The next free name: the first pool name nobody carries, then 철수2, 철수3, ... (the pool is always the stored, Korean one).
+ * `taken` (the active sessions' and groups' lower-cased names) and `avoid` (the names closed sessions still carry) are both
+ * skipped, so a new session never reuses a closed one's name and the chats list does not show one `@name` twice.
+ */
+export function nextMemberName(taken: ReadonlySet<string>, pool: readonly string[] = MEMBER_NAMES_KO, avoid: ReadonlySet<string> = new Set()): string {
+	const free = (n: string) => !taken.has(n.toLowerCase()) && !avoid.has(n.toLowerCase());
+	const fresh = pool.find(free);
+	if (fresh) return fresh;
+	for (let n = 2; ; n++) if (free(`${pool[0]}${n}`)) return `${pool[0]}${n}`;
 }
 
 /** The Korean name a stored name stands for: a name saved before names became language-neutral may still be romanized. */

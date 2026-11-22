@@ -544,7 +544,7 @@ export class SessionManager {
 
 		if (patch.closed === false && current.closed) {
 			this.assertRoom();
-			// A closed session gives its name up; on resume it takes it back unless another session has it by now.
+			// A closed session gives its name up (new sessions still keep clear of it); on resume it takes it back unless another session has it by now.
 			clean.name = this.peers.resumedName(current);
 		}
 		const updated = this.store.update(id, clean);
