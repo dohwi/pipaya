@@ -35,6 +35,8 @@ import { afterTurn, isEmptyFailedReply, runawayReason, type RunStopCause } from 
 import { chooseModel, DelegateLimits, finalText, freeRole, repeatedReadSignature, runDelegateWithinDeadline, subagentReport, subagentReportReserveMs, subagentUsage, loadSubagents, SUBAGENT_NAME, SUBAGENT_TIMEOUT_MS, SUBAGENT_WRAP_UP, subagentSystem, type SubagentDef, type SubagentLimit } from "./subagents.ts";
 import { classifyUpstreamError, DEFAULT_UPSTREAM_RETRY, logUnknownUpstreamError, retryReason, sleepAbortable, STREAM_RETRY, withUpstreamRetry } from "./upstream-retry.ts";
 import { autoTitle, DESCRIBE_MAX_TOKENS, DESCRIBE_SYSTEM, describeRequest, parseDescription, type SystemModelSettings } from "./system-model.ts";
+import type { GuardSettings } from "./guard.ts";
+import { runPromptTemplate } from "./templates.ts";
 
 import { DEFAULT_DELEGATE_POLICY, type DelegatePolicyValue } from "./configuration.ts";
 import { DEFAULT_SYSTEM_PROMPT, FORCE_STOP_MS, IDLE_EVICT_MS, MAX_REPEATED_CALLS, MAX_RUN_TURNS, promptKey, type CompactionOutcome, type CreateSessionInput, type Deferred, type Live, type PromptMode, type RunOrigin, type SessionStatus } from "./session-types.ts";
@@ -109,6 +111,8 @@ export class SessionManager {
 		/** Subagent roles the user switched off (`scope/name`); `delegate` treats them as missing. */
 		private disabledSubagents: () => string[] = () => [],
 		private delegateTimeoutMs = SUBAGENT_TIMEOUT_MS,
+		/** Built-in bash command guard. */
+		private guard?: GuardSettings,
 	) {
 		this.sweeper = setInterval(() => this.evictIdle(), 5 * 60_000);
 		this.sweeper.unref?.();
@@ -596,15 +600,11 @@ export class SessionManager {
 			this.bus.publish(id, "message_queued", { mode, text: input.text, deferred: true });
 			return { accepted: mode };
 		}
-		let extraParts: { type: "text"; text: string }[] = [];
-		let inputTitle: string | undefined;
-		if (this.ext) {
-			const pre = await this.preprocess(id, input.text, mode);
-			if (pre.handled) return { accepted: mode };
-			input = { ...input, text: pre.text };
-			extraParts = pre.parts;
-			inputTitle = pre.title;
-		}
+		const pre = await this.preprocess(id, input.text, mode, workDirOf(record));
+		if (pre.handled) return { accepted: mode };
+		input = { ...input, text: pre.text };
+		const extraParts = pre.parts;
+		const inputTitle = pre.title;
 		// A prompt sent during a manual compaction waits for it to finish instead of being rejected.
 		const compacting = this.live.get(id);
 		if (mode === "prompt" && compacting?.compacting && !compacting.running) {
@@ -751,24 +751,28 @@ export class SessionManager {
 		return part?.text ?? null;
 	}
 
-	/** `input` hooks and `/command` handling. A swallowed message is never sent to the model. */
-	private async preprocess(id: string, text: string, mode: PromptMode): Promise<{ handled: boolean; text: string; parts: { type: "text"; text: string }[]; title?: string }> {
+	/** `input` hooks, built-in `/prompt:` templates and `/command` handling. A swallowed message is never sent to the model. */
+	private async preprocess(id: string, text: string, mode: PromptMode, cwd: string): Promise<{ handled: boolean; text: string; parts: { type: "text"; text: string }[]; title?: string }> {
 		let current = text;
 		let handled = false;
 		const parts: { type: "text"; text: string }[] = [];
 		let title: string | undefined;
 		let note: MessageNote | undefined;
 		const typed = text.trim();
-		await this.ext!.emit("input", { sessionId: id, text: current, mode }, id, (r) => {
-			if (typeof r.text === "string") current = r.text;
-			if (Array.isArray(r.parts)) for (const p of r.parts) if (p?.type === "text" && typeof p.text === "string") parts.push({ type: "text", text: p.text });
-			if (typeof r.title === "string" && r.title.trim()) title = r.title;
-			if (r.note && typeof r.note.text === "string") note = r.note;
-			if (r.handled) { handled = true; return true; }
-		});
+		if (this.ext) {
+			await this.ext.emit("input", { sessionId: id, text: current, mode }, id, (r) => {
+				if (typeof r.text === "string") current = r.text;
+				if (Array.isArray(r.parts)) for (const p of r.parts) if (p?.type === "text" && typeof p.text === "string") parts.push({ type: "text", text: p.text });
+				if (typeof r.title === "string" && r.title.trim()) title = r.title;
+				if (r.note && typeof r.note.text === "string") note = r.note;
+				if (r.handled) { handled = true; return true; }
+			});
+		}
 		const withNote = () => (note ? [...parts, { type: "text" as const, text: noteBlock(note, typed) }] : parts);
 		if (handled) return { handled, text: current, parts, title };
-		const cmd = await this.ext!.runCommand(id, current);
+		const tpl = runPromptTemplate(current, cwd, this.home);
+		if (tpl) return { handled: false, text: tpl.prompt, parts: [...parts, { type: "text" as const, text: noteBlock(tpl.note, typed) }], title: title ?? tpl.title };
+		const cmd = this.ext ? await this.ext.runCommand(id, current) : undefined;
 		if (cmd?.note) note = cmd.note;
 		if (cmd?.title) title = cmd.title;
 		if (cmd) return cmd.prompt ? { handled: false, text: cmd.prompt, parts: withNote(), title } : { handled: true, text: current, parts, title };
@@ -1387,14 +1391,21 @@ export class SessionManager {
 		this.abortRun(sessionId, live, "limit");
 	}
 
-	/** `tool_call` hooks. Shared by the session agent and its subagents so a policy extension cannot be sidestepped. */
+	/** `tool_call` hooks + built-in bash guard. Shared by the session agent and its subagents so a policy cannot be sidestepped. */
 	private async extensionToolCall(sessionId: string, { toolCall, args }: { toolCall: { id: string; name: string }; args: unknown }): Promise<{ block: true; reason: string } | undefined> {
-		if (!this.ext?.has("tool_call")) return undefined;
-		let blocked: { block: true; reason: string } | undefined;
-		await this.ext.emit("tool_call", { sessionId, toolCallId: toolCall.id, toolName: toolCall.name, args }, sessionId, (r) => {
-			if (r.block) { blocked = { block: true, reason: r.reason ?? `"${toolCall.name}" was blocked by an extension` }; return true; }
-		});
-		return blocked;
+		if (this.ext?.has("tool_call")) {
+			let blocked: { block: true; reason: string } | undefined;
+			await this.ext.emit("tool_call", { sessionId, toolCallId: toolCall.id, toolName: toolCall.name, args }, sessionId, (r) => {
+				if (r.block) { blocked = { block: true, reason: r.reason ?? `"${toolCall.name}" was blocked by an extension` }; return true; }
+			});
+			if (blocked) return blocked;
+		}
+		if (toolCall.name === "bash" && this.guard) {
+			const cmd = args && typeof args === "object" && typeof (args as { command?: unknown }).command === "string" ? (args as { command: string }).command : "";
+			const reason = cmd ? this.guard.check(cmd) : null;
+			if (reason) return { block: true, reason };
+		}
+		return undefined;
 	}
 
 	/** `tool_result` hooks: each extension sees what the previous one returned. */

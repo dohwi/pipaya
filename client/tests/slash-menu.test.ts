@@ -2,15 +2,17 @@ import { describe, expect, test } from "bun:test";
 import { fileRows, folderRows, mentionRows, menuKey, menuKindOf, menuOpen, optionRows, slashRows } from "../src/lib/slash-menu";
 
 describe("recommendation menu rows", () => {
-	test("commands, skills and extension commands each get their own heading and text", () => {
+	test("commands, skills, prompt templates and extension commands each get their own heading and text", () => {
 		const rows = slashRows([
 			{ command: { name: "model", args: "[name]", desc: "pick a model" } },
 			{ skill: { name: "review", description: "review code" } },
+			{ template: { name: "standup", description: "daily note" } },
 			{ family: { prefix: "snip", label: "Snippets", name: "fix", description: "fix it", args: "<what>" } },
 		]);
 		expect(rows).toEqual([
 			{ id: "model", text: "/model", args: "[name]", desc: "pick a model", group: "명령" },
 			{ id: "skill:review", text: "/skill:review", desc: "review code", accent: true, group: "스킬" },
+			{ id: "prompt:standup", text: "/prompt:standup", desc: "daily note", accent: true, group: "프롬프트 템플릿" },
 			{ id: "snip:fix", text: "/snip:fix", args: "<what>", desc: "fix it",
 				accent: true, group: "Snippets" },
 		]);

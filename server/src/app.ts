@@ -45,6 +45,9 @@ import { createModelRegistry, describeModels } from "./models.ts";
 import { SessionManager } from "./sessions.ts";
 import { McpManager } from "./mcp.ts";
 import { registerMcpRoutes } from "./mcp-routes.ts";
+import { GuardSettings } from "./guard.ts";
+import { registerGuardRoutes } from "./guard-routes.ts";
+import { registerTemplateRoutes } from "./templates-routes.ts";
 import { SkillService } from "./skills.ts";
 import { registerSkillRoutes } from "./skills-routes.ts";
 import { AgentsWatcher } from "./agents-watch.ts";
@@ -162,7 +165,9 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 		log: (m) => server.log.warn(m),
 	});
 	const mcp = new McpManager(db, () => bus.publish(null, "mcp_updated", {}));
-	const sessions = new SessionManager(cfg, store, bus, registry, () => configuration.defaultWorkdir(), skills, questions, compactionSettings, extensions, () => configuration.disabledTools(), systemModel, imageModel, mcp, opts.home, () => configuration.delegatePolicy(), () => configuration.disabledSubagents(), opts.delegateTimeoutMs);
+	// Seed once from an older copy's saved settings when the built-in setting is not yet in SQLite.
+	const guard = new GuardSettings(db, join(cfg.dataDir, "extensions", "guard", "settings.json"));
+	const sessions = new SessionManager(cfg, store, bus, registry, () => configuration.defaultWorkdir(), skills, questions, compactionSettings, extensions, () => configuration.disabledTools(), systemModel, imageModel, mcp, opts.home, () => configuration.delegatePolicy(), () => configuration.disabledSubagents(), opts.delegateTimeoutMs, guard);
 	const busy = (id: string) => sessions.isRunning(id) || questions.list(id).length > 0;
 	const info = (r: NonNullable<ReturnType<typeof store.get>>) => ({
 		id: r.id, name: r.name, title: r.title, purpose: r.purpose, cwd: r.cwd, provider: r.provider, model: r.model, thinkingLevel: r.thinkingLevel,
@@ -422,6 +427,8 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 		})();
 	});
 	registerSkillRoutes(server, skills, bus);
+	registerTemplateRoutes(server, () => configuration.defaultWorkdir(), bus, opts.home);
+	registerGuardRoutes(server, guard, bus);
 	registerMcpRoutes(server, mcp);
 	registerExtensionSettingsRoutes(server, extensionSettings, bus);
 	registerClientSettingsRoutes(server, clientSettings, bus);

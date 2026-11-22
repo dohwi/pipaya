@@ -354,6 +354,15 @@ export function matchFamilyEntries<T extends { prefix: string; name: string; des
 	return entries.map((k, i) => ({ k, i, s: score(k) })).filter((x) => x.s < 9).sort((a, b) => a.s - b.s || a.i - b.i).map((x) => x.k);
 }
 
+/** Built-in prompt templates (`/prompt:name`) as menu rows for queries like "rev", "prompt:", or "prompt:rev". */
+export function matchTemplates<T extends { name: string }>(templates: T[], query: string): T[] {
+	const q = query.trim().toLowerCase();
+	const full = (k: T) => `prompt:${k.name}`.toLowerCase();
+	const bare = q.startsWith("prompt:") ? q.slice(7) : q;
+	const score = (k: T): number => (!q ? 3 : full(k).startsWith(q) ? 1 : k.name.toLowerCase().includes(bare) || full(k).includes(q) ? 2 : 9);
+	return templates.map((k, i) => ({ k, i, s: score(k) })).filter((x) => x.s < 9).sort((a, b) => a.s - b.s || a.i - b.i).map((x) => x.k);
+}
+
 /** Parse "/name rest" -> command + argument. No translated or alternate command names. */
 export function parseSlash(text: string): { cmd: SlashCommand; arg: string } | null {
 	const m = /^\/([a-z][a-z0-9-]*)(?:\s+([\s\S]*))?$/i.exec(text.trim());

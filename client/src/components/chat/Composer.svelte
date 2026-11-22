@@ -23,7 +23,7 @@
 	import { caretOnFirstVisualLine, caretOnLastVisualLine } from "../../lib/caret-line";
 	import { enterPlan, historyKey, lastPromptOf, menuAria, sentPrompts as sentPromptsOf } from "../../lib/composer/input-keys";
 	import { Ime } from "../../lib/composer/ime";
-	import { fileRows, folderRows, mentionRows, menuKey, menuKindOf, menuOpen, optionRows, slashRows } from "../../lib/slash-menu";
+	import { fileRows, folderRows, mentionRows, menuKey, menuKindOf, menuOpen, optionRows, PROMPT_PREFIX, slashRows } from "../../lib/slash-menu";
 	import { htmlImages, pastedMessage, shiftImageTokens } from "../../lib/rich-copy";
 	import type { ImageBlock } from "../../lib/types";
 	import { MAX_IMAGES } from "../../lib/files";
@@ -40,7 +40,7 @@
 	import ExtensionPanels from "../extensions/ExtensionPanels.svelte";
 	import SlashMenu from "./SlashMenu.svelte";
 	import { cdArgOf, cdCompletion, cdHint, cdRowsOf, cdTab } from "../../lib/workdir-path";
-	import { allCommands, argumentSuggestions, commandQuery, commandText, isCommandInput, matchCommands, matchFamilyEntries, matchSkills, parseSlash, SKILL_PREFIX, type SlashCommand } from "../../lib/commands";
+	import { allCommands, argumentSuggestions, commandQuery, commandText, isCommandInput, matchCommands, matchFamilyEntries, matchSkills, matchTemplates, parseSlash, SKILL_PREFIX, type SlashCommand } from "../../lib/commands";
 	import { app } from "../../lib/store.svelte";
 	import { getPane } from "../../lib/pane";
 	import { extensions } from "../../lib/extensions/host.svelte";
@@ -302,17 +302,32 @@
 	// Skills sit in the same menu after the commands, as `/skill:name`, tagged so they are not mistaken for commands.
 	let skillList = $state<{ name: string; description: string }[]>([]);
 	const skillMatches = $derived(slashQuery !== null ? matchSkills(skillList, slashQuery) : []);
-	// Commands server extensions find at run time (`/prefix:name`, e.g. prompt files) follow the skills.
+	// Built-in prompt templates (`/prompt:name`) follow the skills.
+	let templateList = $state<{ name: string; description: string }[]>([]);
+	const templateMatches = $derived(slashQuery !== null ? matchTemplates(templateList, slashQuery) : []);
+	// Commands server extensions find at run time (`/prefix:name`) follow the templates.
 	type FamilyEntry = { prefix: string; label: string; name: string; description: string; args?: string };
 	let familyList = $state<FamilyEntry[]>([]);
 	const familyMatches = $derived(slashQuery !== null ? matchFamilyEntries(familyList, slashQuery) : []);
-	const slashList = $derived<(SlashCommand | { skill: { name: string; description: string } } | { family: FamilyEntry })[]>([
+	const slashList = $derived<(SlashCommand | { skill: { name: string; description: string } } | { template: { name: string; description: string } } | { family: FamilyEntry })[]>([
 		...commandList,
 		...skillMatches.map((skill) => ({ skill })),
+		...templateMatches.map((template) => ({ template })),
 		...familyMatches.map((family) => ({ family })),
 	]);
 	const skillsWanted = $derived(slashQuery !== null || text.includes(`/${SKILL_PREFIX}`));
+	const templatesWanted = $derived(slashQuery !== null || /(^|\s)\/prompt:/.test(text));
 	const skillsCwd = $derived((pane.id ? app.session(pane.id)?.cwd : null) || app.workdirAbs);
+	$effect(() => {
+		const api = app.api;
+		const cwd = skillsCwd;
+		app.skillsTick;
+		if (!templatesWanted || !api || app.net !== "online") return;
+		return abortable((signal) => api.templates(cwd, signal), {
+			ok: (r) => (templateList = r.templates.filter((x) => !x.overridden).map((x) => ({ name: x.name, description: x.description }))),
+			fail: () => (templateList = []),
+		});
+	});
 	$effect(() => {
 		const api = app.api;
 		const cwd = skillsCwd;
@@ -411,7 +426,7 @@
 					? mentionRows(atMatches)
 					: argSuggestions
 						? optionRows(argSuggestions.options)
-						: slashRows(slashList.map((it) => ("skill" in it || "family" in it ? it : { command: it }))),
+						: slashRows(slashList.map((it) => ("skill" in it || "template" in it || "family" in it ? it : { command: it }))),
 		(r) => r.id,
 	));
 
@@ -513,6 +528,7 @@
 		const cmd = slashList[index];
 		if (!cmd) return;
 		if ("skill" in cmd) return void setText(`/${SKILL_PREFIX}${cmd.skill.name} `);
+		if ("template" in cmd) return void setText(`/${PROMPT_PREFIX}${cmd.template.name} `);
 		if ("family" in cmd) return void setText(`/${cmd.family.prefix}:${cmd.family.name} `);
 		if (completeOnly) setText(`${commandText(cmd)}${cmd.args ? " " : ""}`);
 		else pickSlash(cmd);
@@ -676,7 +692,7 @@
 
 	/** Paths picked from the # menu; only these (exact) tokens get highlighted. */
 	let pickedPaths = $state<string[]>([]);
-	const highlighted = $derived(mirrorHtml(text, { commands: familyList.map((f) => `${f.prefix}:${f.name}`), skills: skillList, mentions: mentionItems.map((m) => m.insert.slice(1)), images: attached.images.length, paths: pickedPaths }));
+	const highlighted = $derived(mirrorHtml(text, { commands: [...templateList.map((x) => `${PROMPT_PREFIX}${x.name}`), ...familyList.map((f) => `${f.prefix}:${f.name}`)], skills: skillList, mentions: mentionItems.map((m) => m.insert.slice(1)), images: attached.images.length, paths: pickedPaths }));
 
 	function insertImageToken(n: number) {
 		const next = insertToken(text, ta?.selectionStart ?? text.length, `#image${n}`);

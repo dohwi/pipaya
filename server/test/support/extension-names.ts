@@ -28,8 +28,6 @@ const KNOWN: Known[] = [
 		words: ["follower", "followers", "팔로워", "기준 서버"],
 	},
 	{ id: "quota-monitor", title: "Quota Monitor", keys: ["pollSeconds"] },
-	{ id: "guard", title: "Guard" },
-	{ id: "prompt-templates", title: "Prompt Templates" },
 	// no longer in the repository: their job is the app's own now (server/src/extensions/retired.ts) or they were dropped
 	{ id: "peer-tools", title: "Peer Tools" },
 	{ id: "peer-names", title: "Peer Names", words: ["mark-agent", "mark-member", "peerbubble"] },
@@ -37,8 +35,9 @@ const KNOWN: Known[] = [
 	{ id: "session-retention", title: "Session Retention" },
 	// kept as a single file in ~/.agents/extensions
 	{ id: "korean" },
-	// Not listed: `voice-input` and `image-generation` were extensions once and are the app's own features now, under
-	// the same words (server/src/voice-input.ts). Only the settings page that warns about an old copy names the id.
+	// Not listed: `voice-input`, `image-generation`, `guard` and `prompt-templates` were extensions once and are the app's
+	// own features now, under the same words (server/src/voice-input.ts, guard.ts, templates.ts). Only the settings page
+	// that warns about an old copy or retired.ts names the id.
 ];
 
 /** Setting keys that are part of a documented SDK contract (the `http-write` permission), not one extension's. */

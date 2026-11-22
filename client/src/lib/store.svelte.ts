@@ -377,6 +377,12 @@ class AppStore {
     if (!this.api) return;
     this.commandsDialog = { cwd: this.session(sessionId)?.cwd ?? this.workdirAbs };
   }
+  /** Built-in prompt templates dialog (`/prompt:<name>`, opened from the footer or settings). */
+  templatesDialog = $state<{ cwd: string } | null>(null);
+  openTemplates(sessionId: string | null = this.activeId) {
+    if (!this.api) return;
+    this.templatesDialog = { cwd: this.session(sessionId)?.cwd ?? this.workdirAbs };
+  }
   /**
    * The section the settings window opens on. `"servers"` and `"agent"` are old links (the server list and the model
    * connection); `Settings` maps them to the sections they became, so a stored or linked value still lands somewhere.

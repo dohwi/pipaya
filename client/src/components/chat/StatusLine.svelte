@@ -85,7 +85,30 @@
 		});
 	});
 	const tplNames = $derived(tpl && tpl.key === tplKey ? tpl.names : null);
+	// Built-in `/prompt:<name>` templates for the active folder.
+	let builtinTpl = $state<{ key: string; names: string[] } | null>(null);
+	$effect(() => {
+		const key = tplKey;
+		const cwd = tplCwd;
+		const api = app.api;
+		app.skillsTick;
+		if (!api) return;
+		return abortable((signal) => api.templates(cwd, signal), {
+			ok: (r) => (builtinTpl = { key, names: r.templates.filter((x) => !x.overridden).map((x) => `/prompt:${x.name}`) }),
+			fail: () => { if (builtinTpl?.key === key) builtinTpl = null; },
+		});
+	});
+	const builtinTplNames = $derived(builtinTpl && builtinTpl.key === tplKey ? builtinTpl.names : null);
 	const list = (items: string[], max = 8) => items.slice(0, max).join(", ") + (items.length > max ? ` ${t("외 {n}개", { n: items.length - max })}` : "");
+	const builtinTplTip = $derived(
+		builtinTplNames
+			? [
+					t("사용할 수 있는 프롬프트 템플릿 {n}개", { n: builtinTplNames.length }),
+					builtinTplNames.length ? list(builtinTplNames) : t("이 폴더에서 쓸 수 있는 프롬프트 템플릿이 없습니다."),
+					t("눌러서 관리"),
+				].join("\n")
+			: "",
+	);
 	const tplTip = $derived(
 		tplNames
 			? [
@@ -271,6 +294,10 @@
 		{:else if id === "roles"}
 			{#if rolesHere && rolesCount > 0}
 				<StatusItem more icon="bot" empty={rolesCount === 0} onclick={() => app.openSubagents(pane.id)} label={t("서브에이전트 역할 {n}개", { n: rolesCount })} title={rolesTip}>{t("{n}개", { n: rolesCount })}</StatusItem>
+			{/if}
+		{:else if id === "templates"}
+			{#if builtinTplNames && builtinTplNames.length > 0}
+				<StatusItem more icon="prompt" empty={builtinTplNames.length === 0} onclick={() => app.openTemplates(pane.id)} label={t("프롬프트 템플릿 {n}개", { n: builtinTplNames.length })} title={builtinTplTip}>{t("{n}개", { n: builtinTplNames.length })}</StatusItem>
 			{/if}
 		{:else if id === "commands"}
 			{#if tplNames && tplNames.length > 0}

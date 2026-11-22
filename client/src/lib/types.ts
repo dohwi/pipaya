@@ -261,6 +261,37 @@ export interface SkillList {
 	warnings: { path: string; message: string }[];
 }
 
+export interface GuardSettings {
+	wipe: boolean;
+	disk: boolean;
+	fork: boolean;
+	permissions: boolean;
+}
+
+export interface GuardInfo {
+	settings: GuardSettings;
+	defaults: GuardSettings;
+}
+
+export type TemplateScope = "global" | "project";
+
+export interface TemplateInfo {
+	name: string;
+	description: string;
+	body: string;
+	path: string;
+	scope: TemplateScope;
+	overridden: boolean;
+}
+
+export interface TemplateList {
+	cwd: string;
+	globalDir: string;
+	projectDir: string;
+	templates: TemplateInfo[];
+	warnings: { path: string; message: string }[];
+}
+
 /** Commands a server extension finds at run time (`pi.registerCommands`), e.g. `/snip:<name>`, for one folder. */
 export interface CommandFamily {
 	prefix: string;
