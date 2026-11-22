@@ -8,7 +8,8 @@
 	 * Colour: `level` sets `data-level` (the reasoning colours in app.css), `color` any other CSS colour; neither = the text colour.
 	 * The rail is never coloured between nodes, so the row reads as a set of steps to press, not a range to drag.
 	 */
-	type Option = { id: T; label: string; level?: string; color?: string; disabled?: boolean; title?: string };
+	/** `marked`: a step to point at without choosing it (the agent's recommendation): a warn-coloured ring and name until it is chosen. */
+	type Option = { id: T; label: string; level?: string; color?: string; disabled?: boolean; title?: string; marked?: boolean };
 	let {
 		options,
 		label,
@@ -41,6 +42,7 @@
 		<button
 			type="button"
 			class="step tap"
+			class:marked={o.marked}
 			data-level={o.level}
 			data-roving={multi ? undefined : ""}
 			style:--lv={o.color ?? (o.level ? undefined : "var(--text)")}
@@ -125,6 +127,12 @@
 	}
 	.step[aria-pressed="true"] {
 		color: var(--lv);
+	}
+	.step.marked[aria-pressed="false"] {
+		color: var(--warn);
+	}
+	.step.marked[aria-pressed="false"] .node {
+		border-color: var(--warn);
 	}
 	.step[aria-pressed="true"] .name {
 		font-weight: 650;

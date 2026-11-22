@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { manifestName } from "../../lib/extensions/translations";
 	import IconButton from "../ui/IconButton.svelte";
+	import Segmented from "../ui/Segmented.svelte";
 	import { t } from "../../lib/i18n";
 	import { extensions, type ExtensionPanel } from "../../lib/extensions/host.svelte";
 	import { viewport } from "../../lib/viewport.svelte";
@@ -67,10 +68,9 @@
 				onpointerdown={down} onpointermove={move} onpointerup={up} onpointercancel={up} onkeydown={keyResize}></div>
 		{/if}
 		<header>
-			<div class="tabs" role="tablist">
-				{#each shown as p (key(p))}
-					<button role="tab" class="tab" class:on={p === current} aria-selected={p === current} title={ownerName(p.owner)} onclick={() => (picked = key(p))}>{p.title}</button>
-				{/each}
+			<div class="tabs">
+				<Segmented tabs variant="underline" full={false} label={t("확장 패널")} value={key(current)} onchange={(id) => (picked = id)}
+					options={shown.map((p) => ({ id: key(p), label: p.title, title: ownerName(p.owner) }))} />
 			</div>
 			<IconButton icon="x" label={t("확장 패널 닫기")} onclick={() => hide(current)} />
 		</header>
@@ -89,13 +89,10 @@
 	.edge { position: absolute; z-index: 2; top: 0; bottom: 0; left: -4px; width: 8px; cursor: col-resize; touch-action: none; }
 	.edge:focus-visible { background: linear-gradient(90deg, transparent 3px, var(--accent) 3px, var(--accent) 5px, transparent 5px); outline: none; opacity: 0.6; }
 	@media (hover: hover) { .edge:hover { background: linear-gradient(90deg, transparent 3px, var(--accent) 3px, var(--accent) 5px, transparent 5px); opacity: 0.6; } }
-	header { flex: none; display: flex; align-items: center; gap: 4px; padding: 4px 4px 4px 8px; border-bottom: 1px solid var(--border); }
-	.tabs { flex: 1; min-width: 0; display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; }
-	.tab { flex: none; max-width: 180px; padding: 4px 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--fs-xs); font-weight: 600; color: var(--text-dim); border-radius: var(--radius-sm); }
-	@media (hover: hover) {
-		.tab:hover { background: var(--bg-hover); color: var(--text); }
-	}
-	.tab.on { background: var(--bg-active); color: var(--text); }
+	/* the header's hairline runs under the close button too; the tabs' own one lies on it */
+	header { flex: none; display: flex; align-items: center; gap: 4px; padding: 0 4px 0 0; box-shadow: inset 0 -1px 0 var(--border); }
+	.tabs { flex: 1; min-width: 0; }
+	.tabs :global(.utabs > button) { max-width: 180px; overflow: hidden; text-overflow: ellipsis; }
 	.body { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 12px; }
 	.desc { margin: 0 0 12px; font-size: var(--fs-xs); color: var(--text-dim); line-height: 1.6; overflow-wrap: anywhere; }
 </style>

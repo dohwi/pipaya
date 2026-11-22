@@ -65,8 +65,10 @@ export interface AskRequest {
 	question: string;
 	options?: string[];
 	recommended?: string;
+	/** The options are ordered steps of one scale (shown as a ladder). */
+	scale?: boolean;
 	allowFreeText?: boolean;
-	items?: { question: string; options?: string[]; recommended?: string; allowFreeText?: boolean }[];
+	items?: { question: string; options?: string[]; recommended?: string; scale?: boolean; allowFreeText?: boolean }[];
 }
 
 /** Keeps the parameter schema generic so `execute` params are inferred, then erases it for storage. */
@@ -472,10 +474,12 @@ const bashTool: ToolDef = {
 const ASK_USER_DESCRIPTION =
 	"Ask the user a question and wait for the answer. Use it only when a requirement is genuinely ambiguous or a decision is hard to undo; " +
 	"for minor details, make a reasonable assumption and continue. Offer `options` when the choices are known, " +
-	"and set `recommended` to the option you suggest (it is highlighted for the user).";
+	"and set `recommended` to the option you suggest (it is highlighted for the user). " +
+	"Set `scale` when the options are short steps of one ordered scale, lowest first (effort, size, 1-5): they are shown as a ladder.";
 
 const askOptions = (extra: Record<string, unknown> = {}) => Type.Optional(Type.Array(Type.String({ minLength: 1, maxLength: 200 }), { minItems: 2, maxItems: 8, ...extra }));
 const askRecommended = Type.Optional(Type.String({ minLength: 1, maxLength: 200, description: "The option you recommend; must be one of `options`" }));
+const askScale = Type.Optional(Type.Boolean({ description: "The options are ordered steps of one scale, lowest first" }));
 
 const askUserTool: ToolDef = {
 	name: "ask_user",
@@ -489,6 +493,7 @@ const askUserTool: ToolDef = {
 				question: Type.Optional(Type.String({ minLength: 1, maxLength: 2000, description: "One clear question. Omit when using `questions`" })),
 				options: askOptions({ description: "Suggested answers" }),
 				recommended: askRecommended,
+				scale: askScale,
 				allowFreeText: Type.Optional(Type.Boolean({ description: "Let the user type something other than the options. Default true" })),
 				questions: Type.Optional(
 					Type.Array(
@@ -496,6 +501,7 @@ const askUserTool: ToolDef = {
 							question: Type.String({ minLength: 1, maxLength: 2000 }),
 							options: askOptions(),
 							recommended: askRecommended,
+							scale: askScale,
 							allowFreeText: Type.Optional(Type.Boolean()),
 						}),
 						{ minItems: 2, maxItems: 8, description: "Ask several independent questions at once instead of one by one. The user sees them as tabs and can revise any answer before sending" },
@@ -505,9 +511,10 @@ const askUserTool: ToolDef = {
 			async execute(id, p, signal) {
 				if (!ctx?.ask) throw new Error("ask_user is not available in this session");
 				const rec = (o?: string[], r?: string) => (r && o?.includes(r) ? { recommended: r } : {});
-				const items = p.questions?.map((q) => ({ question: q.question, options: q.options, ...rec(q.options, q.recommended), allowFreeText: q.allowFreeText ?? true }));
+				const scale = (o?: string[], s?: boolean) => (s && (o?.length ?? 0) >= 2 ? { scale: true } : {});
+				const items = p.questions?.map((q) => ({ question: q.question, options: q.options, ...rec(q.options, q.recommended), ...scale(q.options, q.scale), allowFreeText: q.allowFreeText ?? true }));
 				if (!items?.length && !p.question) throw new Error("ask_user needs `question` or `questions`");
-				const first = items?.[0] ?? { question: p.question!, options: p.options, ...rec(p.options, p.recommended), allowFreeText: p.allowFreeText ?? true };
+				const first = items?.[0] ?? { question: p.question!, options: p.options, ...rec(p.options, p.recommended), ...scale(p.options, p.scale), allowFreeText: p.allowFreeText ?? true };
 				const answer = await ctx.ask(id, { ...first, ...(items?.length ? { items } : {}) }, signal);
 				return text(answer, { question: first.question, answer });
 			},

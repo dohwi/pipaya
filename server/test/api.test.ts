@@ -201,6 +201,21 @@ describe("API contracts", () => {
 		await untilIdle(id);
 	});
 
+	test("ask_user passes a scale on to the client only with options", async () => {
+		const id = (await api("POST", "/sessions", {})).json.id as string;
+		const args = JSON.stringify({ questions: [{ question: "How hard?", options: ["low", "medium", "high"], scale: true }, { question: "Name?", scale: true }] });
+		await api("POST", `/sessions/${id}/messages`, { text: `!ask_user ${args}` });
+		let q: any;
+		for (let i = 0; i < 100 && !q; i++) {
+			q = (await api("GET", `/questions?sessionId=${id}`)).json.questions[0];
+			await Bun.sleep(20);
+		}
+		expect(q.scale).toBe(true);
+		expect(q.items.map((x: any) => x.scale ?? false)).toEqual([true, false]);
+		expect((await api("POST", `/sessions/${id}/questions/${q.toolCallId}`, { answers: ["high", "x"] })).status).toBe(200);
+		await untilIdle(id);
+	});
+
 	test("switchable tools can be turned off, locked ones cannot", async () => {
 		const info = (await api("GET", "/configuration")).json.tools;
 		expect(info.toggleable).toEqual(["ask_user", "peer", "delegate", "schedule"]); // plus whatever extensions mark `switchable`

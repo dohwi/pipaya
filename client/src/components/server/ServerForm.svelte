@@ -2,10 +2,9 @@
 	import Button from "../ui/Button.svelte";
 	import FormField from "../ui/FormField.svelte";
 	import Notice from "../ui/Notice.svelte";
+	import Segmented from "../ui/Segmented.svelte";
 	import { t, tc } from "../../lib/i18n";
 	import { paneIn } from "../../lib/motion";
-	import { slidingIndicator } from "../../lib/sliding-indicator";
-	import { rovingKeys } from "../../lib/roving";
 	import Icon from "../ui/Icon.svelte";
 	import Modal from "../ui/Modal.svelte";
 	import ModalHeader from "../ui/ModalHeader.svelte";
@@ -145,17 +144,9 @@
 	{/if}
 
 	{#if editing && !section}
-		<div
-			class="tabs"
-			role="tablist"
-			aria-label={t("서버 설정 구역")}
-			use:slidingIndicator={{ selector: "button.on", variant: "underline", edge: "bottom", thickness: 2 }}
-			use:rovingKeys={{ item: '[role="tab"]' }}
-		>
-			<button role="tab" aria-selected={tab === "info"} tabindex={tab === "info" ? 0 : -1} class:on={tab === "info"} onclick={() => go("info")}>{t("정보")}</button>
-			<button role="tab" aria-selected={tab === "agent"} tabindex={tab === "agent" ? 0 : -1} class:on={tab === "agent"} onclick={() => go("agent")}>{t("에이전트")}</button>
-			<button role="tab" aria-selected={tab === "sessions"} tabindex={tab === "sessions" ? 0 : -1} class:on={tab === "sessions"} onclick={() => go("sessions")}>{t("대화")}</button>
-			<button role="tab" aria-selected={tab === "devices"} tabindex={tab === "devices" ? 0 : -1} class:on={tab === "devices"} onclick={() => go("devices")}>{t("기기")}</button>
+		<div class="tabs">
+			<Segmented tabs variant="underline" label={t("서버 설정 구역")} value={tab} onchange={go}
+				options={[{ id: "info" as const, label: t("정보") }, { id: "agent" as const, label: t("에이전트") }, { id: "sessions" as const, label: t("대화") }, { id: "devices" as const, label: t("기기") }]} />
 		</div>
 	{/if}
 
@@ -331,35 +322,11 @@
 		white-space: nowrap;
 	}
 	.tabs {
-		position: relative;
-		display: flex;
 		margin-top: 4px;
 		padding: 0 var(--dlg-px);
-		border-bottom: 1px solid var(--border);
 	}
-	.tabs button {
-		flex: 1;
-		height: 40px;
-		padding: 0 12px;
-		text-align: center;
-		color: var(--text-dim);
-		border-bottom: 2px solid transparent;
-		margin-bottom: -1px;
-		font-family: var(--mono);
-		font-size: var(--fs-sm);
-		font-weight: 550;
-	}
-	@media (hover: hover) {
-		.tabs button:hover {
-			color: var(--text);
-		}
-	}
-	.tabs button.on {
-		color: var(--text);
-		border-color: var(--text);
-	}
-	.tabs:global([data-indicator-ready]) button.on {
-		border-color: transparent;
+	.tabs :global(.utabs > button) {
+		font-family: var(--mono); /* the section names read like the server's own fields */
 	}
 	.body {
 		display: flex;
