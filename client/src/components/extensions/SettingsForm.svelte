@@ -208,7 +208,7 @@
 	.readonly-value.empty { color: var(--text-faint); }
 	/* a boolean field: one row, the switch centred on the label's 20px line when there is no description, on the text block otherwise */
 	.swrow { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-width: 0; }
-	.swtext { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+	.swtext { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 	.swtext .name { line-height: 20px; }
 	input[type="text"], input[type="password"], input[type="number"], textarea {
 		display: block; width: 100%; min-width: 0; box-sizing: border-box; padding: 0 12px; height: var(--control-h);

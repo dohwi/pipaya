@@ -236,7 +236,7 @@
 		display: flex;
 		flex-direction: column;
 		gap: 8px;
-		padding: 12px 14px;
+		padding: 12px 16px;
 		border: 1px solid var(--border);
 		border-radius: var(--radius-panel);
 	}
@@ -271,7 +271,7 @@
 		display: flex;
 		align-items: center;
 		gap: 12px;
-		padding: 10px 12px;
+		padding: 8px 12px;
 	}
 	li + li {
 		border-top: 1px solid var(--border);
@@ -296,12 +296,12 @@
 		min-width: 0;
 		display: flex;
 		flex-direction: column;
-		gap: 2px;
+		gap: 4px;
 	}
 	.name {
 		display: flex;
 		align-items: center;
-		gap: 6px;
+		gap: 8px;
 		font-size: var(--fs-md);
 		font-weight: 600;
 		line-height: 20px;

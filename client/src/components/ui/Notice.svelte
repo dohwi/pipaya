@@ -93,7 +93,7 @@
 		color: var(--ok);
 	}
 	.sm {
-		padding: 6px 10px;
+		padding: 4px 12px;
 		border-radius: var(--radius-sm);
 		font-size: var(--fs-xs);
 		line-height: 16px;
@@ -124,6 +124,7 @@
 	.notice :global(svg) {
 		width: 17px;
 		height: 17px;
+		/* 17px icon centred on the 20px first line: (20 - 17) / 2 = 1.5px */
 		margin-top: 1.5px;
 		flex: none;
 		stroke-width: 1.8;

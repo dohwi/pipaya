@@ -164,7 +164,7 @@
 	p { margin: 0; }
 	.description { white-space: pre-wrap; overflow-wrap: anywhere; color: var(--text-dim); }
 	section { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
-	.notices { display: flex; flex-direction: column; gap: 6px; }
+	.notices { display: flex; flex-direction: column; gap: 8px; }
 	.notices:not(:has(*)) { display: none; }
 	.settings-label { font-size: var(--fs-xs); font-weight: 550; }
 	textarea { display: block; width: 100%; box-sizing: border-box; min-height: 110px; resize: vertical; padding: 8px 12px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); background: var(--bg-code); color: var(--text); font-family: var(--mono); font-size: var(--fs-xs); line-height: 1.5; transition: border-color var(--motion-fast) var(--ease-std), box-shadow var(--motion-fast) var(--ease-std); }

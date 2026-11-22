@@ -275,11 +275,11 @@
 {/if}
 
 <style>
-	.hints { display: flex; flex-direction: column; gap: 2px; }
+	.hints { display: flex; flex-direction: column; gap: 4px; }
 	.hints .hint { margin: 0; }
 	.hint { overflow-wrap: anywhere; }
 	.list { font-size: var(--fs-md); line-height: 1.5; list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 8px; }
-	.item { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg-elev); }
+	.item { display: flex; flex-direction: column; gap: 8px; padding: 12px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg-elev); }
 	.top { display: flex; align-items: center; gap: 8px; min-width: 0; }
 	.name { font-size: var(--fs-md); font-weight: 600; min-width: 0; overflow-wrap: anywhere; }
 	.ver { margin-left: auto; flex: none; font-family: var(--mono); font-size: var(--fs-2xs); color: var(--text-faint); }

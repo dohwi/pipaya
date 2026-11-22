@@ -230,6 +230,6 @@
 	.description { white-space: pre-wrap; overflow-wrap: anywhere; color: var(--text-dim); }
 	.brief { font-size: var(--fs-xs); color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 	section { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
-	.notices { display: flex; flex-direction: column; gap: 6px; }
+	.notices { display: flex; flex-direction: column; gap: 8px; }
 	.notices:not(:has(*)) { display: none; }
 </style>

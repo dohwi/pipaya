@@ -57,6 +57,7 @@
 	}
 	.sm {
 		height: 18px;
+		/* 6px horizontal inset keeps the 18px pill tighter than md without crowding the text */
 		padding: 0 6px 1px;
 		font-size: var(--fs-2xs);
 	}
