@@ -34,8 +34,8 @@ export const LIVE_DELAYS = ["minimal", "low", "medium", "high"] as const;
 export const MAX_KEYWORDS = 20;
 export const RealtimeSettingsSchema = Type.Object(
 	{
-		provider: Type.String({ maxLength: 100, description: "Id of the chat connection whose address and key reach /v1/realtime; empty = not chosen" }),
-		model: Type.String({ maxLength: 100, description: "Realtime session model (the URL's ?model=)" }),
+		url: Type.String({ maxLength: 500, description: "The Realtime API address, e.g. wss://api.openai.com/v1/realtime (https:// is taken as wss://); empty = not set" }),
+		model: Type.String({ maxLength: 100, description: "Realtime session model, sent as the URL's ?model= unless the address already has one" }),
 		transcribeModel: Type.String({ maxLength: 100, description: "Transcription model inside the session" }),
 		keywords: Type.Array(Type.String({ maxLength: 60 }), { maxItems: MAX_KEYWORDS, description: "Names and terms to spell as written" }),
 		prompt: Type.String({ maxLength: 300, description: "A short context for the transcription" }),
@@ -58,7 +58,7 @@ export const VoiceSettingsSchema = Type.Object(
 export type VoiceSettingsValue = Static<typeof VoiceSettingsSchema>;
 export type RealtimeSettingsValue = Static<typeof RealtimeSettingsSchema>;
 
-export const DEFAULT_REALTIME_SETTINGS = (): RealtimeSettingsValue => ({ provider: "", model: DEFAULT_REALTIME_MODEL, transcribeModel: DEFAULT_TRANSCRIBE_MODEL, keywords: [], prompt: "" });
+export const DEFAULT_REALTIME_SETTINGS = (): RealtimeSettingsValue => ({ url: "", model: DEFAULT_REALTIME_MODEL, transcribeModel: DEFAULT_TRANSCRIBE_MODEL, keywords: [], prompt: "" });
 export const DEFAULT_VOICE_SETTINGS = (): Required<VoiceSettingsValue> => ({ enabled: false, baseUrl: "", path: "", model: "", language: "", mode: "file", realtime: DEFAULT_REALTIME_SETTINGS() });
 
 /** Settings as stored before the realtime mode existed have neither field: they are the file mode with empty realtime settings. */
@@ -82,6 +82,10 @@ export const VoiceTestResult = Type.Object({
 export const VoiceSettingsResult = Type.Object({
 	settings: VoiceSettingsSchema,
 	hasKey: Type.Boolean(),
+	/** A key for the realtime mode is stored (it is never sent back). Absent on an older server. */
+	hasRealtimeKey: Type.Optional(Type.Boolean()),
+	/** The socket the realtime mode would open right now, or null while its address is unset (never includes the key). */
+	realtimeEndpoint: Type.Optional(Type.Union([Type.String(), Type.Null()])),
 	defaults: VoiceSettingsSchema,
 	defaultPath: Type.String(),
 	/** The address the audio would go to right now, or null while the settings are incomplete (never includes the key). */
@@ -94,6 +98,8 @@ export const VoiceSettingsBody = Type.Object(
 		settings: VoiceSettingsSchema,
 		/** A new key. Absent keeps the stored one; an empty string removes it. */
 		apiKey: Type.Optional(Type.String({ maxLength: 400 })),
+		/** A new key for the realtime mode, the same way: absent keeps it, empty removes it. */
+		realtimeApiKey: Type.Optional(Type.String({ maxLength: 400 })),
 	},
 	{ additionalProperties: false },
 );
@@ -174,8 +180,10 @@ export class VoiceSettings {
 		const before = this.get();
 		const rt = next.realtime ?? before.realtime;
 		const keywords = [...new Set(rt.keywords.map((k) => k.trim()).filter(Boolean))];
+		const url = parseRealtimeUrl(rt.url);
+		if (url === null) throw badRequest("realtime.url must be a ws(s) or http(s) address without embedded credentials or fragment");
 		const realtime: RealtimeSettingsValue = {
-			provider: rt.provider.trim(),
+			url,
 			model: rt.model.trim() || DEFAULT_REALTIME_MODEL,
 			transcribeModel: rt.transcribeModel.trim() || DEFAULT_TRANSCRIBE_MODEL,
 			keywords,
@@ -216,6 +224,38 @@ export class VoiceSettings {
 		this.db.query("DELETE FROM settings WHERE key = $key").run({ key: TEST_KEY });
 	}
 }
+
+/**
+ * The Realtime API address as stored: ws(s) or http(s) (taken as ws(s)), no credentials or fragment, a query allowed
+ * (some gateways route by it). Returns "" for empty and null when it is not acceptable.
+ */
+export function parseRealtimeUrl(text: string): string | null {
+	const value = text.trim();
+	if (!value) return "";
+	let url: URL;
+	try {
+		url = new URL(value);
+	} catch {
+		return null;
+	}
+	if (!["ws:", "wss:", "http:", "https:"].includes(url.protocol)) return null;
+	if (url.username || url.password || url.hash) return null;
+	if (url.protocol === "http:") url.protocol = "ws:";
+	if (url.protocol === "https:") url.protocol = "wss:";
+	return url.toString();
+}
+
+/** The socket to open: the stored address with `?model=` added unless it names one already. Null while unset. */
+export function realtimeSocketOf(rt: Pick<RealtimeSettingsValue, "url" | "model">): string | null {
+	const base = parseRealtimeUrl(rt.url);
+	if (!base) return null;
+	const url = new URL(base);
+	if (!url.searchParams.has("model") && rt.model.trim()) url.searchParams.set("model", rt.model.trim());
+	return url.toString();
+}
+
+/** The realtime mode's own key, apart from the file mode's: the two usually live on different servers. */
+export const VOICE_REALTIME_CREDENTIAL_ID = "voice_realtime";
 
 /** The key lives in the credentials table, like provider keys, so it is never part of the settings row the client reads. */
 export const VOICE_CREDENTIAL_ID = "voice_input";

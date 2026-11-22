@@ -31,6 +31,8 @@ class VoiceStore {
 		return this.settings.mode === "realtime";
 	}
 	hasKey = $state(false);
+	hasRealtimeKey = $state(false);
+	realtimeEndpoint = $state<string | null>(null);
 	endpoint = $state<string | null>(null);
 	/** The settings came from the server at least once. */
 	loaded = $state(false);
@@ -79,6 +81,8 @@ class VoiceStore {
 			this.lastServer = serverKey;
 			this.settings = { enabled: false, baseUrl: "", path: "", model: "", language: "" };
 			this.hasKey = false;
+			this.hasRealtimeKey = false;
+			this.realtimeEndpoint = null;
 			this.endpoint = null;
 			this.loaded = false;
 			this.tested = null;
@@ -103,6 +107,8 @@ class VoiceStore {
 	private apply(view: VoiceView) {
 		this.settings = view.settings;
 		this.hasKey = view.hasKey;
+		this.hasRealtimeKey = view.hasRealtimeKey ?? false;
+		this.realtimeEndpoint = view.realtimeEndpoint ?? null;
 		this.endpoint = view.endpoint;
 		this.tested = readTest(view.test);
 		this.loaded = true;
@@ -120,7 +126,8 @@ class VoiceStore {
 	get state(): VoiceState {
 		return voiceState({
 			enabled: this.settings.enabled,
-			usable: this.realtime ? !!this.settings.realtime?.provider : !!this.endpoint && this.hasKey,
+			// a local Realtime server may need no key, so the address alone makes it usable
+			usable: this.realtime ? !!this.realtimeEndpoint : !!this.endpoint && this.hasKey,
 			// a test that has not run yet is not a failure: the settings alone are enough to try the microphone
 			failed: this.tested?.ok === false,
 			available: this.availability === null,
@@ -147,7 +154,7 @@ class VoiceStore {
 		if (this.availability) return t(AVAILABILITY_TEXT[this.availability]);
 		if (!this.settings.enabled) return null;
 		if (this.realtime) {
-			if (!this.settings.realtime?.provider) return t("실시간 변환에 쓸 연결을 고르세요.");
+			if (!this.realtimeEndpoint) return t("실시간 변환 서버 주소를 입력하세요.");
 		} else {
 			if (!this.settings.baseUrl) return t("변환 서버 주소를 입력하세요.");
 			if (!this.hasKey) return t("변환 API 키를 입력하세요.");
@@ -157,11 +164,11 @@ class VoiceStore {
 		return null;
 	}
 
-	async save(next: VoiceSettings, apiKey: string | undefined): Promise<string | null> {
+	async save(next: VoiceSettings, apiKey: string | undefined, realtimeApiKey?: string): Promise<string | null> {
 		if (!this.api) return t("서버에 연결할 수 없습니다");
 		try {
 			// the server forgets the old test with the new settings, and answers with the cleared state
-			const view = await this.api.saveVoice(next, apiKey);
+			const view = await this.api.saveVoice(next, apiKey, undefined, realtimeApiKey);
 			this.apply(view);
 			return null;
 		} catch (cause) {

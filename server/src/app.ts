@@ -24,8 +24,8 @@ import { IMAGE_TOOL, ImageModelSettings } from "./image-generation.ts";
 import { registerImageModelRoutes } from "./image-model-routes.ts";
 import { VoiceSettings } from "./voice-input.ts";
 import { registerVoiceRoutes } from "./voice-routes.ts";
-import { probeRealtime, REALTIME_SOCKET, realtimeUrl, registerRealtimeVoice, type RealtimeTarget } from "./voice-realtime.ts";
-import type { RealtimeSettingsValue } from "./voice-input.ts";
+import { probeRealtime, REALTIME_SOCKET, registerRealtimeVoice, type RealtimeTarget } from "./voice-realtime.ts";
+import { realtimeSocketOf, VOICE_REALTIME_CREDENTIAL_ID, type RealtimeSettingsValue } from "./voice-input.ts";
 import { ExtensionSettings } from "./extension-settings.ts";
 import { registerExtensionSettingsRoutes } from "./extension-settings-routes.ts";
 import { ClientSettings } from "./client-settings.ts";
@@ -713,15 +713,12 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 	sessions.setScheduler(scheduler);
 	registerSystemModelRoutes(server, systemModel, bus, () => sessions.describeAll());
 	registerImageModelRoutes(server, imageModel, bus);
-	// Realtime voice input borrows a chat connection's address and key (the Realtime API lives next to its chat API).
+	// Realtime voice input: its own address and key (Settings > Voice), so any OpenAI-compatible Realtime server works.
 	const realtimeTarget = async (rt: RealtimeSettingsValue): Promise<RealtimeTarget | { error: string }> => {
-		if (!rt.provider) return { error: "choose the connection that serves the Realtime API" };
-		const provider = registry.models.getProvider(rt.provider);
-		if (!provider) return { error: `connection ${rt.provider} does not exist` };
-		const auth = await registry.models.getAuth(rt.provider).catch(() => undefined);
-		const url = realtimeUrl(auth?.auth.baseUrl ?? provider.baseUrl ?? "", rt.model);
-		if (!url) return { error: `connection ${rt.provider} has no HTTP(S) address` };
-		return { url, key: auth?.auth.apiKey ?? "" };
+		const url = realtimeSocketOf(rt);
+		if (!url) return { error: "set the Realtime API address" };
+		const credential = await credentials.read(VOICE_REALTIME_CREDENTIAL_ID);
+		return { url, key: credential?.type === "api_key" ? credential.key ?? "" : "" };
 	};
 	registerVoiceRoutes(server, voice, credentials, bus, async (current) => {
 		const target = await realtimeTarget(current.realtime);

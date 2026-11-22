@@ -35,24 +35,6 @@ export interface RealtimeTarget {
 	key: string;
 }
 
-/** The Realtime URL of a connection's base URL (`https://host/v1` -> `wss://host/v1/realtime?model=…`). */
-export function realtimeUrl(baseUrl: string, model: string): string | null {
-	let url: URL;
-	try {
-		url = new URL(baseUrl);
-	} catch {
-		return null;
-	}
-	if (url.protocol !== "https:" && url.protocol !== "http:") return null;
-	url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
-	const path = url.pathname.replace(/\/+$/, "");
-	url.pathname = `${path.endsWith("/v1") ? path : `${path}/v1`}/realtime`;
-	url.search = "";
-	url.hash = "";
-	url.searchParams.set("model", model);
-	return url.toString();
-}
-
 /**
  * A streaming ("live") transcription model sends words while the user is still speaking and takes no voice activity
  * detection: the turn ends when the user stops. Other models (gpt-transcribe) start once a pause ends a phrase.
@@ -86,6 +68,10 @@ export function sessionUpdate(rt: RealtimeSettingsValue, language: string) {
 
 type Send = (msg: Record<string, unknown>) => void;
 
+/** The upstream socket; a keyless local server gets no Authorization header. */
+const openUpstream = (url: string, key: string): WebSocket =>
+	new WebSocket(url, (key ? { headers: { authorization: `Bearer ${key}` } } : {}) as unknown as string[]);
+
 /**
  * One relayed session. Pure of Fastify so a test can drive it with a fake upstream: `audio` and `stop` come from the
  * browser, `send` goes to it, `close` ends the browser's socket.
@@ -108,8 +94,7 @@ export class RealtimeRelay {
 		private language: string,
 		private send: Send,
 		private close: (code: number, reason: string) => void,
-		private connect: (url: string, key: string) => WebSocket = (url, key) =>
-			new WebSocket(url, { headers: { authorization: `Bearer ${key}` } } as unknown as string[]),
+		private connect: (url: string, key: string) => WebSocket = openUpstream,
 	) {}
 
 	start() {
@@ -268,7 +253,7 @@ export async function probeRealtime(
 	target: RealtimeTarget,
 	rt: RealtimeSettingsValue,
 	language: string,
-	connect: (url: string, key: string) => WebSocket = (url, key) => new WebSocket(url, { headers: { authorization: `Bearer ${key}` } } as unknown as string[]),
+	connect: (url: string, key: string) => WebSocket = openUpstream,
 ): Promise<void> {
 	await new Promise<void>((resolve, reject) => {
 		let ws: WebSocket;

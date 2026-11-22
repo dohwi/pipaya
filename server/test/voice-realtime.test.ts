@@ -4,8 +4,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { buildApp, type App } from "../src/app.ts";
 import type { Config } from "../src/config.ts";
-import { isLiveModel, realtimeUrl, sessionUpdate } from "../src/voice-realtime.ts";
-import { DEFAULT_REALTIME_SETTINGS } from "../src/voice-input.ts";
+import { isLiveModel, sessionUpdate } from "../src/voice-realtime.ts";
+import { DEFAULT_REALTIME_SETTINGS, parseRealtimeUrl, realtimeSocketOf } from "../src/voice-input.ts";
 
 /**
  * A stand-in Realtime API: takes the session update, answers `session.updated`, and turns every commit (the server's
@@ -83,9 +83,7 @@ beforeAll(async () => {
 	await app.server.listen({ host: "127.0.0.1", port: 0 });
 	const address = app.server.server.address();
 	base = `http://127.0.0.1:${typeof address === "object" && address ? address.port : 0}`;
-	const model = { id: "m", contextWindow: 1000, maxTokens: 100, reasoning: false, vision: false };
-	expect((await api("PUT", "/configuration/providers/gw", { name: "gw", baseUrl: fake.url, api: "openai-completions", authRequired: true, models: [model] })).status).toBe(200);
-	expect((await api("PUT", "/providers/gw/credential", { key: "sk-gw-1" })).status).toBe(200);
+	expect((await api("PUT", "/voice", { settings: realtimeSettings(), realtimeApiKey: "sk-rt-1" })).status).toBe(200);
 });
 afterAll(async () => {
 	await app.close();
@@ -95,7 +93,7 @@ afterAll(async () => {
 
 const realtimeSettings = (patch: Record<string, unknown> = {}) => ({
 	enabled: true, baseUrl: "", path: "", model: "", language: "ko", mode: "realtime",
-	realtime: { provider: "gw", model: "gpt-realtime-2.1", transcribeModel: "gpt-live-transcribe", keywords: [" Pipaya ", "Tailscale", "Pipaya", ""], prompt: "개발 작업 지시", ...patch },
+	realtime: { url: `${fake.url.replace("http", "ws")}/realtime`, model: "gpt-realtime-2.1", transcribeModel: "gpt-live-transcribe", keywords: [" Pipaya ", "Tailscale", "Pipaya", ""], prompt: "개발 작업 지시", ...patch },
 });
 
 describe("realtime voice settings", () => {
@@ -103,12 +101,24 @@ describe("realtime voice settings", () => {
 		const { status, json } = await api("PUT", "/voice", { settings: realtimeSettings() });
 		expect(status).toBe(200);
 		expect(json.settings.mode).toBe("realtime");
-		expect(json.settings.realtime).toEqual({ provider: "gw", model: "gpt-realtime-2.1", transcribeModel: "gpt-live-transcribe", keywords: ["Pipaya", "Tailscale"], prompt: "개발 작업 지시" });
+		expect(json.settings.realtime).toEqual({ url: `${fake.url.replace("http", "ws")}/realtime`, model: "gpt-realtime-2.1", transcribeModel: "gpt-live-transcribe", keywords: ["Pipaya", "Tailscale"], prompt: "개발 작업 지시" });
+		expect(json.realtimeEndpoint).toBe(`${fake.url.replace("http", "ws")}/realtime?model=gpt-realtime-2.1`);
+		// the key is stored and reported, never returned
+		expect(json.hasRealtimeKey).toBe(true);
+		expect(JSON.stringify(json)).not.toContain("sk-rt-1");
 	});
 	test("a client from before the realtime mode keeps the stored mode and hints", async () => {
 		const { json } = await api("PUT", "/voice", { settings: { enabled: true, baseUrl: "", path: "", model: "", language: "ko" } });
 		expect(json.settings.mode).toBe("realtime");
 		expect(json.settings.realtime.keywords).toEqual(["Pipaya", "Tailscale"]);
+	});
+	test("an https address is stored as wss; credentials or a fragment in it are refused", async () => {
+		const { json } = await api("PUT", "/voice", { settings: realtimeSettings({ url: "https://rt.example.com/v1/realtime" }) });
+		expect(json.settings.realtime.url).toBe("wss://rt.example.com/v1/realtime");
+		for (const url of ["ftp://x/realtime", "wss://user:pw@x/realtime", "wss://x/realtime#a", "not a url"]) {
+			expect((await api("PUT", "/voice", { settings: realtimeSettings({ url }) })).status).toBe(400);
+		}
+		await api("PUT", "/voice", { settings: realtimeSettings() });
 	});
 	test("refuses too many keywords and a long context", async () => {
 		expect((await api("PUT", "/voice", { settings: realtimeSettings({ keywords: Array.from({ length: 21 }, (_, i) => `k${i}`) }) })).status).toBe(400);
@@ -131,7 +141,7 @@ describe("GET /voice/realtime", () => {
 		});
 		expect(code).toBe(1000);
 		const s = fake.sessions[before]!;
-		expect(s.authorization).toBe("Bearer sk-gw-1");
+		expect(s.authorization).toBe("Bearer sk-rt-1");
 		expect(new URL(s.url).pathname).toBe("/v1/realtime");
 		expect(new URL(s.url).searchParams.get("model")).toBe("gpt-realtime-2.1");
 		const input = s.update.session.audio.input;
@@ -140,31 +150,41 @@ describe("GET /voice/realtime", () => {
 		expect(got.map((m) => m.type)).toEqual(["ready", "delta", "phrase", "done"]);
 		expect(got.find((m) => m.type === "phrase").text).toBe("커밋하고 푸시해줘 (3)");
 		// the key never travels to the browser
-		expect(JSON.stringify(got)).not.toContain("sk-gw-1");
+		expect(JSON.stringify(got)).not.toContain("sk-rt-1");
 	});
 	test("a stop with nothing said ends cleanly", async () => {
 		const { got, code } = await session((ws) => ws.send(JSON.stringify({ type: "stop" })));
 		expect(code).toBe(1000);
 		expect(got.map((m) => m.type)).toEqual(["ready", "done"]);
 	});
-	test("the file mode or a missing connection refuses the socket with a reason", async () => {
+	test("the file mode or a missing address refuses the socket with a reason", async () => {
 		await api("PUT", "/voice", { settings: { ...realtimeSettings(), mode: "file" } });
 		let r = await session(() => {});
 		expect(r.got[0]).toMatchObject({ type: "error", code: "not_configured" });
-		await api("PUT", "/voice", { settings: realtimeSettings({ provider: "nope" }) });
+		await api("PUT", "/voice", { settings: realtimeSettings({ url: "" }) });
 		r = await session(() => {});
 		expect(r.got[0]).toMatchObject({ type: "error", code: "not_configured" });
-		expect(r.got[0].message).toContain("nope");
+		await api("PUT", "/voice", { settings: realtimeSettings() });
+	});
+	test("a keyless local server gets no Authorization header", async () => {
+		await api("PUT", "/voice", { settings: realtimeSettings(), realtimeApiKey: "" });
+		const before = fake.sessions.length;
+		await session((ws) => ws.send(JSON.stringify({ type: "stop" })));
+		expect(fake.sessions[before]!.authorization).toBeNull();
+		await api("PUT", "/voice", { settings: realtimeSettings(), realtimeApiKey: "sk-rt-1" });
 	});
 });
 
 describe("pure helpers", () => {
-	test("the Realtime URL of a connection's address", () => {
-		expect(realtimeUrl("https://ai.example.com/v1", "gpt-realtime-2.1")).toBe("wss://ai.example.com/v1/realtime?model=gpt-realtime-2.1");
-		expect(realtimeUrl("https://ai.example.com/v1/", "m")).toBe("wss://ai.example.com/v1/realtime?model=m");
-		expect(realtimeUrl("http://127.0.0.1:8317", "m")).toBe("ws://127.0.0.1:8317/v1/realtime?model=m");
-		expect(realtimeUrl("ftp://x", "m")).toBeNull();
-		expect(realtimeUrl("not a url", "m")).toBeNull();
+	test("the Realtime address as typed, and the socket it opens", () => {
+		expect(parseRealtimeUrl(" https://ai.example.com/v1/realtime ")).toBe("wss://ai.example.com/v1/realtime");
+		expect(parseRealtimeUrl("http://127.0.0.1:8317/v1/realtime")).toBe("ws://127.0.0.1:8317/v1/realtime");
+		expect(parseRealtimeUrl("")).toBe("");
+		expect(parseRealtimeUrl("ftp://x")).toBeNull();
+		expect(realtimeSocketOf({ url: "wss://x/v1/realtime", model: "gpt-realtime-2.1" })).toBe("wss://x/v1/realtime?model=gpt-realtime-2.1");
+		// an address that names its model keeps it
+		expect(realtimeSocketOf({ url: "wss://x/v1/realtime?model=other", model: "gpt-realtime-2.1" })).toBe("wss://x/v1/realtime?model=other");
+		expect(realtimeSocketOf({ url: "", model: "m" })).toBeNull();
 	});
 	test("the session update leaves out empty hints", () => {
 		const u = sessionUpdate({ ...DEFAULT_REALTIME_SETTINGS(), transcribeModel: "gpt-transcribe" }, "");
@@ -191,8 +211,8 @@ describe("POST /voice/test in the realtime mode", () => {
 		expect(fake.sessions[before]!.update.session.audio.input.transcription.keywords).toEqual(["Pipaya", "Tailscale"]);
 		expect((await api("GET", "/voice")).json.test.ok).toBe(true);
 	});
-	test("no connection chosen is a settings failure", async () => {
-		await api("PUT", "/voice", { settings: realtimeSettings({ provider: "" }) });
+	test("no address is a settings failure", async () => {
+		await api("PUT", "/voice", { settings: realtimeSettings({ url: "" }) });
 		const { status, json } = await api("POST", "/voice/test", {});
 		expect(status).toBe(400);
 		expect(json.error.code).toBe("not_configured");

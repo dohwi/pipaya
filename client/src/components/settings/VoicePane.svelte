@@ -4,8 +4,6 @@
 	import SettingRow from "../ui/SettingRow.svelte";
 	import Switch from "../ui/Switch.svelte";
 	import Segmented from "../ui/Segmented.svelte";
-	import Select from "../ui/Select.svelte";
-	import { app } from "../../lib/store.svelte";
 	import { t, getLang } from "../../lib/i18n";
 	import { extensions } from "../../lib/extensions/host.svelte";
 	import { voice } from "../../lib/voice.svelte";
@@ -19,12 +17,14 @@
 	 * The page reads in the order the setup happens: switch it on, fill the connection top to bottom (address, model,
 	 * key, then the optional path and language), then check it. The status block at the bottom only reports.
 	 */
-	const REALTIME_DEFAULTS: RealtimeVoiceSettings = { provider: "", model: "gpt-realtime-2.1", transcribeModel: "gpt-live-transcribe", keywords: [], prompt: "" };
+	const REALTIME_DEFAULTS: RealtimeVoiceSettings = { url: "", model: "gpt-realtime-2.1", transcribeModel: "gpt-live-transcribe", keywords: [], prompt: "" };
 	let draft = $state<VoiceSettings>({ enabled: false, baseUrl: "", path: "", model: "", language: "", mode: "file", realtime: { ...REALTIME_DEFAULTS } });
 	/** The keywords as the user types them, one per line; turned into the list when saved. */
 	let keywordText = $state("");
 	let key = $state("");
 	let keyTouched = $state(false);
+	let rtKey = $state("");
+	let rtKeyTouched = $state(false);
 	let saving = $state(false);
 	let message = $state<{ ok: boolean; text: string } | null>(null);
 
@@ -33,6 +33,8 @@
 		if (!voice.loaded) return;
 		draft = { ...voice.settings, mode: voice.settings.mode ?? "file", realtime: { ...REALTIME_DEFAULTS, ...voice.settings.realtime } };
 		keywordText = (voice.settings.realtime?.keywords ?? []).join("\n");
+		rtKey = "";
+		rtKeyTouched = false;
 		key = "";
 		keyTouched = false;
 	});
@@ -51,14 +53,14 @@
 	const realtime = $derived(draft.mode === "realtime");
 	const rt = $derived(draft.realtime ?? REALTIME_DEFAULTS);
 	const keywords = $derived([...new Set(keywordText.split("\n").map((k) => k.trim()).filter(Boolean))]);
-	const providerOptions = $derived(app.providers.filter((p) => p.configured).map((p) => ({ value: p.id, label: p.name })));
 	const setRt = (patch: Partial<RealtimeVoiceSettings>) => (draft = { ...draft, realtime: { ...rt, ...patch } });
 	const savedRt = $derived({ ...REALTIME_DEFAULTS, ...voice.settings.realtime });
 
 	const dirty = $derived(
 		keyTouched ||
+			rtKeyTouched ||
 			(draft.mode ?? "file") !== (voice.settings.mode ?? "file") ||
-			rt.provider !== savedRt.provider ||
+			rt.url !== savedRt.url ||
 			rt.model !== savedRt.model ||
 			rt.transcribeModel !== savedRt.transcribeModel ||
 			rt.prompt !== savedRt.prompt ||
@@ -74,7 +76,7 @@
 		saving = true;
 		message = null;
 		const next: VoiceSettings = hasModes ? { ...draft, realtime: { ...rt, keywords } } : { enabled: draft.enabled, baseUrl: draft.baseUrl, path: draft.path, model: draft.model, language: draft.language };
-		const error = await voice.save(next, keyTouched ? key : undefined);
+		const error = await voice.save(next, keyTouched ? key : undefined, rtKeyTouched ? rtKey : undefined);
 		saving = false;
 		if (error) {
 			message = { ok: false, text: error };
@@ -82,6 +84,8 @@
 		}
 		key = "";
 		keyTouched = false;
+		rtKey = "";
+		rtKeyTouched = false;
 		message = { ok: true, text: t("저장했습니다") };
 		return true;
 	}
@@ -128,11 +132,26 @@
 {#if realtime}
 <section class="set-group">
 	<div class="section-label">{t("실시간 변환")}</div>
-	<span class="hint">{t("채팅 연결 중 Realtime API(/v1/realtime)를 제공하는 연결을 고릅니다. 주소와 키는 그 연결의 것을 씁니다.")}</span>
-	<div class="row">
-		<span>{t("연결")}</span>
-		<Select label={t("실시간 변환 연결")} value={rt.provider} options={providerOptions} placeholder={t("연결을 고르세요")} onchange={(id) => setRt({ provider: id })} />
-	</div>
+	<span class="hint">{t("OpenAI Realtime API 형식이면 됩니다. 주소 · API 키만 있으면 되고, 모델은 비워 두면 기본값을 씁니다.")}</span>
+	<label class="row">
+		<span>{t("서버 주소")}</span>
+		<input class="field" type="url" inputmode="url" autocomplete="off" spellcheck="false" placeholder="wss://api.openai.com/v1/realtime" value={rt.url} oninput={(e) => setRt({ url: e.currentTarget.value })} aria-label={t("실시간 변환 서버 주소")} />
+	</label>
+	<span class="hint">{t("/v1/realtime까지 씁니다. https://로 넣어도 됩니다. 주소에 ?model=이 없으면 아래 세션 모델을 붙입니다.")}</span>
+	<label class="row">
+		<span>{t("API 키")}</span>
+		<input
+			class="field"
+			type="password"
+			autocomplete="off"
+			spellcheck="false"
+			placeholder={voice.hasRealtimeKey && !rtKeyTouched ? t("저장된 키 사용 중") : t("sk-… (키가 없는 로컬 서버면 비워 둡니다)")}
+			bind:value={rtKey}
+			oninput={() => (rtKeyTouched = true)}
+			aria-label={t("실시간 변환 API 키")}
+		/>
+	</label>
+	<span class="hint">{t("음성 입력의 다른 키와 따로 저장되고, 다시 표시되지 않습니다. 비우고 저장하면 키를 지웁니다.")}</span>
 	<label class="row">
 		<span>{t("세션 모델")}</span>
 		<input class="field" type="text" autocomplete="off" spellcheck="false" placeholder={REALTIME_DEFAULTS.model} value={rt.model} oninput={(e) => setRt({ model: e.currentTarget.value })} aria-label={t("실시간 세션 모델")} />
@@ -212,7 +231,7 @@
 	<SettingRow label={t("입력창의 마이크")} hint={voice.blockedReason ?? t("사용할 수 있습니다")}>
 		<span class="state" class:on={voice.state === "ready"} class:blocked={voice.state === "unusable"}>{voice.state === "ready" ? t("사용 가능") : voice.state === "off" ? t("꺼짐") : t("사용 안 함")}</span>
 	</SettingRow>
-	{#if !voice.realtime && voice.endpoint}<span class="hint mono">{voice.endpoint}</span>{/if}
+	{#if voice.realtime ? voice.realtimeEndpoint : voice.endpoint}<span class="hint mono">{voice.realtime ? voice.realtimeEndpoint : voice.endpoint}</span>{/if}
 	{#if voice.failure}<span class="note bad" role="status">{t("마지막 오류")}: {t("녹음 또는 변환에 실패했습니다. 위의 연결 확인으로 상태를 다시 확인하세요.")}</span>{/if}
 </section>
 
