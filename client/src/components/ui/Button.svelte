@@ -10,7 +10,7 @@
 	 * `disabled`, `aria-*`, `data-*`, `use:` actions, `bind:this`) straight to the <button>.
 	 *
 	 *  variant  default | primary (the one main action) | update (take a newer version: the one green button) | danger (red text) | ghost (no fill) | dashed (a full-width "add" slot)
-	 *  size     md (38px) | sm (34px, dense rows and dialogs)
+	 *  size     md (--control-h, 40px) | sm (--control-h-sm, 34px, dense rows and dialogs)
 	 *  type     "button" unless it submits a form (a bare <button> inside a <form> submits, so the default is explicit)
 	 *  class    extra classes for the caller's own layout rules
 	 *  focus    take focus when it appears (the default answer of a confirm sheet; Modal keeps a child's own focus)

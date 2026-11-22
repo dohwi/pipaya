@@ -66,7 +66,7 @@
 	.notice {
 		display: flex;
 		gap: 8px;
-		align-items: center;
+		align-items: flex-start;
 		padding: 8px 12px;
 		border-radius: var(--radius);
 		background: var(--bg-elev);
@@ -93,7 +93,7 @@
 		color: var(--ok);
 	}
 	.sm {
-		padding: 8px 12px;
+		padding: 6px 10px;
 		border-radius: var(--radius-sm);
 		font-size: var(--fs-xs);
 		line-height: 16px;
@@ -124,12 +124,14 @@
 	.notice :global(svg) {
 		width: 17px;
 		height: 17px;
+		margin-top: 1.5px;
 		flex: none;
 		stroke-width: 1.8;
 	}
 	.sm :global(svg) {
 		width: 16px;
 		height: 16px;
+		margin-top: 0;
 	}
 	.text {
 		flex: 1 1 auto;

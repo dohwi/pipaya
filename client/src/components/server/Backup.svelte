@@ -222,7 +222,7 @@
 		align-items: center;
 		justify-content: space-between;
 		gap: 12px;
-		padding: 12px 12px;
+		padding: 10px 12px;
 	}
 	.item + .item {
 		border-top: 1px solid var(--border);
@@ -230,7 +230,7 @@
 	.txt {
 		display: flex;
 		flex-direction: column;
-		gap: 4px;
+		gap: 2px;
 		min-width: 0;
 	}
 	.t {
@@ -281,7 +281,7 @@
 	.note :global(svg) {
 		width: 15px;
 		height: 15px;
-		margin-top: 4px;
+		margin-top: 0.5px;
 	}
 
 	.drop {

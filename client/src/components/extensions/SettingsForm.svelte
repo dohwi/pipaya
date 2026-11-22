@@ -200,7 +200,7 @@
 <style>
 	.settings, .field-row, .body { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 	.settings { gap: 12px; }
-	.name { font-size: var(--fs-xs); font-weight: 550; overflow-wrap: anywhere; }
+	.name { font-size: var(--fs-xs); font-weight: 550; line-height: 20px; overflow-wrap: anywhere; }
 	.req { color: var(--danger); }
 	.hint { margin: 0; overflow-wrap: anywhere; }
 	/* A value the extension wrote: plain text under its name, so it does not look like a field a person can fill in. */
@@ -208,11 +208,11 @@
 	.readonly-value.empty { color: var(--text-faint); }
 	/* a boolean field: one row, the switch centred on the label's 20px line when there is no description, on the text block otherwise */
 	.swrow { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-width: 0; }
-	.swtext { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+	.swtext { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 	.swtext .name { line-height: 20px; }
 	input[type="text"], input[type="password"], input[type="number"], textarea {
-		display: block; width: 100%; min-width: 0; box-sizing: border-box; padding: 0 12px; height: 38px;
-		border: 1px solid var(--border-strong); border-radius: var(--radius-sm); background: var(--bg-code); color: var(--text);
+		display: block; width: 100%; min-width: 0; box-sizing: border-box; padding: 0 12px; height: var(--control-h);
+		border: 1px solid var(--border-strong); border-radius: var(--radius-control); background: var(--bg-code); color: var(--text);
 		font-size: var(--fs-lg); /* >=16px stops iOS zooming on focus */ transition: border-color var(--motion-fast) var(--ease-std), box-shadow var(--motion-fast) var(--ease-std);
 	}
 	textarea { height: auto; min-height: 110px; resize: vertical; padding: 8px 12px; font-family: var(--mono); font-size: var(--fs-xs); line-height: 1.5; }
@@ -220,7 +220,7 @@
 	@media (pointer: coarse) { textarea { font-size: var(--fs-lg); } }
 	input:focus-visible, textarea:focus-visible { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
 	.invalid input:not([type="checkbox"]), textarea[aria-invalid="true"] { border-color: var(--danger); }
-	input:disabled, textarea:disabled { opacity: 0.6; }
-	.advanced { margin-top: 4px; }
+	input:disabled, textarea:disabled { opacity: 0.55; }
+	.advanced { margin-top: 0; }
 	.body { gap: 8px; }
 </style>

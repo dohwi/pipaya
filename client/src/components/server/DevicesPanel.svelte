@@ -163,10 +163,13 @@
 							<span class="nm">{d.name ?? platformName(d.platform)}</span>
 							{#if mine(d)}<Badge variant="outline" size="sm">{t("이 기기")}</Badge>{/if}
 						</span>
-						<span class="sub">{[d.os ?? platformName(d.platform), d.app].filter(Boolean).join(" · ")}</span>
-						<span class="sub">
-							{d.live ? t("접속 중") : d.lastSeen ? t("마지막 접속 {ago}", { ago: livePast(d.lastSeen) }) : t("기록 없음")}{d.push ? ` · ${t("모바일 푸시")}` : ""}{d.enabled ? "" : ` · ${t("알림 꺼짐")}`}
-						</span>
+						<span class="sub">{[
+							d.os ?? platformName(d.platform),
+							d.app,
+							d.live ? t("접속 중") : d.lastSeen ? t("마지막 접속 {ago}", { ago: livePast(d.lastSeen) }) : t("기록 없음"),
+							d.push ? t("모바일 푸시") : "",
+							d.enabled ? "" : t("알림 꺼짐"),
+						].filter(Boolean).join(" · ")}</span>
 					</div>
 					<ConfirmButton size="sm" confirmLabel={t("정말 해지")} disabled={busy === d.id} onconfirm={() => remove(d)}>{t("해지")}</ConfirmButton>
 				</li>
@@ -221,10 +224,11 @@
 	}
 	.adds {
 		display: flex;
+		flex-wrap: wrap;
 		gap: 8px;
 	}
 	.adds > :global(.btn) {
-		flex: 1 1 0;
+		flex: 1 1 140px;
 		min-width: 0;
 	}
 	/* the QR panel takes the slots' place as a card of the list's own frame */
@@ -232,12 +236,9 @@
 		display: flex;
 		flex-direction: column;
 		gap: 8px;
-		padding: 8px 8px 16px 16px;
+		padding: 12px 14px;
 		border: 1px solid var(--border);
 		border-radius: var(--radius-panel);
-	}
-	.addbody > :global(.pair) {
-		padding-right: 8px;
 	}
 	.addhead {
 		display: flex;
@@ -270,7 +271,7 @@
 		display: flex;
 		align-items: center;
 		gap: 12px;
-		padding: 12px 12px;
+		padding: 10px 12px;
 	}
 	li + li {
 		border-top: 1px solid var(--border);
@@ -295,14 +296,15 @@
 		min-width: 0;
 		display: flex;
 		flex-direction: column;
-		gap: 4px;
+		gap: 2px;
 	}
 	.name {
 		display: flex;
 		align-items: center;
-		gap: 8px;
+		gap: 6px;
 		font-size: var(--fs-md);
 		font-weight: 600;
+		line-height: 20px;
 		min-width: 0;
 		white-space: nowrap;
 	}
@@ -310,6 +312,7 @@
 	.nm { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 	.sub {
 		font-size: var(--fs-xs);
+		line-height: 16px;
 		color: var(--text-faint);
 		overflow: hidden;
 		text-overflow: ellipsis;
