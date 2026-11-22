@@ -7,7 +7,8 @@
 	import { t } from "../../lib/i18n";
 	import { Api, errorText } from "../../lib/api";
 	import { app } from "../../lib/store.svelte";
-	import { fullTime, tilde } from "../../lib/format";
+	import { fullTime, pastLabel, tilde } from "../../lib/format";
+	import { minuteClock } from "../../lib/minute-clock.svelte";
 	import { tailKeepLast } from "../../lib/fit-text";
 	import type { Session } from "../../lib/types";
 	import Badge from "../ui/Badge.svelte";
@@ -33,14 +34,12 @@
 	const server = $derived(app.servers.find((s) => s.id === serverId));
 	const api = $derived(server ? new Api({ baseUrl: server.baseUrl, token: server.token }) : null);
 
-	const DAY = 24 * 3600_000;
 
 	let sessions = $state<Session[] | null>(null);
 	let home = $state<string | null>(null);
 	let error = $state("");
 	let picked = $state<Record<string, boolean>>({});
 	let folded = $state<Record<string, boolean>>({});
-	let now = $state(Date.now());
 
 	async function load() {
 		if (!api) return;
@@ -49,7 +48,6 @@
 			const [list, ws] = await Promise.all([api.allSessions(), api.workspace().catch(() => null)]);
 			sessions = list;
 			home = ws?.home ?? null;
-			now = Date.now();
 			const alive = new Set(list.map((s) => s.id));
 			picked = Object.fromEntries(Object.entries(picked).filter(([id]) => alive.has(id)));
 		} catch (e) {
@@ -78,14 +76,6 @@
 			.sort((a, b) => b.updatedAt - a.updatedAt);
 	});
 	const nIn = (list: Session[]) => list.filter((s) => picked[s.id]).length;
-
-	function ageOf(ts: number): string {
-		const d = Math.floor((now - ts) / DAY);
-		if (d <= 0) return t("오늘");
-		if (d < 60) return t("{n}일 전", { n: d });
-		const m = Math.floor(d / 30);
-		return m < 12 ? t("{n}개월 전", { n: m }) : t("{n}년 전", { n: Math.floor(d / 365) });
-	}
 
 	const allIn = (list: Session[]) => list.length > 0 && list.every((s) => picked[s.id]);
 	const someIn = (list: Session[]) => list.some((s) => picked[s.id]) && !allIn(list);
@@ -198,7 +188,7 @@
 										<span class="title">{s.title ? sessionTitle(s.title) : t("제목 없음")}</span>
 									</label>
 									{#if s.closed}<Badge size="sm">{t("닫음")}</Badge>{/if}
-									<span class="age" title={fullTime(s.updatedAt)}>{ageOf(s.updatedAt)}</span>
+									<span class="age" title={fullTime(s.updatedAt)}>{pastLabel(s.updatedAt, minuteClock.now, { time: false })}</span>
 								</li>
 							{/each}
 						</ul>

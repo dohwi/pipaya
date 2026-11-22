@@ -2,7 +2,6 @@ import { afterEach, describe, expect, test } from "bun:test";
 import type { StoredMessage } from "../src/lib/api";
 import { setLang } from "../src/lib/i18n";
 import { gridNext, PREVIEW_MAX, previewOfItems, previewOfStored, previewText, shortPath, tabCountText } from "../src/lib/tab-overview";
-import { ago } from "../src/lib/format";
 import type { ChatItem } from "../src/lib/types";
 
 const user = (text: string): ChatItem => ({ kind: "user", key: text, seq: 1, text, images: [], ts: 0 });
@@ -65,18 +64,6 @@ describe("preview of stored messages", () => {
 		expect(previewOfStored(list)).toEqual({ who: "assistant", text: "done" });
 		expect(previewOfStored(list.slice(0, 1))).toEqual({ who: "user", text: "hello" });
 		expect(previewOfStored([])).toBeNull();
-	});
-});
-
-describe("ago", () => {
-	test("minutes, hours, days, in the current language", () => {
-		const now = 10 * 86_400_000;
-		expect(ago(now - 5_000, now)).toBe("방금");
-		expect(ago(now - 5 * 60_000, now)).toBe("5분 전");
-		setLang("en");
-		expect(ago(now - 3 * 3_600_000, now)).toBe("3h ago");
-		expect(ago(now - 2 * 86_400_000, now)).toBe("2d ago");
-		expect(ago(now + 60_000, now)).toBe("just now");
 	});
 });
 

@@ -3,7 +3,7 @@
 	import Button from "../ui/Button.svelte";
 	import ImportReview from "./ImportReview.svelte";
 	import { collapseIn, collapseOut } from "../../lib/motion";
-	import { localeTag, msg, t } from "../../lib/i18n";
+	import { msg, t } from "../../lib/i18n";
 	import Icon from "../ui/Icon.svelte";
 	import Notice from "../ui/Notice.svelte";
 	import Switch from "../ui/Switch.svelte";
@@ -19,7 +19,8 @@
 		type ConfigurationPlan,
 	} from "../../lib/extensions/configuration";
 	import { download } from "../../lib/download";
-	import { fileStamp } from "../../lib/format";
+	import { fileStamp, fullTime, pastLabel } from "../../lib/format";
+	import { minuteClock } from "../../lib/minute-clock.svelte";
 
 	/* ---------- export ---------- */
 	let parts = $state({ servers: true, preferences: true, keybindings: true });
@@ -118,8 +119,6 @@
 		}
 	}
 
-	const when = (ts: number) =>
-		new Date(ts).toLocaleString(localeTag(), { month: "numeric", day: "numeric", hour: "numeric", minute: "2-digit" });
 </script>
 
 <section class="set-group" aria-labelledby="bk-export">
@@ -181,7 +180,7 @@
 		<div class="restore">
 			<span class="txt">
 				<span class="t">{t("마지막 가져오기 이전 상태")}</span>
-				<span class="s">{savedAt ? `${t("{when}에 백업됨", { when: when(savedAt) })} · ` : ""}{t("이 기기에만 저장되어 있습니다")}</span>
+				<span class="s">{#if savedAt}<span title={fullTime(savedAt)}>{t("{when} 백업됨", { when: pastLabel(savedAt, minuteClock.now) })}</span> · {/if}{t("이 기기에만 저장되어 있습니다")}</span>
 			</span>
 			{#if !confirmingRestore}
 				<Button size="sm" onclick={() => (confirmingRestore = true)}>{t("되돌리기")}</Button>

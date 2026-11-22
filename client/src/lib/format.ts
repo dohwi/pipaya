@@ -50,19 +50,53 @@ export function dayLabel(ts: number, locale?: string, now: number = Date.now()):
   return new Date(ts).toLocaleDateString(locale, { year: year ? "numeric" : undefined, month: "long", day: "numeric", weekday: "short" });
 }
 
+const MIN = 60_000;
+const sameDay = (a: Date, b: Date) => a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
 /**
- * "방금" / "N초 전" / "N분 전" / "N시간 전" / "N일 전".
- * `seconds` (default false): show seconds for under-one-minute spans (DevicesPanel); otherwise shows "방금".
- * `now` defaults to `Date.now()` so callers that hold a reactive clock can pass their own value.
+ * Whole clock minutes from `a` to `b` (12:00:30 → 12:01:05 is 1): relative labels count clock minutes, not elapsed
+ * seconds, so they agree with the clock times shown beside them and all turn over together on the minute (minuteClock).
  */
-export function ago(at: number, now = Date.now(), opts?: { seconds?: boolean }): string {
-  const sec = Math.max(0, Math.round((now - at) / 1000));
-  if (sec < 60) return opts?.seconds ? t("{n}초 전", { n: sec }) : t("방금");
-  const min = Math.floor(sec / 60);
-  if (min < 60) return t("{n}분 전", { n: min });
-  const hour = Math.floor(min / 60);
-  if (hour < 24) return t("{n}시간 전", { n: hour });
-  return t("{n}일 전", { n: Math.floor(hour / 24) });
+export const clockMinutes = (a: number, b: number): number => Math.floor(b / MIN) - Math.floor(a / MIN);
+
+/**
+ * When something happened, read at a glance: the one rule for past times across the app (a message, a chat's last
+ * activity, a backup, a task's last run). The mirror of nextRunLabel (lib/schedules.ts) for future times.
+ *  - the same clock minute: "방금"
+ *  - under 1 hour: "N분 전" (clock minutes, see clockMinutes)
+ *  - under 6 hours: "N시간 전"
+ *  - earlier today: the time, "오후 2:05"
+ *  - yesterday: "어제 오후 9:30"
+ *  - within a week: the weekday and time, "수 오후 2:05"
+ *  - this year: the date, "11월 15일"; before that with the year, "2025년 11월 15일"
+ * `time: false` is for a narrow list column that only needs the day: "어제", "수", and "2025년 11월" for another year.
+ * The exact time stays in the tooltip (fullTime). `now` and `locale` are for tests and for a caller's clock (clock.now).
+ */
+export function pastLabel(ts: number, now: number = Date.now(), opts: { locale?: string; time?: boolean } = {}): string {
+  const locale = opts.locale ?? localeTag();
+  const withTime = opts.time ?? true;
+  const mins = clockMinutes(ts, now);
+  if (mins < 1) return t("방금"); // also a time slightly ahead of this device's clock
+  if (mins < 60) return t("{n}분 전", { n: mins });
+  if (mins < 6 * 60) return t("{n}시간 전", { n: Math.floor(mins / 60) });
+  const at = new Date(ts);
+  const today = new Date(now);
+  const time = at.toLocaleTimeString(locale, { hour: "numeric", minute: "2-digit" });
+  if (sameDay(at, today)) return time;
+  if (sameDay(at, new Date(today.getFullYear(), today.getMonth(), today.getDate() - 1))) return withTime ? t("어제 {time}", { time }) : t("어제");
+  if (Math.round((dayStart(now) - dayStart(ts)) / 86_400_000) < 7) { // round: a DST day is 23 or 25 hours
+    const day = at.toLocaleDateString(locale, { weekday: "short" });
+    return withTime ? `${day} ${time}` : day;
+  }
+  if (at.getFullYear() === today.getFullYear()) return at.toLocaleDateString(locale, { month: "short", day: "numeric" });
+  return at.toLocaleDateString(locale, withTime ? { year: "numeric", month: "short", day: "numeric" } : { year: "numeric", month: "short" });
+}
+
+/**
+ * A message's time in a transcript: "방금" / "N분 전" / "N시간 전" while it is recent (pastLabel), then the time of day,
+ * as the day headings above ("어제", "11월 15일 (일)") already say which day it was.
+ */
+export function messageTime(ts: number, now: number = Date.now(), locale: string = localeTag()): string {
+  return clockMinutes(ts, now) < 6 * 60 ? pastLabel(ts, now, { locale }) : timeOfDay(ts, locale);
 }
 
 export const firstLine = (s: string): string => s.split("\n", 1)[0] ?? "";

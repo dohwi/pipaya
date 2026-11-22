@@ -1,7 +1,8 @@
 <script lang="ts">
 	import { app } from "../../lib/store.svelte";
 	import { t } from "../../lib/i18n";
-	import { ago, compact, duration, tilde } from "../../lib/format";
+	import { compact, duration, fullTime, pastLabel, tilde } from "../../lib/format";
+	import { minuteClock } from "../../lib/minute-clock.svelte";
 	import { copyText } from "../../lib/clipboard";
 	import { abortable } from "../../lib/abortable";
 	import { sessionTitle } from "../../lib/session-title";
@@ -46,11 +47,8 @@
 	const saved = $derived(card ? app.servers.find((s) => s.id === card.server) : undefined);
 	const serverName = $derived(saved?.name ?? card?.server ?? "");
 
-	let now = $state(Date.now());
-	$effect(() => {
-		const timer = setInterval(() => (now = Date.now()), 30_000);
-		return () => clearInterval(timer);
-	});
+	const now = $derived(minuteClock.now);
+	const ago = (ts: number) => pastLabel(ts, now, { time: false });
 
 	// ---- what each kind shows ----
 	const chats = $derived(card && card.kind !== "subagent" && card.kind !== "session" ? under(graph, card.id, "session") : []);
@@ -99,7 +97,7 @@
 		return roleStats((graphRuns.runs[server] ?? []).filter((r) => r.model === model), card.label, (sid) => graph.cards.has(`s:${server}/${sid}`));
 	});
 	/** A role card's row end: its calls, and when it was last used if that was a while ago (a model the role moved off). */
-	const roleEnd = (c: Card) => (c.last && now - c.last > ROLE_STALE_MS ? `${t("{n}회", { n: c.count })} · ${ago(c.last, now)}` : t("{n}회", { n: c.count }));
+	const roleEnd = (c: Card) => (c.last && now - c.last > ROLE_STALE_MS ? `${t("{n}회", { n: c.count })} · ${ago(c.last)}` : t("{n}회", { n: c.count }));
 	/** Calls of the role on every model, when it ran on more than this one. */
 	const roleTotal = $derived(siblings.length ? siblings.reduce((n, c) => n + c.count, card?.count ?? 0) : 0);
 	const callerCwd = $derived(stats?.callers[0] ? link?.sessionById.get(stats.callers[0].sessionId)?.cwd : undefined);
@@ -168,7 +166,7 @@
 			<span class="mark"><AgentBadge id={s.id} server={c.server} state={c.activity} size={20} /></span>
 			<span class="nm {c.activity}" class:who={!!s.name}>{s.name ? `@${s.name}` : sessionTitle(s.title)}</span>
 			{#if s.name}<span class="sub">{sessionTitle(s.title)}</span>{/if}
-			<span class="end">{ago(s.updatedAt, now)}</span>
+			<span class="end" title={fullTime(s.updatedAt)}>{ago(s.updatedAt)}</span>
 		</button>
 	</li>
 {/snippet}
@@ -187,7 +185,7 @@
 			<span class="end">
 				<span class="st {st}">{CALL_TEXT[st]()}</span>
 				{#if r.doneAt !== null && !r.running}<i>·</i><span class="mono">{duration(Math.max(0, r.doneAt - r.at))}</span>{/if}
-				<i>·</i><span>{ago(r.at, now)}</span>
+				<i>·</i><span title={fullTime(r.at)}>{ago(r.at)}</span>
 			</span>
 		</button>
 	</li>

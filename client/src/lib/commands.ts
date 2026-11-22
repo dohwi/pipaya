@@ -2,9 +2,9 @@ import { sessionTitle } from "./session-title";
 import { app } from "./store.svelte";
 import { extensions } from "./extensions/host.svelte";
 import { copyText } from "./clipboard";
-import { clip } from "./format";
+import { clip, pastLabel } from "./format";
 import type { AssistantItem, Session, UserItem } from "./types";
-import { localeTag, msg, t } from "./i18n";
+import { msg, t } from "./i18n";
 import { SKILL_PREFIX } from "./slash-menu";
 
 export interface CommandArgument {
@@ -45,14 +45,7 @@ const dirLabel = (cwd: string) => {
 	return r === "." ? t("서버 기본 폴더") : r;
 };
 
-function when(ts: number): string {
-	const d = new Date(ts);
-	const today = new Date();
-	const same = d.toDateString() === today.toDateString();
-	return same
-		? d.toLocaleTimeString(localeTag(), { hour: "2-digit", minute: "2-digit" })
-		: d.toLocaleDateString(localeTag(), { month: "numeric", day: "numeric" });
-}
+const when = (ts: number): string => pastLabel(ts, Date.now(), { time: false });
 
 /** Sessions as palette rows: title + "작업 디렉터리 · 시각". */
 function sessionRows(list: Session[], opts: { current?: string; showClosed?: boolean } = {}) {

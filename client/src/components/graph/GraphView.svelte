@@ -4,7 +4,8 @@
 	import { marquee, middle } from "../../lib/fit-text";
 	import { app } from "../../lib/store.svelte";
 	import { t } from "../../lib/i18n";
-	import { ago, hostOf } from "../../lib/format";
+	import { hostOf, pastLabel } from "../../lib/format";
+	import { minuteClock } from "../../lib/minute-clock.svelte";
 	import { sessionTitle } from "../../lib/session-title";
 	import { BRAND_LABEL } from "../../lib/brand";
 	import { activityOf } from "../../lib/activity";
@@ -117,6 +118,12 @@
 		widthCache.set(key, w);
 		return w;
 	}
+	/** Every form a card's time can take (pastLabel with `time: false`), at its widest, from a fixed day in the past. */
+	const WHEN_SAMPLES = () => {
+		const now = new Date(2026, 11, 31, 23, 59).getTime();
+		const ago = (ms: number) => pastLabel(now - ms, now, { time: false });
+		return [ago(59 * 60_000), ago(5 * 3_600_000), ago(11 * 3_600_000 + 59 * 60_000), ago(24 * 3_600_000), ago(3 * 86_400_000), ago(13 * 86_400_000), pastLabel(new Date(2025, 11, 30).getTime(), now, { time: false })];
+	};
 	/** A chat: its name with the time beside it, its title below (what it is doing while it works is live text: it never widens a column). */
 	function chatWidth(c: Card): number {
 		const s = c.session!;
@@ -131,9 +138,9 @@
 		if (!nm || !tl || !when) return 0;
 		nm.textContent = name;
 		tl.textContent = title;
-		// room for the longest time it shows before it turns into days ("59분 전", "23시간 전"), so the column does not twitch as it ages
+		// room for the widest of the forms its time takes as it ages (pastLabel), so the column does not twitch over time
 		let wWhen = 0;
-		for (const x of [t("{n}분 전", { n: 59 }), t("{n}시간 전", { n: 23 }), t("{n}일 전", { n: 30 })]) {
+		for (const x of WHEN_SAMPLES()) {
 			when.textContent = x;
 			wWhen = Math.max(wWhen, when.getBoundingClientRect().width);
 		}
@@ -767,7 +774,7 @@
 						<span class="lead"><AgentBadge id={s.id} server={c.server} state={c.activity} size={24} /></span>
 						{@const name = s.name ? `@${s.name}` : sessionTitle(s.title)}
 						<span class="nm fl" class:who={!!s.name} title={name} use:marquee={name}>{@render flow(name)}</span>
-						{#if !busy}<span class="when">{ago(s.updatedAt, now)}</span>{/if}
+						{#if !busy}<span class="when">{pastLabel(s.updatedAt, minuteClock.now, { time: false })}</span>{/if}
 						<span class="title fl" title={sessionTitle(s.title)} use:marquee={sessionTitle(s.title)}>{@render flow(sessionTitle(s.title))}</span>
 						{#if busy}
 							<span class="doing" class:ask={c.activity === "asking"} in:glowFade={{ delay: 120 }}>

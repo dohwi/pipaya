@@ -15,8 +15,8 @@
 	 * One scheduled task as a row of the queue above the input (QueuedList puts these after the waiting messages).
 	 * Only switched-on tasks are listed. The row opens the task in Settings > Scheduled tasks; ✕ asks whether to pause it
 	 * (it leaves the queue and stays in Settings, off) or delete it. `n`: its place among the conversation's tasks, soonest first.
-	 * `blocked`: the press was a drag of the list, not a click. `now`: the list's clock (NextRunClock), so the countdown
-	 * ("12분 후") moves on the minute.
+	 * `blocked`: the press was a drag of the list, not a click. `now`: the shared minute clock (minuteClock), so the
+	 * countdown ("12분 후") moves on the minute.
 	 */
 	let { s, n, now, serverId, sessionId, blocked = () => false }: { s: Schedule; n: number; now: number; serverId: string; sessionId: string; blocked?: () => boolean } = $props();
 
