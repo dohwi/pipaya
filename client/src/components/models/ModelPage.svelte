@@ -2,11 +2,11 @@
 	import { focusOnDesktop } from "../../lib/focus";
 	import Button from "../ui/Button.svelte";
 	import Segmented from "../ui/Segmented.svelte";
+	import Ladder from "../ui/Ladder.svelte";
 	import { t, tc } from "../../lib/i18n";
 	import { ICON_LABEL } from "../../lib/brand";
 	import { isImageIcon } from "../../lib/model-icon-image";
 	import { ALL_LEVELS, isLastLevel, shownLevels, toggleLevel, type Row } from "../../lib/connection-form";
-	import { slidingIndicator } from "../../lib/sliding-indicator";
 	import TierOptions from "./TierOptions.svelte";
 	import { Api } from "../../lib/api";
 	import type { CatalogModel, ThinkingLevel } from "../../lib/types";
@@ -59,33 +59,6 @@
 	const iconName = $derived(r.icon ? (isImageIcon(r.icon) ? t("올린 이미지") : (ICON_LABEL[r.icon] ?? r.icon)) : t("자동"));
 	/** The strengths this model really offers (the owner's own list or the matched catalog's), in canonical order. */
 	const levels = $derived(shownLevels(r, matched));
-	/**
-	 * Svelte action for the starting-strength row: keeps the chosen strength in view when the row scrolls sideways
-	 * (a phone with many strengths) and marks which edge still has more behind it (`data-more="start end"`), which the
-	 * CSS turns into a soft fade, so a half-cut label reads as "scroll" rather than as a broken layout.
-	 */
-	function sideScroll(row: HTMLElement, _value: unknown) {
-		const mark = () => {
-			const more = [row.scrollLeft > 1 && "start", row.scrollLeft + row.clientWidth < row.scrollWidth - 1 && "end"].filter(Boolean).join(" ");
-			if (more) row.dataset.more = more;
-			else delete row.dataset.more;
-		};
-		const reveal = () => {
-			row.querySelector<HTMLElement>("button.on")?.scrollIntoView({ block: "nearest", inline: "center" });
-			mark();
-		};
-		row.addEventListener("scroll", mark, { passive: true });
-		const ro = typeof ResizeObserver === "undefined" ? undefined : new ResizeObserver(mark);
-		ro?.observe(row);
-		reveal();
-		return {
-			update: reveal,
-			destroy() {
-				row.removeEventListener("scroll", mark);
-				ro?.disconnect();
-			},
-		};
-	}
 	/** "새 대화 기본 강도: 자동" unless a strength this model offers was chosen. */
 	const fallbackLevel = $derived<"auto" | ThinkingLevel>(levels.includes(r.defaultThinkingLevel as ThinkingLevel) ? r.defaultThinkingLevel! : "auto");
 </script>
@@ -161,23 +134,12 @@
 		{@const shown = shownLevels(r, matched)}
 		<section class="fsec set-group">
 			<div class="section-label">{t("선택 가능한 추론 강도")}</div>
-			<div class="ladder" role="group" aria-label={t("선택 가능한 추론 강도")}>
-				<span class="rail" aria-hidden="true"></span>
-				{#each ALL_LEVELS as l (l)}
-					<button
-						type="button"
-						class="step tap"
-						data-level={l}
-						aria-pressed={shown.includes(l)}
-						disabled={isLastLevel(r, matched, l)}
-						title={isLastLevel(r, matched, l) ? t("하나는 남겨 두어야 합니다") : undefined}
-						onclick={() => toggleLevel(r, matched, l)}
-					>
-						<span class="node" aria-hidden="true"></span>
-						<span class="name">{l}</span>
-					</button>
-				{/each}
-			</div>
+			<Ladder
+				label={t("선택 가능한 추론 강도")}
+				options={ALL_LEVELS.map((l) => ({ id: l, label: l, level: l, disabled: isLastLevel(r, matched, l), title: isLastLevel(r, matched, l) ? t("하나는 남겨 두어야 합니다") : undefined }))}
+				selected={shown}
+				ontoggle={(l) => toggleLevel(r, matched, l)}
+			/>
 			<p class="hint note">
 				{#if r.thinkingLevels.length}
 					{t("고른 강도만 이 모델에서 선택할 수 있습니다.")}
@@ -189,18 +151,12 @@
 			</p>
 
 			<div class="section-label">{t("새 대화 기본 강도")}</div>
-			<div
-				class="seg dseg"
-				role="group"
-				aria-label={t("새 대화 기본 강도")}
-				use:slidingIndicator={{ selector: "button.on", variant: "level", radius: "calc(var(--radius) - 3px)", mirror: ["data-level"] }}
-				use:sideScroll={fallbackLevel}
-			>
-				<button type="button" class="tap" class:on={fallbackLevel === "auto"} aria-pressed={fallbackLevel === "auto"} onclick={() => (r.defaultThinkingLevel = undefined)}>{t("자동")}</button>
-				{#each levels as l (l)}
-					<button type="button" class="tap" class:on={fallbackLevel === l} aria-pressed={fallbackLevel === l} data-level={l} onclick={() => (r.defaultThinkingLevel = l)}>{l}</button>
-				{/each}
-			</div>
+			<Ladder
+				label={t("새 대화 기본 강도")}
+				options={[{ id: "auto" as const, label: t("자동") }, ...levels.map((l) => ({ id: l, label: l, level: l }))]}
+				value={fallbackLevel}
+				onchange={(l) => (r.defaultThinkingLevel = l === "auto" ? undefined : l)}
+			/>
 			<p class="hint note">{r.defaultThinkingLevel ? t("이 모델로 새 대화를 시작하면 {level}로 시작합니다.", { level: r.defaultThinkingLevel }) : t("자동이면 이 기기의 지난 강도로 시작합니다.")}</p>
 		</section>
 	{/if}
@@ -387,145 +343,6 @@
 	.caprow.off .captext b,
 	.caprow.off .capic {
 		color: var(--text-faint);
-	}
-	/* the strengths this model offers, as a ladder from off to max: one quiet rail, seven nodes, each node a toggle.
-	   off = a hollow ring on the rail, on = the ring filled in the level's colour (no halo: the fill and the coloured
-	   name already say "on") and the name in that colour. The rail is never coloured between nodes: a filled span would read as a range slider to drag.
-	   Seven equal columns on every width (390px phone: 46px each, "minimal" in 12px fits), so nothing wraps or scrolls. */
-	.ladder {
-		position: relative;
-		display: grid;
-		grid-template-columns: repeat(7, minmax(0, 1fr));
-		padding: 12px 4px 8px;
-		background: var(--bg);
-		border: 1px solid var(--border);
-		border-radius: var(--radius);
-	}
-	/* from the first node's centre to the last one's: half a column in from each side of the 4px padding */
-	.rail {
-		position: absolute;
-		left: calc(4px + (100% - 8px) / 14);
-		right: calc(4px + (100% - 8px) / 14);
-		top: 23px; /* 12 padding + 4 node inset + 8 (half the 16px node) - 1 (half the 2px rail) */
-		height: 2px;
-		border-radius: 1px;
-		background: var(--border-strong);
-	}
-	.step {
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		gap: 4px;
-		min-width: 0;
-		padding: 4px 0;
-		background: none;
-		border: 0;
-		border-radius: var(--radius-control);
-		color: var(--text-faint);
-	}
-	.node {
-		position: relative; /* above the rail */
-		width: 16px;
-		height: 16px;
-		box-sizing: border-box;
-		border-radius: 50%;
-		border: 2px solid var(--border-strong);
-		background: var(--bg);
-		transition: background var(--motion-fast) var(--ease-std), border-color var(--motion-fast) var(--ease-std), transform var(--motion-fast) var(--ease-std);
-	}
-	/* the name may run a few px past its column (a 360px phone: "medium" 44px in a 41.7px column); its neighbours'
-	   names are short enough that they never meet, so it is never cut */
-	.name {
-		white-space: nowrap;
-		line-height: 20px;
-		font-size: var(--fs-sm);
-		font-weight: 500;
-		transition: color var(--motion-fast) var(--ease-std);
-	}
-	@media (hover: hover) {
-		.step:hover {
-			color: var(--text);
-		}
-		.step:hover .node {
-			transform: scale(1.15);
-		}
-		.step[aria-pressed="false"]:hover .node {
-			border-color: var(--lv);
-		}
-	}
-	.step[aria-pressed="true"] {
-		color: var(--lv);
-	}
-	.step[aria-pressed="true"] .name {
-		font-weight: 650;
-	}
-	.step[aria-pressed="true"] .node {
-		background: var(--lv);
-		border-color: var(--lv);
-	}
-	/* starting strength: one row of the offered strengths; scrolls sideways when a phone is too narrow for them */
-	.dseg {
-		display: flex;
-		width: 100%;
-		overflow-x: auto;
-		scrollbar-width: none;
-	}
-	.dseg::-webkit-scrollbar {
-		display: none;
-	}
-	/* equal columns while the row fits (basis 0), never narrower than the label (min-width auto) so a phone scrolls */
-	.dseg button {
-		flex: 1 0 0;
-		padding: 0 8px;
-		white-space: nowrap;
-		font-size: var(--fs-sm);
-	}
-	.dseg:global([data-more~="start"]) {
-		mask-image: linear-gradient(to right, transparent, #000 24px);
-	}
-	.dseg:global([data-more~="end"]) {
-		mask-image: linear-gradient(to left, transparent, #000 24px);
-	}
-	.dseg:global([data-more="start end"]) {
-		mask-image: linear-gradient(to right, transparent, #000 24px, #000 calc(100% - 24px), transparent);
-	}
-	.dseg button:focus-visible {
-		outline-offset: -2px; /* keep the ring inside the visible strength at either scroll edge */
-	}
-	.dseg button.on {
-		background: var(--lv-soft, var(--bg-active));
-		color: var(--lv, var(--text));
-		box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--lv, var(--border-strong)) 45%, transparent);
-		font-weight: 600;
-	}
-	.dseg:global([data-indicator-ready]) button.on {
-		background: transparent;
-		box-shadow: none;
-	}
-	@media (max-width: 640px) {
-		.dseg button,
-		.ladder .name {
-			font-size: var(--fs-xs);
-		}
-	}
-	/* a 360px phone gives each column 40px: "minimal" and "medium" in 12px crowded their neighbours. 11px and no side
-	   padding (columns 41.7px) keep a gap between every pair of names; the rail's ends follow the padding. */
-	@media (max-width: 380px) {
-		.ladder {
-			padding-inline: 0;
-		}
-		.rail {
-			left: calc(100% / 14);
-			right: calc(100% / 14);
-		}
-		.ladder .name {
-			font-size: var(--fs-2xs);
-		}
-	}
-	/* the last strength of a matched model: it stays on, so it neither hovers nor reads as clickable */
-	.step:disabled {
-		cursor: default;
-		pointer-events: none;
 	}
 	.field[readonly] {
 		color: var(--text-dim);

@@ -100,7 +100,7 @@ SCREENS = [
     ("connection-edit", EDIT, '.fform .mopen'),
     ("discard-connection", EDIT + ['fill:.fform input[placeholder="예: 내 프록시"]|audit', "key:Escape"], '[role="alertdialog"]'),
     ("connection-model", MODEL, '.fform .iconpick'),
-    ("model-strength", MODEL + ['.caprow:has-text("추론") [role="switch"]'], '.dseg button.on'),
+    ("model-strength", MODEL + ['.caprow:has-text("추론") [role="switch"]'], '[aria-label="새 대화 기본 강도"] button[aria-pressed="true"]'),
     ("icon-picker", MODEL + ['.iconpick'], '.grid .cell[aria-pressed="true"]'),
     ("catalog-picker", MODEL + ['.mtrigger'], '.pk-list .pk-opt'),
     ("model-picker", [".trigger.inline"], '.pk-list .pk-opt'),
