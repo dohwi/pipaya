@@ -149,7 +149,7 @@
 {/snippet}
 
 <!-- opened from the composer (over the page) or from settings: the top layer works for both -->
-<PickerModal {closeShortcut} title={title ?? t("모델 설정")} {onclose} bind:query={filter} placeholder={t("모델 검색")} empty={!starred.length && !shown.length ? t("일치하는 모델이 없습니다") : undefined}>
+<PickerModal {closeShortcut} title={title ?? t("모델 선택")} {onclose} bind:query={filter} placeholder={t("모델 검색")} empty={!starred.length && !shown.length ? t("일치하는 모델이 없습니다") : undefined}>
 	{#snippet list()}
 		{#if allowUnset}
 			<PickerOption selected={!sel} onclick={unset}>

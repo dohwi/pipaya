@@ -216,7 +216,7 @@ def run_flows(a, out, client_url, api_base, token, api, console, work):
         def b_shortcut_toggles():
             dialog = page.get_by_role("dialog")
             for key, name in [("Control+Shift+a", re.compile("탭 .*개 모두 보기")), ("Control+k", "대화 찾기"),
-                              ("Control+m", "모델 설정"), ("Alt+w", "작업 폴더 선택"), ("Control+,", "설정")]:
+                              ("Control+m", "모델 선택"), ("Alt+w", "작업 폴더 선택"), ("Control+,", "설정")]:
                 composer().focus()
                 page.keyboard.press(key)
                 expect(page.get_by_role("dialog", name=name)).to_be_visible()
@@ -262,7 +262,7 @@ def run_flows(a, out, client_url, api_base, token, api, console, work):
             expect(palette).to_have_count(0)
             for from_list in [False, True]:
                 page.keyboard.press("Control+ArrowDown")
-                picker = page.get_by_role("dialog", name="모델 설정")
+                picker = page.get_by_role("dialog", name="모델 선택")
                 expect(picker.get_by_role("textbox")).to_be_focused()
                 if from_list:
                     page.keyboard.press("ArrowDown")  # an unmodified arrow still navigates

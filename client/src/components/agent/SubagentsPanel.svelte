@@ -2,6 +2,7 @@
 	import { untrack } from "svelte";
 	import Badge from "../ui/Badge.svelte";
 	import Button from "../ui/Button.svelte";
+	import Icon from "../ui/Icon.svelte";
 	import ConfirmButton from "../ui/ConfirmButton.svelte";
 	import EmptyState from "../ui/EmptyState.svelte";
 	import FilterChip from "../ui/FilterChip.svelte";
@@ -233,7 +234,7 @@
 			</ListGroup>
 		{/each}
 		</div>
-		<Button variant="dashed" onclick={add}>{t("서브에이전트 역할 추가")}</Button>
+		<Button variant="dashed" onclick={add}><Icon name="plus" /> {t("서브에이전트 역할 추가")}</Button>
 	{:else if !loadError}
 		<EmptyState loading />
 	{/if}

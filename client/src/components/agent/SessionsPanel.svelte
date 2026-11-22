@@ -174,7 +174,7 @@
 						{#if nIn(g.list)}
 							<span class="del" in:collapseIn out:collapseOut>
 								<Button size="sm" onclick={() => void restore(g.list)} disabled={busy || !can(g.list, canRestore)}><Icon name="undo" /> {t("복원")}</Button>
-								<Button size="sm" onclick={() => void close(g.list)} disabled={busy || !can(g.list, canClose)}><Icon name="x" /> {t("닫기")}</Button>
+								<Button size="sm" onclick={() => void close(g.list)} disabled={busy || !can(g.list, canClose)}><Icon name="x" /> {t("대화 닫기")}</Button>
 								<ConfirmButton size="sm" danger timeout={5000} confirmLabel={t("정말 {n}개 삭제", { n: nIn(g.list) })} onconfirm={() => void remove(g.list)} disabled={busy}><Icon name="trash" /> {t("{n}개 삭제", { n: nIn(g.list) })}</ConfirmButton>
 							</span>
 						{/if}

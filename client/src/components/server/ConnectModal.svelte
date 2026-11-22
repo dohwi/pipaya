@@ -333,6 +333,8 @@
 									<Icon name="chevron-right" />
 								</button>
 							</li>
+						{:else}
+							<EmptyState as="li" tone="plain" compact>{t("해당하는 서비스가 없습니다")}</EmptyState>
 						{/each}
 					</ul>
 					<div class="group">{t("로컬 모델 (서버 PC에서 실행 중인 것)")}</div>
