@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Notice from "../ui/Notice.svelte";
 	import { onMount } from "svelte";
 	import Button from "../ui/Button.svelte";
 	import Switch from "../ui/Switch.svelte";
@@ -63,7 +64,7 @@
 	<div class="actions">
 		<Button size="sm" disabled={!dirty || busy || badPort} onclick={apply}>{busy ? t("적용 중…") : t("적용")}</Button>
 	</div>
-	{#if error}<p class="hint danger" role="alert" in:collapseIn out:collapseOut>{error}</p>{/if}
+	{#if error}<Notice tone="danger" size="sm" animated>{error}</Notice>{/if}
 	<p class="hint">{t("적용하면 내장 서버가 다시 시작됩니다. 진행 중인 작업은 중지됩니다")}</p>
 </div>
 {/if}

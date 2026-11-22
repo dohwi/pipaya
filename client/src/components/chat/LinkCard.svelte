@@ -4,6 +4,7 @@
 	import { t } from "../../lib/i18n";
 	import { app } from "../../lib/store.svelte";
 	import PipayaMark from "../ui/PipayaMark.svelte";
+	import Notice from "../ui/Notice.svelte";
 	import Icon from "../ui/Icon.svelte";
 	import StatusCard from "./StatusCard.svelte";
 
@@ -32,14 +33,14 @@
 		{/snippet}
 		<p class="who"><b>{link.name}</b><span class="mono">{link.baseUrl}</span></p>
 		{#if link.state === "confirm"}
-			{#if isPlainHttpOnOpenNetwork(link.baseUrl)}<p class="warn">{t("암호화되지 않은 http 주소입니다. Tailscale 주소나 https를 권장합니다.")}</p>{/if}
-			<p class="warn">{t("링크를 보낸 사람이 믿을 수 있는지, 위 주소가 내 서버가 맞는지 확인하세요. 연결하면 이 서버가 목록에 추가됩니다.")}</p>
+			{#if isPlainHttpOnOpenNetwork(link.baseUrl)}<Notice tone="warn">{t("암호화되지 않은 http 주소입니다. Tailscale 주소나 https를 권장합니다.")}</Notice>{/if}
+			<Notice tone="warn">{t("링크를 보낸 사람이 믿을 수 있는지, 위 주소가 내 서버가 맞는지 확인하세요. 연결하면 이 서버가 목록에 추가됩니다.")}</Notice>
 			<div class="actions">
 				<Button onclick={() => app.closeLinking()}>{t("취소")}</Button>
 				<Button variant="primary" onclick={() => void app.confirmLinking()}>{t("연결")}</Button>
 			</div>
 		{:else if link.state === "failed"}
-			<p class="why" role="alert">{link.error}</p>
+			<Notice tone="danger">{link.error}</Notice>
 			<Button variant="primary" onclick={() => app.closeLinking()}>{t("닫기")}</Button>
 		{/if}
 	</StatusCard>
@@ -62,25 +63,5 @@
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
-	}
-	.warn {
-		margin: 4px 0 4px;
-		padding: 8px 12px;
-		border-radius: var(--radius);
-		background: var(--warn-soft);
-		color: var(--warn);
-		font-size: var(--fs-sm);
-		line-height: 1.55;
-		word-break: keep-all;
-	}
-	.why {
-		margin: 4px 0 4px;
-		padding: 8px 12px;
-		border-radius: var(--radius);
-		background: var(--danger-soft);
-		color: var(--danger);
-		font-size: var(--fs-sm);
-		line-height: 1.55;
-		word-break: keep-all;
 	}
 </style>

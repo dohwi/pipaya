@@ -149,7 +149,7 @@
 {/snippet}
 
 <!-- opened from the composer (over the page) or from settings: the top layer works for both -->
-<PickerModal {closeShortcut} title={title ?? t("모델 설정")} {onclose} bind:query={filter} placeholder={t("모델 검색")}>
+<PickerModal {closeShortcut} title={title ?? t("모델 설정")} {onclose} bind:query={filter} placeholder={t("모델 검색")} empty={!starred.length && !shown.length ? t("일치하는 모델이 없습니다") : undefined}>
 	{#snippet list()}
 		{#if allowUnset}
 			<PickerOption selected={!sel} onclick={unset}>
@@ -166,9 +166,6 @@
 			<div class="pk-group">{g.name}{#if !g.configured} <Badge size="sm">{t("키 없음")}</Badge>{/if}</div>
 			{#each g.models as m (m.id)}{@render opt(m, false)}{/each}
 		{/each}
-		{#if !starred.length && !shown.length}
-			<div class="pk-empty">{t("일치하는 모델이 없습니다")}</div>
-		{/if}
 	{/snippet}
 
 	{#snippet after()}

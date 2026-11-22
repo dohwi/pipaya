@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Notice from "../ui/Notice.svelte";
 	import Button from "../ui/Button.svelte";
 	import { t } from "../../lib/i18n";
 	import { updater } from "../../lib/updater.svelte";
@@ -58,7 +59,7 @@
 	{#if release === "older" && !isNew && !busy}
 		<p class="hint note" in:collapseIn out:collapseOut>{t("서버가 앱보다 오래된 버전입니다. 서버에서 업데이트를 실행하세요 (install.sh update)")}</p>
 	{/if}
-	{#if serverUpdater.error}<p class="hint danger note" role="alert" in:collapseIn out:collapseOut>{serverUpdater.error}</p>{/if}
+	{#if serverUpdater.error}<Notice tone="danger" size="sm" animated>{serverUpdater.error}</Notice>{/if}
 {/if}
 
 <style>

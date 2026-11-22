@@ -5,6 +5,7 @@
 	import { getLang, t } from "../../lib/i18n";
 	import Icon from "../ui/Icon.svelte";
 	import Notice from "../ui/Notice.svelte";
+	import EmptyState from "../ui/EmptyState.svelte";
 	import Modal from "../ui/Modal.svelte";
 	import DialogBody from "../ui/DialogBody.svelte";
 	import RemoveExtensionConfirm from "./RemoveExtensionConfirm.svelte";
@@ -247,7 +248,7 @@
 					{/if}
 				</li>
 			{:else}
-				{#if catalog && !loading}<li class="none">{t("일치하는 확장이 없습니다")}</li>{/if}
+				{#if catalog && !loading}<li class="none"><EmptyState tone="plain" compact>{t("일치하는 확장이 없습니다")}</EmptyState></li>{/if}
 			{/each}
 		</ul>
 	</DialogBody>
@@ -290,7 +291,7 @@
 	.desc { margin: 0; flex: 1; color: var(--text-dim); overflow-wrap: anywhere; }
 	.foot :global(.btn) { flex: none; }
 	.acts { display: flex; align-items: center; gap: 4px; flex: none; }
-	.none { grid-column: 1 / -1; color: var(--text-faint); padding: 16px 0; text-align: center; }
+	.none { grid-column: 1 / -1; list-style: none; }
 	.pair { flex: none; display: inline-flex; color: var(--text-faint); }
 	.pair :global(svg) { width: 14px; height: 14px; }
 </style>

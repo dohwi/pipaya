@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Notice from "../ui/Notice.svelte";
 	import { onMount } from "svelte";
 	import { errorText, type Api } from "../../lib/api";
 	import { iconFileToBase64 } from "../../lib/model-icon-image";
@@ -54,7 +55,7 @@
 	const showAuto = $derived(!q || t("자동").toLowerCase().includes(q) || "auto".includes(q));
 </script>
 
-<PickerModal title={t("아이콘")} {onclose} bind:query placeholder={t("아이콘 검색")} width="400px" minList="220px">
+<PickerModal title={t("아이콘")} {onclose} bind:query placeholder={t("아이콘 검색")} width="400px" minList="220px" empty={!showAuto && !hits.length ? t("일치하는 항목이 없습니다") : undefined}>
 	{#snippet list()}
 		<div class="grid" role="group" aria-label={t("아이콘")}>
 			{#if showAuto}
@@ -84,9 +85,8 @@
 		{#if api && !q}
 			<input bind:this={file} type="file" accept="image/png,image/jpeg,image/webp" hidden onchange={upload} />
 			<p class="hint">{t("PNG·JPEG·WebP, 정사각형에 가까울수록 좋습니다. 서버에 저장되어 모든 기기에서 보입니다.")}</p>
-			{#if error}<p class="hint danger" role="alert">{error}</p>{/if}
+			{#if error}<Notice tone="danger" size="sm">{error}</Notice>{/if}
 		{/if}
-		{#if !showAuto && !hits.length}<p class="none">{t("일치하는 항목이 없습니다")}</p>{/if}
 	{/snippet}
 </PickerModal>
 
@@ -143,11 +143,5 @@
 	}
 	.hint {
 		margin: 4px 4px 0;
-	}
-	.none {
-		margin: 16px 0;
-		text-align: center;
-		color: var(--text-faint);
-		font-size: var(--fs-sm);
 	}
 </style>

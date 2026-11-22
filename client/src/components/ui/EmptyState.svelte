@@ -8,22 +8,25 @@
 	 *  loading  shows "불러오는 중…" (announced politely) instead of the children
 	 *  tone     card = a tinted box (inside a dialog body), plain = bare centred text (inside a menu or a list that has its own frame),
 	 *           dashed = an outlined slot (the page itself is empty)
+	 *  compact  tighter padding (12px) for a line in a picker list or a small dialog list
 	 * A page-level empty state with an icon and a call to action is `Welcome`/`EmptyHero`, not this.
 	 */
 	let {
 		loading = false,
 		tone = "card",
+		compact = false,
 		as = "div",
 		children,
 	}: {
 		loading?: boolean;
 		tone?: "card" | "plain" | "dashed";
+		compact?: boolean;
 		as?: "div" | "p" | "li";
 		children?: Snippet;
 	} = $props();
 </script>
 
-<svelte:element this={as} class="es {tone}" role={loading ? "status" : undefined}>
+<svelte:element this={as} class="es {tone}" class:compact role={loading ? "status" : undefined}>
 	{#if loading}{t("불러오는 중…")}{:else}{@render children?.()}{/if}
 </svelte:element>
 
@@ -32,5 +35,6 @@
 	.card { padding: 16px 12px; background: var(--bg); border-radius: var(--radius); }
 	.plain { padding: 24px 12px; text-align: center; }
 	.dashed { padding: 16px; border: 1px dashed var(--border); border-radius: var(--radius); text-align: center; }
+	.compact { padding-block: 12px; }
 	li.es { list-style: none; }
 </style>

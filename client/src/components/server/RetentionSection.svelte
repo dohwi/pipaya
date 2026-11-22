@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Notice from "../ui/Notice.svelte";
 	import Button from "../ui/Button.svelte";
 	import Select from "../ui/Select.svelte";
 	import SettingRow from "../ui/SettingRow.svelte";
@@ -106,7 +107,7 @@
 			</div>
 		{/if}
 		{#if note}<p class="hint" role="status">{note}</p>{/if}
-		{#if error}<p class="hint danger" role="alert">{error}</p>{/if}
+		{#if error}<Notice tone="danger" size="sm">{error}</Notice>{/if}
 	</section>
 {/if}
 
@@ -124,8 +125,5 @@
 	}
 	.hint {
 		margin: 0;
-	}
-	.danger {
-		color: var(--danger);
 	}
 </style>

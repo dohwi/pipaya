@@ -5,6 +5,8 @@
 	import { t } from "../../lib/i18n";
 	import Icon from "../ui/Icon.svelte";
 	import Badge from "../ui/Badge.svelte";
+	import EmptyState from "../ui/EmptyState.svelte";
+	import Notice from "../ui/Notice.svelte";
 	import Modal from "../ui/Modal.svelte";
 	import ModalHeader from "../ui/ModalHeader.svelte";
 	import { app } from "../../lib/store.svelte";
@@ -233,7 +235,7 @@
 			</div>
 		{:else}
 		<div class="body">
-			{#if error}<p class="bad" role="alert">{error}</p>{/if}
+			{#if error}<Notice tone="danger" size="sm">{error}</Notice>{/if}
 
 			{#if login}
 				<div class="flow" role="status" aria-live="polite">
@@ -289,7 +291,7 @@
 								{/if}
 							</div>
 						{/if}
-						{#if login.error}<p class="bad" role="alert">{login.error}</p>{/if}
+						{#if login.error}<Notice tone="danger" size="sm">{login.error}</Notice>{/if}
 						{#if login.status === "cancelled"}<p class="hint">{t("취소됨")}</p>{/if}
 					{/if}
 				</div>
@@ -317,7 +319,7 @@
 								</button>
 							</li>
 						{:else}
-							<li class="empty">{t("해당하는 서비스가 없습니다")}</li>
+							<EmptyState as="li" tone="plain" compact>{t("해당하는 서비스가 없습니다")}</EmptyState>
 						{/each}
 					</ul>
 				{:else}
@@ -370,7 +372,6 @@
 	.body { display: flex; flex-direction: column; gap: 12px; padding: var(--dlg-body-t) var(--dlg-px) var(--dlg-body-b); overflow-y: auto; min-height: 0; }
 	.hint { margin: 0; line-height: 1.55; word-break: keep-all; }
 	.hint.lead { margin-top: -4px; } /* the lead line sits 8 under the title, not the body's 12 gap */
-	.bad { color: var(--danger); margin: 0; font-size: var(--fs-sm); overflow-wrap: anywhere; }
 	.search { position: relative; display: flex; align-items: center; }
 	.search :global(svg) { position: absolute; left: 12px; width: 16px; height: 16px; stroke: var(--text-faint); stroke-width: 2; pointer-events: none; }
 	.search .field { width: 100%; padding-left: 36px; }
@@ -386,7 +387,6 @@
 	.item :global(svg) { flex: none; width: 15px; height: 15px; stroke: var(--text-faint); stroke-width: 2; }
 	.pname { flex: 1; min-width: 0; font-size: var(--fs-sm); }
 	.sub { font-size: var(--fs-xs); color: var(--text-faint); }
-	.empty { padding: 16px; text-align: center; font-size: var(--fs-sm); color: var(--text-faint); }
 	.flow { display: flex; flex-direction: column; gap: 16px; }
 	.steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 16px; counter-reset: s; }
 	.steps li { position: relative; display: flex; flex-direction: column; gap: 8px; padding-left: 32px; counter-increment: s; font-size: var(--fs-sm); color: var(--text-dim); line-height: 1.55; word-break: keep-all; opacity: 0.6; }

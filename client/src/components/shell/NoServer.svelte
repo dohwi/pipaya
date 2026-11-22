@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Notice from "../ui/Notice.svelte";
 	import { errorText } from "../../lib/api";
 	import Button from "../ui/Button.svelte";
 	import { t } from "../../lib/i18n";
@@ -86,7 +87,7 @@
 					<li><b>{t("아래 버튼으로 카메라를 열어 QR을 스캔합니다")}</b></li>
 				</ol>
 				<Button variant="primary" class="add" onclick={scan} disabled={scanning}><Icon name="phone" /> {t("QR 스캔")}</Button>
-				{#if error}<p class="hint danger" role="alert">{error}</p>{/if}
+				{#if error}<Notice tone="danger" size="sm">{error}</Notice>{/if}
 			{/if}
 			<Button variant={ways[0] === "manual" ? "primary" : "default"} class="add" onclick={() => (app.serverForm = "new")}>{#if ways[0] === "manual"}<Icon name="plus" /> {/if}{t("주소와 토큰으로 연결")}</Button>
 		</div>
@@ -234,11 +235,6 @@
 		line-height: 20px;
 		color: var(--text);
 		scrollbar-width: none;
-	}
-	.hint {
-		margin: 0;
-		line-height: 1.55;
-		word-break: keep-all;
 	}
 	.steps {
 		list-style: none;

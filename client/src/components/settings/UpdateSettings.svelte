@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Notice from "../ui/Notice.svelte";
 	import Button from "../ui/Button.svelte";
 	import { t } from "../../lib/i18n";
 	import { updater } from "../../lib/updater.svelte";
@@ -44,7 +45,7 @@
 			</div>
 		{/if}
 	</div>
-	{#if updater.error}<p class="hint danger err" role="alert" in:collapseIn out:collapseOut>{updater.error}</p>{/if}
+	{#if updater.error}<Notice tone="danger" size="sm" animated>{updater.error}</Notice>{/if}
 	<p class="hint note">
 		{android ? t("앱 안에서 내려받은 뒤 시스템 설치 화면이 열립니다. 설치를 한 번 확인해 주세요.") : t("업데이트는 서명을 확인한 뒤 설치하고 앱을 다시 시작합니다.")}
 	</p>
@@ -60,5 +61,5 @@
 	.bar { height: 3px; background: var(--border); }
 	.bar span { display: block; height: 100%; background: var(--accent); transition: width var(--motion-fast) var(--ease-std); }
 	.note { line-height: 1.6; }
-	.note, .err { margin: 8px 0 0; }
+	.note { margin: 8px 0 0; }
 </style>
