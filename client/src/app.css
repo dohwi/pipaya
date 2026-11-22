@@ -123,12 +123,30 @@
 	--dlg-body-b: 24px; /* body bottom */
 	--dlg-foot-t: 12px; /* footer top */
 	--dlg-foot-b: 16px; /* footer bottom (plus --sab) */
-	/* dialog widths: S confirm / M form / L list+settings / XL workspace; the gutter keeps them off the screen edge */
+	/* dialog widths: XS compact / S confirm / M form / L list+settings / XL workspace / 2XL–3XL full-sheet; the gutter keeps them off the screen edge */
 	--modal-gutter: 24px;
+	--modal-w-xs: 360px;
 	--modal-w-s: 420px;
 	--modal-w-m: 480px;
 	--modal-w-l: 560px;
 	--modal-w-xl: 720px;
+	--modal-w-2xl: 920px;
+	--modal-w-3xl: 1080px;
+	/* lightbox (always dark media stage) and subtle surface shadows */
+	--lb-scrim: rgba(0, 0, 0, 0.82);
+	--lb-top-fade: rgba(0, 0, 0, 0.5);
+	--lb-ink: #fff;
+	--lb-ink-dim: rgba(255, 255, 255, 0.8);
+	--lb-ctrl-bg: rgba(255, 255, 255, 0.12);
+	--lb-ctrl-hover: rgba(255, 255, 255, 0.22);
+	--lb-nav-hover: rgba(255, 255, 255, 0.24);
+	--lb-dot: rgba(255, 255, 255, 0.35);
+	--lb-note-bg: rgba(20, 20, 20, 0.88);
+	--lb-note-err: rgba(150, 30, 30, 0.92);
+	--lb-shadow: 0 20px 80px rgba(0, 0, 0, 0.55);
+	--lb-note-shadow: 0 8px 30px rgba(0, 0, 0, 0.5);
+	--shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.08);
+	--shadow-up: 0 -6px 20px rgba(0, 0, 0, 0.35);
 	/* Stacking scale. A dialog is a scrim + a panel pair; a dialog opened from another sits one layer higher.
 	   layer 1: dialogs opened from the main screen (settings, palette, work details, model picker)
 	   layer 2: opened from a layer-1 dialog (server form)  layer 3: from layer 2 (folder picker, extension dialogs)

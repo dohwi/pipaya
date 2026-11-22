@@ -55,7 +55,7 @@
 	const showAuto = $derived(!q || t("자동").toLowerCase().includes(q) || "auto".includes(q));
 </script>
 
-<PickerModal title={t("아이콘")} {onclose} bind:query placeholder={t("아이콘 검색")} width="400px" minList="220px" empty={!showAuto && !hits.length ? t("일치하는 항목이 없습니다") : undefined}>
+<PickerModal title={t("아이콘")} {onclose} bind:query placeholder={t("아이콘 검색")} width="s" minList="220px" empty={!showAuto && !hits.length ? t("일치하는 항목이 없습니다") : undefined}>
 	{#snippet list()}
 		<div class="grid" role="group" aria-label={t("아이콘")}>
 			{#if showAuto}

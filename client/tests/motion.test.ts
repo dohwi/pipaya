@@ -222,8 +222,8 @@ describe("modals mounted by their parent animate", () => {
 		const s = markup(read("components/chat/Lightbox.svelte"));
 		expect(s).toMatch(/class="lb"[^>]*in:fadeIn\|global out:fadeOut\|global/);
 	});
-	test("the extension approval and request dialogs are the shared Modal, closed by the request going away", () => {
-		for (const f of ["extensions/ExtensionApproval", "extensions/ExtensionDialog"]) {
+	test("the extension approval, request and panel dialogs are the shared Modal, never native <dialog>", () => {
+		for (const f of ["extensions/ExtensionApproval", "extensions/ExtensionDialog", "extensions/ExtensionPanels"]) {
 			const s = markup(read(`components/${f}.svelte`));
 			expect(s, f).toContain("<Modal");
 			expect(s, f).not.toContain("<dialog");

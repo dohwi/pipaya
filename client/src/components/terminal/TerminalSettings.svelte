@@ -6,6 +6,7 @@
 	import Switch from "../ui/Switch.svelte";
 	import Select from "../ui/Select.svelte";
 	import SettingRow from "../ui/SettingRow.svelte";
+	import NumberField from "../ui/NumberField.svelte";
 
 	const p = $derived(app.prefs.terminal);
 	const changed = $derived(JSON.stringify(p) !== JSON.stringify(DEFAULT_TERMINAL));
@@ -39,13 +40,13 @@
 	/>
 </SettingRow>
 <SettingRow label={t("글자 크기")} for="terminal-size">
-	<input id="terminal-size" type="number" min={L.fontSize.min} max={L.fontSize.max} step="1" value={p.fontSize} aria-label={t("터미널 글자 크기")} onchange={numeric("fontSize")} />
+	<NumberField id="terminal-size" min={L.fontSize.min} max={L.fontSize.max} step={1} value={p.fontSize} ariaLabel={t("터미널 글자 크기")} onchange={numeric("fontSize")} />
 </SettingRow>
 <SettingRow label={t("줄 높이")} for="terminal-line">
-	<input id="terminal-line" type="number" min={L.lineHeight.min} max={L.lineHeight.max} step="0.05" value={p.lineHeight} aria-label={t("터미널 줄 높이")} onchange={numeric("lineHeight")} />
+	<NumberField id="terminal-line" min={L.lineHeight.min} max={L.lineHeight.max} step={0.05} value={p.lineHeight} ariaLabel={t("터미널 줄 높이")} onchange={numeric("lineHeight")} />
 </SettingRow>
 <SettingRow label={t("스크롤백 줄 수")} for="terminal-scroll">
-	<input id="terminal-scroll" type="number" min={L.scrollback.min} max={L.scrollback.max} step="500" value={p.scrollback} aria-label={t("터미널 스크롤백 줄 수")} onchange={numeric("scrollback")} />
+	<NumberField id="terminal-scroll" min={L.scrollback.min} max={L.scrollback.max} step={500} value={p.scrollback} ariaLabel={t("터미널 스크롤백 줄 수")} onchange={numeric("scrollback")} />
 </SettingRow>
 <SettingRow label={t("커서 깜빡임")}>
 	<Switch checked={p.cursorBlink} label={t("커서 깜빡임")} onchange={(on) => app.prefs.setTerminal({ cursorBlink: on })} />
@@ -60,24 +61,5 @@
 		align-items: center;
 		justify-content: space-between;
 		gap: 8px;
-	}
-	input[type="number"] {
-		width: 96px;
-		height: var(--control-h-sm);
-		padding: 0 8px;
-		border: 1px solid var(--border-strong);
-		border-radius: var(--radius-control);
-		background: var(--bg);
-		color: var(--text);
-		font-family: var(--mono);
-		font-size: var(--fs-sm);
-		transition:
-			border-color var(--motion-fast) var(--ease-std),
-			box-shadow var(--motion-fast) var(--ease-std);
-	}
-	input[type="number"]:focus-visible {
-		outline: none;
-		border-color: var(--accent);
-		box-shadow: 0 0 0 3px var(--accent-soft);
 	}
 </style>

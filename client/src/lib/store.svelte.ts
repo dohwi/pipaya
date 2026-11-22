@@ -43,6 +43,7 @@ import { getLang, LocalizedError, onLangChange, setRemotePacks, t } from "./i18n
 import { queuedShown } from "./queue";
 import { graphRuns } from "./graph-runs.svelte";
 import { fetchLocalePacks } from "./locale-sync";
+import { configureUiEnv } from "./ui-env.svelte";
 import { groupNameFor } from "./group-name";
 import { parseConfiguration, parseKeybindings, type ConfigurationDocument } from "./extensions/configuration";
 import { rehydrateSettingsFromDurable } from "./durable-storage";
@@ -2806,3 +2807,8 @@ class AppStore {
 }
 
 export const app = new AppStore();
+
+configureUiEnv({
+  dark: () => app.prefs.resolvedDark,
+  closeBinding: (action) => (app.prefs.recordingKey ? undefined : app.prefs.bindings[action]),
+});

@@ -151,7 +151,7 @@
 	const close = () => (app.settingsOpen = false);
 </script>
 
-<Modal closeShortcut="settings" onclose={close} label={t("설정")} width="920px" height="700px" maxHeight="700px" gutter="48px" safeArea>
+<Modal closeShortcut="settings" onclose={close} label={t("설정")} width="2xl" height="700px" maxHeight="700px" gutter="48px" safeArea>
 	<ModalHeader title={detailPhone ? t(current.label) : t("설정")} onclose={close} onback={detailPhone ? back : undefined} />
 	{#if !detailPhone}
 	<div class="srvbar" role="group" aria-label={t("설정 범위")} use:slidingIndicator={{ selector: ".fchip.on", radius: "999px" }}>

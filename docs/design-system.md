@@ -239,8 +239,7 @@ Every dialog band (header, search strip, body, footer, list rows) must start and
 Popovers that are lists (`Palette`, queue) use a fixed **16**: their rows start at 16, so the title and the close glyph do too. A settings window's body starts
 after its nav column (nav right edge + the same gutter); the nav's icons and group labels start on the window's gutter too (nav 12 + row 12 + 1px border = 25, the title's and search field's line). Measure the content (text range or control box), not a scroller: a scroller that gives 4px of focus-ring room
 and takes it back with `margin: 0 -4px` still has its content on the gutter. Ellipsised and wrapped text is judged by its box.
-Checked at 1440 / 820 / 390, light and dark: 223 bands over 29 screens, 0 off-rule sides (extension dialogs included, they are native `<dialog>` with
-`padding: var(--dlg-head-t) var(--dlg-px) var(--dlg-foot-b)`).
+Checked at 1440 / 820 / 390, light and dark: 223 bands over 29 screens, 0 off-rule sides (extension dialogs and panels included, all routed through the shared `<Modal>`).
 
 ### The conversation column (main screen)
 

@@ -1,6 +1,15 @@
 <script module lang="ts">
+	import Badge from "../ui/Badge.svelte";
 	import Button from "../ui/Button.svelte";
 	import type { UINode } from "../../lib/extensions/ui";
+
+	type BadgeTone = "neutral" | "ok" | "warn" | "danger" | "accent" | "info";
+	function badgeTone(tone?: string): BadgeTone {
+		if (tone === "success" || tone === "ok") return "ok";
+		if (tone === "warning" || tone === "warn") return "warn";
+		if (tone === "danger" || tone === "info" || tone === "accent") return tone;
+		return "neutral";
+	}
 
 	const VIEW = Symbol("extension-view");
 
@@ -323,7 +332,7 @@
 		<p class="text size-{size} tone-{node.tone ?? 'neutral'}">{node.text}</p>
 	{/if}
 {:else if node.type === "badge"}
-	<span class="badge tone-{node.tone ?? 'neutral'}">{node.text}</span>
+	<span class="ext-badge"><Badge tone={badgeTone(node.tone)}>{node.text}</Badge></span>
 {:else if node.type === "divider"}
 	<hr class="divider" />
 {:else if node.type === "code"}
@@ -385,7 +394,7 @@
 						<span class="list-title">{item.title}</span>
 						{#if item.description}<span class="muted">{item.description}</span>{/if}
 					</div>
-					{#if item.badge}<span class="badge tone-neutral">{item.badge}</span>{/if}
+					{#if item.badge}<Badge>{item.badge}</Badge>{/if}
 				</li>
 			{/each}
 		</ul>
@@ -529,8 +538,7 @@
 	.size-heading { font-size: var(--fs-lg); font-weight: 600; line-height: 1.35; }
 	.muted { font-size: var(--fs-xs); color: var(--text-faint); line-height: 1.5; }
 	.empty { padding: 4px 0; }
-	.badge { display: inline-flex; align-items: center; align-self: flex-start; max-width: 100%; padding: 4px 8px; border-radius: var(--radius-pill); background: var(--tone-soft); color: var(--tone); font-size: var(--fs-xs); font-weight: 550; line-height: 1.5; overflow-wrap: anywhere; }
-	.badge.tone-neutral { color: var(--text); }
+	.ext-badge { display: inline-flex; align-self: flex-start; max-width: 100%; }
 	.divider { width: 100%; margin: 4px 0; border: 0; border-top: 1px solid var(--border); }
 
 	.code { margin: 0; padding: 8px 12px; max-width: 100%; overflow: auto; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-code); font-family: var(--mono); font-size: var(--fs-xs); line-height: 1.55; tab-size: 2; }
@@ -569,7 +577,7 @@
 	.list li { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 12px; }
 	.list li + li { border-top: 1px solid var(--border); }
 	.list-text { display: flex; flex: 1; flex-direction: column; gap: 4px; min-width: 0; }
-	.list li > .badge { flex: none; align-self: center; white-space: nowrap; }
+	.list li > :global(.badge) { flex: none; align-self: center; white-space: nowrap; }
 	.list-title { font-size: var(--fs-md); font-weight: 550; }
 
 	/* tabs */

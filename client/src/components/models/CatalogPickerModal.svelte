@@ -72,7 +72,7 @@
 	</PickerOption>
 {/snippet}
 
-<PickerModal title={t("OpenRouter에서 찾은 모델")} {onclose} bind:query={filter} placeholder={t("모델 검색")} width="440px" minList="200px" empty={!rows.length && !showSuggested ? t("일치하는 모델이 없습니다") : undefined}>
+<PickerModal title={t("OpenRouter에서 찾은 모델")} {onclose} bind:query={filter} placeholder={t("모델 검색")} width="m" minList="200px" empty={!rows.length && !showSuggested ? t("일치하는 모델이 없습니다") : undefined}>
 	{#snippet footerStart()}
 		{#if onrefresh}
 			<button type="button" class="src" onclick={onrefresh} disabled={refreshing} title={detail}>
