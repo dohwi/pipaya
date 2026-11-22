@@ -8,6 +8,10 @@ export interface QuestionItem {
 	recommended?: string;
 	/** The options are steps of one ordered scale (low → high): drawn as a ladder instead of buttons. */
 	scale?: boolean;
+	/** Any number of the options may be picked (at least one); the answer holds them one per line. */
+	multiple?: boolean;
+	/** One short line per option, same order as `options`, shown under its label. */
+	descriptions?: string[];
 	allowFreeText: boolean;
 }
 
@@ -19,6 +23,8 @@ export interface QuestionRequest {
 	options?: string[];
 	recommended?: string;
 	scale?: boolean;
+	multiple?: boolean;
+	descriptions?: string[];
 	allowFreeText: boolean;
 	/** Set when several questions were asked at once; one entry per question, in order. */
 	items?: QuestionItem[];
@@ -26,9 +32,10 @@ export interface QuestionRequest {
 }
 
 export interface QuestionAnswer {
-	answer?: string;
-	/** One answer per entry of `items`, in order. */
-	answers?: string[];
+	/** null: the user left this question to the agent ("알아서 정해 줘"). */
+	answer?: string | null;
+	/** One answer per entry of `items`, in order; null for a question left to the agent. */
+	answers?: (string | null)[];
 }
 
 export type QuestionOutcome =
@@ -47,11 +54,32 @@ export type DecideResult = "ok" | "not_found" | "invalid";
  * Options without repeats (an agent sometimes offers the same answer twice). The client keys its answer buttons by their
  * text, so a repeated option used to crash the whole screen; it is also a choice the user cannot tell apart.
  */
-const uniqueOptions = (o: string[] | undefined): string[] | undefined => (o ? [...new Set(o)] : o);
-const cleanItem = <T extends { options?: string[] }>(item: T): T => (item.options ? { ...item, options: uniqueOptions(item.options) } : item);
+const cleanItem = <T extends { options?: string[]; descriptions?: string[] }>(item: T): T => {
+	if (!item.options) return item;
+	const keep = item.options.map((o, i) => item.options!.indexOf(o) === i);
+	const options = item.options.filter((_, i) => keep[i]);
+	// a description belongs to its option: kept only when there is one per option, and thinned out with the repeats
+	const descriptions = item.descriptions?.length === item.options.length ? item.descriptions.filter((_, i) => keep[i]) : undefined;
+	const { descriptions: _d, ...rest } = item;
+	return { ...rest, options, ...(descriptions?.some((d) => d.trim()) ? { descriptions } : {}) } as T;
+};
 
-const valid = (item: QuestionItem, answer: string) =>
-	!!answer && (item.allowFreeText || !item.options?.length || item.options.includes(answer));
+/** The told-the-agent text of a question the user left to it. Exported so the tool can tell it from a typed answer. */
+export const LEFT_TO_AGENT = "The user left this to you: decide with your best judgment (the recommended option if you gave one) and continue.";
+const LEFT_SHORT = "(left to you: decide)";
+
+/** The picks of a multiple-choice answer: one per line, trimmed, without repeats. */
+export const picksOf = (answer: string): string[] => [...new Set(answer.split("\n").map((x) => x.trim()).filter(Boolean))];
+
+const valid = (item: QuestionItem, answer: string | null) => {
+	if (answer === null) return true;
+	if (!answer) return false;
+	const allowed = (x: string) => item.allowFreeText || !item.options?.length || item.options.includes(x);
+	return item.multiple ? picksOf(answer).length > 0 && picksOf(answer).every(allowed) : allowed(answer);
+};
+/** An answer as the agent reads it: picks of a multiple-choice question joined, a left question said so. */
+const shown = (item: QuestionItem, answer: string | null, short: boolean) =>
+	answer === null ? (short ? LEFT_SHORT : LEFT_TO_AGENT) : item.multiple ? picksOf(answer).join(short ? " | " : "\n") : answer;
 
 /**
  * Holds tool calls (any tool using ctx.ask) that are waiting for a human answer. A question waits until it is answered or the run is
@@ -104,17 +132,17 @@ export class QuestionManager {
 		const { request } = entry;
 
 		if (request.items?.length) {
-			const answers = a.answers?.map((x) => x.trim());
+			const answers = a.answers?.map((x) => (x === null ? null : x.trim()));
 			if (!answers || answers.length !== request.items.length) return "invalid";
 			if (!request.items.every((item, i) => valid(item, answers[i]!))) return "invalid";
-			const text = request.items.map((item, i) => `${i + 1}. ${item.question}\n→ ${answers[i]}`).join("\n\n");
+			const text = request.items.map((item, i) => `${i + 1}. ${item.question}\n→ ${shown(item, answers[i]!, true)}`).join("\n\n");
 			entry.resolve({ status: "answered", answer: text }, "user");
 			return "ok";
 		}
 
-		const answer = (a.answer ?? "").trim();
+		const answer = a.answer === null ? null : (a.answer ?? "").trim();
 		if (!valid(request, answer)) return "invalid";
-		entry.resolve({ status: "answered", answer }, "user");
+		entry.resolve({ status: "answered", answer: shown(request, answer, false) }, "user");
 		return "ok";
 	}
 

@@ -2235,7 +2235,7 @@ class AppStore {
     return this.send(t("이어서 작성해 주세요. 앞부분은 다시 쓰지 말고 끊긴 곳부터 바로 시작해 주세요."), [], id);
   }
 
-  async answerQuestion(toolCallId: string, answer: string | string[], id = this.activeId) {
+  async answerQuestion(toolCallId: string, answer: string | null | (string | null)[], id = this.activeId) {
     const chat = this.chatOf(id);
     if (!this.api || !chat) return;
     try {

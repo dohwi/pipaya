@@ -216,6 +216,43 @@ describe("API contracts", () => {
 		await untilIdle(id);
 	});
 
+	test("ask_user takes several picks, option descriptions, and a question left to the agent", async () => {
+		const id = (await api("POST", "/sessions", {})).json.id as string;
+		const args = JSON.stringify({ questions: [
+			{ question: "Which checks?", options: ["lint", "test", "build"], descriptions: ["fast", "", "slow"], multiple: true, allowFreeText: false },
+			{ question: "Branch?", options: ["main", "dev"], descriptions: ["only one"], recommended: "main" },
+		] });
+		await api("POST", `/sessions/${id}/messages`, { text: `!ask_user ${args}` });
+		let q: any;
+		for (let i = 0; i < 100 && !q; i++) {
+			q = (await api("GET", `/questions?sessionId=${id}`)).json.questions[0];
+			await Bun.sleep(20);
+		}
+		expect(q.items[0]).toMatchObject({ multiple: true, descriptions: ["fast", "", "slow"] });
+		expect(q.items[1].descriptions).toBeUndefined(); // one line for two options: dropped
+		const answer = (answers: unknown[]) => api("POST", `/sessions/${id}/questions/${q.toolCallId}`, { answers });
+		expect((await answer(["lint\nnope", "main"])).status).toBe(400); // a pick outside the options
+		expect((await answer(["\n", "main"])).status).toBe(400); // no pick at all
+		expect((await answer(["test\nlint\ntest", null])).status).toBe(200);
+		await untilIdle(id);
+		const msgs = JSON.stringify((await api("GET", `/sessions/${id}/messages`)).json);
+		expect(msgs).toContain("→ test | lint");
+		expect(msgs).toContain("→ (left to you: decide)");
+	});
+
+	test("ask_user: a single question left to the agent says so", async () => {
+		const id = (await api("POST", "/sessions", {})).json.id as string;
+		await api("POST", `/sessions/${id}/messages`, { text: `!ask_user ${JSON.stringify({ question: "Name?", options: ["a", "b"], recommended: "b" })}` });
+		let q: any;
+		for (let i = 0; i < 100 && !q; i++) {
+			q = (await api("GET", `/questions?sessionId=${id}`)).json.questions[0];
+			await Bun.sleep(20);
+		}
+		expect((await api("POST", `/sessions/${id}/questions/${q.toolCallId}`, { answer: null })).status).toBe(200);
+		await untilIdle(id);
+		expect(JSON.stringify((await api("GET", `/sessions/${id}/messages`)).json)).toContain("The user left this to you");
+	});
+
 	test("switchable tools can be turned off, locked ones cannot", async () => {
 		const info = (await api("GET", "/configuration")).json.tools;
 		expect(info.toggleable).toEqual(["ask_user", "peer", "delegate", "schedule"]); // plus whatever extensions mark `switchable`

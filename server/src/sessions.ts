@@ -1319,7 +1319,7 @@ export class SessionManager {
 		if (q) {
 			ctx.ask = async (toolCallId, req, signal) => {
 				const items = req.items?.map((i) => ({ ...i, allowFreeText: i.allowFreeText ?? true }));
-				const outcome = await q.ask({ sessionId, toolCallId, question: req.question, options: req.options, ...(req.recommended ? { recommended: req.recommended } : {}), ...(req.scale ? { scale: true } : {}), allowFreeText: req.allowFreeText ?? true, ...(items?.length ? { items } : {}) }, signal);
+				const outcome = await q.ask({ sessionId, toolCallId, question: req.question, options: req.options, ...(req.recommended ? { recommended: req.recommended } : {}), ...(req.scale ? { scale: true } : {}), ...(req.multiple ? { multiple: true } : {}), ...(req.descriptions ? { descriptions: req.descriptions } : {}), allowFreeText: req.allowFreeText ?? true, ...(items?.length ? { items } : {}) }, signal);
 				if (outcome.status === "abort") throw new Error("Run aborted while waiting for the user");
 				return outcome.answer;
 			};

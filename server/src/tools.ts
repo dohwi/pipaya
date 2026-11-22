@@ -9,6 +9,7 @@ import { resizeImage } from "./image-resize.ts";
 import { commandArgv, pickCommandShell, shellNote } from "./command-shell.ts";
 import type { ManageAction, ManageArgs, PeerCreateInput } from "./peers.ts";
 import { scheduleTool, type ScheduleOps } from "./schedule-tool.ts";
+import { LEFT_TO_AGENT } from "./questions.ts";
 
 const MAX_OUTPUT_BYTES = 50 * 1024;
 const MAX_READ_LINES = 2000;
@@ -67,8 +68,12 @@ export interface AskRequest {
 	recommended?: string;
 	/** The options are ordered steps of one scale (shown as a ladder). */
 	scale?: boolean;
+	/** Any number of the options may be picked; the answer holds them one per line. */
+	multiple?: boolean;
+	/** One short line per option, same order as `options`. */
+	descriptions?: string[];
 	allowFreeText?: boolean;
-	items?: { question: string; options?: string[]; recommended?: string; scale?: boolean; allowFreeText?: boolean }[];
+	items?: { question: string; options?: string[]; recommended?: string; scale?: boolean; multiple?: boolean; descriptions?: string[]; allowFreeText?: boolean }[];
 }
 
 /** Keeps the parameter schema generic so `execute` params are inferred, then erases it for storage. */
@@ -475,11 +480,16 @@ const ASK_USER_DESCRIPTION =
 	"Ask the user a question and wait for the answer. Use it only when a requirement is genuinely ambiguous or a decision is hard to undo; " +
 	"for minor details, make a reasonable assumption and continue. Offer `options` when the choices are known, " +
 	"and set `recommended` to the option you suggest (it is highlighted for the user). " +
-	"Set `scale` when the options are short steps of one ordered scale, lowest first (effort, size, 1-5): they are shown as a ladder.";
+	"Set `scale` when the options are short steps of one ordered scale, lowest first (effort, size, 1-5): they are shown as a ladder. " +
+	"Set `multiple` when the user may pick several options (the answer lists them one per line). " +
+	"Give `descriptions` (one short line per option) when a label alone does not say what it means. " +
+	"The user may also leave a question to you; then decide yourself and continue.";
 
 const askOptions = (extra: Record<string, unknown> = {}) => Type.Optional(Type.Array(Type.String({ minLength: 1, maxLength: 200 }), { minItems: 2, maxItems: 8, ...extra }));
 const askRecommended = Type.Optional(Type.String({ minLength: 1, maxLength: 200, description: "The option you recommend; must be one of `options`" }));
 const askScale = Type.Optional(Type.Boolean({ description: "The options are ordered steps of one scale, lowest first" }));
+const askMultiple = Type.Optional(Type.Boolean({ description: "The user may pick several options" }));
+const askDescriptions = Type.Optional(Type.Array(Type.String({ maxLength: 300 }), { maxItems: 8, description: "One short line per option, same order and count as `options`" }));
 
 const askUserTool: ToolDef = {
 	name: "ask_user",
@@ -494,6 +504,8 @@ const askUserTool: ToolDef = {
 				options: askOptions({ description: "Suggested answers" }),
 				recommended: askRecommended,
 				scale: askScale,
+				multiple: askMultiple,
+				descriptions: askDescriptions,
 				allowFreeText: Type.Optional(Type.Boolean({ description: "Let the user type something other than the options. Default true" })),
 				questions: Type.Optional(
 					Type.Array(
@@ -502,6 +514,8 @@ const askUserTool: ToolDef = {
 							options: askOptions(),
 							recommended: askRecommended,
 							scale: askScale,
+							multiple: askMultiple,
+							descriptions: askDescriptions,
 							allowFreeText: Type.Optional(Type.Boolean()),
 						}),
 						{ minItems: 2, maxItems: 8, description: "Ask several independent questions at once instead of one by one. The user sees them as tabs and can revise any answer before sending" },
@@ -512,11 +526,15 @@ const askUserTool: ToolDef = {
 				if (!ctx?.ask) throw new Error("ask_user is not available in this session");
 				const rec = (o?: string[], r?: string) => (r && o?.includes(r) ? { recommended: r } : {});
 				const scale = (o?: string[], s?: boolean) => (s && (o?.length ?? 0) >= 2 ? { scale: true } : {});
-				const items = p.questions?.map((q) => ({ question: q.question, options: q.options, ...rec(q.options, q.recommended), ...scale(q.options, q.scale), allowFreeText: q.allowFreeText ?? true }));
+				const multiple = (o?: string[], m?: boolean) => (m && (o?.length ?? 0) >= 2 ? { multiple: true } : {});
+				// a description list that does not line up with the options would label the wrong ones: dropped
+				const desc = (o?: string[], d?: string[]) => (o?.length && d?.length === o.length && d.some((x) => x.trim()) ? { descriptions: d.map((x) => x.trim()) } : {});
+				const extra = (q: { options?: string[]; recommended?: string; scale?: boolean; multiple?: boolean; descriptions?: string[] }) => ({ ...rec(q.options, q.recommended), ...scale(q.options, q.scale), ...multiple(q.options, q.multiple), ...desc(q.options, q.descriptions) });
+				const items = p.questions?.map((q) => ({ question: q.question, options: q.options, ...extra(q), allowFreeText: q.allowFreeText ?? true }));
 				if (!items?.length && !p.question) throw new Error("ask_user needs `question` or `questions`");
-				const first = items?.[0] ?? { question: p.question!, options: p.options, ...rec(p.options, p.recommended), ...scale(p.options, p.scale), allowFreeText: p.allowFreeText ?? true };
+				const first = items?.[0] ?? { question: p.question!, options: p.options, ...extra(p), allowFreeText: p.allowFreeText ?? true };
 				const answer = await ctx.ask(id, { ...first, ...(items?.length ? { items } : {}) }, signal);
-				return text(answer, { question: first.question, answer });
+				return text(answer, { question: first.question, answer, ...(answer === LEFT_TO_AGENT ? { left: true } : {}) });
 			},
 		});
 	},
@@ -575,7 +593,7 @@ const peerTool: ToolDef = {
 				notify: Type.Optional(Type.Boolean({ description: "send, create: report to you when it ends its run" })),
 				count: Type.Optional(Type.Integer({ minimum: 1, maximum: 40, description: "read: how many recent messages (default 10)" })),
 				detail: Type.Optional(Type.Boolean({ description: "read: also show tool call arguments and results, errors included" })),
-				answer: Type.Optional(Type.String({ maxLength: 8000, description: "answer: the answer (one of its options when it offers only options)" })),
+				answer: Type.Optional(Type.String({ maxLength: 8000, description: "answer: the answer (one of its options when it offers only options; several picks one per line)" })),
 				answers: Type.Optional(Type.Array(Type.String({ maxLength: 8000 }), { maxItems: 20, description: "answer: one answer per question, when it asked several at once" })),
 				toolCallId: Type.Optional(Type.String({ description: "answer: which question, when several wait (default: the oldest)" })),
 				title: Type.Optional(Type.String({ maxLength: 100, description: "create" })),

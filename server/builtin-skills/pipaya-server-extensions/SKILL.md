@@ -147,7 +147,7 @@ export default (pi) => {
 | `pi.dataDir` | a folder for this extension's own files |
 | `pi.log(...)` | server log |
 
-`ctx` (ExtensionContext): `sessionId`, `cwd`, `appendEntry(type, data)`, `entries(type?)`, `sendUserMessage(text, mode?)`, `abort()`, `isRunning()`, `ask(toolCallId, {question, options?, recommended?, allowFreeText?, items?}, signal?)` (asks the user, resolves to the answer text). `appendEntry` data is stored in `extension_entries`, published as `extension_entry`, listed by `GET /sessions/:id/extension-entries[?extension=&type=&after=<id>&limit=<≤1000>]` (oldest first), and never reaches the model.
+`ctx` (ExtensionContext): `sessionId`, `cwd`, `appendEntry(type, data)`, `entries(type?)`, `sendUserMessage(text, mode?)`, `abort()`, `isRunning()`, `ask(toolCallId, {question, options?, recommended?, scale?, multiple?, descriptions?, allowFreeText?, items?}, signal?)` (asks the user, resolves to the answer text; `multiple` picks come one per line, and a question the user left to the agent resolves to a sentence saying so). `appendEntry` data is stored in `extension_entries`, published as `extension_entry`, listed by `GET /sessions/:id/extension-entries[?extension=&type=&after=<id>&limit=<≤1000>]` (oldest first), and never reaches the model.
 
 ## Hooks
 
