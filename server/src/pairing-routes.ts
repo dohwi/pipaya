@@ -1,29 +1,13 @@
 import type { FastifyInstance } from "fastify";
 import Type from "typebox";
+import { isAdminOnlyRoute, PUBLIC_PAIRING_PATH } from "./auth-policy.ts";
 import type { DeviceTokens } from "./device-tokens.ts";
 import { HttpError } from "./errors.ts";
 import type { Pairing } from "./pairing.ts";
 import { Ok, errors } from "./schemas.ts";
 import type { TypeBoxProvider } from "./typebox-provider.ts";
 
-/** Paths reachable without the access token (the code is the credential). Keep in step with the auth hook in app.ts. */
-export const PUBLIC_PAIRING_PATH = "/pairing/redeem";
-
-/**
- * Only the admin token may open the door for another device: a paired phone must not be able to pair more phones.
- *
- * `path` must be the route pattern the router matched (`req.routeOptions.url`, e.g. `/devices/tokens/:id`), never the raw
- * request URL: the router decodes percent-escapes, so `/devices/token%73` reaches `/devices/tokens` while the raw text
- * would not match any rule here.
- */
-export const isAdminOnlyRoute = (method: string, path: string) =>
-	(path === "/pairing" && (method === "POST" || method === "DELETE")) || path === "/devices/tokens" || path.startsWith("/devices/tokens/") ||
-	// Server extensions and stdio MCP servers execute code on this host; a paired phone may use them, never install or reconfigure them.
-	((path === "/server-extensions/reload" || path === "/server-extensions/install") && method === "POST") ||
-	(path.startsWith("/server-extensions/") && method === "DELETE") ||
-	(path === "/mcp" && method === "PUT") || (path === "/mcp/reload" && method === "POST") ||
-	// Replacing the server's own code and restarting it is the owner's call alone.
-	path === "/server/update";
+export { isAdminOnlyRoute, PUBLIC_PAIRING_PATH };
 
 export function registerPairingRoutes(server: FastifyInstance, pairing: Pairing, devices: DeviceTokens, onRevoke: (id: string) => void = () => {}): void {
 	const app = server.withTypeProvider<TypeBoxProvider>();
