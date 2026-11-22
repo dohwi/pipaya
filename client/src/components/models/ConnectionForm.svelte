@@ -21,7 +21,7 @@
 	import CatalogPickerModal from "./CatalogPickerModal.svelte";
 	import ModelPage from "./ModelPage.svelte";
 	import type { CatalogInfo, CatalogModel, CustomProvider } from "../../lib/types";
-	import { directRouter } from "../../lib/service-tier";
+	import { directRouter, proxyTierApi } from "../../lib/service-tier";
 	import { applyMatch, collectModels, formFromProvider, headerError, newForm, newRow, slug, snapshot, type Form, type LocalPreset, type Row } from "../../lib/connection-form";
 
 	/**
@@ -340,7 +340,7 @@
 			{#if editing !== null}
 				{@const r = form.rows[editing]}
 				{#if r}
-					<ModelPage {r} router={directRouter(form.baseUrl)} providerId={form.id} connection={api()?.connection} {catalogLoaded} matched={matchedOf(r)} {fresh} onpickmatch={() => (matchFor = editing)} onpickicon={() => (iconFor = editing)} onremove={removeModel} />
+					<ModelPage {r} router={directRouter(form.baseUrl)} proxyTiers={!directRouter(form.baseUrl) && proxyTierApi(form.api)} providerId={form.id} connection={api()?.connection} {catalogLoaded} matched={matchedOf(r)} {fresh} onpickmatch={() => (matchFor = editing)} onpickicon={() => (iconFor = editing)} onremove={removeModel} />
 				{/if}
 			{:else}
 				<ConnectionFields {form} onname={onName} />

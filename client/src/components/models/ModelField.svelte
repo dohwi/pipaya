@@ -2,7 +2,7 @@
 	import { modelDisplayName } from "../../lib/model-name";
 	import type { Api } from "../../lib/api";
 	import type { ServiceTier } from "../../lib/types";
-	import { tierLabel } from "../../lib/service-tier";
+	import { takesTier, tierLabel } from "../../lib/service-tier";
 	import { t } from "../../lib/i18n";
 	import ModelLogo from "./ModelLogo.svelte";
 	import Icon from "../ui/Icon.svelte";
@@ -80,7 +80,7 @@
 	{#if value}<span class="mlogo"><ModelLogo {conn} icon={current?.icon} provider={value.provider} model={value.model} size={variant === "inline" ? 16 : 18} colored={variant === "inline" || Boolean(current?.icon)} /></span>{/if}
 	<span class="mname">{shown}</span>
 	{#if current?.reasoning && level}<span class="chip think" data-level={level}>{level}</span>{/if}
-	{#if current?.openRouterTiers && tier}<span class="chip speed">{tierLabel(tier)}</span>{/if}
+	{#if takesTier(current) && tier}<span class="chip speed">{tierLabel(tier)}</span>{/if}
 	{#if invalid}<span class="warnmark"><Icon name="alert" /></span>{/if}
 	<span class="chev" class:up={open}><Icon name="chevron-down" /></span>
 </button>

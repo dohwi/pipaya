@@ -2,6 +2,7 @@
 	import type { ActionId } from "../../lib/keys";
 	import type { Api } from "../../lib/api";
 	import TierOptions from "./TierOptions.svelte";
+	import { takesTier } from "../../lib/service-tier";
 	import type { ServiceTier } from "../../lib/types";
 	import { t } from "../../lib/i18n";
 	import Ladder from "../ui/Ladder.svelte";
@@ -110,7 +111,7 @@
 	const selectedTier = $derived(sel?.provider === value?.provider && sel?.model === value?.model ? tier : null);
 	function apply(speed = selectedTier, inherit = false) {
 		if (!sel) return onpick(null);
-		onpick({ provider: sel.provider, model: sel.model, ...(!inherit && tierApi && (info?.openRouterTiers || tier) ? { serviceTier: info?.openRouterTiers ? speed : null } : {}), ...(shownLvl && reasoning ? { thinkingLevel: shownLvl } : {}) });
+		onpick({ provider: sel.provider, model: sel.model, ...(!inherit && tierApi && (takesTier(info) || tier) ? { serviceTier: takesTier(info) ? speed : null } : {}), ...(shownLvl && reasoning ? { thinkingLevel: shownLvl } : {}) });
 	}
 	function choose(m: ModelInfo) {
 		if (!m.configured || m.available === false || same(m)) return;
@@ -175,8 +176,8 @@
 			<Ladder label={t("추론 강도")} options={available.map((l) => ({ id: l, label: l, level: l }))} value={shownLvl} disabled={!sel} onchange={strength} />
 		</div>
 		{/if}
-		{#if tierApi && info && (info.openRouterTiers || selectedTier) && !info.imageGeneration}
-			{#key info.provider + ":" + info.id}<TierOptions api={tierApi} model={info.id} lookup={!!info.openRouterTiers} value={selectedTier} onchange={apply} />{/key}
+		{#if tierApi && info && (takesTier(info) || selectedTier) && !info.imageGeneration}
+			{#key info.provider + ":" + info.id}<TierOptions api={tierApi} model={info.id} lookup={!!info.openRouterTiers} offered={info.serviceTiers} value={selectedTier} onchange={apply} />{/key}
 		{/if}
 	{/snippet}
 

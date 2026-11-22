@@ -24,7 +24,7 @@ export function servedTierOf(event: unknown): ServiceTier | undefined {
 	return tierOf(e.service_tier) ?? tierOf(obj(e.response)?.service_tier) ?? tierOf(usage?.service_tier) ?? (usage?.speed === "fast" ? "priority" : undefined);
 }
 
-/** Before each call the transport must still be OpenRouter, but a catalog outage does not stop a chat whose speed was checked when it was chosen. */
+/** Before each call the model must still take the speed, but a catalog outage does not stop a chat whose speed was checked when it was chosen. */
 export async function checkRunTier(reg: ModelRegistry, provider: string, id: string, tier: ServiceTier) {
 	try {
 		await checkServiceTier(reg, provider, id, tier);
@@ -36,10 +36,13 @@ export async function checkRunTier(reg: ModelRegistry, provider: string, id: str
 /**
  * One streamed model call at a chosen speed (null = send none). On a direct OpenRouter connection the final reply is
  * stamped with the requested and the served tier, so a quiet fallback (Ultrafast to Fast, Fast to standard) is visible.
+ * A proxy's reply only records the requested tier: CLIProxyAPI echoes the upstream's `default` even when Fast was used,
+ * so its served tier would report a fallback that did not happen.
  */
 export async function streamAtTier(reg: ModelRegistry, m: Model<Api>, ctx: Context, opts: SimpleStreamOptions | undefined, tier: ServiceTier | null): Promise<AssistantMessageEventStream> {
 	if (tier) await checkRunTier(reg, m.provider, m.id, tier);
 	else if (!isOpenRouterChat(m)) return reg.models.streamSimple(m, ctx, opts);
+	if (!isOpenRouterChat(m)) return stampTier(reg.models.streamSimple(m, ctx, withServiceTier(opts, tier!)), () => ({ requestedTier: tier! }));
 	let served: ServiceTier | undefined;
 	const observer = opts?.onProviderStreamEvent;
 	const base: SimpleStreamOptions = { ...opts, onProviderStreamEvent: (data, model) => {

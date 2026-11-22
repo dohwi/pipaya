@@ -13,6 +13,11 @@ export const en: Record<string, string> = {
 	"새 대화 기본 속도": "Default speed for new chats",
 	"새 대화는 {tier} 속도로 시작합니다.": "New chats start at {tier} speed.",
 	"새 대화의 응답 속도는 OpenRouter 설정을 따릅니다.": "New chats follow OpenRouter’s speed settings.",
+	"새 대화는 속도를 지정하지 않고 시작합니다.": "New chats start without a speed.",
+	"자동은 속도를 보내지 않아 프록시 기본을 따르고, 표준은 가속을 끕니다.": "Auto sends no speed, so the proxy's default applies. Standard turns off acceleration.",
+	"선택 가능한 속도": "Available speeds",
+	"고른 속도를 service_tier로 그대로 보냅니다. 고속 등급은 추가 요금이 들 수 있습니다.": "The chosen speed is sent as service_tier as is. Faster tiers may cost extra.",
+	"프록시가 속도 지정(service_tier)을 처리하는 모델만 켜세요. CLIProxyAPI는 GPT 모델에서 Fast를 처리합니다.": "Turn speeds on only for models whose proxy handles service_tier. CLIProxyAPI handles Fast for GPT models.",
 	"OpenRouter 응답 등급: {tiers}. 속도는 OpenRouter에 직접 연결할 때만 고를 수 있습니다.": "OpenRouter service tiers: {tiers}. Speed can only be chosen on a direct OpenRouter connection.",
 	"응답 등급을 확인하지 못했습니다.": "Could not check service tiers.",
 	/* ---- first run and empty conversation ---- */

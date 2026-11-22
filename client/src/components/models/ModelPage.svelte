@@ -14,6 +14,8 @@
 	import Badge from "../ui/Badge.svelte";
 	import Switch from "../ui/Switch.svelte";
 	import { CAPS } from "../../lib/model-caps";
+	import { EXTRA_TIERS, tierLabel } from "../../lib/service-tier";
+	import type { ServiceTier } from "../../lib/types";
 	import ModelLogo from "./ModelLogo.svelte";
 
 	/**
@@ -24,6 +26,7 @@
 		r = $bindable(),
 		providerId,
 		router,
+		proxyTiers,
 		connection,
 		catalogLoaded,
 		matched,
@@ -35,6 +38,8 @@
 		r: Row;
 		providerId: string;
 		router: boolean;
+		/** The connection can pass a speed on: an OpenAI-format proxy that is not OpenRouter (CLIProxyAPI and the like) */
+		proxyTiers: boolean;
 		connection: Api["connection"] | undefined;
 		catalogLoaded: boolean;
 		/** The OpenRouter model `r` is matched to; null = manual */
@@ -59,6 +64,13 @@
 	const iconName = $derived(r.icon ? (isImageIcon(r.icon) ? t("올린 이미지") : (ICON_LABEL[r.icon] ?? r.icon)) : t("자동"));
 	/** The strengths this model really offers (the owner's own list or the matched catalog's), in canonical order. */
 	const levels = $derived(shownLevels(r, matched));
+	/** The speeds this proxy model takes besides standard; dropping one also drops it as the starting speed. */
+	const offered = $derived(r.serviceTiers ?? []);
+	function toggleTier(id: (typeof EXTRA_TIERS)[number]) {
+		const next = EXTRA_TIERS.filter((x) => (x === id ? !offered.includes(x) : offered.includes(x)));
+		r.serviceTiers = next.length ? next : undefined;
+		if (r.defaultServiceTier && (!next.length || (r.defaultServiceTier !== "default" && !(next as ServiceTier[]).includes(r.defaultServiceTier)))) r.defaultServiceTier = undefined;
+	}
 	/** "새 대화 기본 강도: 자동" unless a strength this model offers was chosen. */
 	const fallbackLevel = $derived<"auto" | ThinkingLevel>(levels.includes(r.defaultThinkingLevel as ThinkingLevel) ? r.defaultThinkingLevel! : "auto");
 </script>
@@ -167,6 +179,24 @@
 	{#if router && !r.imageGeneration && r.id.trim() && catalogApi}
 		<section class="fsec set-group">
 			<TierOptions api={catalogApi} model={r.id.trim()} label={t("새 대화 기본 속도")} value={r.defaultServiceTier ?? null} onchange={v => (r.defaultServiceTier = v ?? undefined)} />
+		</section>
+	{:else if proxyTiers && !r.imageGeneration}
+		<section class="fsec set-group">
+			<div class="section-label">{t("선택 가능한 속도")}</div>
+			<div class="stack">
+			<Ladder
+				label={t("선택 가능한 속도")}
+				options={EXTRA_TIERS.map((id) => ({ id, label: tierLabel(id), color: id === "flex" ? undefined : "var(--warn)" }))}
+				selected={offered}
+				ontoggle={toggleTier}
+			/>
+			<p class="hint note">{offered.length ? t("고른 속도를 service_tier로 그대로 보냅니다. 고속 등급은 추가 요금이 들 수 있습니다.") : t("프록시가 속도 지정(service_tier)을 처리하는 모델만 켜세요. CLIProxyAPI는 GPT 모델에서 Fast를 처리합니다.")}</p>
+			</div>
+			{#if offered.length && catalogApi}
+				<div class="next">
+					<TierOptions api={catalogApi} model={r.id.trim()} offered={offered} label={t("새 대화 기본 속도")} value={r.defaultServiceTier ?? null} onchange={v => (r.defaultServiceTier = v ?? undefined)} />
+				</div>
+			{/if}
 		</section>
 	{/if}
 	{#if !r.imageGeneration}
@@ -402,7 +432,8 @@
 		gap: 4px;
 	}
 	/* the second ladder's label starts a new block: 24px above it, so it does not read as the first ladder's hint's */
-	.section-label.next {
+	.section-label.next,
+	div.next {
 		margin-top: 12px;
 	}
 	label > span {
