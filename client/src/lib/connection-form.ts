@@ -27,7 +27,7 @@ export interface Row {
 	/** Where a new chat with this model starts; undefined = this device's last choice */
 	defaultThinkingLevel?: ThinkingLevel;
 	defaultServiceTier?: CustomModel["defaultServiceTier"];
-	/** Speeds besides standard this proxy model passes on; empty = none (no speed is sent) */
+	/** Speeds besides standard this proxy model passes on. undefined = the matched OpenRouter model's; empty = none. */
 	serviceTiers?: NonNullable<CustomModel["serviceTiers"]>;
 	/** What the server matched this model to, for display only */
 	thinkingSource?: CustomModel["thinkingSource"];
@@ -142,7 +142,7 @@ export function formFromProvider(p: CustomProvider): Form {
 			catalogId: m.catalogId,
 			defaultThinkingLevel: m.defaultThinkingLevel,
 			defaultServiceTier: m.defaultServiceTier,
-			...(m.serviceTiers?.length ? { serviceTiers: [...m.serviceTiers] } : {}),
+			...(m.serviceTiers ? { serviceTiers: [...m.serviceTiers] } : {}),
 			thinkingSource: m.thinkingSource,
 			unavailable: m.unavailable,
 		})),
@@ -205,11 +205,16 @@ export function collectModels(
 		const hit = matchedId(r);
 		// A default the model does not offer would never be reachable, so it is dropped along with the strengths.
 		const def = r.reasoning && !r.imageGeneration && r.defaultThinkingLevel && (!r.thinkingLevels.length || r.thinkingLevels.includes(r.defaultThinkingLevel)) ? r.defaultThinkingLevel : undefined;
-		// A proxy model's speeds only on an OpenAI-format connection that is not OpenRouter (the server refuses the rest);
-		// its starting speed must be standard or one of them, else it would never be reachable.
+		// A proxy model's speeds only on an OpenAI-format connection that is not OpenRouter (the server refuses the rest):
+		// its own list, else (none given) the matched OpenRouter model's. Its starting speed must stay reachable: standard
+		// or one of its own speeds; one that follows the catalog is checked against the catalog by the server.
 		const router = directRouter(f.baseUrl);
-		const tiers = !r.imageGeneration && !router && proxyTierApi(f.api) ? (r.serviceTiers ?? []) : [];
-		const defTier = r.imageGeneration || !r.defaultServiceTier ? undefined : router ? r.defaultServiceTier : tiers.length && (r.defaultServiceTier === "default" || (tiers as string[]).includes(r.defaultServiceTier)) ? r.defaultServiceTier : undefined;
+		const proxy = !r.imageGeneration && !router && proxyTierApi(f.api);
+		const tiers = proxy ? r.serviceTiers : undefined;
+		const follows = proxy && !tiers && !!hit;
+		const defTier = r.imageGeneration || !r.defaultServiceTier ? undefined
+			: router || follows ? r.defaultServiceTier
+			: tiers?.length && (r.defaultServiceTier === "default" || (tiers as string[]).includes(r.defaultServiceTier)) ? r.defaultServiceTier : undefined;
 		out.push({
 			id: r.id.trim(),
 			...(r.fromUpstream && !r.unavailable ? { fromUpstream: true } : {}),
@@ -225,7 +230,7 @@ export function collectModels(
 			...(r.reasoning && !r.imageGeneration && r.thinkingLevels.length ? { thinkingLevels: ALL_LEVELS.filter((l) => r.thinkingLevels.includes(l)) } : {}),
 			// A default outside the strengths this model offers would never be reachable, so it is dropped with them.
 			...(def ? { defaultThinkingLevel: def } : {}),
-			...(tiers.length ? { serviceTiers: tiers } : {}),
+			...(tiers ? { serviceTiers: tiers } : {}),
 			...(defTier ? { defaultServiceTier: defTier } : {}),
 		} as CustomModel);
 	}

@@ -12,5 +12,6 @@ export const EXTRA_TIERS = ["flex", "priority", "ultrafast"] as const satisfies 
 /** The request formats a proxy passes `service_tier` on as is (the server checks the same list). */
 export const proxyTierApi = (api: string) => api === "openai-completions" || api === "openai-responses";
 
-/** A model a speed can be chosen for: a direct OpenRouter chat, or a proxy model whose owner listed its speeds. */
-export const takesTier = (m: { openRouterTiers?: boolean; serviceTiers?: readonly ServiceTier[] } | null | undefined) => !!m && (!!m.openRouterTiers || !!m.serviceTiers?.length);
+/** A model a speed can be chosen for: a direct OpenRouter chat, or a proxy model with its own speeds or an OpenRouter match. */
+export const takesTier = (m: { openRouterTiers?: boolean; serviceTiers?: readonly ServiceTier[]; tierCatalogId?: string } | null | undefined) =>
+	!!m && (!!m.openRouterTiers || !!m.serviceTiers?.length || !!m.tierCatalogId);

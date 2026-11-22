@@ -323,6 +323,7 @@ export const ModelInfo = Type.Object({
 	reasoning: Type.Boolean(),
 	openRouterTiers: Type.Optional(Type.Boolean()),
 	serviceTiers: Type.Optional(Type.Array(Tier, { description: "A proxy model's speeds besides standard, as its owner listed them (OpenRouter models list theirs from the catalog: openRouterTiers)" })),
+	tierCatalogId: Type.Optional(Type.String({ description: "A proxy model that follows the speeds OpenRouter lists for this catalog id (GET /configuration/catalog/tiers?model=…)" })),
 	thinkingLevels: Type.Array(Thinking, { description: "Reasoning strengths this model accepts, weakest first; empty without reasoning" }),
 	contextWindow: Type.Number(),
 	maxTokens: Type.Number(),

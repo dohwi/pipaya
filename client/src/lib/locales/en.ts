@@ -16,6 +16,8 @@ export const en: Record<string, string> = {
 	"새 대화는 속도를 지정하지 않고 시작합니다.": "New chats start without a speed.",
 	"자동은 속도를 보내지 않아 프록시 기본을 따르고, 표준은 가속을 끕니다.": "Auto sends no speed, so the proxy's default applies. Standard turns off acceleration.",
 	"선택 가능한 속도": "Available speeds",
+	"OpenRouter에서 찾은 모델이 지원하는 속도를 따르고, 고른 속도를 service_tier로 그대로 보냅니다. 프록시가 처리하지 않는 모델이면 눌러서 끄세요.": "Follows the speeds the matched OpenRouter model offers and sends the chosen one as service_tier as is. Tap to switch them off if the proxy does not handle them for this model.",
+	"OpenRouter에서 찾은 모델은 속도 등급을 지원하지 않습니다.": "The matched OpenRouter model has no speed tiers.",
 	"고른 속도를 service_tier로 그대로 보냅니다. 고속 등급은 추가 요금이 들 수 있습니다.": "The chosen speed is sent as service_tier as is. Faster tiers may cost extra.",
 	"프록시가 속도 지정(service_tier)을 처리하는 모델만 켜세요. CLIProxyAPI는 GPT 모델에서 Fast를 처리합니다.": "Turn speeds on only for models whose proxy handles service_tier. CLIProxyAPI handles Fast for GPT models.",
 	"OpenRouter 응답 등급: {tiers}. 속도는 OpenRouter에 직접 연결할 때만 고를 수 있습니다.": "OpenRouter service tiers: {tiers}. Speed can only be chosen on a direct OpenRouter connection.",

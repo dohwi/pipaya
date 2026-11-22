@@ -5,30 +5,36 @@
 	import { tierLabel } from "../../lib/service-tier";
 	import Ladder from "../ui/Ladder.svelte";
 
-	/** `offered`: a proxy model's own speeds (its owner listed them), so nothing is looked up in the OpenRouter catalog. */
-	let { api, model, value = null, lookup = true, offered, label = t("응답 속도"), onchange }: {
-		api: Api; model: string; lookup?: boolean; offered?: readonly ServiceTier[]; label?: string; value?: ServiceTier | null; onchange?: (v: ServiceTier | null) => void;
+	/**
+	 * `model`: the OpenRouter catalog id whose speeds are looked up. `offered`: a proxy model's own speeds (its owner listed
+	 * them), so nothing is looked up. `proxy`: the speed goes to a proxy, not OpenRouter (only the hint changes).
+	 */
+	let { api, model, value = null, lookup = true, offered, proxy: viaProxy = false, label = t("응답 속도"), onchange }: {
+		api: Api; model: string; lookup?: boolean; offered?: readonly ServiceTier[]; proxy?: boolean; label?: string; value?: ServiceTier | null; onchange?: (v: ServiceTier | null) => void;
 	} = $props();
 	let tiers = $state<ServiceTier[]>([]);
 	let failed = $state(false);
+	let loaded = $state(false);
 	/** Slow to fast, so the row reads like the strength ladder beside it: flex, standard, then the paid fast tiers. */
 	const ORDER: ServiceTier[] = ["flex", "default", "priority", "ultrafast"];
-	const proxy = $derived(!!offered?.length);
-	const choices = $derived<ServiceTier[]>(proxy ? ORDER.filter(id => id === "default" || offered!.includes(id)) : lookup ? ORDER.filter(id => id === "default" || tiers.includes(id)) : []);
+	const own = $derived(!!offered?.length);
+	const proxy = $derived(viaProxy || own);
+	const choices = $derived<ServiceTier[]>(own ? ORDER.filter(id => id === "default" || offered!.includes(id)) : lookup ? ORDER.filter(id => id === "default" || tiers.includes(id)) : []);
 	/** The tiers that may cost extra carry the warn colour when chosen; the rest the text colour. */
 	const paid = (id: ServiceTier) => id === "priority" || id === "ultrafast";
 	$effect(() => {
-		tiers = []; failed = false;
+		tiers = []; failed = false; loaded = false;
 		if (!lookup || offered?.length) return;
 		const controller = new AbortController();
 		api.scoped(controller.signal).catalogTiers(model).then(result => {
-			if (!controller.signal.aborted) tiers = result.tiers;
+			if (!controller.signal.aborted) { tiers = result.tiers; loaded = true; }
 		}).catch(() => { if (!controller.signal.aborted) failed = true; });
 		return () => controller.abort();
 	});
 </script>
 
-{#if onchange && (lookup || proxy || value)}
+<!-- a proxy model that follows a catalog entry without speeds has nothing to choose: no row with only auto and standard -->
+{#if onchange && (lookup || proxy || value) && !(viaProxy && !own && loaded && !tiers.length && !value)}
 	<div class="tier-row">
 		<div class="section-label">{label}</div>
 		<div class="stack">

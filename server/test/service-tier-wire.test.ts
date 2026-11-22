@@ -79,7 +79,7 @@ function sse(api: ChatApi, served: string | null): string {
 	return events.map(([name, e]) => `event: ${name}\ndata: ${JSON.stringify(e)}\n\n`).join("");
 }
 
-function registry(model: Model<Api>, tiers: () => Promise<string[]>): ModelRegistry {
+function registry(model: Model<Api>, tiers: (id: string) => Promise<string[]>): ModelRegistry {
 	return { models: { getModel: () => model, streamSimple: (m: Model<Api>, c: Ctx, o?: SimpleStreamOptions) => callApi(m, c, o ?? {}) } as unknown as ModelRegistry["models"], serviceTiers: tiers as ModelRegistry["serviceTiers"] };
 }
 
@@ -158,4 +158,23 @@ test("a proxy model with listed speeds gets service_tier on the OpenAI formats; 
 	for (const other of [{ ...proxy, api: "anthropic-messages" }, { ...proxy, serviceTiers: [] }] as Model<Api>[]) {
 		await expect(streamAtTier(registry(other, async () => ["priority"]), other, ctx, opts, "priority")).rejects.toBeInstanceOf(HttpError);
 	}
+});
+
+test("a proxy model matched to OpenRouter takes the speeds the catalog lists for its match", async () => {
+	const base = routerModel("openai-completions");
+	const bodies: Record<string, unknown>[] = [];
+	const asked: string[] = [];
+	const opts: SimpleStreamOptions = { apiKey: "fixture", maxRetries: 0,
+		fetch: (async (_url, init) => { bodies.push(JSON.parse(String(init?.body))); return new Response(sse("openai-completions", "default"), { headers: { "content-type": "text/event-stream" } }); }) as typeof fetch };
+	const proxy = { ...base, id: "gpt-upstream", baseUrl: "https://proxy.invalid/v1", tierCatalogId: "openai/gpt-upstream" } as Model<Api>;
+	const reg = registry(proxy, async (id: string) => { asked.push(id); return ["priority"]; });
+	expect(await (await streamAtTier(reg, proxy, ctx, opts, "priority")).result()).toMatchObject({ requestedTier: "priority" });
+	expect(bodies.at(-1)).toMatchObject({ service_tier: "priority" });
+	expect(asked).toEqual(["openai/gpt-upstream"]);
+	await expect(streamAtTier(reg, proxy, ctx, opts, "ultrafast")).rejects.toThrow("not available");
+	// an own list wins over the match, and an empty one switches speeds off
+	const own = { ...proxy, serviceTiers: ["ultrafast"] } as Model<Api>;
+	expect(await (await streamAtTier(registry(own, async () => []), own, ctx, opts, "ultrafast")).result()).toMatchObject({ requestedTier: "ultrafast" });
+	const off = { ...proxy, serviceTiers: [] } as Model<Api>;
+	await expect(streamAtTier(registry(off, async () => ["priority"]), off, ctx, opts, "priority")).rejects.toBeInstanceOf(HttpError);
 });

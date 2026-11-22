@@ -101,9 +101,9 @@ test("only direct OpenRouter chats can save advertised tiers; default, reset and
 	const proxy = { provider: "tier-proxy", model: id };
 	await get("/configuration/catalog");
 	expect(await get(`/configuration/catalog/tiers?model=${id}`)).toEqual({ tiers: ["priority"] });
-	for (const [provider, baseUrl] of [[router.provider, "https://openrouter.ai/api/v1"], [proxy.provider, "http://127.0.0.1:9/v1"]] as const) {
-		expect((await call("PUT", `/configuration/providers/${provider}`, { ...base, baseUrl })).statusCode).toBe(200);
-	}
+	expect((await call("PUT", `/configuration/providers/${router.provider}`, { ...base, baseUrl: "https://openrouter.ai/api/v1" })).statusCode).toBe(200);
+	// A proxy model set to manual values (no OpenRouter match) and no speeds of its own takes none.
+	expect((await call("PUT", `/configuration/providers/${proxy.provider}`, { ...base, baseUrl: "http://127.0.0.1:9/v1", models: [{ ...base.models[0], catalogId: null }] })).statusCode).toBe(200);
 	expect((await call("PUT", "/configuration/defaults", { ...router, serviceTier: "priority", thinkingLevel: "high" })).statusCode).toBe(200);
 	const session = (await call("POST", "/sessions", {})).json();
 	expect(session).toMatchObject({ ...router, serviceTier: "priority", thinkingLevel: "high" });
@@ -147,7 +147,7 @@ test("new chats snapshot the chosen speed: explicit session > new-chat setting >
 	await defaults(selection);
 	expect((await save({ ...conn, models: [{ ...model, defaultServiceTier: "default" }] })).statusCode).toBe(200);
 	expect((await create()).serviceTier).toBe("default");
-	for (const body of [{ ...conn, baseUrl: "https://proxy.invalid/v1" }, { ...conn, models: [{ ...model, imageGeneration: true }] }, { ...conn, models: [{ ...model, defaultServiceTier: "ultrafast" }] }]) {
+	for (const body of [{ ...conn, baseUrl: "https://proxy.invalid/v1", models: [{ ...model, catalogId: null }] }, { ...conn, models: [{ ...model, imageGeneration: true }] }, { ...conn, models: [{ ...model, defaultServiceTier: "ultrafast" }] }]) {
 		expect((await save(body)).statusCode).toBe(400);
 	}
 	expect((await call("PATCH", `/sessions/${existing.id}`, { serviceTier: "default" })).json().serviceTier).toBe("default");
@@ -160,9 +160,9 @@ test("new chats snapshot the chosen speed: explicit session > new-chat setting >
 	expect((await call("PATCH", switched, { provider, model: id, serviceTier: null })).json().serviceTier).toBeNull();
 	expect((await call("PATCH", switched, { provider: other, model: id })).json().serviceTier).toBe("priority");
 	expect((await call("PATCH", switched, { provider, model: id })).json().serviceTier).toBe("default");
-	// A connection whose id sounds like OpenRouter still cannot pin a tier on a different transport.
+	// A connection whose id sounds like OpenRouter still cannot pin a tier on a different transport (unless its model is matched).
 	const shadow = "openrouter-shadow";
-	expect((await call("PUT", `/configuration/providers/${shadow}`, { ...conn, baseUrl: "http://127.0.0.1:9/v1", models: [{ id, contextWindow: 10000, maxTokens: 200, reasoning: false, vision: false }] })).statusCode).toBe(200);
+	expect((await call("PUT", `/configuration/providers/${shadow}`, { ...conn, baseUrl: "http://127.0.0.1:9/v1", models: [{ id, catalogId: null, contextWindow: 10000, maxTokens: 200, reasoning: false, vision: false }] })).statusCode).toBe(200);
 	expect((await call("POST", "/sessions", { provider: shadow, model: id, serviceTier: "default" })).statusCode).toBe(400);
 });
 
@@ -195,14 +195,45 @@ test("a proxy model takes only the speeds its owner listed; other connections an
 	expect((await call("PATCH", path, { serviceTier: "default" })).statusCode).toBe(400);
 });
 
-test("a subagent runs at its session's speed on the same model, else at its own model's default, never at a proxy's", async () => {
+test("a proxy model matched to OpenRouter follows its speeds until the owner sets a list of its own", async () => {
+	const call = async (method: "POST" | "PUT" | "PATCH", url: string, payload: object) => app.server.inject({ method, url, headers: auth, payload });
+	const id = "anthropic/claude-fable-5.2";
+	const model = { id: "fable-upstream", catalogId: id, contextWindow: 10000, maxTokens: 200, reasoning: true, vision: false };
+	const conn = (models: object[]) => ({ name: "Proxy", baseUrl: "http://127.0.0.1:9/v1", api: "openai-completions", authRequired: false, models });
+	const save = (body: object) => call("PUT", "/configuration/providers/tier-match", body);
+	await get("/configuration/catalog");
+	// The catalog lists only priority for it: Fast and standard are offered, Ultrafast is not.
+	const saved = await save(conn([{ ...model, defaultServiceTier: "priority" }]));
+	expect(saved.statusCode).toBe(200);
+	const info = (await get("/models?provider=tier-match")).models[0];
+	expect(info).toMatchObject({ tierCatalogId: id, defaultServiceTier: "priority" });
+	expect(info).not.toHaveProperty("serviceTiers");
+	expect(info).not.toHaveProperty("openRouterTiers");
+	const session = (await call("POST", "/sessions", { provider: "tier-match", model: model.id })).json();
+	expect(session.serviceTier).toBe("priority");
+	const path = `/sessions/${session.id}`;
+	expect((await call("PATCH", path, { serviceTier: "ultrafast" })).statusCode).toBe(400);
+	expect((await call("PATCH", path, { serviceTier: "default" })).json().serviceTier).toBe("default");
+	expect((await save(conn([{ ...model, defaultServiceTier: "ultrafast" }]))).statusCode).toBe(400);
+	// An empty list switches speeds off for this model even though OpenRouter offers them.
+	expect((await save(conn([{ ...model, serviceTiers: [] }]))).statusCode).toBe(200);
+	const off = (await get("/models?provider=tier-match")).models[0];
+	expect(off).not.toHaveProperty("tierCatalogId");
+	expect(off).not.toHaveProperty("serviceTiers");
+	expect((await call("PATCH", path, { serviceTier: "priority" })).statusCode).toBe(400);
+	// The Messages format never takes the catalog's speeds.
+	expect((await call("PUT", "/configuration/providers/tier-match-msg", { ...conn([model]), api: "anthropic-messages" })).statusCode).toBe(200);
+	expect((await get("/models?provider=tier-match-msg")).models[0]).not.toHaveProperty("tierCatalogId");
+});
+
+test("a subagent runs at its session's speed on the same model, else at its own model's default, never at an unmatched proxy's", async () => {
 	const call = async (method: "POST" | "PUT", url: string, payload: object) => app.server.inject({ method, url, headers: auth, payload });
 	const id = "anthropic/claude-fable-5.2";
 	const model = { id, contextWindow: 10000, maxTokens: 200, reasoning: true, vision: false };
 	const conn = (baseUrl: string, models: object[]) => ({ name: "Sub", baseUrl, api: "openai-completions", authRequired: false, models });
 	expect((await call("PUT", "/configuration/providers/sub-fast", conn("https://openrouter.ai/api/v1", [{ ...model, defaultServiceTier: "priority" }]))).statusCode).toBe(200);
 	expect((await call("PUT", "/configuration/providers/sub-plain", conn("https://openrouter.ai/api/v1", [model]))).statusCode).toBe(200);
-	expect((await call("PUT", "/configuration/providers/sub-proxy", conn("http://127.0.0.1:9/v1", [model]))).statusCode).toBe(200);
+	expect((await call("PUT", "/configuration/providers/sub-proxy", conn("http://127.0.0.1:9/v1", [{ ...model, catalogId: null }]))).statusCode).toBe(200);
 	const session = (await call("POST", "/sessions", { provider: "sub-plain", model: id, serviceTier: "default" })).json();
 	const rec = app.sessions.get(session.id);
 	const tierOf = (provider: string) => (app.sessions as unknown as { subagentTier(r: unknown, p: string, m: string): unknown }).subagentTier(rec, provider, id);
