@@ -8,7 +8,7 @@
 	 *
 	 *  lead     leading control, top-aligned with the first text line (a 22px Switch against the 20px badge row)
 	 *  title    the first line: the name followed by Badges (wraps on a narrow screen)
-	 *  actions  trailing buttons, kept on one row, right-aligned (below the text on a phone)
+	 *  actions  trailing buttons on the title row, right-aligned; the lines under the title run beneath them (last row on a phone)
 	 *  off      fades the text column (a switched-off item)
 	 *  children the lines under the title (`<p class="meta">`, `<p class="desc">` …)
 	 * The row is a <div> inside the caller's keyed <li>: `animate:reflow` and `in:/out:` only work on the direct child of an
@@ -117,25 +117,52 @@
 		padding-top: 8px;
 		border-top: 1px solid var(--border);
 	}
-	/* A phone: the actions drop under the text. They are a grid row of their own, so the card keeps its 12px padding (a wrapped
-	   flex line left 46px of empty space under the buttons) and the text column takes the full width next to the switch. */
+	/* With actions the card is a grid: the actions sit on the title row only, and the lines under the title (desc, path)
+	   run under them to the card's right edge. As a column of their own they left a dead strip under the buttons and
+	   wrapped a path at half the card's width. `.info` dissolves (display: contents) so its lines are grid rows. */
+	.item.act {
+		display: grid;
+		grid-template-columns: auto minmax(0, 1fr) auto;
+		gap: 0 12px; /* no row gap: the lines keep their own 4 / 8px margins, as in the flex column they came from */
+		align-items: start;
+	}
+	.item.act:not(:has(.lead)) {
+		grid-template-columns: minmax(0, 1fr) auto;
+	}
+	.act .info {
+		display: contents;
+	}
+	.act > .lead {
+		grid-row: 1;
+		grid-column: 1;
+	}
+	.act .line {
+		grid-row: 1;
+		grid-column: 2;
+	}
+	.act:not(:has(.lead)) .line {
+		grid-column: 1;
+	}
+	.act > .side {
+		grid-row: 1;
+		grid-column: -2;
+	}
+	.act .info > :global(:not(.line)) {
+		grid-column: 2 / -1;
+	}
+	.act:not(:has(.lead)) .info > :global(:not(.line)) {
+		grid-column: 1 / -1;
+	}
+	/* A phone: the title row is too narrow for the name, its badges and two buttons, so the actions become the card's last
+	   row, right-aligned like a dialog's footer, and the switch column keeps the text beside it. */
 	@media (max-width: 640px) {
-		.item {
-			display: grid;
-			grid-template-columns: auto 1fr;
-			column-gap: 12px;
-			row-gap: 8px;
-			align-items: start;
-		}
-		.item:not(:has(.lead)) {
-			grid-template-columns: 1fr;
-		}
-		.item > .side {
-			grid-column: 1 / -1;
-			justify-content: flex-start;
-		}
 		.act {
 			--row: 22px;
+		}
+		.act > .side {
+			grid-row: auto;
+			grid-column: 1 / -1;
+			margin-top: 12px;
 		}
 	}
 </style>

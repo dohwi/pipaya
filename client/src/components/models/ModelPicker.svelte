@@ -36,7 +36,7 @@
 	tier={eff.serviceTier}
 	tierApi={app.api}
 	favs={app.favModels}
-	label={t("모델 설정")}
+	label={t("모델 선택")}
 	onfav={(p, id) => app.toggleFavModel(p, id)}
 	onmanage={() => (app.openSettings("agent"))}
 	onpick={pick}

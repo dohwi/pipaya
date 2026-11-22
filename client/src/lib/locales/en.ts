@@ -1048,6 +1048,8 @@ export const en: Record<string, string> = {
 	"답변 필요": "Needs an answer",
 	"답변": "Answer",
 	"직접 입력": "Type your own",
+	"대화 닫기": "Close chats",
+	"작업 폴더 확인·이동 (workdir)": "Show or move the working folder (workdir)",
 	"직접 입력 (쉼표로 여러 개)": "Type your own (commas for several)",
 	"여러 개를 고를 수 있습니다": "Pick as many as you like",
 	"알아서 정해 줘": "You decide",

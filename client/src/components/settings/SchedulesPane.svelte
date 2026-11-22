@@ -3,6 +3,7 @@
 	import Accordion from "../ui/Accordion.svelte";
 	import Badge from "../ui/Badge.svelte";
 	import Button from "../ui/Button.svelte";
+	import Icon from "../ui/Icon.svelte";
 	import ConfirmButton from "../ui/ConfirmButton.svelte";
 	import EmptyState from "../ui/EmptyState.svelte";
 	import ExtrasIntro from "../ui/ExtrasIntro.svelte";
@@ -361,7 +362,7 @@
 		{:else if sessions.length === 0}
 			<p class="hint">{t("예약할 대화가 없습니다. 먼저 대화를 시작하세요.")}</p>
 		{:else}
-			<Button variant="dashed" onclick={() => add()}>{t("예약 추가")}</Button>
+			<Button variant="dashed" onclick={() => add()}><Icon name="plus" /> {t("예약 추가")}</Button>
 		{/if}
 		{#if finished.length}
 			<!-- "text", not "line": the line variant pads its body 4px and would pull these cards off the gutter of the cards above -->

@@ -11,10 +11,6 @@
 	});
 </script>
 
-<section class="set-group">
-	{#if api}{#key serverId}<McpPanel {api} {only} />{/key}{/if}
-</section>
-
-<style>
-	section { display: flex; flex-direction: column; gap: 8px; }
-</style>
+<!-- the list dialog's own shape (intro, group, cards, dashed add, inline form) straight on the page, like 예약 작업:
+     a grey settings card around it put the form 16px inside the page's left and right lines -->
+{#if api}{#key serverId}<McpPanel {api} {only} />{/key}{/if}

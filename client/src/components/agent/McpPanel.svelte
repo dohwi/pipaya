@@ -2,6 +2,7 @@
 	import { untrack } from "svelte";
 	import Badge from "../ui/Badge.svelte";
 	import Button from "../ui/Button.svelte";
+	import Icon from "../ui/Icon.svelte";
 	import ConfirmButton from "../ui/ConfirmButton.svelte";
 	import EmptyState from "../ui/EmptyState.svelte";
 	import IconButton from "../ui/IconButton.svelte";
@@ -191,7 +192,7 @@
 			{/each}
 		</ul>
 		</ListGroup>
-		{#if shown.length === data.servers.length}<Button variant="dashed" onclick={add}>{t("MCP 서버 추가")}</Button>{/if}
+		{#if shown.length === data.servers.length}<Button variant="dashed" onclick={add}><Icon name="plus" /> {t("MCP 서버 추가")}</Button>{/if}
 	{/if}
 </div>
 
