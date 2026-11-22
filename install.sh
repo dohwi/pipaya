@@ -116,20 +116,52 @@ install_bun() {
 	trap - EXIT
 }
 
+# Verify that `sha` in the repository at `$1` lies on the remote's release branch (`main`), matching SelfUpdater.provenance.
+verify_provenance() {
+	local repo="$1" sha="$2" branch="${PIPAYA_RELEASE_BRANCH:-}" head=""
+	if [ -z "$branch" ]; then
+		branch="$(git -C "$repo" ls-remote --symref origin HEAD 2>/dev/null | sed -n 's|^ref: refs/heads/\([^[:space:]]*\)[[:space:]]*HEAD$|\1|p' | head -n 1)"
+	fi
+	[[ -n "$branch" && "$branch" =~ ^[A-Za-z0-9._/-]+$ && "$branch" != -* ]] || die "could not determine the release branch to verify the update"
+	head="$(git -C "$repo" ls-remote origin "refs/heads/$branch" 2>/dev/null | awk -v r="refs/heads/$branch" '$2 == r { print $1; exit }')"
+	[[ "$head" =~ ^[0-9a-f]{7,64}$ ]] || die "could not look up refs/heads/$branch on origin"
+	if [ "$head" = "$sha" ]; then return 0; fi
+	local depth
+	for depth in 64 512; do
+		git -C "$repo" fetch --quiet --depth "$depth" origin "$head" || die "could not fetch release branch history"
+		if git -C "$repo" merge-base --is-ancestor "$sha" "$head" 2>/dev/null; then return 0; fi
+	done
+	if [ "$(git -C "$repo" rev-parse --is-shallow-repository 2>/dev/null)" = true ]; then
+		git -C "$repo" fetch --quiet --unshallow origin || die "could not fetch full history to verify release provenance"
+		git -C "$repo" fetch --quiet origin "$head" || die "could not fetch release branch tip"
+		if git -C "$repo" merge-base --is-ancestor "$sha" "$head" 2>/dev/null; then return 0; fi
+	fi
+	die "refusing to install: the release tag points at a commit ($sha) that is not on $branch"
+}
+
 fetch_code() {
 	# The default follows the `latest` release tag but stays on a branch, so the server can still update itself.
-	local branch="$REF" want="$REF"
+	local branch="$REF" want="$REF" sha=""
 	if [ "$REF" = latest ]; then branch="main"; want="refs/tags/latest"; fi
 	if [ -d "$APP_DIR/.git" ]; then
 		git -C "$APP_DIR" fetch --quiet --depth 1 origin "$want"
-		git -C "$APP_DIR" reset --quiet --hard FETCH_HEAD
+		sha="$(git -C "$APP_DIR" rev-parse FETCH_HEAD)"
+		if [ "$REF" = latest ]; then verify_provenance "$APP_DIR" "$sha"; fi
+		git -C "$APP_DIR" reset --quiet --hard "$sha"
 	else
 		[ ! -e "$APP_DIR" ] || [ -z "$(ls -A "$APP_DIR" 2>/dev/null)" ] || die "$APP_DIR exists and is not a pipaya checkout (use --dir)"
 		mkdir -p "$(dirname "$APP_DIR")"
 		git clone --quiet --depth 1 --branch "$branch" "$REPO_URL" "$APP_DIR"
 		if [ "$want" != "$branch" ]; then
-			git -C "$APP_DIR" fetch --quiet --depth 1 origin "$want"
-			git -C "$APP_DIR" reset --quiet --hard FETCH_HEAD
+			if ! (
+				git -C "$APP_DIR" fetch --quiet --depth 1 origin "$want" &&
+				sha="$(git -C "$APP_DIR" rev-parse FETCH_HEAD)" &&
+				{ [ "$REF" != latest ] || verify_provenance "$APP_DIR" "$sha"; } &&
+				git -C "$APP_DIR" reset --quiet --hard "$sha"
+			); then
+				rm -rf "$APP_DIR"
+				exit 1
+			fi
 		fi
 	fi
 	(cd "$APP_DIR/server" && bun install --frozen-lockfile --production --silent)

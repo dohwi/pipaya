@@ -157,6 +157,11 @@ mod local_server {
         }
         let data = app.path().app_local_data_dir().map_err(|e| e.to_string())?.join("server");
         std::fs::create_dir_all(&data).map_err(|e| e.to_string())?;
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let _ = std::fs::set_permissions(&data, std::fs::Permissions::from_mode(0o700));
+        }
         let workspace = app.path().home_dir().map_err(|e| e.to_string())?;
         let saved = read_bind(app);
         let host = bind_host(&saved);

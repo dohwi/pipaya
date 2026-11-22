@@ -125,4 +125,20 @@ describe.skipIf(!hasGit)("self-update against a real shallow checkout", () => {
 		expect(s.head()).toBe(main[600]!);
 		expect(s.restarted()).toBe(false);
 	}, 60_000);
+
+	test.skipIf(process.platform === "win32")("install.sh refuses a release tag moved off the release branch", () => {
+		const installer = join(import.meta.dir, "..", "..", "install.sh");
+		const appDir = join(dir, "script-install");
+		rmSync(appDir, { recursive: true, force: true });
+
+		// Off-branch `latest` tag must be rejected during a fresh install, leaving no checkout behind.
+		release(offBranch);
+		const bad = Bun.spawnSync(["bash", installer, "server", "--no-service", "--dir", appDir], {
+			env: { ...process.env, ...quiet, PIPAYA_REPO: `file://${remote}` },
+			stdout: "pipe",
+			stderr: "pipe",
+		});
+		expect(bad.exitCode).not.toBe(0);
+		expect(bad.stderr.toString()).toContain("not on main");
+	}, 60_000);
 });

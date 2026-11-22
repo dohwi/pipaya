@@ -18,9 +18,10 @@ export const PUBLIC_PAIRING_PATH = "/pairing/redeem";
  */
 export const isAdminOnlyRoute = (method: string, path: string) =>
 	(path === "/pairing" && (method === "POST" || method === "DELETE")) || path === "/devices/tokens" || path.startsWith("/devices/tokens/") ||
-	// Server extensions execute code in this process; a paired phone may use their methods but never reload or install them.
+	// Server extensions and stdio MCP servers execute code on this host; a paired phone may use them, never install or reconfigure them.
 	((path === "/server-extensions/reload" || path === "/server-extensions/install") && method === "POST") ||
 	(path.startsWith("/server-extensions/") && method === "DELETE") ||
+	(path === "/mcp" && method === "PUT") || (path === "/mcp/reload" && method === "POST") ||
 	// Replacing the server's own code and restarting it is the owner's call alone.
 	path === "/server/update";
 

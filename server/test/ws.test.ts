@@ -120,6 +120,28 @@ describe("websocket replay", () => {
 	});
 });
 
+describe("websocket origin policy", () => {
+	test("rejects upgrades from untrusted web origins while allowing trusted and non-browser clients", async () => {
+		const evil = await fetch(`http://127.0.0.1:${port}/ws?token=${TOKEN}`, {
+			headers: { Upgrade: "websocket", Connection: "Upgrade", Origin: "https://evil.example" },
+		});
+		expect(evil.status).toBe(403);
+
+		const sseEvil = await app.server.inject({
+			method: "GET",
+			url: `/events?token=${TOKEN}`,
+			headers: { origin: "https://evil.example" },
+		});
+		expect(sseEvil.statusCode).toBe(403);
+
+		const ws = new WebSocket(url, { headers: { Origin: "https://tauri.localhost" } } as any);
+		await new Promise((r, j) => ((ws.onopen = r), (ws.onerror = j)));
+		const done = closed(ws, 1000);
+		ws.close();
+		await done;
+	});
+});
+
 describe("websocket slow clients", () => {
 	test("a client whose queue is over the limit is closed with 1013 so it reconnects and replays", async () => {
 		const dir2 = mkdtempSync(join(tmpdir(), "pipaya-ws-slow-"));

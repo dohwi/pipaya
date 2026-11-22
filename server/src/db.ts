@@ -284,15 +284,19 @@ export const MIGRATIONS: (string | ((db: Database) => void))[] = [
 ];
 
 export function openDb(path: string): Database {
-	const isNew = path !== ":memory:" && !existsSync(path);
-	if (path !== ":memory:") mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
+	const fileDb = path !== ":memory:";
+	if (fileDb) mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
 	const db = new Database(path, { create: true, strict: true });
-	if (isNew) chmodSync(path, 0o600);
 	db.exec("PRAGMA journal_mode = WAL");
 	db.exec("PRAGMA synchronous = NORMAL");
 	db.exec("PRAGMA foreign_keys = ON");
 	db.exec("PRAGMA busy_timeout = 5000");
 	migrate(db);
+	if (fileDb) {
+		for (const file of [path, `${path}-wal`, `${path}-shm`]) {
+			if (existsSync(file)) try { chmodSync(file, 0o600); } catch { /* unsupported FS */ }
+		}
+	}
 	return db;
 }
 

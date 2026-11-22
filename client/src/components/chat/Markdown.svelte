@@ -3,7 +3,7 @@
 	import { t } from "../../lib/i18n";
 	import { app } from "../../lib/store.svelte";
 	import { baseName } from "../../lib/files";
-	import { awaitsHighlight, renderMarkdown, renderStreaming } from "../../lib/markdown";
+	import { awaitsHighlight, isSafeExternalUrl, renderMarkdown, renderStreaming } from "../../lib/markdown";
 	import { onHighlightReady } from "../../lib/code-highlight";
 	import { copyText } from "../../lib/clipboard";
 	import { openExternal } from "../../lib/tauri";
@@ -153,7 +153,7 @@
 		const a = el.closest<HTMLAnchorElement>("a[data-ext]");
 		if (a) {
 			e.preventDefault();
-			void openExternal(a.href);
+			if (isSafeExternalUrl(a.href)) void openExternal(a.href);
 		}
 	}
 </script>

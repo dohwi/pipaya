@@ -310,6 +310,33 @@ describe("extension settings", () => {
 		store.delete("legacy.one");
 	});
 
+	test("a keyed update that changes httpOrigin without supplying httpToken drops the stored token", async () => {
+		await api("PUT", "/extensions/origin.guard/settings", {
+			settings: { httpOrigin: "https://one.test", httpToken: "secret-1", interval: 30 },
+		});
+		// Unrelated keyed edits keep both httpOrigin and httpToken.
+		const sameOrigin = await api("PUT", "/extensions/origin.guard/settings", {
+			settings: { interval: 60 },
+			keys: ["interval"],
+		});
+		expect(sameOrigin.json.value).toEqual({ httpOrigin: "https://one.test", httpToken: "secret-1", interval: 60 });
+
+		// Supplying both keys together (as the settings form does) keeps the new token.
+		const withToken = await api("PUT", "/extensions/origin.guard/settings", {
+			settings: { httpOrigin: "https://two.test", httpToken: "secret-1" },
+			keys: ["httpOrigin", "httpToken"],
+		});
+		expect(withToken.json.value).toEqual({ httpOrigin: "https://two.test", httpToken: "secret-1", interval: 60 });
+
+		// Changing httpOrigin alone clears httpToken so the old secret is never sent to the new origin.
+		const hijacked = await api("PUT", "/extensions/origin.guard/settings", {
+			settings: { httpOrigin: "https://evil.test" },
+			keys: ["httpOrigin"],
+		});
+		expect(hijacked.json.value).toEqual({ httpOrigin: "https://evil.test", interval: 60 });
+		await api("DELETE", "/extensions/origin.guard");
+	});
+
 	test("authentication is required on every route", async () => {
 		const calls: [string, string, unknown?][] = [
 			["GET", "/extensions/settings"],

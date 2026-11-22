@@ -1,4 +1,4 @@
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { CATALOG_ID_PATTERN as ID } from "../extension-settings.ts";
@@ -48,6 +48,19 @@ export function removeInstalled(id: string, extensionsDir: string, keepSettings:
 	return found;
 }
 
+const SKIPPED_INSTALL_ENTRIES = new Set([".git", "node_modules", "tests"]);
+
+/** Refuse symlinks anywhere in the copied tree so an archive cannot point files outside the extension folder. */
+export function assertNoSymlinks(root: string): void {
+	if (lstatSync(root).isSymbolicLink()) throw new Error("extension package must not contain symlinks");
+	for (const entry of readdirSync(root, { withFileTypes: true })) {
+		if (SKIPPED_INSTALL_ENTRIES.has(entry.name)) continue;
+		const full = join(root, entry.name);
+		if (lstatSync(full).isSymbolicLink()) throw new Error(`extension package must not contain symlinks: ${entry.name}`);
+		if (entry.isDirectory()) assertNoSymlinks(full);
+	}
+}
+
 /** Fetch the tag and refuse it when it no longer points at the pinned commit. */
 export async function installFromGit(id: string, src: GitSource, extensionsDir: string, hosts: readonly string[] = allowedGitHosts()): Promise<string> {
 	const host = (src.host ?? DEFAULT_GIT_HOST).toLowerCase();
@@ -66,6 +79,7 @@ export async function installFromGit(id: string, src: GitSource, extensionsDir: 
 		if (head !== src.commit) throw new Error(`${src.repo}@${src.ref} is at ${head}, the catalog lists ${src.commit}; refusing to install`);
 		const from = src.dir ? join(tmp, src.dir) : tmp;
 		if (!existsSync(join(from, "package.json"))) throw new Error(`${src.repo}@${src.ref} has no ${src.dir ?? "."}/package.json`);
+		assertNoSymlinks(from);
 		mkdirSync(extensionsDir, { recursive: true });
 		const to = join(extensionsDir, id);
 		const staging = `${to}.installing`;
@@ -73,7 +87,7 @@ export async function installFromGit(id: string, src: GitSource, extensionsDir: 
 		cpSync(from, staging, { recursive: true, filter: (f) => !/(^|\/)(\.git|node_modules|tests)(\/|$)/.test(f.slice(from.length)) });
 		// The shared settings of this id live in the same folder (extension-settings.ts): an update keeps them.
 		const settings = join(to, "settings.json");
-		if (existsSync(settings)) cpSync(settings, join(staging, "settings.json"));
+		if (existsSync(settings) && !lstatSync(settings).isSymbolicLink()) cpSync(settings, join(staging, "settings.json"));
 		rmSync(to, { recursive: true, force: true });
 		renameSync(staging, to);
 		return to;
