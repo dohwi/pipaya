@@ -1486,8 +1486,50 @@ class AppStore {
   /** The tab last open in each folder (by `server\0path`), so a folder button lands where that folder was left. */
   private lastTabIn: Record<string, string> = {};
 
+  /**
+   * The project whose folders' tabs the strip shows together (its header was clicked in the sidebar), or null: the strip
+   * shows the open folder's alone. Opening a folder (its row) or a tab outside the project goes back to one folder.
+   */
+  tabProject = $state<{ serverId: string; root: string } | null>(null);
+
+  /** The folders of project `root` on server `serverId`, in sidebar order (null: no such project listed). */
+  projectDirs(serverId: string, root: string): DirBlock[] | null {
+    const b = this.blocksByServer[serverId]?.find((x) => x.kind === "project" && x.root === root);
+    return b?.kind === "project" ? b.dirs : null;
+  }
+
+  /**
+   * The folders whose tabs the strip lists, in order: every folder of the chosen project while the open tab is in one of
+   * them, else the open folder alone.
+   */
+  get stripDirs(): DirBlock[] {
+    const cur = this.tabDir;
+    const p = this.tabProject;
+    const dirs = p && p.serverId === this.serverId ? this.projectDirs(p.serverId, p.root) : null;
+    if (dirs && (!cur || dirs.some((d) => d.path === cur.path))) return dirs;
+    return cur ? [cur] : NO_DIRS;
+  }
+
+  /**
+   * Show a whole project in the strip: the tabs of all its folders together. Stays on the open tab when it is already in
+   * the project, else opens the tab last used in its first folder that has one.
+   */
+  openProject(serverId: string, root: string) {
+    const own = this.projectDirs(serverId, root);
+    const first = own?.find((d) => d.tabs.length);
+    if (!own || !first) return;
+    this.tabProject = { serverId, root };
+    if (serverId === this.serverId && this.activeTab && own.some((d) => d.path === this.activeTab!.dir.path)) return;
+    this.showDir(serverId, first.path);
+  }
+
   /** Show a folder: the tab last used in it, else its first one. `serverId` other than the open one switches server. */
   openDir(serverId: string, path: string) {
+    this.tabProject = null;
+    this.showDir(serverId, path);
+  }
+
+  private showDir(serverId: string, path: string) {
     const ov = serverId === this.serverId ? null : this.links[serverId]?.data;
     const dirs = ov ? (this.dirsByServer[serverId] ?? []) : this.dirs;
     const dir = dirs.find((d) => d.path === path);
@@ -1825,6 +1867,9 @@ class AppStore {
     if (g) this.lastPane[g.id] = id;
     const at = this.serverId ? tabOf(this.dirs, id) : null;
     if (at && this.serverId) this.lastTabIn[`${this.serverId}\u0000${at.dir.path}`] = at.tab.id;
+    // a tab outside the project shown in the strip: back to one folder's tabs
+    const p = this.tabProject;
+    if (at && p && (p.serverId !== this.serverId || !this.projectDirs(p.serverId, p.root)?.some((d) => d.path === at.dir.path))) this.tabProject = null;
     if (reveal) this.revealRow(id);
     delete this.unread[id];
     delete this.failed[id];

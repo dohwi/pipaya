@@ -23,6 +23,8 @@
 	import { rovingKeys } from "../../lib/roving";
 	import { slidingIndicator } from "../../lib/sliding-indicator";
 	import { tabPanes, type Tab } from "../../lib/nav";
+	import { branchLabel } from "../../lib/projects";
+	import { shortName } from "../../lib/sidebar-model";
 	import { app } from "../../lib/store.svelte";
 
 	/**
@@ -30,11 +32,28 @@
 	 * or a group of panes. Click to switch, drag to reorder; drag a tab onto a pane to split it with that pane, or a
 	 * pane's title bar onto the strip to take it out of its group as a tab of its own.
 	 */
-	const dir = $derived(app.activeTab?.dir ?? app.dirs.find((d) => d.path === app.workdirAbs) ?? null);
-	const path = $derived(dir?.path ?? app.workdirAbs);
-	const tabs = $derived(dir?.tabs ?? []);
+	/** The open folder's tabs, or every folder's of the project picked in the sidebar (each folder's run after a branch label) */
+	const dirs = $derived(app.stripDirs);
+	const multi = $derived(dirs.length > 1);
+	const tabs = $derived(dirs.flatMap((d) => d.tabs));
 	const activeTab = $derived(app.activeTab?.tab.id ?? null);
 	const ids = $derived(tabs.map((x) => x.id));
+	/** The folder a tab (or a pane of one of its groups) is listed in */
+	const dirOf = (id: string) => dirs.find((d) => d.tabs.some((x) => x.id === id || tabPanes(x).includes(id)))?.path ?? null;
+	/** Where a folder's run starts, with the name it goes by: its branch inside a git project, else its short name */
+	const leads = $derived.by(() => {
+		const out: Record<string, string> = {};
+		const sid = app.serverId;
+		if (!multi || !sid) return out;
+		const repos = app.links[sid]?.repos ?? {};
+		for (const d of dirs) {
+			const first = d.tabs[0];
+			if (!first) continue;
+			const repo = repos[d.path];
+			out[first.id] = app.sidebar.dirName(sid, d.path) ?? (repo ? branchLabel(d.path, repo).name : shortName(d.path, app.workspace?.home));
+		}
+		return out;
+	});
 
 	const titleOf = (x: Tab) => (x.kind === "group" ? x.group.name : x.kind === "session" ? sessionTitle(x.session.title) : x.terminal.title);
 	/** The `@name` other sessions call this conversation by, as the sidebar row and the split tab's title bar show it. */
@@ -58,12 +77,15 @@
 	};
 	/** A tab of this strip, or a pane of one of its groups (which then steps out into a tab of its own). */
 	const takes = (id: string) => ids.includes(id) || tabs.some((x) => x.kind === "group" && tabPanes(x).includes(id));
+	/** Tabs stay in their own folder: across a project's folders only the end of the strip takes one (the end of its folder's run) */
+	const sameDir = (id: string, target: string) => dirOf(id) === dirOf(target);
 	async function put(id: string, target: string | null, after: boolean) {
 		const serverId = app.serverId;
-		if (!serverId || id === target) return;
+		const path = dirOf(id);
+		if (!serverId || id === target || !path) return;
 		if (!ids.includes(id)) await app.leaveGroup(id);
 		// as listed now (stepping out of a group may have changed the tabs)
-		const now = app.dirs.find((d) => d.path === path)?.tabs.map((x) => x.id) ?? ids;
+		const now = app.dirs.find((d) => d.path === path)?.tabs.map((x) => x.id) ?? [];
 		const others = now.filter((x) => x !== id);
 		const anchor = target && others.includes(target) ? target : others[others.length - 1];
 		if (anchor) app.sidebar.moveTab(serverId, now, id, anchor, target ? after : true);
@@ -73,7 +95,7 @@
 	const acrossPins = (id: string | null, x: string) =>
 		!!app.serverId && !!id && ids.includes(id) && app.sidebar.isTabPinned(app.serverId, id) !== app.sidebar.isTabPinned(app.serverId, x);
 	const tabTarget = (x: Tab) => ({
-		accepts: (id: string) => takes(id) && !acrossPins(id, x.id),
+		accepts: (id: string) => takes(id) && sameDir(id, x.id) && !acrossPins(id, x.id),
 		hover: (pt: Point | null) => {
 			if (pt && drag.id === x.id) slot = null;
 			else if (pt) {
@@ -101,7 +123,10 @@
 	};
 	const stripTarget = {
 		// the end of the strip is behind every unpinned tab: a pinned one cannot go there
-		accepts: (id: string) => takes(id) && !(!!app.serverId && ids.includes(id) && app.sidebar.isTabPinned(app.serverId, id) && tabs.some((t) => !app.sidebar.isTabPinned(app.serverId!, t.id))),
+		accepts: (id: string) => {
+			const own = dirs.find((d) => d.path === dirOf(id))?.tabs ?? [];
+			return takes(id) && !(!!app.serverId && ids.includes(id) && app.sidebar.isTabPinned(app.serverId, id) && own.some((t) => !app.sidebar.isTabPinned(app.serverId!, t.id)));
+		},
 		hover: (pt: Point | null) => (end = !!pt),
 		drop: (id: string) => {
 			end = false;
@@ -273,6 +298,7 @@
 			{#each tabs as x (x.id)}
 				{@const on = x.id === activeTab}
 				{@const st = stateOf(x)}
+				{#if leads[x.id]}<span class="lead mono" title={leads[x.id]}><Icon name="fork" /><span class="ln">{leads[x.id]}</span></span>{/if}
 				<!-- a group is a tray of its sessions' chips, laid out inline with the other tabs (its name is in the page
 				     header's "group › session" and the sidebar) -->
 				{#if x.kind === "group"}
@@ -378,6 +404,37 @@
 		z-index: 1;
 		background: var(--bg-tabbar-on);
 		border-radius: var(--radius-sm);
+	}
+
+	/* a project's strip: each folder's run of tabs starts with its branch, dim and small, the run before it kept 8px off */
+	.lead {
+		flex: none;
+		display: flex;
+		align-items: center;
+		gap: 4px;
+		max-width: 160px;
+		height: 28px;
+		padding: 0 4px 0 8px;
+		color: var(--text-faint);
+		font-size: var(--fs-2xs);
+		line-height: 20px; /* whole-pixel line box */
+		user-select: none;
+		-webkit-user-select: none;
+	}
+	.lead:not(:first-child) {
+		margin-left: 8px;
+		box-shadow: inset 1px 0 var(--tabbar-line); /* the hairline between two folders' runs */
+	}
+	.lead > :global(svg) {
+		flex: none;
+		width: 12px;
+		height: 12px;
+	}
+	.ln {
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 	}
 
 	.tab {

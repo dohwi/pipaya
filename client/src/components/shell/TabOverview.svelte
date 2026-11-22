@@ -29,7 +29,11 @@
 
 	const dir = $derived(app.tabDir);
 	const path = $derived(dir?.path ?? app.workdirAbs);
-	const tabs = $derived(dir?.tabs ?? []);
+	/** as the strip lists them: a whole project's when its name was clicked */
+	const strip = $derived(app.stripDirs);
+	const tabs = $derived(strip.flatMap((d) => d.tabs));
+	/** Cards move within their own folder only (each folder keeps its own order) */
+	const sameDir = (a: string, b: string) => strip.find((d) => d.tabs.some((x) => x.id === a))?.path === strip.find((d) => d.tabs.some((x) => x.id === b))?.path;
 	const activeTab = $derived(app.activeTab?.tab.id ?? null);
 	const title = t("탭");
 	const sub = $derived(shortPath(path));
@@ -84,8 +88,9 @@
 	const pinned = (id: string) => !!app.serverId && app.sidebar.isTabPinned(app.serverId, id);
 	function move(id: string, target: string, after: boolean): boolean {
 		const serverId = app.serverId;
-		if (!serverId || id === target || !ids.includes(id) || !ids.includes(target) || pinned(id) !== pinned(target)) return false;
-		app.sidebar.moveTab(serverId, ids, id, target, after);
+		if (!serverId || id === target || !ids.includes(id) || !ids.includes(target) || !sameDir(id, target) || pinned(id) !== pinned(target)) return false;
+		const own = strip.find((d) => d.tabs.some((x) => x.id === id))?.tabs.map((x) => x.id) ?? ids;
+		app.sidebar.moveTab(serverId, own, id, target, after);
 		return true;
 	}
 	let slot = $state<{ id: string; after: boolean } | null>(null);
@@ -95,7 +100,7 @@
 		return !!r && pt.x > r.left + r.width / 2;
 	};
 	const cardTarget = (x: Tab) => ({
-		accepts: (id: string) => ids.includes(id) && pinned(id) === pinned(x.id),
+		accepts: (id: string) => ids.includes(id) && sameDir(id, x.id) && pinned(id) === pinned(x.id),
 		hover: (pt: Point | null) => {
 			if (!pt) {
 				if (slot?.id === x.id) slot = null;

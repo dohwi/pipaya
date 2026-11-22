@@ -35,12 +35,16 @@
 	const pstate = $derived(mostUrgent(dirs.flatMap((d) => d.tabs.flatMap((x) => tabPanes(x))).map((id) => sb.stateOfId(n, id))));
 	/** One of its folders is the open one: the header reads as current, like a folder's */
 	const cur = $derived(!app.graphOpen && n.current && dirs.some((d) => d.path === (app.activeTab?.dir.path ?? app.workdirAbs)));
+	/** The tab bar lists the whole project (its name was clicked) */
+	const shown = $derived(cur && app.tabProject?.serverId === n.server.id && app.tabProject.root === root && app.stripDirs.length > 1);
 </script>
 
 <div class="projblock">
-	<div class="dir proj grabbable" class:folded class:cur={cur && folded} use:sb.dirSource={{ kind: "dir", serverId: n.server.id, path: dirs[0]?.path ?? root, paths: [], disabled: true, menu: (pt) => sb.projectMenuAt(pt, n, root, key, workdir) }}>
-		<button class="dirtoggle projtoggle" onclick={() => app.sidebar.toggleFolded(key)} aria-expanded={!folded} title={manual ? name : sb.pretty(n, root)}>
+	<div class="dir proj grabbable" class:folded class:cur={cur && folded} class:shown use:sb.dirSource={{ kind: "dir", serverId: n.server.id, path: dirs[0]?.path ?? root, paths: [], disabled: true, menu: (pt) => sb.projectMenuAt(pt, n, root, key, workdir) }}>
+		<button class="projfold" onclick={() => app.sidebar.toggleFolded(key)} aria-expanded={!folded} aria-label={folded ? t("프로젝트 펼치기") : t("프로젝트 접기")} title={folded ? t("프로젝트 펼치기") : t("프로젝트 접기")}>
 			<span class="chev" class:folded><Icon name="chevron-down" /></span>
+		</button>
+		<button class="dirtoggle projtoggle" onclick={() => (total ? app.openProject(n.server.id, root) : app.sidebar.toggleFolded(key))} aria-current={shown ? "true" : undefined} title={total ? t("{name}의 탭 모두 보기", { name }) : manual ? name : sb.pretty(n, root)}>
 			<span class="dicon"><Icon name="repo" /></span>
 			{#if sb.projectRename.is(key)}
 				<!-- svelte-ignore a11y_autofocus -->
@@ -90,15 +94,25 @@
 	:global(:where(.side) :is(.dirblock, .projblock):has(> .fold) + .projblock > .proj) {
 		margin-top: 8px;
 	}
+	/* the chevron is its own button (it folds the project); the rest of the row lists the whole project in the tab bar.
+	   Together they keep the old columns, as in a folder row: chevron x 28, repo icon x 48 */
+	.projfold {
+		flex: none;
+		display: flex;
+		align-items: center;
+		height: 32px; /* every row is 32px tall */
+		padding-left: 4px; /* the chevron's column, as when it sat inside the toggle */
+		border-radius: var(--radius-sm);
+	}
 	.projtoggle {
 		flex: 1;
 		min-width: 0;
 		display: flex;
 		align-items: center;
-		gap: 6px; /* alignment, not spacing: chevron 14 + 6 = the 20px column step (x 28 -> 48), as in a folder row */
+		gap: 6px; /* alignment, not spacing: the icon 14 + 6 puts the name where it was */
 		height: 32px; /* every row is 32px tall */
 		border-radius: var(--radius-sm);
-		padding: 0 4px;
+		padding: 0 4px 0 6px; /* alignment: the gap the chevron used to keep to the icon (14 + 6 = the 20px column step, x 28 -> 48) */
 		text-align: left;
 		color: var(--text-dim);
 		transition: color var(--motion-fast) var(--ease-std);
@@ -124,8 +138,13 @@
 	.proj.folded .projtoggle {
 		padding-right: 0; /* the count takes the "+" column, as on a folded folder */
 	}
-	.proj.cur .projtoggle {
+	.proj.cur .projtoggle,
+	.proj.shown .projtoggle {
 		color: var(--text);
+	}
+	/* the tab bar lists the whole project: its name reads as the open place, like an open folder's */
+	.proj.shown .dname {
+		font-weight: 700;
 	}
 	@media (hover: hover) {
 		.proj:hover .projtoggle {
@@ -158,7 +177,8 @@
 		padding-left: 20px; /* the 20px column step */
 	}
 	@media (pointer: coarse) {
-		.projtoggle {
+		.projtoggle,
+		.projfold {
 			height: 40px;
 		}
 	}
