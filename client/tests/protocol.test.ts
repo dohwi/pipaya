@@ -1,20 +1,17 @@
 import { describe, expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
-import { compareVersions, compat, isClientTooOld, PROTOCOL_VERSION, serverReleaseState, serverVersionLabel } from "../src/lib/protocol";
-
-const serverSrc = readFileSync(new URL("../../server/src/version.ts", import.meta.url), "utf8");
-const serverConst = (name: string) => Number(new RegExp(`export const ${name} = (\\d+);`).exec(serverSrc)?.[1]);
+import { MIN_CLIENT_PROTOCOL, PROTOCOL_HEADER as SERVER_HEADER, PROTOCOL_QUERY as SERVER_QUERY, PROTOCOL_VERSION as SERVER_PROTOCOL } from "@shared/protocol";
+import { compareVersions, compat, isClientTooOld, PROTOCOL_HEADER, PROTOCOL_QUERY, PROTOCOL_VERSION, serverReleaseState, serverVersionLabel } from "../src/lib/protocol";
 
 describe("protocol constants", () => {
-	test("the client and the server agree on the protocol number", () => {
-		expect(serverConst("PROTOCOL_VERSION")).toBe(PROTOCOL_VERSION);
+	test("the client and the server share the protocol number", () => {
+		expect(PROTOCOL_VERSION).toBe(SERVER_PROTOCOL);
 	});
 	test("this client is not below what the server in the same tree demands", () => {
-		expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(serverConst("MIN_CLIENT_PROTOCOL"));
+		expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(MIN_CLIENT_PROTOCOL);
 	});
 	test("the header and query names match the server's", () => {
-		expect(serverSrc).toContain('PROTOCOL_HEADER = "x-pipaya-protocol"');
-		expect(serverSrc).toContain('PROTOCOL_QUERY = "protocol"');
+		expect(PROTOCOL_HEADER).toBe(SERVER_HEADER);
+		expect(PROTOCOL_QUERY).toBe(SERVER_QUERY);
 	});
 });
 

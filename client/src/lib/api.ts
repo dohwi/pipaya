@@ -1,3 +1,4 @@
+import { EVENT_TYPES } from "@shared/events";
 import type { ExtensionSaveResult, StoredExtensionSettings } from "./extensions/settings-store";
 import type { DelegateRun } from "./graph";
 import type { CatalogInfo, CompactionSettings, CompactionSettingsInfo, DefaultModelSelection, ImageModelSettings, ImageModelSettingsInfo, RetentionInfo, RetentionSettings, Schedule, ScheduleInput, SchedulePatch, SystemModelSettings, SystemModelSettingsInfo,
@@ -166,35 +167,45 @@ export class Api {
 		return this.conn;
 	}
 
-	private async req<T>(method: string, path: string, body?: unknown, signal?: AbortSignal): Promise<T> {
-		let res: Response;
+	private authHeaders(extra?: Record<string, string>): Record<string, string> {
+		return {
+			Authorization: `Bearer ${this.conn.token}`,
+			[PROTOCOL_HEADER]: String(PROTOCOL_VERSION),
+			...extra,
+		};
+	}
+
+	private async sendFetch(path: string, init: RequestInit): Promise<Response> {
 		try {
-			res = await fetch(this.conn.baseUrl + path, {
-				method,
-				signal: this.signalFor(signal),
-				headers: {
-					Authorization: `Bearer ${this.conn.token}`,
-					[PROTOCOL_HEADER]: String(PROTOCOL_VERSION),
-					...(body !== undefined ? { "Content-Type": "application/json" } : {}),
-				},
-				body: body !== undefined ? JSON.stringify(body) : undefined,
-			});
+			return await fetch(this.conn.baseUrl + path, init);
 		} catch (e) {
 			if ((e as Error).name === "AbortError") throw e;
 			throw new ApiError(0, "network", t("서버에 연결할 수 없습니다"));
 		}
+	}
+
+	private toApiError(res: Response, json: unknown): ApiError {
+		const err = (json as { error?: { code?: string; message?: string; [k: string]: unknown } } | undefined)?.error ?? {};
+		const { code, message, ...data } = err;
+		return new ApiError(res.status, code ?? "http_error", message ?? res.statusText, Object.keys(data).length ? data : undefined);
+	}
+
+	private async req<T>(method: string, path: string, body?: unknown, signal?: AbortSignal): Promise<T> {
+		const res = await this.sendFetch(path, {
+			method,
+			signal: this.signalFor(signal),
+			headers: this.authHeaders(body !== undefined ? { "Content-Type": "application/json" } : undefined),
+			body: body !== undefined ? JSON.stringify(body) : undefined,
+		});
 		if (res.status === 204) return undefined as T;
 		const text = await res.text();
-		let json: any;
+		let json: unknown;
 		try {
 			json = text ? JSON.parse(text) : undefined;
 		} catch {
 			json = undefined;
 		}
-		if (!res.ok) {
-			const { code, message, ...data } = json?.error ?? {};
-			throw new ApiError(res.status, code ?? "http_error", message ?? res.statusText, Object.keys(data).length ? data : undefined);
-		}
+		if (!res.ok) throw this.toApiError(res, json);
 		return json as T;
 	}
 
@@ -281,11 +292,7 @@ export class Api {
 		const res = await fetch(this.conn.baseUrl + path, {
 			method,
 			signal,
-			headers: {
-				Authorization: `Bearer ${this.conn.token}`,
-				[PROTOCOL_HEADER]: String(PROTOCOL_VERSION),
-				...(body !== undefined ? { "Content-Type": "application/json" } : {}),
-			},
+			headers: this.authHeaders(body !== undefined ? { "Content-Type": "application/json" } : undefined),
 			body: body !== undefined ? JSON.stringify(body) : undefined,
 		});
 		const text = await res.text();
@@ -326,18 +333,9 @@ export class Api {
 	testVoice = (signal?: AbortSignal) => this.req<{ text: string; status: number }>("POST", "/voice/test", {}, signal);
 	/** A multipart upload: the browser sets the boundary, so no Content-Type is written here. */
 	private async upload<T>(path: string, body: FormData, signal?: AbortSignal): Promise<T> {
-		let res: Response;
-		try {
-			res = await fetch(`${this.conn.baseUrl}${path}`, { method: "POST", body, signal, headers: { Authorization: `Bearer ${this.conn.token}`, [PROTOCOL_HEADER]: String(PROTOCOL_VERSION) } });
-		} catch (e) {
-			if ((e as Error).name === "AbortError") throw e;
-			throw new ApiError(0, "network", t("서버에 연결할 수 없습니다"));
-		}
+		const res = await this.sendFetch(path, { method: "POST", body, signal, headers: this.authHeaders() });
 		const json = await res.json().catch(() => undefined);
-		if (!res.ok) {
-			const { code, message, ...data } = json?.error ?? {};
-			throw new ApiError(res.status, code ?? "http_error", message ?? res.statusText, Object.keys(data).length ? data : undefined);
-		}
+		if (!res.ok) throw this.toApiError(res, json);
 		return json as T;
 	}
 
@@ -503,17 +501,10 @@ export class Api {
 	listIcons = () => this.req<{ icons: string[] }>("GET", "/configuration/icons");
 	/** A file of the session's working directory (an upload, or something the agent wrote), as bytes. */
 	async fetchFile(id: string, path: string, signal?: AbortSignal): Promise<Blob> {
-		let res: Response;
-		try {
-			res = await fetch(`${this.conn.baseUrl}/sessions/${encodeURIComponent(id)}/files?${new URLSearchParams({ path })}`, { signal, headers: { Authorization: `Bearer ${this.conn.token}`, [PROTOCOL_HEADER]: String(PROTOCOL_VERSION) } });
-		} catch (e) {
-			if ((e as Error).name === "AbortError") throw e;
-			throw new ApiError(0, "network", t("서버에 연결할 수 없습니다"));
-		}
+		const res = await this.sendFetch(`/sessions/${encodeURIComponent(id)}/files?${new URLSearchParams({ path })}`, { signal, headers: this.authHeaders() });
 		if (!res.ok) {
 			const json = await res.json().catch(() => undefined);
-			const { code, message, ...data } = json?.error ?? {};
-			throw new ApiError(res.status, code ?? "http_error", message ?? res.statusText, Object.keys(data).length ? data : undefined);
+			throw this.toApiError(res, json);
 		}
 		return res.blob();
 	}
@@ -616,57 +607,8 @@ export class Api {
 	}
 }
 
-/** Every event name the server can send. EventSource only delivers names registered here, so a missing one is dropped without an error. */
-export const EVENT_TYPES = [
-	"session_created",
-	"session_updated",
-	"session_deleted",
-	"session_forked",
-	"group_created",
-	"group_updated",
-	"group_deleted",
-	"terminal_created",
-	"terminal_updated",
-	"terminal_closed",
-	"run_started",
-	"run_finished",
-	"run_limit",
-	"run_retrying",
-	"compaction_started",
-	"compaction_finished",
-	"compaction_failed",
-	"context_updated",
-	"agent_start",
-	"agent_end",
-	"turn_start",
-	"turn_end",
-	"message_start",
-	"message_update",
-	"message_end",
-	"tool_execution_start",
-	"tool_execution_update",
-	"tool_execution_end",
-	"question_requested",
-	"question_resolved",
-	"message_queued",
-	"message_dequeued",
-	"provider_updated",
-	"configuration_updated",
-	"skills_updated",
-	"mcp_updated",
-	"schedules_updated",
-	"locales_updated",
-	"client_settings_updated",
-	"extension_settings_updated",
-	"extension_panel_updated",
-	"extensions_updated",
-	"extension_error",
-	"extension_event",
-	"extension_entry",
-	"notification",
-	"device_revoked",
-	"session_unread",
-];
+/** Every event name the server can send, shared directly from `server/src/shared/events.ts`. */
+export { EVENT_TYPES };
 
 /* ---------- helpers for the server list ---------- */
 

@@ -1,19 +1,13 @@
+import { HISTORY_KEEP_MS, MAX_EVERY_MS, MAX_PROMPT, MAX_TASKS, MAX_TITLE, MIN_EVERY_MS } from "@shared/schedules";
 import { clockMinutes, fmt } from "./format";
 import { localeTag, t } from "./i18n";
 import type { Schedule, ScheduleStatus } from "./types";
 
 /**
  * Helpers of the scheduled-tasks page. Plain TypeScript (no runes), so they are unit-tested directly.
- * The limits mirror server/src/scheduler.ts; the server checks them again and answers 400.
+ * Limits are shared directly from `server/src/shared/schedules.ts` (`@shared/schedules`).
  */
-export const MIN_EVERY_MS = 5 * 60_000;
-export const MAX_EVERY_MS = 30 * 86_400_000;
-export const MAX_PROMPT = 8000;
-export const MAX_TITLE = 100;
-/** Pending tasks at most; finished one-time tasks do not count. */
-export const MAX_TASKS = 50;
-/** A finished one-time task is deleted this long after its last run (server: HISTORY_KEEP_MS). */
-export const HISTORY_KEEP_MS = 7 * 86_400_000;
+export { HISTORY_KEEP_MS, MAX_EVERY_MS, MAX_PROMPT, MAX_TASKS, MAX_TITLE, MIN_EVERY_MS };
 
 export type EveryUnit = "minute" | "hour" | "day";
 export const UNIT_MS: Record<EveryUnit, number> = { minute: 60_000, hour: 3_600_000, day: 86_400_000 };

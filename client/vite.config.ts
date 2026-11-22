@@ -1,3 +1,4 @@
+import { resolve } from "node:path";
 import { defineConfig } from "vite";
 import { svelte } from "@sveltejs/vite-plugin-svelte";
 import { eachGuard } from "./scripts/each-guard-plugin";
@@ -7,6 +8,11 @@ const host = process.env.TAURI_DEV_HOST;
 
 export default defineConfig({
 	plugins: [svelte(), eachGuard()], // a repeated each key is reported, not a crash (src/lib/each-guard.ts)
+	resolve: {
+		alias: {
+			"@shared": resolve(import.meta.dirname, "../server/src/shared"),
+		},
+	},
 	clearScreen: false,
 	envPrefix: ["VITE_", "TAURI_ENV_*"],
 	server: {
