@@ -2130,14 +2130,14 @@ class AppStore {
   }
 
   /** Remove one not-yet-delivered steer/queue message. The chat list updates from the `message_dequeued` event. */
-  async cancelQueued(item: { mode: "steer" | "follow_up"; text: string; deferred?: boolean }, id: string | null = this.queueDialog): Promise<void> {
+  async cancelQueued(item: { mode: "steer" | "follow_up"; text: string; deferred?: boolean }, id: string | null = this.queueDialog): Promise<boolean> {
     const chat = this.chatOf(id);
-    if (!this.api || !chat) return;
+    if (!this.api || !chat) return false;
     const h = item.mode === "follow_up" && !item.deferred ? chat.held.findIndex((x) => x.text === item.text) : -1;
     if (h >= 0) {
       const [held] = chat.held.splice(h, 1);
       chat.restored.push({ ...held!, byHand: true });
-      return;
+      return true;
     }
     // Taken now: the `message_dequeued` event may drop it from `mine` before the answer comes back.
     const own = chat.mine.find((m) => !m.pending && m.text === item.text);
@@ -2145,23 +2145,27 @@ class AppStore {
       const r = await this.api.cancelQueued(chat.id, item.mode, item.text, item.deferred ? true : undefined);
       if (!r.cancelled) {
         // Already delivered (or gone): drop the stale row so the list matches the server.
-        const i = chat.queued.findIndex((x) => x.mode === item.mode && x.text === item.text);
+        const i = chat.queued.findIndex((x) => x.mode === item.mode && x.text === item.text && !!x.deferred === !!item.deferred);
         if (i >= 0) chat.queued.splice(i, 1);
         this.toast(t("이미 전달되어 취소할 수 없습니다"), "error", chat.id);
-      } else if (own) {
+        return false;
+      }
+      if (own) {
         // Cancelled in time, and sent from here: back to the input with its pictures and files, to edit or re-send.
         chat.restored.push({ ...own, byHand: true });
       } else if (chat.id === this.activeId) {
         // A message from elsewhere (a peer, another device): only its text is known (without the server's hint blocks).
         this.prefill = queuedShown(item.text);
       }
+      return true;
     } catch (e) {
       if ((e as { code?: string })?.code === "not_found") {
         // Session or route is gone on the server: the row can never be cancelled, so drop it.
-        const i = chat.queued.findIndex((x) => x.mode === item.mode && x.text === item.text);
+        const i = chat.queued.findIndex((x) => x.mode === item.mode && x.text === item.text && !!x.deferred === !!item.deferred);
         if (i >= 0) chat.queued.splice(i, 1);
       }
       this.fail(e, t("대기열에서 빼지 못했습니다"), chat.id);
+      return false;
     }
   }
 

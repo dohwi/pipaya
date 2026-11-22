@@ -140,6 +140,7 @@ export const en: Record<string, string> = {
 	"대기열 / 끼워 넣기 취소": "Cancel queued / steered messages",
 	"전달 대기 중인 메시지 목록을 열어 하나씩 뺍니다": "Open the list of waiting messages and remove them one by one",
 	"대기열 관리": "Manage queue",
+	"↑↓ 선택 · Enter로 빼기": "↑↓ Select · Enter to remove",
 	"자세히 보기": "Show details",
 	"대기열에서 빼기": "Remove from queue",
 	"빼면 내용이 입력창으로 돌아옵니다": "Removing puts the text back in the input",

@@ -183,7 +183,7 @@
 				<QueueBadge {q} />
 				<QueueText text={q.text} />
 			</button>
-			<button type="button" class="qx" onclick={() => oncancel({ mode: q.mode, text: q.text })} aria-label={t("{name} 취소", { name: queuedShown(q.text) })} title={t("취소")}><Icon name="x" /></button>
+			<button type="button" class="qx" onclick={() => oncancel(q)} aria-label={t("{name} 취소", { name: queuedShown(q.text) })} title={t("취소")}><Icon name="x" /></button>
 		</li>
 	{/each}
 	{#if scheduleOf}

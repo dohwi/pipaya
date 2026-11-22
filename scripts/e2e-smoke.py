@@ -271,6 +271,52 @@ def run_flows(a, out, client_url, api_base, token, api, console, work):
                 expect(picker).to_have_count(0)
             page.evaluate("v => localStorage.setItem('pipaya.keys', v)", original)
 
+        def b_queue_shortcut():
+            composer().fill("!bash sleep 60")  # hold the echo run open; the step stops it below
+            composer().press("Enter")
+            running_input = page.get_by_role("textbox", name=re.compile("작업 중 · Enter"))
+            expect(running_input).to_be_empty()
+            for text in ["queue first", "queue second", "queue third"]:
+                running_input.fill(text)
+                running_input.press("Alt+Enter")
+                expect(running_input).to_be_empty()
+            waiting = page.get_by_role("list", name="전달 대기 중인 메시지")
+            expect(waiting.get_by_role("listitem")).to_have_count(3)
+
+            dialog = page.get_by_role("dialog", name=re.compile("^대기열"))
+            queue = dialog.get_by_role("listbox")
+            page.keyboard.press("Control+Backslash")
+            expect(queue).to_be_focused()
+            selected = queue.get_by_role("option", selected=True)
+            expect(selected).to_contain_text("queue first")
+            page.keyboard.press("ArrowDown")
+            expect(selected).to_contain_text("queue second")
+            page.keyboard.press("ArrowUp")
+            expect(selected).to_contain_text("queue first")
+            page.keyboard.press("ArrowDown")
+            # Repeated keydown must not remove another row or send the restored draft.
+            page.keyboard.down("Enter")
+            page.keyboard.down("Enter")
+            expect(queue.get_by_role("option")).to_have_count(3)
+            page.keyboard.up("Enter")
+            expect(dialog).to_have_count(0)
+            expect(running_input).to_have_value("queue second")
+            expect(running_input).to_be_focused()
+            expect(waiting.get_by_role("listitem")).to_have_count(2)
+            expect(waiting.get_by_text("queue second")).to_have_count(0)
+
+            # Pointer users can still preview the full text and remove it without returning to the list.
+            waiting.get_by_text("queue first").click()
+            expect(page.get_by_role("dialog", name="대기열 1")).to_be_visible()
+            dialog.get_by_role("button", name="대기열에서 빼기").click()
+            expect(dialog).to_have_count(0)
+            expect(running_input).to_have_value("queue first\nqueue second")
+            expect(waiting.get_by_role("listitem")).to_have_count(1)
+            expect(waiting).to_contain_text("queue third")
+            page.get_by_role("button", name="중지", exact=True).click()
+            expect(composer()).to_be_visible()
+            composer().fill("")
+
         def b2_draft_survives_reload():
             composer().fill("kept across a reload")
             expect(composer()).to_have_value("kept across a reload")
@@ -388,6 +434,7 @@ def run_flows(a, out, client_url, api_base, token, api, console, work):
             step("b. send a message, see the echo", b_send)
             step("b1. view shortcuts open and close", b_shortcut_toggles)
             step("b1a. rebound arrows close pickers from search or list", b_picker_shortcuts)
+            step("b1b. choose a queued message with arrows and remove it with Enter", b_queue_shortcut)
             step("b2. unsent input survives a reload", b2_draft_survives_reload)
             step("b3. attached picture and file survive a reload", b3_attachments_survive_reload)
             step("c. stream auth (ticket, no token in URLs)", c_stream_auth)
