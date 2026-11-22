@@ -59,6 +59,12 @@ export function deliveredIndex<T extends { mode: string; text: string }>(items: 
 	return exact >= 0 ? exact : pick((x) => !!x.text.trim() && text.startsWith(x.text.trim()));
 }
 
+/**
+ * Width of the numbered pills in front of queued messages and scheduled tasks: a glyph and two digits (measured 50px at 11px
+ * mono with the badge's 8px padding). Wide enough for 10-99, so a row numbered 10 does not push its text 7px right of row 9.
+ */
+export const QUEUE_BADGE_W = 50;
+
 export const queuedEmoji = (mode: QueuedItem["mode"]) => (mode === "steer" ? "⚡" : "⏳");
 export const queuedTone = (mode: QueuedItem["mode"]) => (mode === "steer" ? "warn" : "info");
 export const queuedLabel = (q: QueuedView) => `${queuedEmoji(q.mode)} ${q.mode === "steer" ? t("끼워 넣기") : t("대기열")} ${q.n}`;
