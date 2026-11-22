@@ -118,37 +118,37 @@ const BASE: Omit<ActionDef, "group">[] = [
   {
     id: "prevRow",
     label: msg("사이드바 위 줄로 이동"),
-    hint: msg("사이드바에서 한 줄 위 탭을 엽니다. 접힌 작업 폴더는 한 줄로 치고 첫 탭을 엽니다"),
+    hint: msg("사이드바에서 한 줄 위 탭을 엽니다. 접힌 작업 폴더는 한 줄로 치고 마지막에 보던 탭을 엽니다"),
     default: "Mod+Alt+Shift+BracketLeft",
   },
   {
     id: "nextRow",
     label: msg("사이드바 아래 줄로 이동"),
-    hint: msg("사이드바에서 한 줄 아래 탭을 엽니다. 접힌 작업 폴더는 한 줄로 치고 첫 탭을 엽니다"),
+    hint: msg("사이드바에서 한 줄 아래 탭을 엽니다. 접힌 작업 폴더는 한 줄로 치고 마지막에 보던 탭을 엽니다"),
     default: "Mod+Alt+Shift+BracketRight",
   },
   {
     id: "prevWorkspace",
     label: msg("이전 작업 폴더로 이동"),
-    hint: msg("사이드바에서 한 줄 위 작업 폴더의 첫 탭을 엽니다"),
+    hint: msg("사이드바에서 위쪽 작업 폴더로 옮겨 마지막에 보던 탭을 엽니다"),
     default: "Mod+Alt+BracketLeft",
   },
   {
     id: "nextWorkspace",
     label: msg("다음 작업 폴더로 이동"),
-    hint: msg("사이드바에서 한 줄 아래 작업 폴더의 첫 탭을 엽니다"),
+    hint: msg("사이드바에서 아래쪽 작업 폴더로 옮겨 마지막에 보던 탭을 엽니다"),
     default: "Mod+Alt+BracketRight",
   },
   {
     id: "prevTab",
     label: msg("이전 탭으로 이동"),
-    hint: msg("탭 바에서 왼쪽 탭으로"),
+    hint: msg("탭 바에서 왼쪽 탭으로 (끝에서는 반대쪽 끝으로)"),
     default: "Mod+Shift+BracketLeft",
   },
   {
     id: "nextTab",
     label: msg("다음 탭으로 이동"),
-    hint: msg("탭 바에서 오른쪽 탭으로"),
+    hint: msg("탭 바에서 오른쪽 탭으로 (끝에서는 반대쪽 끝으로)"),
     default: "Mod+Shift+BracketRight",
   },
   {
@@ -166,7 +166,7 @@ const BASE: Omit<ActionDef, "group">[] = [
   {
     id: "nextAttention",
     label: msg("확인할 대화로 이동"),
-    hint: msg("답을 기다리는 대화, 실패한 대화, 끝났지만 아직 보지 않은 대화 순으로 엽니다"),
+    hint: msg("모든 서버에서 답을 기다리는 대화, 실패한 대화, 끝났지만 아직 보지 않은 대화 순으로 엽니다. 다시 누르면 다음 대화로"),
     default: "Mod+J",
   },
   {

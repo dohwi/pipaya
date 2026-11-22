@@ -209,6 +209,14 @@ class AppStore {
   activeId = $state<string | null>(null);
   /** The session that had the focus before this one: the target of "back to the previous conversation". */
   previousId: string | null = null;
+  /** The server `previousId` belongs to: going back may cross to another server. */
+  previousServer: string | null = null;
+  /** Remember the focused pane as the one to go back to (before something else takes the focus). */
+  private rememberPrevious() {
+    if (!this.activeId) return;
+    this.previousId = this.activeId;
+    this.previousServer = this.serverId;
+  }
   /** Transcripts of every session on screen: the focused one, plus all panes of the open group. */
   chats = $state.raw<Record<string, ChatState>>({});
   /** Session groups of the open server: named split-window layouts, stored on the server. */
@@ -823,6 +831,8 @@ class AppStore {
     const target = this.servers.find((s) => s.id === id);
     if (!target) return;
     if (!force && this.serverId === id && this.net !== "idle") return;
+    // leaving a server: what was open there is where "back to the previous conversation" goes
+    if (this.serverId && this.serverId !== id) this.rememberPrevious();
     this.syncLinks();
     this.attachToken++;
     // The extension host reads the open server's list once at launch (init); only a later switch has to swap it.
@@ -1534,7 +1544,11 @@ class AppStore {
     this.showDir(serverId, path);
   }
 
-  private showDir(serverId: string, path: string) {
+  /**
+   * Land on a folder the way a click on its row does (the tab last used in it, else its first), but keep a project shown
+   * in the strip when the folder is one of its own: the previous / next folder shortcuts walk within it.
+   */
+  showDir(serverId: string, path: string) {
     const ov = serverId === this.serverId ? null : this.links[serverId]?.data;
     const dirs = ov ? (this.dirsByServer[serverId] ?? []) : this.dirs;
     const dir = dirs.find((d) => d.path === path);
@@ -1719,7 +1733,7 @@ class AppStore {
   newChat() {
     this.graphOpen = false;
     this.graphPeek = null;
-    if (this.activeId) this.previousId = this.activeId;
+    this.rememberPrevious();
     this.activeId = null;
     try {
       localStorage.removeItem(this.activeKey);
@@ -1865,7 +1879,7 @@ class AppStore {
       this.sidebar.open = false;
       return;
     }
-    if (this.activeId && this.activeId !== id) this.previousId = this.activeId;
+    if (this.activeId !== id) this.rememberPrevious();
     this.activeId = id;
     write(this.activeKey, id);
     const g = this.groupOf(id);
