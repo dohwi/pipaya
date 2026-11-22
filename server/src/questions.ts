@@ -6,6 +6,8 @@ export interface QuestionItem {
 	options?: string[];
 	/** The option the agent recommends (one of `options`). */
 	recommended?: string;
+	/** The options are steps of one ordered scale (low → high): drawn as a ladder instead of buttons. */
+	scale?: boolean;
 	allowFreeText: boolean;
 }
 
@@ -16,6 +18,7 @@ export interface QuestionRequest {
 	question: string;
 	options?: string[];
 	recommended?: string;
+	scale?: boolean;
 	allowFreeText: boolean;
 	/** Set when several questions were asked at once; one entry per question, in order. */
 	items?: QuestionItem[];

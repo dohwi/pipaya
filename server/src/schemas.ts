@@ -289,6 +289,7 @@ export const QuestionItem = Type.Object({
 	question: Type.String(),
 	options: Type.Optional(Type.Array(Type.String())),
 	recommended: Type.Optional(Type.String({ description: "The option the agent recommends" })),
+	scale: Type.Optional(Type.Boolean({ description: "The options are ordered steps of one scale (shown as a ladder)" })),
 	allowFreeText: Type.Boolean(),
 });
 export const QuestionRequest = Type.Object({
@@ -297,6 +298,7 @@ export const QuestionRequest = Type.Object({
 	question: Type.String(),
 	options: Type.Optional(Type.Array(Type.String())),
 	recommended: Type.Optional(Type.String({ description: "The option the agent recommends" })),
+	scale: Type.Optional(Type.Boolean({ description: "The options are ordered steps of one scale (shown as a ladder)" })),
 	allowFreeText: Type.Boolean(),
 	items: Type.Optional(Type.Array(QuestionItem, { description: "Present when several questions were asked at once" })),
 	requestedAt: Type.Integer(),

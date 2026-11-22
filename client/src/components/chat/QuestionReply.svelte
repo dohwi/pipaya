@@ -3,10 +3,11 @@
 	import { t } from "../../lib/i18n";
 	import { app } from "../../lib/store.svelte";
 	import Icon from "../ui/Icon.svelte";
-	import type { Question } from "../../lib/types";
+	import Ladder from "../ui/Ladder.svelte";
+	import { THINKING_LEVELS, type Question } from "../../lib/types";
 	import { unique } from "../../lib/unique";
 
-	let { id, paneId, question }: { id: string; paneId: string | null; question: Pick<Question, "question" | "options" | "recommended" | "allowFreeText" | "items"> } = $props();
+	let { id, paneId, question }: { id: string; paneId: string | null; question: Pick<Question, "question" | "options" | "recommended" | "scale" | "allowFreeText" | "items"> } = $props();
 
 	let typed = $state("");
 
@@ -34,6 +35,15 @@
 		if (o.length < 2 || o.length > 4 || !o.every((x) => width(x) <= SHORT)) return 1;
 		return o.length === 3 ? 3 : 2;
 	});
+
+	/**
+	 * Options the agent marked as one ordered scale (low → high) are drawn as the strength ladder, when they fit one:
+	 * two to eight steps, each a short word (a name runs under its node, so a sentence would not fit). Reasoning
+	 * strengths take their own colours. Anything else stays a button grid.
+	 */
+	const LADDER_LABEL = 10;
+	const ladder = $derived(!!cur.scale && options.length >= 2 && options.length <= 8 && options.every((o) => [...o].length <= LADDER_LABEL));
+	const isLevel = (o: string) => (THINKING_LEVELS as readonly string[]).includes(o);
 
 	// Show the saved answer of the tab being opened in the text field.
 	function go(i: number) {
@@ -87,7 +97,14 @@
 <div class="reply">
 	{#if items}{@render stepper()}{/if}
 	<div class="q">{cur.question}</div>
-	{#if options.length}
+	{#if ladder}
+		<Ladder
+			label={cur.question}
+			options={options.map((o) => ({ id: o, label: o, level: isLevel(o) ? o : undefined, marked: cur.recommended === o, title: cur.recommended === o ? t("추천") : undefined }))}
+			value={items ? (answers[tab] ?? null) : null}
+			onchange={reply}
+		/>
+	{:else if options.length}
 		<div class="opts" style:--cols={cols}>
 			{#each options as o (o)}
 				<Button class={["opt", items && answers[tab] === o && "picked", cur.recommended === o && "rec"]} onclick={() => reply(o)}>
@@ -150,7 +167,7 @@
 		place-items: center;
 		width: 28px;
 		height: 28px;
-		border: 1px solid var(--border-strong);
+		border: 2px solid var(--border-strong); /* the ladder's ring weight (ui/Ladder.svelte) */
 		border-radius: 50%;
 		background: transparent;
 		color: var(--text-dim);
@@ -163,14 +180,13 @@
 			border-color var(--motion-fast) var(--ease-std),
 			color var(--motion-fast) var(--ease-std);
 	}
-	/* the line between two circles: 16px long, green once the question before it is answered */
+	/* the line between two circles: the ladder's rail (2px, --border-strong), green once the question before it is answered */
 	.link {
 		flex: none;
-		width: 16px;
+		width: 24px;
 		height: 2px;
-		margin: 0 4px;
-		border-radius: var(--radius-pill);
-		background: color-mix(in srgb, var(--text) 16%, transparent);
+		border-radius: 1px;
+		background: var(--border-strong);
 		transition: background var(--motion-fast) var(--ease-std);
 	}
 	.link.done {

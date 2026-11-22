@@ -566,9 +566,11 @@ export interface Question {
 	options?: string[];
 	/** The option the agent recommends. */
 	recommended?: string;
+	/** The options are steps of one ordered scale (low → high): drawn as a ladder instead of buttons. */
+	scale?: boolean;
 	allowFreeText: boolean;
 	/** Several questions asked at once: shown as tabs. */
-	items?: { question: string; options?: string[]; recommended?: string; allowFreeText: boolean }[];
+	items?: { question: string; options?: string[]; recommended?: string; scale?: boolean; allowFreeText: boolean }[];
 	requestedAt: number;
 }
 
@@ -677,7 +679,7 @@ export interface ToolRun {
 	/** When the call finished (epoch ms): the result message's timestamp, or the moment the live end event came in. */
 	endedAt?: number;
 	/** Set while a call using ctx.ask waits for the user (state is "awaiting_input"). */
-	question?: Pick<Question, "question" | "options" | "recommended" | "allowFreeText" | "items">;
+	question?: Pick<Question, "question" | "options" | "recommended" | "scale" | "allowFreeText" | "items">;
 }
 
 export interface UserItem {

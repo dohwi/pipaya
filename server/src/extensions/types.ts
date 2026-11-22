@@ -34,9 +34,11 @@ export interface AskRequest {
 	question: string;
 	options?: string[];
 	recommended?: string;
+	/** The options are steps of one ordered scale (low → high): drawn as a ladder instead of buttons. */
+	scale?: boolean;
 	allowFreeText?: boolean;
 	/** Several questions at once; `question`/`options` describe the first one. */
-	items?: { question: string; options?: string[]; recommended?: string; allowFreeText?: boolean }[];
+	items?: { question: string; options?: string[]; recommended?: string; scale?: boolean; allowFreeText?: boolean }[];
 }
 
 /** A session as an extension sees it. */

@@ -23,7 +23,7 @@
 <script lang="ts">
 	import { LocalizedError, msg, t } from "../../lib/i18n";
 	import { paneIn } from "../../lib/motion";
-	import { slidingIndicator } from "../../lib/sliding-indicator";
+	import Segmented from "../ui/Segmented.svelte";
 	import { getContext, setContext, tick } from "svelte";
 	import Select from "../ui/Select.svelte";
 	import ExtensionView from "./ExtensionView.svelte";
@@ -249,20 +249,7 @@
 		if (hit) selectedTab = hit.id;
 	});
 
-	function onTabKey(event: KeyboardEvent, ids: string[], index: number) {
-		const last = ids.length - 1;
-		const next =
-			event.key === "ArrowRight" ? (index >= last ? 0 : index + 1)
-			: event.key === "ArrowLeft" ? (index <= 0 ? last : index - 1)
-			: event.key === "Home" ? 0
-			: event.key === "End" ? last
-			: -1;
-		if (next < 0) return;
-		event.preventDefault();
-		pickTab(ids, ids[next]);
-		const tabs = (event.currentTarget as HTMLElement).parentElement?.querySelectorAll<HTMLElement>('[role="tab"]');
-		tabs?.[next]?.focus();
-	}
+
 
 	// ---- presentation helpers ------------------------------------------------------------------
 	const gaps = { small: "gap-small", medium: "gap-medium", large: "gap-large" } as const;
@@ -306,21 +293,10 @@
 	{@const active = node.items[tabIndex]}
 	{#if active}
 		<div class="tabs">
-			<div class="tablist" role="tablist" aria-orientation="horizontal" style="--ind-color: var(--accent)" use:slidingIndicator={{ selector: '.tab[aria-selected="true"]', variant: "underline", edge: "bottom", thickness: 2 }}>
-				{#each node.items as item, index (item.id)}
-					{@const selected = index === tabIndex}
-					<button
-						type="button"
-						role="tab"
-						class="tab"
-						id="{base}-tab-{item.id}"
-						aria-selected={selected}
-						aria-controls={selected ? `${base}-panel-${item.id}` : undefined}
-						tabindex={selected ? 0 : -1}
-						onclick={() => pickTab(ids, item.id)}
-						onkeydown={(event) => onTabKey(event, ids, index)}
-					>{item.label}</button>
-				{/each}
+			<!-- extension tabs keep the accent bar, so a panel's own sections read apart from the app's -->
+			<div class="tablist">
+				<Segmented tabs variant="underline" full={false} label={t("탭")} value={active.id} onchange={(id) => pickTab(ids, id)}
+					options={node.items.map((item) => ({ id: item.id, label: item.label, domId: `${base}-tab-${item.id}`, controls: `${base}-panel-${item.id}` }))} />
 			</div>
 			{#key active.id}
 				<div class="tabpanel" role="tabpanel" id="{base}-panel-{active.id}" aria-labelledby="{base}-tab-{active.id}" tabindex="0" in:paneIn={{ x: tabDir * 14 }}>
@@ -598,13 +574,7 @@
 
 	/* tabs */
 	.tabs { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
-	.tablist { position: relative; display: flex; gap: 4px; overflow-x: auto; border-bottom: 1px solid var(--border); }
-	.tab { flex: none; padding: 8px 12px; margin-bottom: -1px; border-bottom: 2px solid transparent; color: var(--text-dim); font-size: var(--fs-sm); font-weight: 550; transition: color var(--motion-fast) var(--ease-std), border-color var(--motion-fast) var(--ease-std); }
-	@media (hover: hover) {
-		.tab:hover { color: var(--text); }
-	}
-	.tab[aria-selected="true"] { color: var(--text); border-bottom-color: var(--accent); }
-	.tablist:global([data-indicator-ready]) .tab[aria-selected="true"] { border-bottom-color: transparent; }
+	.tablist { --ind-color: var(--accent); min-width: 0; }
 	.tabpanel { display: flex; flex-direction: column; gap: 12px; min-width: 0; border-radius: var(--radius-sm); }
 
 	/* forms + controls */
@@ -644,6 +614,6 @@
 	}
 
 	@media (prefers-reduced-motion: reduce) {
-		.tab, .control { transition: none; }
+		.control { transition: none; }
 	}
 </style>
