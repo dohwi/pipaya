@@ -200,6 +200,16 @@
 		position: relative;
 		padding: 12px 16px 0;
 	}
+	/* A narrow pane (a phone, a split group) gives the textarea 12px sides (Composer, same container query): the rows follow,
+	   so badges still start on the text line and the ✕ glyph still ends on it. */
+	@container (max-width: 420px) {
+		.queued-wrap {
+			padding-inline: 12px;
+		}
+		.thumb {
+			right: -8px; /* mid-gutter of the 12px side: the 4px bar keeps 4px from the ✕ column and from the box edge */
+		}
+	}
 	/* Pull handle in the wrap's 12px top padding: a 4px bar 4px below the box edge, centred over the summary line.
 	   The bar is 10% of the box (32px to 80px), so it stays in proportion: a fixed 32px read as a speck over a wide
 	   desktop composer. The grip's content box is the bar and its side padding (--pad) widens the hit area; the hit area
