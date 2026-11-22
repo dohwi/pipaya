@@ -24,7 +24,7 @@ export const VoiceSettingsSchema = Type.Object(
 		enabled: Type.Boolean({ description: "The microphone button is offered in the composer" }),
 		baseUrl: Type.String({ maxLength: 300, description: "Origin of the transcription server, e.g. https://api.openai.com" }),
 		path: Type.String({ maxLength: 200, description: `Request path on that server; empty means ${DEFAULT_PATH}` }),
-		model: Type.String({ maxLength: 100, description: "Model name as the transcription server takes it, e.g. gpt-transcribe (OpenAI) or voxtral-mini-transcribe-3-0 (Mistral)" }),
+		model: Type.String({ maxLength: 100, description: "Model name as the transcription server takes it; empty sends none" }),
 		language: Type.String({ maxLength: 20, description: "Optional language hint (ISO-639-1); empty lets the server decide" }),
 	},
 	{ additionalProperties: false },

@@ -102,7 +102,7 @@
 		<!-- Free text, no list: OpenAI, Mistral and gateways each take their own names, and a list would only age. -->
 		<input class="field" type="text" autocomplete="off" spellcheck="false" placeholder={t("비우면 서버 기본 모델")} bind:value={draft.model} aria-label={t("변환 모델")} aria-describedby="voice-model-hint" />
 	</label>
-	<span class="hint" id="voice-model-hint">{t("변환 서버가 받는 모델 이름을 그대로 넣습니다. 예: OpenAI는 gpt-transcribe, Mistral은 voxtral-mini-transcribe-3-0")}</span>
+	<span class="hint" id="voice-model-hint">{t("변환 서버가 받는 모델 이름을 그대로 넣습니다.")}</span>
 	<label class="row">
 		<span>{t("API 키")}</span>
 		<input
@@ -121,7 +121,7 @@
 		<span>{t("변환 경로 (선택)")}</span>
 		<input class="field" type="text" autocomplete="off" spellcheck="false" placeholder={t("비우면 {path}", { path: "/v1/audio/transcriptions" })} bind:value={draft.path} aria-label={t("변환 경로")} />
 	</label>
-	<span class="hint">{t("게이트웨이가 변환을 다른 경로에 두었을 때만 넣습니다. 예: CLIProxyAPI 플러그인은 {path}", { path: "/v0/management/audio/transcriptions" })}</span>
+	<span class="hint">{t("게이트웨이가 변환을 다른 경로에 두었을 때만 넣습니다.")}</span>
 	<label class="row">
 		<span>{t("언어 (선택)")}</span>
 		<input class="field" type="text" autocomplete="off" spellcheck="false" placeholder={uiLang} bind:value={draft.language} aria-label={t("변환 언어")} />
@@ -156,8 +156,7 @@
 		flex-direction: column;
 		gap: var(--dlg-gap-sm);
 	}
-	.row > span,
-	.row > label {
+	.row > span {
 		font-size: var(--fs-sm);
 		line-height: 20px;
 		color: var(--text-dim);
