@@ -263,6 +263,24 @@ export const MIGRATIONS: (string | ((db: Database) => void))[] = [
 	(db) => addColumn(db, "sessions", "service_tier", "TEXT"),
 	// The git worktree a session's agent moved into (null: its own cwd); the sidebar lists the session there.
 	(db) => addColumn(db, "sessions", "active_dir", "TEXT"),
+	// A closed session keeps its @name now (peer resume finds it by that name), so no two sessions may share one, closed
+	// ones included. Before, closing gave the name up and a later session could take it. Per name, an open session keeps
+	// it (v31 left at most one), else the oldest closed one; every other holder (always closed) takes the next free name.
+	// Only the name column changes, nothing is deleted. Running it again finds no duplicates and changes nothing.
+	(db) => {
+		const taken = new Set<string>((db.query("SELECT name FROM groups").all() as { name: string }[]).map((g) => nameKey(groupHandle(g.name))));
+		const dupes: string[] = [];
+		for (const s of db.query("SELECT id, name FROM sessions WHERE name != '' ORDER BY closed, created_at, id").all() as { id: string; name: string }[]) {
+			if (taken.has(nameKey(s.name))) dupes.push(s.id);
+			else taken.add(nameKey(s.name));
+		}
+		const set = db.query("UPDATE sessions SET name = $name WHERE id = $id");
+		for (const id of dupes) {
+			const name = nextMemberName(taken);
+			taken.add(nameKey(name));
+			set.run({ id, name });
+		}
+	},
 ];
 
 export function openDb(path: string): Database {
