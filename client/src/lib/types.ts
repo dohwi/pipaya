@@ -568,9 +568,13 @@ export interface Question {
 	recommended?: string;
 	/** The options are steps of one ordered scale (low → high): drawn as a ladder instead of buttons. */
 	scale?: boolean;
+	/** Any number of the options may be picked; the answer holds them one per line. */
+	multiple?: boolean;
+	/** One short line per option, same order as `options`. */
+	descriptions?: string[];
 	allowFreeText: boolean;
 	/** Several questions asked at once: shown as tabs. */
-	items?: { question: string; options?: string[]; recommended?: string; scale?: boolean; allowFreeText: boolean }[];
+	items?: { question: string; options?: string[]; recommended?: string; scale?: boolean; multiple?: boolean; descriptions?: string[]; allowFreeText: boolean }[];
 	requestedAt: number;
 }
 
@@ -679,7 +683,7 @@ export interface ToolRun {
 	/** When the call finished (epoch ms): the result message's timestamp, or the moment the live end event came in. */
 	endedAt?: number;
 	/** Set while a call using ctx.ask waits for the user (state is "awaiting_input"). */
-	question?: Pick<Question, "question" | "options" | "recommended" | "scale" | "allowFreeText" | "items">;
+	question?: Pick<Question, "question" | "options" | "recommended" | "scale" | "multiple" | "descriptions" | "allowFreeText" | "items">;
 }
 
 export interface UserItem {

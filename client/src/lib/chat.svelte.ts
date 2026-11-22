@@ -728,7 +728,7 @@ export class ChatState {
 					...this.tools[d.toolCallId],
 					output: "",
 					state: "awaiting_input",
-					question: { question: d.question, options: d.options, recommended: d.recommended, scale: d.scale, allowFreeText: d.allowFreeText, items: d.items },
+					question: { question: d.question, options: d.options, recommended: d.recommended, scale: d.scale, multiple: d.multiple, descriptions: d.descriptions, allowFreeText: d.allowFreeText, items: d.items },
 				};
 				break;
 

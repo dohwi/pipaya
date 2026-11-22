@@ -535,7 +535,8 @@ export class Api {
 	/** Pending questions; `sessionId` narrows them to one conversation (a server that ignores it sends all, callers filter). */
 	questions = (sessionId?: string) =>
 		this.req<{ questions: Question[] }>("GET", sessionId ? `/questions?sessionId=${encodeURIComponent(sessionId)}` : "/questions").then((r) => r.questions).catch(() => [] as Question[]);
-	answer = (sessionId: string, toolCallId: string, answer: string | string[]) =>
+	/** null (alone or in the list): the user leaves that question to the agent. */
+	answer = (sessionId: string, toolCallId: string, answer: string | null | (string | null)[]) =>
 		this.req<{ ok: boolean }>("POST", `/sessions/${sessionId}/questions/${encodeURIComponent(toolCallId)}`, Array.isArray(answer) ? { answers: answer } : { answer });
 
 	/** A server from before stream tickets answers 404 once; after that the token goes in the URL as it always did. */

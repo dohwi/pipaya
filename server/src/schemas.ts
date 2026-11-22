@@ -290,6 +290,8 @@ export const QuestionItem = Type.Object({
 	options: Type.Optional(Type.Array(Type.String())),
 	recommended: Type.Optional(Type.String({ description: "The option the agent recommends" })),
 	scale: Type.Optional(Type.Boolean({ description: "The options are ordered steps of one scale (shown as a ladder)" })),
+	multiple: Type.Optional(Type.Boolean({ description: "Several options may be picked; the answer holds them one per line" })),
+	descriptions: Type.Optional(Type.Array(Type.String(), { description: "One line per option, same order as `options`" })),
 	allowFreeText: Type.Boolean(),
 });
 export const QuestionRequest = Type.Object({
@@ -299,14 +301,16 @@ export const QuestionRequest = Type.Object({
 	options: Type.Optional(Type.Array(Type.String())),
 	recommended: Type.Optional(Type.String({ description: "The option the agent recommends" })),
 	scale: Type.Optional(Type.Boolean({ description: "The options are ordered steps of one scale (shown as a ladder)" })),
+	multiple: Type.Optional(Type.Boolean({ description: "Several options may be picked; the answer holds them one per line" })),
+	descriptions: Type.Optional(Type.Array(Type.String(), { description: "One line per option, same order as `options`" })),
 	allowFreeText: Type.Boolean(),
 	items: Type.Optional(Type.Array(QuestionItem, { description: "Present when several questions were asked at once" })),
 	requestedAt: Type.Integer(),
 });
 export const QuestionList = Type.Object({ questions: Type.Array(QuestionRequest) });
 export const QuestionAnswerBody = Type.Object({
-	answer: Type.Optional(Type.String({ minLength: 1, maxLength: 10_000, description: "For a single question" })),
-	answers: Type.Optional(Type.Array(Type.String({ minLength: 1, maxLength: 10_000 }), { description: "For several questions: one per item, in order" })),
+	answer: Type.Optional(Type.Union([Type.String({ minLength: 1, maxLength: 10_000 }), Type.Null()], { description: "For a single question. A multiple-choice answer holds its picks one per line. null: the user leaves it to the agent" })),
+	answers: Type.Optional(Type.Array(Type.Union([Type.String({ minLength: 1, maxLength: 10_000 }), Type.Null()]), { description: "For several questions: one per item, in order (null: left to the agent)" })),
 });
 
 // ── Models, providers, tools ────────────────────────────────────────────────

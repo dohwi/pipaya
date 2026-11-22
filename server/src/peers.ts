@@ -159,8 +159,8 @@ export class PeerService {
 		if (this.reported.has(key)) return;
 		this.reported.add(key);
 		const name = this.host.store.get(id)?.name ?? "session";
-		const items = q.items?.length ? q.items : [{ question: q.question, options: q.options, recommended: q.recommended, allowFreeText: q.allowFreeText }];
-		const lines = items.map((it, i) => `${items.length > 1 ? `${i + 1}. ` : ""}${oneLine(it.question, 500)}${it.options?.length ? ` [options: ${it.options.join(" | ")}]` : ""}${it.recommended ? ` (recommended: ${it.recommended})` : ""}${it.allowFreeText ? "" : " (pick one option)"}`);
+		const items = q.items?.length ? q.items : [{ question: q.question, options: q.options, recommended: q.recommended, multiple: q.multiple, allowFreeText: q.allowFreeText }];
+		const lines = items.map((it, i) => `${items.length > 1 ? `${i + 1}. ` : ""}${oneLine(it.question, 500)}${it.options?.length ? ` [options: ${it.options.join(" | ")}]` : ""}${it.recommended ? ` (recommended: ${it.recommended})` : ""}${it.multiple ? " (several may be picked: one per line)" : it.allowFreeText ? "" : " (pick one option)"}`);
 		const body = `[from the server: @${name} is waiting for an answer and does nothing until it gets one. No reply to this message needed.]\n${lines.join("\n")}\nAnswer it with peer(action=answer) (name: ${name}) if you can decide with what you know; if it needs the user's judgment, ask the user instead.`;
 		for (const w of watching) this.tell(w, body);
 	}
