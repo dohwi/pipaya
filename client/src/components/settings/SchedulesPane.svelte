@@ -30,6 +30,7 @@
 		everyProblem,
 		isUsedUp,
 		labelOf,
+		nextRunLabel,
 		parseLocal,
 		purgeAt,
 		resultOf,
@@ -38,6 +39,7 @@
 		toLocalInput,
 		type EveryUnit,
 	} from "../../lib/schedules";
+	import { NextRunClock } from "../../lib/next-run-clock.svelte";
 	import { app } from "../../lib/store.svelte";
 	import type { Schedule, Session } from "../../lib/types";
 
@@ -82,6 +84,10 @@
 			error = errorText(e);
 		}
 	}
+
+	// "(12분 후)" beside a full next-run time within the 6-hour countdown (a later one is a date already), moving on the minute.
+	const clock = new NextRunClock();
+	$effect(() => clock.follow((list ?? []).flatMap((x) => (x.enabled && x.nextRunAt ? [x.nextRunAt] : []))));
 
 	const split = $derived(splitSchedules((list ?? []).filter((s) => !hidden.includes(s.id))));
 	const pending = $derived(split.pending);
@@ -342,7 +348,7 @@
 							<p class="desc">{s.prompt}</p>
 							<p class="meta">{sessionLabel(s.sessionId)}</p>
 							<p class="meta">
-								{#if s.enabled && s.nextRunAt}{t("다음 실행 {when}", { when: fullTime(s.nextRunAt) })}
+								{#if s.enabled && s.nextRunAt}{t("다음 실행 {when}", { when: fullTime(s.nextRunAt) })}{#if s.nextRunAt - clock.now < 6 * 3_600_000}{` (${nextRunLabel(s.nextRunAt, clock.now)})`}{/if}
 								{:else}{t("꺼져 있음")}{/if}
 								{#if s.lastRunAt} · {t("마지막 {when}", { when: fullTime(s.lastRunAt) })}{/if}
 							</p>

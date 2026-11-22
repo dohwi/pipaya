@@ -15,9 +15,10 @@
 	 * One scheduled task as a row of the queue above the input (QueuedList puts these after the waiting messages).
 	 * Only switched-on tasks are listed. The row opens the task in Settings > Scheduled tasks; ✕ asks whether to pause it
 	 * (it leaves the queue and stays in Settings, off) or delete it. `n`: its place among the conversation's tasks, soonest first.
-	 * `blocked`: the press was a drag of the list, not a click.
+	 * `blocked`: the press was a drag of the list, not a click. `now`: the list's clock (NextRunClock), so the countdown
+	 * ("12분 후") moves on the minute.
 	 */
-	let { s, n, serverId, sessionId, blocked = () => false }: { s: Schedule; n: number; serverId: string; sessionId: string; blocked?: () => boolean } = $props();
+	let { s, n, now, serverId, sessionId, blocked = () => false }: { s: Schedule; n: number; now: number; serverId: string; sessionId: string; blocked?: () => boolean } = $props();
 
 	const tone = $derived(lastRunTone(s));
 	let asking = $state(false);
@@ -64,7 +65,7 @@
 	<span class="sb"><Badge size="sm" mono minWidth={QUEUE_BADGE_W}><span class="in"><Icon name="clock" /><span class="n">{n}</span></span></Badge></span>
 	<span class="st"><span class="name">{labelOf(s)}</span><span class="cad">{` · ${cadence(s)}`}</span></span>
 	{#if tone}<StatusDot {tone} size={6} />{/if}
-	{#if s.nextRunAt}<span class="when {tone ?? ''}">{t("다음 {when}", { when: nextRunLabel(s.nextRunAt) })}</span>{/if}
+	{#if s.nextRunAt}<time class="when {tone ?? ''}" datetime={new Date(s.nextRunAt).toISOString()}>{nextRunLabel(s.nextRunAt, now)}</time>{/if}
 </button>
 <button type="button" class="sx" onclick={() => (asking = true)} disabled={busy} aria-label={t("{name} 멈추기", { name: labelOf(s) })} title={t("일시정지 또는 삭제")}><Icon name="x" /></button>
 

@@ -3,6 +3,7 @@
 	import QueueBadge from "./QueueBadge.svelte";
 	import QueueText from "./QueueText.svelte";
 	import ScheduleRow from "./ScheduleRow.svelte";
+	import { NextRunClock } from "../../lib/next-run-clock.svelte";
 	import type { Schedule } from "../../lib/types";
 	import Icon from "../ui/Icon.svelte";
 	import { orderQueued, queuedLabel, queuedShown, queuedTone } from "../../lib/queue";
@@ -30,6 +31,10 @@
 		scheduleOf?: { serverId: string; sessionId: string } | null;
 	} = $props();
 	const tasks = $derived(scheduleOf ? schedules : []);
+	// One clock for the task rows: it ticks on the minute while a task is within the countdown, not at all otherwise.
+	const clock = new NextRunClock();
+	const runTimes = $derived(tasks.flatMap((x) => (x.nextRunAt ? [x.nextRunAt] : [])));
+	$effect(() => clock.follow(runTimes));
 	const total = $derived(queued.length + tasks.length);
 
 	// The list has a fixed max height and scrolls inside it, so a long queue never pushes the input down.
@@ -186,7 +191,7 @@
 	{/each}
 	{#if scheduleOf}
 		{#each tasks as task, i (task.id)}
-			<li animate:reflow in:rowIn out:rowOut><ScheduleRow s={task} n={i + 1} serverId={scheduleOf.serverId} sessionId={scheduleOf.sessionId} blocked={() => dragged} /></li>
+			<li animate:reflow in:rowIn out:rowOut><ScheduleRow s={task} n={i + 1} now={clock.now} serverId={scheduleOf.serverId} sessionId={scheduleOf.sessionId} blocked={() => dragged} /></li>
 		{/each}
 	{/if}
 </ul>

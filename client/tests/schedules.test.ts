@@ -18,6 +18,7 @@ import {
 	isUsedUp,
 	labelOf,
 	lastRunTone,
+	nextLabelChange,
 	nextRunLabel,
 	parseLocal,
 	purgeAt,
@@ -237,10 +238,40 @@ describe("above the input", () => {
 		expect(lastRunTone(task({ lastStatus: "skipped_closed" }))).toBe("warn");
 		expect(lastRunTone(task({ lastStatus: "error" }))).toBe("danger");
 	});
-	test("the next run: the time alone today, the day with it otherwise", () => {
-		const now = new Date(2026, 10, 22, 9, 0).getTime();
-		expect(nextRunLabel(new Date(2026, 10, 22, 14, 30).getTime(), now, "en-GB")).toBe("14:30");
-		expect(nextRunLabel(new Date(2026, 10, 23, 9, 5).getTime(), now, "en-GB")).toBe("23 Nov, 09:05");
-		expect(nextRunLabel(new Date(2026, 10, 22, 14, 30).getTime(), now, "ko-KR")).toBe("오후 02:30");
+	test("the next run: a countdown when close, the time today, then tomorrow, the weekday, the date", () => {
+		setLang("ko");
+		const now = new Date(2026, 10, 22, 9, 0, 0).getTime(); // a Sunday
+		const at = (d: number, h: number, m = 0, s = 0) => new Date(2026, 10, d, h, m, s).getTime();
+		const ko = (ts: number) => nextRunLabel(ts, now, "ko-KR");
+		expect(ko(now - 5_000)).toBe("곧"); // due, the server has not moved it on yet
+		expect(ko(now + 59_000)).toBe("곧");
+		expect(ko(now + 60_000)).toBe("1분 후");
+		expect(ko(now + 61_000)).toBe("2분 후"); // rounded up: never reads less than what is left
+		expect(ko(at(22, 9, 59, 30))).toBe("60분 후");
+		expect(ko(at(22, 10))).toBe("1시간 후");
+		expect(ko(at(22, 11, 30))).toBe("2시간 30분 후");
+		expect(ko(at(22, 14, 59))).toBe("5시간 59분 후");
+		expect(ko(at(22, 15))).toBe("오후 3:00"); // 6 hours: the time of day
+		expect(ko(at(22, 23, 5))).toBe("오후 11:05");
+		expect(ko(at(23, 2, 0))).toBe("내일 오전 2:00");
+		expect(ko(at(23, 21, 30))).toBe("내일 오후 9:30");
+		expect(ko(at(25, 14, 5))).toBe("수 오후 2:05");
+		expect(ko(at(29, 12, 5))).toBe("11월 29일"); // a week on: the date
+		setLang("en");
+		expect(nextRunLabel(now + 12 * 60_000, now, "en-US")).toBe("in 12 min");
+		expect(nextRunLabel(at(22, 11, 30), now, "en-US")).toBe("in 2 h 30 min");
+		expect(nextRunLabel(at(23, 9, 0), now, "en-US")).toBe("tomorrow 9:00 AM");
+		expect(nextRunLabel(at(29, 12, 5), now, "en-US")).toBe("Nov 29");
 	});
-});
+	test("the clock wakes when a label would change: on the minute in the countdown, else at 6 hours or midnight", () => {
+		const now = new Date(2026, 10, 22, 9, 0, 0).getTime();
+		const near = (ms: number | null, want: number) => expect(Math.abs((ms ?? -1) - want)).toBeLessThan(100);
+		near(nextLabelChange([now + 12 * 60_000 + 20_000], now), 20_000); // "13분 후" turns "12분 후" in 20 s
+		near(nextLabelChange([now + 12 * 60_000], now), 60_000); // on a whole minute: the next one
+		near(nextLabelChange([now + 3 * 3_600_000 + 5_000, now + 40 * 60_000 + 7_000], now), 5_000); // the soonest change of all
+		near(nextLabelChange([now + 8 * 3_600_000], now), 2 * 3_600_000); // a far one: when it enters the 6-hour countdown
+		near(nextLabelChange([now + 9 * 86_400_000], now), 15 * 3_600_000); // a date: only at midnight ("내일" → today)
+		near(nextLabelChange([now - 1_000], now), 15 * 3_600_000); // already due: nothing until midnight
+		near(nextLabelChange([], now), 15 * 3_600_000);
+		expect(nextLabelChange([now + 59_990], now)).toBeGreaterThanOrEqual(250); // never a tight loop
+	});});
