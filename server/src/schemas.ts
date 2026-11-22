@@ -1,5 +1,6 @@
 import Type, { type TSchema } from "typebox";
-import { THINKING_LEVELS } from "./store.ts";
+import type { EventType } from "./shared/events.ts";
+import { THINKING_LEVELS } from "./shared/thinking.ts";
 
 // ── Shared building blocks ──────────────────────────────────────────────────
 
@@ -426,7 +427,7 @@ const Message = Type.Unknown({ description: "pi-agent-core AgentMessage" });
 const ToolRef = { toolCallId: Type.String(), toolName: Type.String() };
 
 export interface EventDef {
-	type: string;
+	type: EventType;
 	/** false = delivered live only (id 0), never replayed. */
 	persisted: boolean;
 	description: string;

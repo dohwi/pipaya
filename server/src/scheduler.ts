@@ -3,6 +3,9 @@ import { randomUUID } from "node:crypto";
 import Type, { type Static, type TSchema } from "typebox";
 import { badRequest, conflict, HttpError, notFound } from "./errors.ts";
 import { DAY_MS } from "./retention.ts";
+import { HISTORY_KEEP_MS, MAX_EVERY_MS, MAX_PROMPT, MAX_TASKS, MAX_TITLE, MIN_EVERY_MS } from "./shared/schedules.ts";
+
+export { HISTORY_KEEP_MS, MAX_EVERY_MS, MAX_PROMPT, MAX_TASKS, MAX_TITLE, MIN_EVERY_MS };
 
 /**
  * Scheduled tasks: a prompt sent to an existing session once, or every so often.
@@ -18,16 +21,8 @@ import { DAY_MS } from "./retention.ts";
  * Invariant: `nextRunAt` is set exactly when the task is enabled.
  */
 
-/** Pending tasks (everything but finished one-time tasks) at most. */
-export const MAX_TASKS = 50;
-/** A finished one-time task is kept this long after its last run, then deleted. */
-export const HISTORY_KEEP_MS = 7 * DAY_MS;
 /** SQL condition: a one-time task that is used up (switched off after it ran or was skipped). */
 const FINISHED = "kind = 'once' AND enabled = 0 AND last_status IS NOT NULL";
-export const MIN_EVERY_MS = 5 * 60_000;
-export const MAX_EVERY_MS = 30 * DAY_MS;
-export const MAX_PROMPT = 8000;
-export const MAX_TITLE = 100;
 /** A one-time task this much past its time (server was off) is not run any more. */
 export const EXPIRE_AFTER_MS = DAY_MS;
 /** This many failed runs in a row switch an interval task off. */

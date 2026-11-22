@@ -25,6 +25,6 @@ test("the server's event list can be read (guards the check below from passing o
 });
 
 test("the client listens for every event the server can send", () => {
-	const missing = serverEventNames().filter((t) => !EVENT_TYPES.includes(t) && !NOT_USED.includes(t));
+	const missing = serverEventNames().filter((t) => !(EVENT_TYPES as readonly string[]).includes(t) && !NOT_USED.includes(t));
 	expect(missing).toEqual([]);
 });

@@ -1,3 +1,5 @@
+import { THINKING_LEVELS, type ThinkingLevel } from "@shared/thinking";
+
 /* ---------- REST API shapes ---------- */
 
 /** A named split-window arrangement of sessions, stored on the server so every client shows the same one. */
@@ -13,9 +15,8 @@ export interface Group {
  * Every strength a model can be asked for, weakest first. `off` asks for no reasoning at all (the server sends no
  * effort, or the provider's "none"), so a model that always reasons keeps its own default.
  */
-export const THINKING_LEVELS = ["off", "minimal", "low", "medium", "high", "xhigh", "max"] as const;
+export { THINKING_LEVELS, type ThinkingLevel };
 export type ServiceTier = "default" | "flex" | "priority" | "ultrafast";
-export type ThinkingLevel = (typeof THINKING_LEVELS)[number];
 export type SendMode = "prompt" | "steer" | "follow_up";
 
 /** A model with the reasoning strength to run it at; the two are always chosen together. */
