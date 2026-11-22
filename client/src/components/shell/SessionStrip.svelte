@@ -7,6 +7,7 @@
 	import Handle from "../ui/Handle.svelte";
 	import AgentBadge from "./AgentBadge.svelte";
 	import Icon from "../ui/Icon.svelte";
+	import InlineRenameField from "../ui/InlineRenameField.svelte";
 	import { ACTIVITY_LABEL, activityOf } from "../../lib/activity";
 	import type { Tab } from "../../lib/nav";
 	import { panesOf } from "../../lib/layout";
@@ -23,10 +24,6 @@
 		const done = rename.commit();
 		if (!done) return;
 		void (app.terminal(done.id) ? app.renameTerminal(done.id, done.name) : app.rename(done.id, done.name));
-	}
-	function focusSelect(node: HTMLInputElement) {
-		node.focus();
-		node.select();
 	}
 
 	/** Long press / right click on a chip: the same entries as the sidebar's row for it, except the ones that dissolve the group. */
@@ -56,17 +53,14 @@
 			{@const st = app.terminal(x.id) ? "idle" : activityOf(app, x.id)}
 			{@const who = whoOf(x.id)}
 			{#if rename.is(x.id)}
-				<input
-					class="rename"
+				<InlineRenameField
+					variant="bar"
+					class="strip-rename"
 					value={rename.draft}
-					aria-label={t("이름 바꾸기")}
-					use:focusSelect
-					oninput={(e) => (rename.draft = e.currentTarget.value)}
-					onblur={commitRename}
-					onkeydown={(e) => {
-						if (e.key === "Enter") commitRename();
-						if (e.key === "Escape") rename.cancel();
-					}}
+					ariaLabel={t("이름 바꾸기")}
+					oninput={(v) => (rename.draft = v)}
+					oncommit={commitRename}
+					oncancel={() => rename.cancel()}
 				/>
 			{:else}
 				<span class="gitem">
@@ -201,17 +195,9 @@
 			color: var(--text);
 		}
 	}
-	.rename {
+	.strip :global(.strip-rename) {
 		flex: none;
 		width: 160px;
-		height: 28px;
-		padding: 0 8px;
-		border: 1px solid var(--accent);
-		border-radius: var(--radius-sm);
-		background: var(--bg);
-		color: var(--text);
-		font-size: var(--fs-sm);
-		outline: 0;
 	}
 	.t {
 		min-width: 0;

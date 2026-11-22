@@ -4,6 +4,7 @@
 	import { t } from "../../lib/i18n";
 	import { formatCombo } from "../../lib/keys";
 	import Icon from "../ui/Icon.svelte";
+	import InlineRenameField from "../ui/InlineRenameField.svelte";
 	import TabControls from "./TabControls.svelte";
 	import NavbarItems from "../extensions/NavbarItems.svelte";
 	import ExtensionSlot from "../extensions/ExtensionSlot.svelte";
@@ -52,10 +53,6 @@
 		else if (app.terminal(done.id)) void app.renameTerminal(done.id, done.name);
 		else void app.rename(done.id, done.name);
 	}
-	function focusSelect(node: HTMLInputElement) {
-		node.focus();
-		node.select();
-	}
 	function titleMenu(pt: Point) {
 		if (!target) return;
 		const { id, name } = target;
@@ -86,18 +83,15 @@
 		<div class="title" data-part="header.title" tabindex="-1" onkeydown={(e) => e.key === RENAME_KEY && target && !rename.is(target.id) && (e.preventDefault(), rename.start(target.id, target.name))} use:pressMenu={titleMenu}>
 			{#if (target && rename.is(target.id)) || (groupTarget && rename.is(groupTarget.id))}
 				{@const renamingGroup = !!groupTarget && rename.is(groupTarget.id)}
-				<input
-					class="rename"
+				<InlineRenameField
+					variant="bar"
+					class="header-rename"
 					value={rename.draft}
 					maxlength={renamingGroup ? 100 : undefined}
-					aria-label={renamingGroup ? t("그룹 이름 바꾸기") : t("이름 바꾸기")}
-					use:focusSelect
-					oninput={(e) => (rename.draft = e.currentTarget.value)}
-					onblur={commitRename}
-					onkeydown={(e) => {
-						if (e.key === "Enter") commitRename();
-						if (e.key === "Escape") rename.cancel();
-					}}
+					ariaLabel={renamingGroup ? t("그룹 이름 바꾸기") : t("이름 바꾸기")}
+					oninput={(v) => (rename.draft = v)}
+					oncommit={commitRename}
+					oncancel={() => rename.cancel()}
 				/>
 			{:else if group}
 				<span class="t crumbs">
@@ -211,17 +205,10 @@
 		white-space: nowrap;
 		line-height: 1.2;
 	}
-	.rename {
+	.title :global(.header-rename) {
+		flex: none;
 		width: min(100%, 360px);
-		min-width: 0;
-		height: 28px;
-		padding: 0 8px;
-		border: 1px solid var(--accent);
-		border-radius: var(--radius-sm);
-		background: var(--bg);
-		color: var(--text);
 		font-size: var(--fs-md);
-		outline: 0;
 	}
 	.sub {
 		font-size: var(--fs-2xs);

@@ -3,6 +3,7 @@
 	import { hintOnce } from "../../lib/touch-hints";
 	import { chipIn, chipOut, surfaceIn, surfaceOut } from "../../lib/motion";
 	import Icon from "../ui/Icon.svelte";
+	import Spinner from "../ui/Spinner.svelte";
 
 	/**
 	 * The right end of the composer bar. Idle: send. While the agent works: queue (after the run), steer (into it) and
@@ -133,7 +134,7 @@
 			{#if mode === "compacting"}
 				<span class="compacting" role="status"><span class="dots" aria-hidden="true"><i></i><i></i><i></i></span> {t("압축 중")}</span>
 				<button class="send" class:on={canSend} onclick={onsend} disabled={!canSend} aria-label={t("보내기")}>
-					{#if sending}<span class="spinner"></span>{:else}<Icon name="send" />{/if}
+					{#if sending}<Spinner />{:else}<Icon name="send" />{/if}
 				</button>
 				<button class="send stop" onclick={onstop} disabled={!online} aria-label={t("압축 취소")} title={t("컨텍스트 압축 취소")}><Icon name="stop" /></button>
 			{:else if mode === "running"}
@@ -180,7 +181,7 @@
 			{:else}
 				<div class="slot" class:folded={fold} inert={fold}>
 					<button class="send" class:on={canSend} onclick={onsend} disabled={!canSend} aria-label={t("보내기")}>
-						{#if sending}<span class="spinner"></span>{:else}<Icon name="send" />{/if}
+						{#if sending}<Spinner />{:else}<Icon name="send" />{/if}
 					</button>
 				</div>
 			{/if}

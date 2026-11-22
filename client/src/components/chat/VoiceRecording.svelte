@@ -1,5 +1,6 @@
 <script lang="ts">
 	import Icon from "../ui/Icon.svelte";
+	import Spinner from "../ui/Spinner.svelte";
 	import { t } from "../../lib/i18n";
 	import { voice } from "../../lib/voice.svelte";
 	import { formatTime } from "../../lib/voice";
@@ -115,7 +116,7 @@
 			<Icon name="check" />
 		</button>
 	{:else if voice.transcribing}
-		<span class="mark"><span class="spinner" aria-hidden="true"></span></span>
+		<span class="mark"><Spinner size={12} tone="muted" /></span>
 		<span class="meta">
 			<span class="label" role="status" aria-live="polite">{t("변환 중")}<span class="ellipsis" aria-hidden="true"><i>.</i><i>.</i><i>.</i></span></span>
 			<span class="time" aria-hidden="true">{formatTime(waited)}</span>
@@ -211,15 +212,6 @@
 		border-radius: 50%;
 		background: var(--danger);
 	}
-	.spinner {
-		box-sizing: border-box; /* the 2px ring is part of the 12px, so it stays inside the 16px slot */
-		width: 12px;
-		height: 12px;
-		border-radius: 50%;
-		border: 2px solid var(--border-strong);
-		border-top-color: var(--text);
-		animation: spin 0.8s linear infinite;
-	}
 	/* A fixed height, not flex: the canvas sets its own width/height attributes from the box it is drawn into, and
 	   with `height: auto` the browser derives the CSS height from those attributes, which grows the box every frame.
 	   The wave takes the room the row leaves. */
@@ -283,13 +275,7 @@
 			background-position: 0 0;
 		}
 	}
-	@keyframes spin {
-		to {
-			transform: rotate(360deg);
-		}
-	}
 	@media (prefers-reduced-motion: reduce) {
-		.spinner,
 		.dot,
 		.ellipsis i,
 		.ghost,

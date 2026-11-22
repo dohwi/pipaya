@@ -234,8 +234,8 @@
 					{/if}
 				{/snippet}
 				<Button variant="ghost" onclick={close}>{t("취소")}</Button>
-				<Button variant="primary" type="submit" disabled={busy}>
-					{#if busy}<span class="spinner"></span>{t("확인 중…")}{:else}{editing ? t("저장") : t("추가")}{/if}
+				<Button variant="primary" type="submit" {busy}>
+					{busy ? t("확인 중…") : editing ? t("저장") : t("추가")}
 				</Button>
 			</DialogFooter>
 		</form>

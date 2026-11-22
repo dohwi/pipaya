@@ -51,9 +51,9 @@
 			{#if serverUpdater.error}<span class="err">{serverUpdater.error}</span>{/if}
 		</span>
 		{#if kind === "update-app" && updater.supported}
-			<button type="button" class="act" onclick={updateApp}>{t("업데이트 확인")}</button>
+			<button type="button" class="act" disabled={updater.phase === "checking"} aria-busy={updater.phase === "checking" || undefined} onclick={updateApp}>{updater.phase === "checking" ? t("확인 중…") : t("업데이트 확인")}</button>
 		{:else if kind === "update-server" && serverUpdater.available}
-			<button type="button" class="act" disabled={busy} onclick={updateServer}>
+			<button type="button" class="act" disabled={busy} aria-busy={busy || undefined} onclick={updateServer}>
 				{busy ? t("서버를 업데이트하는 중…") : t("서버 업데이트")}
 			</button>
 		{/if}

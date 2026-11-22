@@ -8,6 +8,7 @@
 	import { OVERLAY_SELECTOR } from "./lib/keys";
 	import { fadeIn, fadeOut } from "./lib/motion";
 	import Icon from "./components/ui/Icon.svelte";
+	import Spinner from "./components/ui/Spinner.svelte";
 	import Sidebar from "./components/shell/Sidebar.svelte";
 	import Rail from "./components/shell/Rail.svelte";
 	import { drag, dropTarget } from "./lib/dnd.svelte";
@@ -459,12 +460,12 @@
 	{#if app.net !== "online"}
 		<div class="banner" role="status" aria-live="polite" class:bad={app.net === "offline" || app.net === "unauthorized"} in:fadeIn out:fadeOut>
 			{#if app.net === "connecting"}
-				<span class="spinner"></span> {t("연결하는 중…")}
+				<Spinner size={12} /> {t("연결하는 중…")}
 			{:else if app.net === "unauthorized"}
 				<Icon name="key" /> {t("서버가 토큰을 거부했습니다.")}
 				<button class="link" onclick={() => app.openSettings("servers", app.serverId)}>{t("토큰 수정")}</button>
 			{:else}
-				{#if retrying}<span class="spinner"></span>{:else}<Icon name="wifi-off" />{/if} {t("서버에 다시 연결하는 중…")}
+				{#if retrying}<Spinner size={12} />{:else}<Icon name="wifi-off" />{/if} {t("서버에 다시 연결하는 중…")}
 				{#if !retrying}<button class="link" onclick={retryNow}>{t("다시 연결하기")}</button>{/if}
 			{/if}
 		</div>
@@ -769,10 +770,6 @@
 		border: 1px solid var(--border-strong);
 		font-weight: 600;
 		font-size: var(--fs-xs);
-	}
-	.banner .spinner {
-		width: 12px;
-		height: 12px;
 	}
 
 	.grip {

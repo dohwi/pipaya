@@ -8,6 +8,7 @@
 	import { asWorkdir } from "../../../lib/sidebar-model";
 	import { getSidebarCtx, type SidebarNode } from "../../../lib/sidebar-ctx";
 	import Icon from "../../ui/Icon.svelte";
+	import InlineRenameField from "../../ui/InlineRenameField.svelte";
 	import DirBlockView from "./DirBlock.svelte";
 	import NewButton from "./NewButton.svelte";
 
@@ -18,10 +19,6 @@
 	 * or a long press opens its menu (rename, undo a hand-made one).
 	 */
 	let { n, root, dirs }: { n: SidebarNode; root: string; dirs: Dir[] } = $props();
-	function focusSelect(node: HTMLInputElement) {
-		node.focus();
-		node.select();
-	}
 
 	const sb = getSidebarCtx();
 	const key = $derived(projectKey(n.server.id, root));
@@ -47,20 +44,15 @@
 		<button class="dirtoggle projtoggle" onclick={() => (total ? app.openProject(n.server.id, root) : app.sidebar.toggleFolded(key))} aria-current={shown ? "true" : undefined} title={total ? t("{name}의 탭 모두 보기", { name }) : manual ? name : sb.pretty(n, root)}>
 			<span class="dicon"><Icon name="repo" /></span>
 			{#if sb.projectRename.is(key)}
-				<!-- svelte-ignore a11y_autofocus -->
-				<input
-					class="pnameinput"
+				<InlineRenameField
+					variant="heading"
 					value={sb.projectRename.draft}
-					maxlength="60"
-					oninput={(e) => (sb.projectRename.draft = e.currentTarget.value)}
-					use:focusSelect
-					onclick={(e) => e.stopPropagation()}
-					onblur={() => sb.commitProjectRename(n, root)}
-					onkeydown={(e) => {
-						e.stopPropagation();
-						if (e.key === "Enter") sb.commitProjectRename(n, root);
-						if (e.key === "Escape") sb.projectRename.cancel();
-					}}
+					maxlength={60}
+					oninput={(v) => (sb.projectRename.draft = v)}
+					oncommit={() => sb.commitProjectRename(n, root)}
+					oncancel={() => sb.projectRename.cancel()}
+					stopClick
+					stopKeys
 				/>
 			{:else}
 				<span class="dname">{name}</span>
@@ -116,19 +108,6 @@
 		text-align: left;
 		color: var(--text-dim);
 		transition: color var(--motion-fast) var(--ease-std);
-	}
-	.pnameinput {
-		flex: 1;
-		min-width: 0;
-		height: 24px;
-		padding: 0 4px;
-		border-radius: var(--radius-sm);
-		border: 1px solid var(--accent);
-		background: var(--bg);
-		outline: 0;
-		font-size: var(--fs-sm);
-		font-weight: 600;
-		color: var(--text);
 	}
 	.proj.grabbable {
 		-webkit-user-select: none;

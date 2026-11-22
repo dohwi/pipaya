@@ -110,8 +110,8 @@
 			<Button variant="ghost" onclick={create} disabled={busy}>{t("새 QR")}</Button>
 		</div>
 	{:else}
-		<Button variant="primary" class="make" onclick={create} disabled={busy || !address.trim()}>
-			{#if busy}<span class="spinner"></span>{t("만드는 중…")}{:else}{t("QR 만들기")}{/if}
+		<Button variant="primary" class="make" onclick={create} {busy} disabled={!address.trim()}>
+			{busy ? t("만드는 중…") : t("QR 만들기")}
 		</Button>
 	{/if}
 
