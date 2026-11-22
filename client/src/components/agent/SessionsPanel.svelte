@@ -7,8 +7,8 @@
 	import { t } from "../../lib/i18n";
 	import { Api, errorText } from "../../lib/api";
 	import { app } from "../../lib/store.svelte";
-	import { fullTime, pastLabel, tilde } from "../../lib/format";
-	import { minuteClock } from "../../lib/minute-clock.svelte";
+	import { fullTime, tilde } from "../../lib/format";
+	import { livePast } from "../../lib/minute-clock.svelte";
 	import { tailKeepLast } from "../../lib/fit-text";
 	import type { Session } from "../../lib/types";
 	import Badge from "../ui/Badge.svelte";
@@ -188,7 +188,7 @@
 										<span class="title">{s.title ? sessionTitle(s.title) : t("제목 없음")}</span>
 									</label>
 									{#if s.closed}<Badge size="sm">{t("닫음")}</Badge>{/if}
-									<span class="age" title={fullTime(s.updatedAt)}>{pastLabel(s.updatedAt, minuteClock.now, { time: false })}</span>
+									<span class="age" title={fullTime(s.updatedAt)}>{livePast(s.updatedAt, { time: false })}</span>
 								</li>
 							{/each}
 						</ul>

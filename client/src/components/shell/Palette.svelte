@@ -7,6 +7,8 @@
 	import Icon from "../ui/Icon.svelte";
 	import { app } from "../../lib/store.svelte";
 	import { uniqueBy } from "../../lib/unique";
+	import { fullTime } from "../../lib/format";
+	import { livePast } from "../../lib/minute-clock.svelte";
 
 	/** Ties the search field to the list for assistive tech: focus stays in the field while the arrows move the selection. */
 	const uid = $props.id();
@@ -22,7 +24,7 @@
 		const q = query.trim().toLowerCase();
 		// rows are keyed by id: a list that names one twice (two pages of one listing) shows it once
 		const all = uniqueBy(spec?.items ?? [], (i) => i.id);
-		return q ? all.filter((i) => `${i.title} ${i.sub ?? ""}`.toLowerCase().includes(q)) : all;
+		return q ? all.filter((i) => `${i.title} ${i.sub ?? ""}`.toLowerCase().includes(q)) : all; // not the time: "분" matched every row
 	});
 
 	// Fresh state each time a palette opens; start on the current item when there is one.
@@ -121,7 +123,7 @@
 						{#if it.depth}<span class="branch" aria-hidden="true"></span>{/if}
 						<span class="main">
 							<span class="t">{it.title}</span>
-							{#if it.sub}<span class="s mono">{it.sub}</span>{/if}
+							{#if it.sub || it.when}<span class="s">{#if it.sub}<span class="mono">{it.sub}{#if it.when}{" · "}{/if}</span>{/if}{#if it.when}<time datetime={new Date(it.when).toISOString()} title={fullTime(it.when)}>{livePast(it.when, { time: false })}</time>{/if}</span>{/if}
 						</span>
 						{#if it.tag}<Badge variant="outline" size="sm">{it.tag}</Badge>{/if}
 						{#if it.current}<span class="cur"><Icon name="check" /></span>{/if}

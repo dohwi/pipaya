@@ -5,7 +5,7 @@
 	import { app } from "../../lib/store.svelte";
 	import { t } from "../../lib/i18n";
 	import { hostOf, pastLabel } from "../../lib/format";
-	import { minuteClock } from "../../lib/minute-clock.svelte";
+	import { livePast } from "../../lib/minute-clock.svelte";
 	import { sessionTitle } from "../../lib/session-title";
 	import { BRAND_LABEL } from "../../lib/brand";
 	import { activityOf } from "../../lib/activity";
@@ -774,7 +774,7 @@
 						<span class="lead"><AgentBadge id={s.id} server={c.server} state={c.activity} size={24} /></span>
 						{@const name = s.name ? `@${s.name}` : sessionTitle(s.title)}
 						<span class="nm fl" class:who={!!s.name} title={name} use:marquee={name}>{@render flow(name)}</span>
-						{#if !busy}<span class="when">{pastLabel(s.updatedAt, minuteClock.now, { time: false })}</span>{/if}
+						{#if !busy}<span class="when">{livePast(s.updatedAt, { time: false })}</span>{/if}
 						<span class="title fl" title={sessionTitle(s.title)} use:marquee={sessionTitle(s.title)}>{@render flow(sessionTitle(s.title))}</span>
 						{#if busy}
 							<span class="doing" class:ask={c.activity === "asking"} in:glowFade={{ delay: 120 }}>

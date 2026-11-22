@@ -18,7 +18,7 @@
 	import { recentreOn } from "../../lib/dialog";
 	import { Api, errorText } from "../../lib/api";
 	import { t } from "../../lib/i18n";
-	import { fullTime, pastLabel, shortDate } from "../../lib/format";
+	import { fullTime, shortDate } from "../../lib/format";
 	import { nameInLang } from "../../lib/member-names";
 	import { reflow, rowIn, rowOut } from "../../lib/motion";
 	import {
@@ -31,7 +31,6 @@
 		everyProblem,
 		isUsedUp,
 		labelOf,
-		nextRunLabel,
 		parseLocal,
 		purgeAt,
 		resultOf,
@@ -40,7 +39,7 @@
 		toLocalInput,
 		type EveryUnit,
 	} from "../../lib/schedules";
-	import { minuteClock } from "../../lib/minute-clock.svelte";
+	import { livePast, liveNext } from "../../lib/minute-clock.svelte";
 	import { app } from "../../lib/store.svelte";
 	import type { Schedule, Session } from "../../lib/types";
 
@@ -345,9 +344,9 @@
 							<p class="desc">{s.prompt}</p>
 							<p class="meta">{sessionLabel(s.sessionId)}</p>
 							<p class="meta">
-								{#if s.enabled && s.nextRunAt}<span title={fullTime(s.nextRunAt)}>{t("다음 실행 {when}", { when: nextRunLabel(s.nextRunAt, minuteClock.now) })}</span>
+								{#if s.enabled && s.nextRunAt}<span title={fullTime(s.nextRunAt)}>{t("다음 실행 {when}", { when: liveNext(s.nextRunAt) })}</span>
 								{:else}{t("꺼져 있음")}{/if}
-								{#if s.lastRunAt} · <span title={fullTime(s.lastRunAt)}>{t("마지막 {when}", { when: pastLabel(s.lastRunAt, minuteClock.now) })}</span>{/if}
+								{#if s.lastRunAt}{" · "}<span title={fullTime(s.lastRunAt)}>{t("마지막 {when}", { when: livePast(s.lastRunAt) })}</span>{/if}
 							</p>
 							{#if s.lastStatus === "error" && s.lastError}<p class="meta err">{s.lastError}</p>{/if}
 						</ListItem>
@@ -386,7 +385,7 @@
 									<p class="desc">{s.prompt}</p>
 									<p class="meta">{sessionLabel(s.sessionId)}</p>
 									<p class="meta">
-										{#if s.lastRunAt}<span title={fullTime(s.lastRunAt)}>{s.lastStatus?.startsWith("skipped") ? t("{when} 건너뜀 · {day}에 지워짐", { when: pastLabel(s.lastRunAt, minuteClock.now), day: shortDate(purgeAt(s)) }) : t("{when} 실행 · {day}에 지워짐", { when: pastLabel(s.lastRunAt, minuteClock.now), day: shortDate(purgeAt(s)) })}</span>
+										{#if s.lastRunAt}<span title={fullTime(s.lastRunAt)}>{s.lastStatus?.startsWith("skipped") ? t("{when} 건너뜀 · {day}에 지워짐", { when: livePast(s.lastRunAt), day: shortDate(purgeAt(s)) }) : t("{when} 실행 · {day}에 지워짐", { when: livePast(s.lastRunAt), day: shortDate(purgeAt(s)) })}</span>
 										{:else}{t("{day}에 지워짐", { day: shortDate(purgeAt(s)) })}{/if}
 									</p>
 									{#if s.lastStatus === "error" && s.lastError}<p class="meta err">{s.lastError}</p>{/if}

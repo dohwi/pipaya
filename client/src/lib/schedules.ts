@@ -1,4 +1,4 @@
-import { clockMinutes } from "./format";
+import { clockMinutes, fmt } from "./format";
 import { localeTag, t } from "./i18n";
 import type { Schedule, ScheduleStatus } from "./types";
 
@@ -174,10 +174,10 @@ export function nextRunLabel(ts: number, now: number = Date.now(), locale: strin
 		return m ? t("{h}시간 {m}분 후", { h, m }) : t("{h}시간 후", { h });
 	}
 	const at = new Date(ts);
-	const time = at.toLocaleTimeString(locale, { hour: "numeric", minute: "2-digit" });
+	const time = fmt(locale, { hour: "numeric", minute: "2-digit" }).format(ts);
 	const today = new Date(now);
 	if (sameDay(at, today)) return time;
 	if (sameDay(at, new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1))) return t("내일 {time}", { time });
-	if (ts - now < 6 * 86_400_000) return `${at.toLocaleDateString(locale, { weekday: "short" })} ${time}`;
-	return at.toLocaleDateString(locale, { month: "short", day: "numeric" });
+	if (ts - now < 6 * 86_400_000) return `${fmt(locale, { weekday: "short" }).format(ts)} ${time}`;
+	return fmt(locale, { month: "short", day: "numeric" }).format(ts);
 }

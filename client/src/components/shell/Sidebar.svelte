@@ -9,8 +9,7 @@
 	import { updater } from "../../lib/updater.svelte";
 	import { serverUpdater } from "../../lib/server-update.svelte";
 	import { msg, t } from "../../lib/i18n";
-	import { nextRunLabel } from "../../lib/schedules";
-	import { minuteClock } from "../../lib/minute-clock.svelte";
+	import { liveNext } from "../../lib/minute-clock.svelte";
 	import { slidingIndicator } from "../../lib/sliding-indicator";
 	import { formatCombo } from "../../lib/keys";
 	import Icon from "../ui/Icon.svelte";
@@ -433,7 +432,7 @@
 	const scheduled = $derived(app.schedules.all(app.serverId));
 	const graphTip = $derived(app.prefs.bindings.openGraph ? `${t("그래프 뷰")} (${formatCombo(app.prefs.bindings.openGraph)})` : t("그래프 뷰"));
 	const schedulesShown = $derived(!!app.serverId && app.schedules.supported(app.serverId));
-	const schedulesTip = $derived(scheduled.next === null ? t("예약 작업") : t("다음 실행: {when}", { when: nextRunLabel(scheduled.next, minuteClock.now) }));
+	const schedulesTip = $derived(scheduled.next === null ? t("예약 작업") : t("다음 실행: {when}", { when: liveNext(scheduled.next) }));
 	/** Only an optional update is green; a version mismatch (the app and server cannot work together) stays amber. A saved model that no longer works (`problems`) outranks an update. */
 	const alertTone = $derived(problems ? "danger" : app.compat === "ok" ? "ok" : "warn");
 	/** Something in settings needs the user: a newer app or server build, or the two out of step. Connection state is not here: the sidebar's server block already shows it. */

@@ -1,8 +1,8 @@
 <script lang="ts">
 	import { untrack } from "svelte";
 	import { t } from "../../lib/i18n";
-	import { fullTime, pastLabel } from "../../lib/format";
-	import { minuteClock } from "../../lib/minute-clock.svelte";
+	import { fullTime } from "../../lib/format";
+	import { livePast } from "../../lib/minute-clock.svelte";
 	import { app } from "../../lib/store.svelte";
 	import { sessionTitle } from "../../lib/session-title";
 	import { activityOf, ACTIVITY_LABEL, ACTIVITY_TONE, URGENCY, type Activity } from "../../lib/activity";
@@ -239,7 +239,7 @@
 									<span class="info">
 										{#if x.kind === "group"}{t("대화 {n}개", { n: x.members.length })}
 										{:else if x.kind === "terminal"}{t("터미널")} · <span class="mono">{shortPath(x.terminal.cwd)}</span>
-										{:else}<span title={fullTime(x.session.updatedAt)}>{pastLabel(x.session.updatedAt, minuteClock.now, { time: false })}</span>{/if}
+										{:else}<span title={fullTime(x.session.updatedAt)}>{livePast(x.session.updatedAt, { time: false })}</span>{/if}
 									</span>
 								</div>
 							</div>

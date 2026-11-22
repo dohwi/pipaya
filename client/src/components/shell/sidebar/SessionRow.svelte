@@ -3,8 +3,7 @@
 	import { extensions } from "../../../lib/extensions/host.svelte";
 	import { ACTIVITY_LABEL } from "../../../lib/activity";
 	import { t } from "../../../lib/i18n";
-	import { nextRunLabel } from "../../../lib/schedules";
-	import { minuteClock } from "../../../lib/minute-clock.svelte";
+	import { liveNext } from "../../../lib/minute-clock.svelte";
 	import { parentLabel, peerLabel } from "../../../lib/peers";
 	import type { DropOpts } from "../../../lib/dnd.svelte";
 	import { getSidebarCtx, type SidebarNode } from "../../../lib/sidebar-ctx";
@@ -28,7 +27,7 @@
 	const tip = $derived([label?.title ?? "", sessionTitle(x.title), st !== "idle" ? ACTIVITY_LABEL[st] : "", parent?.title ?? (x.parentId ? t("분기된 대화") : "")].filter(Boolean).join(" · "));
 	/** Switched-on scheduled tasks of this conversation. Only the open server's list is kept current, so only its rows show it. */
 	const sched = $derived(n.current ? app.schedules.of(n.server.id, x.id) : { count: 0, next: null });
-	const schedTip = $derived(sched.next === null ? t("예약 {n}개", { n: sched.count }) : `${t("예약 {n}개", { n: sched.count })} · ${t("다음 실행 {when}", { when: nextRunLabel(sched.next, minuteClock.now) })}`);
+	const schedTip = $derived(sched.next === null ? t("예약 {n}개", { n: sched.count }) : `${t("예약 {n}개", { n: sched.count })} · ${t("다음 실행 {when}", { when: liveNext(sched.next) })}`);
 </script>
 
 {#snippet body(pinned: boolean)}

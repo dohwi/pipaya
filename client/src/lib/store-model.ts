@@ -7,6 +7,8 @@ export interface PaletteItem {
   id: string;
   title: string;
   sub?: string;
+  /** When it was last active (ms), shown after `sub` as a live relative time ("3분 전", "어제") in the text face. */
+  when?: number;
   /** Small right-aligned tag, e.g. "닫힘". */
   tag?: string;
   /** Tree depth (indentation). */

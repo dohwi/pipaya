@@ -19,8 +19,8 @@
 		type ConfigurationPlan,
 	} from "../../lib/extensions/configuration";
 	import { download } from "../../lib/download";
-	import { fileStamp, fullTime, pastLabel } from "../../lib/format";
-	import { minuteClock } from "../../lib/minute-clock.svelte";
+	import { fileStamp, fullTime } from "../../lib/format";
+	import { livePast } from "../../lib/minute-clock.svelte";
 
 	/* ---------- export ---------- */
 	let parts = $state({ servers: true, preferences: true, keybindings: true });
@@ -180,7 +180,7 @@
 		<div class="restore">
 			<span class="txt">
 				<span class="t">{t("마지막 가져오기 이전 상태")}</span>
-				<span class="s">{#if savedAt}<span title={fullTime(savedAt)}>{t("{when} 백업됨", { when: pastLabel(savedAt, minuteClock.now) })}</span> · {/if}{t("이 기기에만 저장되어 있습니다")}</span>
+				<span class="s">{#if savedAt}<span title={fullTime(savedAt)}>{t("{when} 백업됨", { when: livePast(savedAt) })}</span>{" · "}{/if}{t("이 기기에만 저장되어 있습니다")}</span>
 			</span>
 			{#if !confirmingRestore}
 				<Button size="sm" onclick={() => (confirmingRestore = true)}>{t("되돌리기")}</Button>
