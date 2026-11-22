@@ -15,15 +15,17 @@
 	import Modal from "../ui/Modal.svelte";
 
 	/**
-	 * The messages that were queued (follow_up) or steered but not delivered yet. The list is like the slash menu: ↑/↓ moves
-	 * the highlight, Enter or a click opens the row in full (the composer shows one cut line), Delete / Backspace or the ✕
-	 * takes it out. The detail view shows the whole text, copies it, and takes it out (the text goes back to the input).
+	 * The messages that were queued (follow_up) or steered but not delivered yet. ↑/↓ selects a row; Enter, Delete,
+	 * Backspace or its ✕ takes it back to the input and closes the dialog. Clicking a row still opens its full text.
 	 */
 	const chat = $derived(app.chatOf(app.queueDialog));
 	const items = $derived(orderQueued(chat?.waiting ?? []));
+	const uid = $props.id();
+	const optionId = (i: number) => `${uid}-queue-${i}`;
 	let listEl = $state<HTMLElement | null>(null);
-	// The highlighted row, like the slash menu: arrows move it, Enter opens it, Delete removes it.
 	let index = $state(0);
+	let removing = $state(false);
+	let pendingKey: { key: string; item: QueuedItem } | null = null;
 	// The message shown in full (null = the list). Taken once from the composer row that opened the dialog.
 	let detail = $state<QueuedItem | null>(untrack(() => app.queueItem));
 	// Later requests (the dialog already open) switch to that message.
@@ -59,7 +61,7 @@
 
 	// Nothing left to manage: close (the detail of a message that just left stays until it is closed or left).
 	$effect(() => {
-		if (!chat || (!items.length && !detail)) close();
+		if (!removing && app.queueDialog && (!chat || (!items.length && !detail))) close();
 	});
 
 	// Keep the highlight inside the list as rows disappear.
@@ -68,45 +70,53 @@
 	});
 
 	$effect(() => {
-		index;
-		listEl?.querySelector<HTMLElement>(`[data-i="${index}"]`)?.scrollIntoView({ block: "nearest" });
+		const id = optionId(index);
+		listEl?.querySelector<HTMLElement>(`[id="${id}"]`)?.scrollIntoView({ block: "nearest" });
 	});
 
 	async function remove(item: QueuedItem) {
-		await app.cancelQueued({ mode: item.mode, text: item.text });
-	}
-	async function removeShown() {
-		if (!shown) return;
-		await remove(shown);
-		back();
+		const id = app.queueDialog;
+		if (!id || removing) return;
+		removing = true;
+		try {
+			if (await app.cancelQueued(item, id) && app.queueDialog === id) close();
+		} finally {
+			removing = false;
+		}
 	}
 	function open(i: number) {
 		const item = items[i];
-		if (!item) return;
+		if (!item || removing) return;
 		index = i;
 		detail = item;
 	}
 
 	function onKey(e: KeyboardEvent) {
-		if (e.isComposing || detail) return;
+		if (e.defaultPrevented || e.isComposing || e.keyCode === 229 || e.ctrlKey || e.metaKey || e.altKey || e.shiftKey || e.target !== listEl) return;
 		const n = items.length;
-		if (!n || (e.target as HTMLElement).closest("button")) return;
 		if (e.key === "ArrowDown" || e.key === "ArrowUp") {
 			e.preventDefault();
-			index = (index + (e.key === "ArrowDown" ? 1 : -1) + n) % n;
-		} else if (e.key === "Enter") {
-			e.preventDefault();
-			open(index);
-		} else if (e.key === "Delete" || e.key === "Backspace") {
+			if (n && !removing && !pendingKey) index = (index + (e.key === "ArrowDown" ? 1 : -1) + n) % n;
+		} else if (e.key === "Enter" || e.key === "Delete" || e.key === "Backspace") {
 			e.preventDefault();
 			const item = items[index];
-			if (item) void remove(item);
+			if (!e.repeat && !removing && !pendingKey && item) pendingKey = { key: e.key, item };
 		}
+	}
+
+	function onKeyUp(e: KeyboardEvent) {
+		const pending = pendingKey;
+		if (e.key !== pending?.key) return;
+		pendingKey = null;
+		if (e.isComposing || e.target !== listEl) return;
+		// Wait for release so a held Enter or Backspace cannot act on the returned draft after focus moves back.
+		const item = items[index];
+		if (item && same(item, pending.item)) void remove(item);
 	}
 
 	// Focus the list itself (not a button) so the highlighted row, not an x, is what shows.
 	function focusList(node: HTMLElement) {
-		queueMicrotask(() => node.focus());
+		queueMicrotask(() => node.focus({ preventScroll: true }));
 	}
 </script>
 
@@ -115,7 +125,7 @@
 <!-- The detail takes the full header (its back arrow and the copy button sit on the body's 24px gutter); the list keeps the compact one.
      Both views are as wide and tall as the other reading dialogs (SessionContext) so a long message is not a narrow
      column, and opening a row does not resize the dialog. -->
-<Modal closeShortcut="cancelQueue" onclose={close} onescape={detail ? back : undefined} onback={detail ? back : undefined} title={view && detail ? `${view.mode === "steer" ? t("끼워 넣기") : t("대기열")} ${view.n}` : t("대기열 관리")} compact={!detail} headerActions={view && detail ? copyAction : undefined} width="xl" maxHeight="760px" layer={4} elevated portal safeArea>
+<Modal closeShortcut="cancelQueue" dismissible={!removing} onclose={close} onescape={detail ? back : undefined} onback={detail ? back : undefined} title={view && detail ? `${view.mode === "steer" ? t("끼워 넣기") : t("대기열")} ${view.n}` : t("대기열 관리")} sub={detail ? undefined : t("↑↓ 선택 · Enter로 빼기")} compact={!detail} headerActions={view && detail ? copyAction : undefined} width="xl" maxHeight="760px" layer={4} elevated portal safeArea>
 	{#if view && detail}
 		<DialogBody>
 			<p class="when">
@@ -126,36 +136,32 @@
 		</DialogBody>
 		<DialogFooter rule>
 			{#if shown}
-				<Button size="sm" variant="danger" title={t("빼면 내용이 입력창으로 돌아옵니다")} onclick={removeShown}>{t("대기열에서 빼기")}</Button>
+				<Button size="sm" variant="danger" title={t("빼면 내용이 입력창으로 돌아옵니다")} disabled={removing} onclick={() => { if (shown) void remove(shown); }}>{t("대기열에서 빼기")}</Button>
 			{:else}
 				<span class="gone" role="status">{t("이미 전달되었습니다")}</span>
 			{/if}
 		</DialogFooter>
 	{:else}
-		<!-- arrows move between rows from anywhere in the dialog, the close button included -->
-		<!-- svelte-ignore a11y_no_static_element_interactions -->
-		<div class="keys" onkeydown={onKey}>
-		<ul bind:this={listEl} use:focusList tabindex="-1" role="listbox" aria-label={t("대기열 관리")}>
+		<ul bind:this={listEl} use:focusList tabindex="0" role="listbox" aria-label={t("대기열 관리")} aria-activedescendant={items.length ? optionId(index) : undefined} onkeydown={onKey} onkeyup={onKeyUp} onblur={() => (pendingKey = null)}>
 			{#each items as q, i (q.mode + "\u0000" + q.text + "\u0000" + i)}
-				<!-- Enter on the listbox (onKey above) opens the highlighted row; the click is for a pointer. -->
+				<!-- Enter removes the highlighted row; a pointer click opens its details. -->
 				<!-- svelte-ignore a11y_click_events_have_key_events -->
 				<li
 					class:on={i === index}
 					role="option"
 					aria-selected={i === index}
-					data-i={i}
-					onmousemove={() => (index = i)}
+					id={optionId(i)}
+					onmousemove={() => { if (!removing && !pendingKey) index = i; }}
 					onclick={() => open(i)}
 				>
 					<QueueBadge {q} />
 					<QueueText text={q.text} />
-					<button type="button" class="rm" tabindex="-1" aria-label={t("{name} 취소", { name: queuedShown(q.text) })} title={t("대기열에서 빼기")} onclick={(e) => { e.stopPropagation(); index = i; void remove(q); }}><Icon name="x" /></button>
+					<button type="button" class="rm" tabindex="-1" disabled={removing} aria-label={t("{name} 취소", { name: queuedShown(q.text) })} title={t("대기열에서 빼기")} onclick={(e) => { e.stopPropagation(); index = i; void remove(q); }}><Icon name="x" /></button>
 				</li>
 			{:else}
 				<EmptyState as="li" tone="plain" compact>{t("대기 중인 메시지가 없습니다")}</EmptyState>
 			{/each}
 		</ul>
-		</div>
 	{/if}
 </Modal>
 
@@ -164,9 +170,6 @@
 {/snippet}
 
 <style>
-	.keys {
-		display: contents;
-	}
 	ul {
 		list-style: none;
 		margin: 0;
