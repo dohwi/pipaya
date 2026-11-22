@@ -698,6 +698,9 @@ export const en: Record<string, string> = {
 	"새 프로젝트 · {path}": "New project · {path}",
 	"탭 펼치기": "Show tabs",
 	"탭 접기": "Hide tabs",
+	"프로젝트 펼치기": "Expand project",
+	"프로젝트 접기": "Collapse project",
+	"{name}의 탭 모두 보기": "Show all tabs of {name}",
 	/* ---- tab overview ---- */
 	"탭 {n}개 모두 보기": "Show all {n} {n#tab|tabs}",
 	"탭 모두 보기": "Show all tabs",

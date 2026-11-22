@@ -112,7 +112,7 @@ function stepWorkspace(step: 1 | -1) {
 function stepTab(step: 1 | -1) {
   const at = app.activeTab;
   if (!at || !app.activeId) return;
-  const order = at.dir.tabs.flatMap((x) => tabPanes(x)).filter((id) => app.shows(id));
+  const order = app.stripDirs.flatMap((d) => d.tabs.flatMap((x) => tabPanes(x))).filter((id) => app.shows(id));
   const id = stepFrom(order, app.activeId, step);
   if (id && id !== app.activeId) void app.openSession(id);
 }

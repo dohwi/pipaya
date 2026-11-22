@@ -17,7 +17,8 @@
 
 	const dir = $derived(app.tabDir);
 	const path = $derived(dir?.path ?? app.workdirAbs);
-	const count = $derived(dir?.tabs.length ?? 0);
+	/** as many as the strip lists: a whole project's when its name was clicked */
+	const count = $derived(app.stripDirs.reduce((k, d) => k + d.tabs.length, 0));
 	const workdir = $derived(path === app.workspace?.root ? "." : path);
 
 	let menu: ReturnType<typeof RowMenu> | undefined = $state();
