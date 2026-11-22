@@ -45,7 +45,8 @@ export const SETTINGS_ITEMS: { tab: SettingsTabId; label: string; words: string 
 	{ tab: "voice", label: msg("음성 입력 사용"), words: "voice mic microphone dictation 음성 마이크 받아쓰기 켜기" }, // i18n-ok: search words in either language
 	{ tab: "tools", label: msg("에이전트 도구"), words: "tools agent permission 도구 에이전트" }, // i18n-ok: search words in either language
 	{ tab: "tools", label: msg("서브에이전트 위임"), words: "subagent sub-agent delegate helper role 서브에이전트 위임 역할 도우미" }, // i18n-ok: search words in either language; "helper / 도우미" was the old name
-	{ tab: "guard", label: msg("위험 명령 차단"), words: "guard bash rm mkfs dd fork bomb chmod chown 차단 보호 보안 안전" }, // i18n-ok: search words in either language
+	{ tab: "guard", label: msg("위험 명령 차단"), words: "guard bash rm find delete mkfs wipefs blkdiscard sgdisk dd tee fork bomb chmod chown chgrp 차단 보호 보안 안전 삭제 디스크 포크 권한" }, // i18n-ok: search words in either language
+	{ tab: "guard", label: msg("추가 명령 보호"), words: "curl wget sh remote script shutdown reboot poweroff halt systemctl init git push force --force -f 원격 스크립트 종료 재부팅 강제 푸시" }, // i18n-ok: search words in either language
 	{ tab: "mcp", label: msg("MCP 서버"), words: "mcp server tool 도구 서버 연결" }, // i18n-ok: search words in either language
 	{ tab: "sessions", label: msg("기본 작업 폴더"), words: "folder workdir directory workspace cwd default 기본 폴더 작업 폴더 작업 디렉터리 워크스페이스" }, // i18n-ok: search words in either language
 	{ tab: "sessions", label: msg("자동 삭제"), words: "retention delete cleanup old auto 보관 자동 삭제 정리 오래된" }, // i18n-ok: search words in either language

@@ -35,7 +35,7 @@ describe("settings search", () => {
 		for (const q of ["서브에이전트", "subagent", "delegate", "도우미"]) expect(find(q).some((h) => h.target.tab === "tools"), q).toBe(true);
 	});
 	test("guard and prompt templates tabs are searchable in Korean and English", () => {
-		for (const q of ["명령 보호", "guard", "rm", "차단"]) expect(find(q).some((h) => h.target.tab === "guard"), q).toBe(true);
+		for (const q of ["명령 보호", "guard", "rm", "wipefs", "force push", "재부팅", "원격 스크립트", "차단"]) expect(find(q).some((h) => h.target.tab === "guard"), q).toBe(true);
 		for (const q of ["프롬프트 템플릿", "template", "/prompt:"]) expect(find(q).some((h) => h.target.tab === "templates"), q).toBe(true);
 	});
 	test("a shortcut is found by its keys and hands its name to the shortcut list as a filter", () => {
