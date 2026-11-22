@@ -22,7 +22,8 @@
 
 	/**
 	 * One folder of a server: its header (fold, name, "+") and, once opened, its tabs. Folders start folded: the tab bar
-	 * lists the open folder's tabs, so the sidebar is a list of places. The chevron opens or folds the list; the name shows
+	 * lists the open folder's tabs, so the sidebar is a list of places. Inside a project they start open: the project header
+	 * already folds them all. The chevron opens or folds the list; the name shows
 	 * the folder (its last used tab). Inside a project the folder is named by its branch. The header can be dragged to
 	 * reorder folders, and a split-tab pane dropped on it steps out of its group.
 	 */
@@ -35,7 +36,7 @@
 		node.select();
 	}
 	const key = $derived(dirKey(n.server.id, d.path));
-	const folded = $derived(sb.isDirFolded(key));
+	const folded = $derived(sb.isDirFolded(key, !!inProject));
 	/** Inside a project: the folder is named by the branch checked out there (a project lists one repository's worktrees) */
 	const repo = $derived(inProject === "git" ? n.repos[d.path] ?? null : null);
 	const branch = $derived(repo ? branchLabel(d.path, repo) : null);
@@ -66,10 +67,10 @@
 		use:dropTarget={{ accepts: sb.acceptsOnDir(n, d.path), hover: sb.hover(key), drop: sb.dropOnDir(n, d.path) }}
 		use:sb.dirSource={{ kind: "dir", serverId: n.server.id, path: d.path, paths: n.dirs.map((x) => x.path), disabled: n.dirs.length < 2, menu: (pt) => sb.headMenuAt(pt, n, d.path, key) }}
 	>
-		<button class="dirfold" onclick={() => app.sidebar.toggleDir(key)} aria-expanded={!folded} aria-label={folded ? t("탭 펼치기") : t("탭 접기")} title={folded ? t("탭 펼치기") : t("탭 접기")}>
+		<button class="dirfold" onclick={() => app.sidebar.toggleDir(key, !!inProject)} aria-expanded={!folded} aria-label={folded ? t("탭 펼치기") : t("탭 접기")} title={folded ? t("탭 펼치기") : t("탭 접기")}>
 			<span class="chev" class:folded><Icon name="chevron-down" /></span>
 		</button>
-		<button class="dirtoggle" onclick={() => (d.tabs.length ? app.openDir(n.server.id, d.path) : app.sidebar.toggleDir(key))} aria-current={cur ? "true" : undefined} title={parent}>
+		<button class="dirtoggle" onclick={() => (d.tabs.length ? app.openDir(n.server.id, d.path) : app.sidebar.toggleDir(key, !!inProject))} aria-current={cur ? "true" : undefined} title={parent}>
 			<span class="dicon">{#if branch}<Icon name="fork" />{:else}<Icon name="folder" />{/if}{#if pinned}<PinMark />{/if}</span>
 			<span class="dlabel">
 				{#if sb.dirRename.is(key)}

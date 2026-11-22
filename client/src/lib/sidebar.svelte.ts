@@ -83,6 +83,11 @@ export class SidebarState {
    * sidebar stays a list of places and a folder shows its tabs only when the user opens it.
    */
   openDirs = $state<string[]>(read<string[]>(K.openDirs, []));
+  /**
+   * Folders inside a project folded by hand, by `dirKey`. A project's folders (its branches) start open instead: the
+   * project header already folds them all at once, so a second fold on each branch would only hide its tabs twice.
+   */
+  foldedProjectDirs = $state<string[]>(read<string[]>(K.foldedProjectDirs, []));
   dirOrder = $state<Record<string, string[]>>(read<Record<string, string[]>>(K.dirOrder, {}));
   /** Folders pinned per server: they stay listed with no tabs in them. */
   pinned = $state<Record<string, string[]>>(read<Record<string, string[]>>(K.pinnedDirs, {}));
@@ -150,13 +155,26 @@ export class SidebarState {
     write(K.folded, this.folded);
   }
 
-  isDirFolded(key: string): boolean {
-    return !this.openDirs.includes(key);
+  /** `inProject`: the folder is listed under a project header (it starts open there, see `foldedProjectDirs`). */
+  isDirFolded(key: string, inProject = false): boolean {
+    return inProject ? this.foldedProjectDirs.includes(key) : !this.openDirs.includes(key);
   }
 
-  toggleDir(key: string) {
+  toggleDir(key: string, inProject = false) {
+    if (inProject) {
+      this.foldedProjectDirs = this.foldedProjectDirs.includes(key) ? this.foldedProjectDirs.filter((p) => p !== key) : [...this.foldedProjectDirs, key];
+      write(K.foldedProjectDirs, this.foldedProjectDirs);
+      return;
+    }
     this.openDirs = this.openDirs.includes(key) ? this.openDirs.filter((p) => p !== key) : [...this.openDirs, key];
     write(K.openDirs, this.openDirs);
+  }
+
+  /** Open or fold every folder of a project at once (`keys`: their `dirKey`s); the project header's menu offers it. */
+  setProjectDirsFolded(keys: readonly string[], folded: boolean) {
+    const rest = this.foldedProjectDirs.filter((p) => !keys.includes(p));
+    this.foldedProjectDirs = folded ? [...rest, ...keys] : rest;
+    write(K.foldedProjectDirs, this.foldedProjectDirs);
   }
 
   /**

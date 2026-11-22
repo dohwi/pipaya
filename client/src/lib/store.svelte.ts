@@ -1436,11 +1436,16 @@ class AppStore {
    * skeleton has the height the list will have. Folders start folded, so most entries are a single row.
    */
   private sidebarShape(serverId: string): number[] {
-    const open = (path: string) => !this.sidebar.isDirFolded(dirKey(serverId, path));
-    const rows = (d: DirBlock) => 1 + (open(d.path) ? d.tabs.length : 0);
+    const rows = (d: DirBlock, inProject: boolean) => 1 + (this.sidebar.isDirFolded(dirKey(serverId, d.path), inProject) ? 0 : d.tabs.length);
     return (this.blocksByServer[serverId] ?? []).map((b) =>
-      b.kind === "dir" ? rows(b.dir) : 1 + (this.sidebar.folded.includes(projectKey(serverId, b.root)) ? 0 : b.dirs.reduce((k, d) => k + rows(d), 0)),
+      b.kind === "dir" ? rows(b.dir, false) : 1 + (this.sidebar.folded.includes(projectKey(serverId, b.root)) ? 0 : b.dirs.reduce((k, d) => k + rows(d, true), 0)),
     );
+  }
+
+  /** Folder `path` of a server lists no tabs under its row: folded by hand, or never opened (outside a project they start folded). */
+  dirFolded(serverId: string, path: string): boolean {
+    const inProject = (this.blocksByServer[serverId] ?? []).some((b) => b.kind === "project" && b.dirs.some((d) => d.path === path));
+    return this.sidebar.isDirFolded(dirKey(serverId, path), inProject);
   }
 
   /** The same folders in the order the sidebar draws them (a project's folders together), for everything that walks them. */
