@@ -15,6 +15,7 @@
 		skills: { name: msg("스킬"), icon: "skill" },
 		mcp: { name: msg("MCP 서버"), icon: "plug" },
 		roles: { name: msg("서브에이전트 역할"), icon: "bot" },
+		templates: { name: msg("프롬프트 템플릿"), icon: "prompt" },
 		commands: { name: msg("확장 명령"), icon: "list" },
 		context: { name: msg("컨텍스트 사용량"), icon: "bolt" },
 		cache: { name: msg("캐시 적중률"), icon: "cache" },

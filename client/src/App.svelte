@@ -74,6 +74,7 @@
 	const load = {
 		settings: () => import("./components/settings/Settings.svelte"),
 		skills: () => import("./components/agent/SkillsDialog.svelte"),
+		templates: () => import("./components/agent/TemplatesDialog.svelte"),
 		commands: () => import("./components/agent/CommandFamiliesDialog.svelte"),
 		mcp: () => import("./components/agent/McpDialog.svelte"),
 		schedules: () => import("./components/agent/SchedulesDialog.svelte"),
@@ -572,6 +573,9 @@
 {/if}
 {#if app.commandsDialog && app.api}
 	{#key app.serverId}<Lazy load={load.commands} dialog={app.commandsDialog} api={app.api} onclose={() => (app.commandsDialog = null)} />{/key}
+{/if}
+{#if app.templatesDialog && app.api}
+	{#key app.serverId}<Lazy load={load.templates} dialog={app.templatesDialog} api={app.api} onclose={() => (app.templatesDialog = null)} />{/key}
 {/if}
 {#if app.servers.length === 0}
 	<button class="extension-entry" onclick={() => app.openSettings("srvext")}>{t("설정 · 확장")}</button>

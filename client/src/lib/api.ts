@@ -32,6 +32,10 @@ import type { CatalogInfo, CompactionSettings, CompactionSettingsInfo, DefaultMo
 	McpInfo,
 	McpServer,
 	CommandFamily,
+	GuardInfo,
+	GuardSettings,
+	TemplateList,
+	TemplateScope,
 	ToolInfo,
 	Usage,
 	WorkspaceInfo,
@@ -460,6 +464,19 @@ export class Api {
 	/** Commands server extensions find at run time (`/prefix:name`), for `cwd`. */
 	commandFamilies = (cwd?: string, signal?: AbortSignal) =>
 		this.req<{ cwd: string; families: CommandFamily[] }>("GET", `/server-extensions/commands${cwd ? `?cwd=${encodeURIComponent(cwd)}` : ""}`, undefined, signal);
+	guard = (signal?: AbortSignal) => this.req<GuardInfo>("GET", "/guard", undefined, signal);
+	setGuard = (body: GuardSettings) => this.req<GuardInfo>("PUT", "/guard", body);
+	templates = (cwd?: string, signal?: AbortSignal) =>
+		this.req<TemplateList>("GET", `/templates${cwd ? `?${new URLSearchParams({ cwd })}` : ""}`, undefined, signal);
+	createTemplate = (body: { name: string; scope: TemplateScope; description?: string; body: string }, cwd?: string) =>
+		this.req<TemplateList>("POST", `/templates${cwd ? `?${new URLSearchParams({ cwd })}` : ""}`, body);
+	saveTemplate = (name: string, body: { scope: TemplateScope; description?: string; body: string }, cwd?: string) =>
+		this.req<TemplateList>("PUT", `/templates/${encodeURIComponent(name)}${cwd ? `?${new URLSearchParams({ cwd })}` : ""}`, body);
+	deleteTemplate = (name: string, scope: TemplateScope, cwd?: string) => {
+		const q = new URLSearchParams({ scope });
+		if (cwd) q.set("cwd", cwd);
+		return this.req<TemplateList>("DELETE", `/templates/${encodeURIComponent(name)}?${q}`);
+	};
 	patchSession = (id: string, patch: PatchSessionInput) => this.req<Session>("PATCH", `/sessions/${id}`, patch);
 	/** The working trees of the session's repository it may be moved to (`patchSession` workDir), its own first. */
 	sessionWorkdirs = (id: string) => this.req<{ workdirs: { path: string; branch: string | null; home: boolean; current: boolean }[] }>("GET", `/sessions/${encodeURIComponent(id)}/workdirs`);

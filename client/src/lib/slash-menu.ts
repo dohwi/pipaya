@@ -12,13 +12,15 @@ export interface MenuRow {
 	group?: string;
 }
 
-/** A built-in command, a skill (`/skill:name`) or a command found by a server extension (`/prefix:name`). */
+/** A built-in command, a skill (`/skill:name`), a prompt template (`/prompt:name`) or a command found by a server extension (`/prefix:name`). */
 export type SlashEntry =
 	| { command: { name: string; args?: string; desc: string } }
 	| { skill: { name: string; description: string } }
+	| { template: { name: string; description: string } }
 	| { family: { prefix: string; label: string; name: string; description: string; args?: string } };
 
 export const SKILL_PREFIX = "skill:";
+export const PROMPT_PREFIX = "prompt:";
 
 const slash = (name: string) => `/${name}`;
 
@@ -45,6 +47,7 @@ export function optionRows(options: readonly { value: string; desc: string; curr
 export function slashRows(entries: readonly SlashEntry[]): MenuRow[] {
 	return entries.map((it): MenuRow => {
 		if ("skill" in it) return { id: `skill:${it.skill.name}`, text: slash(`${SKILL_PREFIX}${it.skill.name}`), desc: it.skill.description, accent: true, group: msg("스킬") };
+		if ("template" in it) return { id: `prompt:${it.template.name}`, text: slash(`${PROMPT_PREFIX}${it.template.name}`), desc: it.template.description, accent: true, group: msg("프롬프트 템플릿") };
 		if ("family" in it) {
 			const f = it.family;
 			return { id: `${f.prefix}:${f.name}`, text: slash(`${f.prefix}:${f.name}`), args: f.args, desc: f.description, accent: true, group: f.label };

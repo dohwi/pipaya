@@ -16,9 +16,11 @@ export const SETTINGS_TABS = [
 	{ id: "models", label: msg("모델"), icon: "key", sub: msg("모델 연결 · 기본 모델 · 이미지 모델"), server: true },
 	{ id: "voice", label: msg("음성 입력"), icon: "mic", sub: msg("말해서 입력하기"), server: true },
 	{ id: "tools", label: msg("에이전트 도구"), icon: "widgets", sub: msg("도구 허용 · 서브에이전트 위임"), server: true },
+	{ id: "guard", label: msg("명령 보호"), icon: "shield", sub: msg("위험한 셸 명령 실행 차단"), server: true },
 	{ id: "mcp", label: msg("MCP"), icon: "plug", sub: msg("MCP 서버 연결"), server: true },
 	{ id: "sessions", label: msg("대화"), icon: "chat", sub: msg("기본 작업 폴더 · 자동 삭제"), server: true },
 	{ id: "schedules", label: msg("예약 작업"), icon: "clock", sub: msg("정해진 때에 대화로 프롬프트 보내기"), server: true },
+	{ id: "templates", label: msg("프롬프트 템플릿"), icon: "prompt", sub: msg("자주 쓰는 /prompt 명령 관리"), server: true },
 	{ id: "srvext", label: msg("확장"), icon: "bolt", sub: msg("설치 · 권한 · 설정"), server: true },
 	{ id: "devices", label: msg("기기"), icon: "phone", sub: msg("접속한 기기 · 폰 연결"), server: true },
 ] as const;
@@ -43,10 +45,12 @@ export const SETTINGS_ITEMS: { tab: SettingsTabId; label: string; words: string 
 	{ tab: "voice", label: msg("음성 입력 사용"), words: "voice mic microphone dictation 음성 마이크 받아쓰기 켜기" }, // i18n-ok: search words in either language
 	{ tab: "tools", label: msg("에이전트 도구"), words: "tools agent permission 도구 에이전트" }, // i18n-ok: search words in either language
 	{ tab: "tools", label: msg("서브에이전트 위임"), words: "subagent sub-agent delegate helper role 서브에이전트 위임 역할 도우미" }, // i18n-ok: search words in either language; "helper / 도우미" was the old name
+	{ tab: "guard", label: msg("위험 명령 차단"), words: "guard bash rm mkfs dd fork bomb chmod chown 차단 보호 보안 안전" }, // i18n-ok: search words in either language
 	{ tab: "mcp", label: msg("MCP 서버"), words: "mcp server tool 도구 서버 연결" }, // i18n-ok: search words in either language
 	{ tab: "sessions", label: msg("기본 작업 폴더"), words: "folder workdir directory workspace cwd default 기본 폴더 작업 폴더 작업 디렉터리 워크스페이스" }, // i18n-ok: search words in either language
 	{ tab: "sessions", label: msg("자동 삭제"), words: "retention delete cleanup old auto 보관 자동 삭제 정리 오래된" }, // i18n-ok: search words in either language
 	{ tab: "schedules", label: msg("예약 작업"), words: "schedule scheduled task timer cron repeat interval later 예약 반복 정기 주기 자동 실행 알람" }, // i18n-ok: search words in either language
+	{ tab: "templates", label: msg("프롬프트 템플릿"), words: "prompt template slash command /prompt: 프롬프트 템플릿 명령 상용구" }, // i18n-ok: search words in either language
 ];
 
 const norm = (s: string) => s.toLowerCase();
