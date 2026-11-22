@@ -1,8 +1,8 @@
 <script lang="ts">
 	import { app } from "../../lib/store.svelte";
 	import { t } from "../../lib/i18n";
-	import { compact, duration, fullTime, pastLabel, tilde } from "../../lib/format";
-	import { minuteClock } from "../../lib/minute-clock.svelte";
+	import { compact, duration, fullTime, tilde } from "../../lib/format";
+	import { livePast } from "../../lib/minute-clock.svelte";
 	import { copyText } from "../../lib/clipboard";
 	import { abortable } from "../../lib/abortable";
 	import { sessionTitle } from "../../lib/session-title";
@@ -47,8 +47,7 @@
 	const saved = $derived(card ? app.servers.find((s) => s.id === card.server) : undefined);
 	const serverName = $derived(saved?.name ?? card?.server ?? "");
 
-	const now = $derived(minuteClock.now);
-	const ago = (ts: number) => pastLabel(ts, now, { time: false });
+	const ago = (ts: number) => livePast(ts, { time: false });
 
 	// ---- what each kind shows ----
 	const chats = $derived(card && card.kind !== "subagent" && card.kind !== "session" ? under(graph, card.id, "session") : []);
@@ -97,7 +96,7 @@
 		return roleStats((graphRuns.runs[server] ?? []).filter((r) => r.model === model), card.label, (sid) => graph.cards.has(`s:${server}/${sid}`));
 	});
 	/** A role card's row end: its calls, and when it was last used if that was a while ago (a model the role moved off). */
-	const roleEnd = (c: Card) => (c.last && now - c.last > ROLE_STALE_MS ? `${t("{n}회", { n: c.count })} · ${ago(c.last)}` : t("{n}회", { n: c.count }));
+	const roleEnd = (c: Card) => (c.last && Date.now() - c.last > ROLE_STALE_MS ? `${t("{n}회", { n: c.count })} · ${ago(c.last)}` : t("{n}회", { n: c.count }));
 	/** Calls of the role on every model, when it ran on more than this one. */
 	const roleTotal = $derived(siblings.length ? siblings.reduce((n, c) => n + c.count, card?.count ?? 0) : 0);
 	const callerCwd = $derived(stats?.callers[0] ? link?.sessionById.get(stats.callers[0].sessionId)?.cwd : undefined);

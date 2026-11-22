@@ -2,7 +2,7 @@ import { sessionTitle } from "./session-title";
 import { app } from "./store.svelte";
 import { extensions } from "./extensions/host.svelte";
 import { copyText } from "./clipboard";
-import { clip, pastLabel } from "./format";
+import { clip } from "./format";
 import type { AssistantItem, Session, UserItem } from "./types";
 import { msg, t } from "./i18n";
 import { SKILL_PREFIX } from "./slash-menu";
@@ -45,14 +45,13 @@ const dirLabel = (cwd: string) => {
 	return r === "." ? t("서버 기본 폴더") : r;
 };
 
-const when = (ts: number): string => pastLabel(ts, Date.now(), { time: false });
-
-/** Sessions as palette rows: title + "작업 디렉터리 · 시각". */
+/** Sessions as palette rows: title + "작업 디렉터리 · 3분 전" (the time is drawn live by the palette). */
 function sessionRows(list: Session[], opts: { current?: string; showClosed?: boolean } = {}) {
 	return list.map((s) => ({
 		id: s.id,
 		title: sessionTitle(s.title),
-		sub: `${dirLabel(s.cwd)} · ${when(s.updatedAt)}`,
+		sub: dirLabel(s.cwd),
+		when: s.updatedAt,
 		tag: opts.showClosed && s.closed ? t("닫힘") : undefined,
 		current: s.id === opts.current,
 		dim: s.closed,

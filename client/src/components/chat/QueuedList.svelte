@@ -3,7 +3,6 @@
 	import QueueBadge from "./QueueBadge.svelte";
 	import QueueText from "./QueueText.svelte";
 	import ScheduleRow from "./ScheduleRow.svelte";
-	import { minuteClock } from "../../lib/minute-clock.svelte";
 	import type { Schedule } from "../../lib/types";
 	import Icon from "../ui/Icon.svelte";
 	import { orderQueued, queuedLabel, queuedShown, queuedTone } from "../../lib/queue";
@@ -188,7 +187,7 @@
 	{/each}
 	{#if scheduleOf}
 		{#each tasks as task, i (task.id)}
-			<li animate:reflow in:rowIn out:rowOut><ScheduleRow s={task} n={i + 1} now={minuteClock.now} serverId={scheduleOf.serverId} sessionId={scheduleOf.sessionId} blocked={() => dragged} /></li>
+			<li animate:reflow in:rowIn out:rowOut><ScheduleRow s={task} n={i + 1} serverId={scheduleOf.serverId} sessionId={scheduleOf.sessionId} blocked={() => dragged} /></li>
 		{/each}
 	{/if}
 </ul>

@@ -1,8 +1,8 @@
 <script lang="ts">
 	import IconButton from "../ui/IconButton.svelte";
 	import { t } from "../../lib/i18n";
-	import { fullTime, messageTime } from "../../lib/format";
-	import { minuteClock } from "../../lib/minute-clock.svelte";
+	import { fullTime } from "../../lib/format";
+	import { liveMessageTime } from "../../lib/minute-clock.svelte";
 	import { parsePeer } from "../../lib/peers";
 	import Icon from "../ui/Icon.svelte";
 	import FileChip from "./FileChip.svelte";
@@ -89,7 +89,7 @@
 		{#if item.seq !== null && session && item.text}
 			<IconButton icon="fork" label={t("여기서 분기해 다시 쓰기")} tip size="sm" onclick={() => app.branchEdit(session.id, item.seq!, item.text)} />
 		{/if}
-		{#if item.ts}<time class="when" use:tapTitle datetime={new Date(item.ts).toISOString()} title={fullTime(item.ts)}>{messageTime(item.ts, minuteClock.now)}</time>{/if}
+		{#if item.ts}<time class="when" use:tapTitle datetime={new Date(item.ts).toISOString()} title={fullTime(item.ts)}>{liveMessageTime(item.ts)}</time>{/if}
 	</div>
 </div>
 

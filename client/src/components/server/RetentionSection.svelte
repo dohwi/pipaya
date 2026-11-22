@@ -5,8 +5,8 @@
 	import SettingRow from "../ui/SettingRow.svelte";
 	import Switch from "../ui/Switch.svelte";
 	import { t } from "../../lib/i18n";
-	import { fullTime, pastLabel } from "../../lib/format";
-	import { minuteClock } from "../../lib/minute-clock.svelte";
+	import { fullTime } from "../../lib/format";
+	import { livePast } from "../../lib/minute-clock.svelte";
 	import { Api, errorText } from "../../lib/api";
 	import { app } from "../../lib/store.svelte";
 	import type { RetentionInfo, RetentionSettings } from "../../lib/types";
@@ -102,7 +102,7 @@
 		{#if s.enabled}
 			<div class="status">
 				<span class="hint">
-					{t("지금 기준으로 {n}개가 대상입니다", { n: info.due })}{#if info.lastRun} · <span title={fullTime(info.lastRun)}>{t("마지막 정리 {when}", { when: pastLabel(info.lastRun, minuteClock.now) })}</span>{/if}
+					{t("지금 기준으로 {n}개가 대상입니다", { n: info.due })}{#if info.lastRun}{" · "}<span title={fullTime(info.lastRun)}>{t("마지막 정리 {when}", { when: livePast(info.lastRun) })}</span>{/if}
 				</span>
 				<Button size="sm" disabled={busy || info.due === 0} onclick={() => void runNow()}>{t("지금 정리")}</Button>
 			</div>

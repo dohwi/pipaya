@@ -1,7 +1,6 @@
 <script lang="ts">
 	import { t } from "../../lib/i18n";
-	import { nextRunLabel } from "../../lib/schedules";
-	import { minuteClock } from "../../lib/minute-clock.svelte";
+	import { liveNext } from "../../lib/minute-clock.svelte";
 	import { slidingIndicator } from "../../lib/sliding-indicator";
 	import { formatCombo } from "../../lib/keys";
 	import IconButton from "../ui/IconButton.svelte";
@@ -23,7 +22,7 @@
 	const graphTip = $derived(app.prefs.bindings.openGraph ? `${t("그래프 뷰")} (${formatCombo(app.prefs.bindings.openGraph)})` : t("그래프 뷰"));
 	const scheduled = $derived(app.schedules.all(app.serverId));
 	const schedulesShown = $derived(!!app.serverId && app.schedules.supported(app.serverId));
-	const schedulesTip = $derived(scheduled.next === null ? t("예약 작업") : `${t("예약 작업")} · ${t("다음 실행: {when}", { when: nextRunLabel(scheduled.next, minuteClock.now) })}`);
+	const schedulesTip = $derived(scheduled.next === null ? t("예약 작업") : `${t("예약 작업")} · ${t("다음 실행: {when}", { when: liveNext(scheduled.next) })}`);
 
 	interface Section {
 		server: Server;

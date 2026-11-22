@@ -2,8 +2,8 @@
 	import Badge from "../ui/Badge.svelte";
 	import Icon from "../ui/Icon.svelte";
 	import { t } from "../../lib/i18n";
-	import { compact, pastLabel } from "../../lib/format";
-	import { minuteClock } from "../../lib/minute-clock.svelte";
+	import { compact } from "../../lib/format";
+	import { livePast } from "../../lib/minute-clock.svelte";
 	import EmptyState from "../ui/EmptyState.svelte";
 	import PickerModal from "../ui/PickerModal.svelte";
 	import CapTags from "./CapTags.svelte";
@@ -44,14 +44,14 @@
 	const source = $derived.by(() => {
 		if (!info) return "";
 		if (!info.live) return info.error ? t("목록을 불러오지 못했습니다") : t("서버에 포함된 목록");
-		return t("OpenRouter 목록 · {ago} 갱신", { ago: pastLabel(info.updatedAt, minuteClock.now) });
+		return t("OpenRouter 목록 · {ago} 갱신", { ago: livePast(info.updatedAt) });
 	});
 	/** The tooltip: the full story, including why a fetch failed. */
 	const detail = $derived.by(() => {
 		if (!info) return "";
 		if (!info.error) return t("OpenRouter에서 목록을 다시 받아옵니다");
 		return info.live
-			? t("OpenRouter 목록을 불러오지 못했습니다: {error} · {ago} 목록", { error: info.error, ago: pastLabel(info.updatedAt, minuteClock.now) })
+			? t("OpenRouter 목록을 불러오지 못했습니다: {error} · {ago} 목록", { error: info.error, ago: livePast(info.updatedAt) })
 			: t("OpenRouter 목록을 불러오지 못했습니다: {error} · 서버에 포함된 목록", { error: info.error });
 	});
 

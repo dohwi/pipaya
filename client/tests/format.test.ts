@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { clockMinutes, dayLabel, dayStart, fileStamp, fullTime, messageTime, pastLabel, shortDate, shortDateTime, timeOfDay } from "../src/lib/format";
+import { clockMinutes, dayLabel, nextChange, pastChange, dayStart, fileStamp, fullTime, messageTime, pastLabel, shortDate, shortDateTime, timeOfDay } from "../src/lib/format";
 import { setLang } from "../src/lib/i18n";
 
 describe("fileStamp", () => {
@@ -29,6 +29,9 @@ describe("dayLabel", () => {
 	test("older days: date and weekday, the year only when it is another year", () => {
 		expect(dayLabel(new Date(2026, 10, 15, 12).getTime(), "ko-KR", now)).toBe("11월 15일 (일)");
 		expect(dayLabel(new Date(2025, 10, 16, 12).getTime(), "en-US", now)).toBe("Sun, November 16, 2025");
+		// Korean keeps the weekday in brackets with the year too, as the headings without it do
+		expect(dayLabel(new Date(2025, 9, 18, 12).getTime(), "ko-KR", now)).toBe("2025년 10월 18일 (토)");
+		expect(dayLabel(new Date(2026, 9, 13, 12).getTime(), "ko-KR", now)).toBe("10월 13일 (화)");
 	});
 	test("dayStart groups times by their local day", () => {
 		expect(dayStart(new Date(2026, 10, 17, 23, 59).getTime())).toBe(dayStart(new Date(2026, 10, 17, 0, 0).getTime()));
@@ -78,7 +81,7 @@ describe("pastLabel / messageTime", () => {
 		expect(ko(at(10, 21, 23, 30))).toBe("어제 오후 11:30");
 		expect(ko(at(10, 21, 23, 30), false)).toBe("어제");
 		expect(ko(at(10, 18, 14, 5))).toBe("수 오후 2:05");
-		expect(ko(at(10, 16, 14, 5), false)).toBe("월");
+		expect(ko(at(10, 16, 14, 5), false)).toBe("6일 전"); // a list column: days, not a bare weekday
 		expect(ko(at(10, 15, 14, 5))).toBe("11월 15일"); // 7 days back: the date
 		expect(ko(new Date(2025, 10, 15, 12).getTime())).toBe("2025년 11월 15일");
 		expect(ko(new Date(2025, 10, 15, 12).getTime(), false)).toBe("2025년 11월");
@@ -96,5 +99,36 @@ describe("pastLabel / messageTime", () => {
 		expect(messageTime(at(10, 22, 12, 30), now, "ko-KR")).toBe("2시간 전");
 		expect(messageTime(at(10, 22, 9, 0), now, "ko-KR")).toBe("오전 9:00");
 		expect(messageTime(at(10, 18, 14, 5), now, "ko-KR")).toBe("오후 2:05"); // not "수 오후 2:05": the heading has it
+	});
+});
+
+describe("pastChange / nextChange: the minute a label next reads differently", () => {
+	const MIN = 60_000;
+	const m = (ts: number) => Math.floor(ts / MIN);
+	const ts = new Date(2026, 10, 22, 12, 0, 20).getTime();
+	test("a past time: every minute for an hour, then on the hour, then never by the minute", () => {
+		expect(pastChange(ts, ts + 5_000)).toBe(m(ts) + 1); // "방금" → "1분 전"
+		expect(pastChange(ts, ts + 12 * MIN)).toBe(m(ts) + 13);
+		expect(pastChange(ts, ts + 59 * MIN)).toBe(m(ts) + 60); // "59분 전" → "1시간 전"
+		expect(pastChange(ts, ts + 61 * MIN)).toBe(m(ts) + 120); // "1시간 전" until "2시간 전"
+		expect(pastChange(ts, ts + 5 * 60 * MIN + 30 * MIN)).toBe(m(ts) + 360); // "5시간 전" → the time of day
+		expect(pastChange(ts, ts + 6 * 60 * MIN)).toBeNull(); // the day (or nothing) changes it from here
+		expect(pastChange(ts, ts - 30_000)).toBe(m(ts) + 1); // a time ahead of this clock: "방금" until then
+	});
+	test("a future time: every minute within 6 hours, else when it comes within them", () => {
+		const now = new Date(2026, 10, 22, 9, 0, 10).getTime();
+		expect(nextChange(now + 12 * MIN, now)).toBe(m(now) + 1);
+		expect(nextChange(now + 5 * 60 * MIN, now)).toBe(m(now) + 1);
+		expect(nextChange(now + 9 * 60 * MIN, now)).toBe(m(now + 9 * 60 * MIN) - 359); // "오후 6:00" until "5시간 59분 후"
+		expect(nextChange(now + 20_000, now)).toBeNull(); // "곧" stays until the run
+	});
+	test("waking at the given minute shows the next label, not the same one", () => {
+		setLang("ko");
+		for (const gone of [5_000, 12 * MIN, 59 * MIN + 30_000, 61 * MIN, 5 * 60 * MIN + 30 * MIN]) {
+			const now = ts + gone;
+			const wake = pastChange(ts, now)! * MIN;
+			expect(pastLabel(ts, wake - 1, { locale: "ko-KR" })).toBe(pastLabel(ts, now, { locale: "ko-KR" })); // nothing changes before it
+			expect(pastLabel(ts, wake, { locale: "ko-KR" })).not.toBe(pastLabel(ts, now, { locale: "ko-KR" }));
+		}
 	});
 });

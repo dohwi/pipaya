@@ -17,24 +17,36 @@ export const duration = (ms: number): string =>
 export const clip = (s: string, n: number): string =>
   s.length > n ? `${s.slice(0, n - 1)}…` : s;
 
+/**
+ * One Intl.DateTimeFormat per locale and option set, kept: `toLocaleTimeString` builds a new formatter on every call
+ * (about 50 µs), which a transcript of a thousand message times paid on every render.
+ */
+const formatters = new Map<string, Intl.DateTimeFormat>();
+export function fmt(locale: string | undefined, opts: Intl.DateTimeFormatOptions): Intl.DateTimeFormat {
+  const key = `${locale ?? ""}|${JSON.stringify(opts)}`;
+  let f = formatters.get(key);
+  if (!f) formatters.set(key, (f = new Intl.DateTimeFormat(locale, opts)));
+  return f;
+}
+const TIME: Intl.DateTimeFormatOptions = { hour: "numeric", minute: "2-digit" };
+const FULL: Intl.DateTimeFormatOptions = { year: "numeric", month: "numeric", day: "numeric", hour: "numeric", minute: "numeric", second: "numeric" };
+
 /** The time of day a message was sent ("9:04 AM", "오전 9:04"); the day it belongs to is the divider above it (dayLabel). */
-export const timeOfDay = (ts: number, locale?: string): string =>
-  new Date(ts).toLocaleTimeString(locale, { hour: "numeric", minute: "2-digit" });
+export const timeOfDay = (ts: number, locale?: string): string => fmt(locale, TIME).format(ts);
 
 /**
  * Date and time formats, in the app's language (`localeTag()`), never the browser's: with the app set to English on a
  * Korean system a bare `toLocaleString()` printed "2026. 11. 19. 오후 3:04:05" in an English screen. `locale` is for tests.
  */
 /** The whole date and time, for a tooltip or a "last run" line: "11/19/2026, 3:04:05 PM", "2026. 11. 19. 오후 3:04:05". */
-export const fullTime = (ts: number, locale: string = localeTag()): string => new Date(ts).toLocaleString(locale);
+export const fullTime = (ts: number, locale: string = localeTag()): string => fmt(locale, FULL).format(ts);
 
 /** A day without the year: "Nov 19", "11월 19일". */
-export const shortDate = (ts: number, locale: string = localeTag()): string =>
-  new Date(ts).toLocaleDateString(locale, { month: "short", day: "numeric" });
+export const shortDate = (ts: number, locale: string = localeTag()): string => fmt(locale, { month: "short", day: "numeric" }).format(ts);
 
 /** A day and a time without the year or seconds, for a tooltip: "Nov 19, 03:04 PM", "11월 19일 오후 03:04". */
 export const shortDateTime = (ts: number, locale: string = localeTag()): string =>
-  new Date(ts).toLocaleString(locale, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+  fmt(locale, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }).format(ts);
 
 /** Local midnight of the day `ts` falls on: two times are on the same day when these match. */
 export const dayStart = (ts: number): number => {
@@ -42,12 +54,18 @@ export const dayStart = (ts: number): number => {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
 };
 
-/** The heading of a day in a transcript: "오늘" / "어제", else the date with its weekday, and the year once it is not this year's. */
+/**
+ * The heading of a day in a transcript: "오늘" / "어제", else the date with its weekday, and the year once it is not
+ * this year's. Korean keeps the weekday in brackets with or without the year: Intl writes "10월 13일 (화)" but
+ * "2025년 10월 18일 토", and the two stood one above the other in a long transcript.
+ */
 export function dayLabel(ts: number, locale?: string, now: number = Date.now()): string {
   const days = Math.round((dayStart(now) - dayStart(ts)) / 86_400_000); // round: a DST day is 23 or 25 hours
   if (days === 0 || days === 1) return new Intl.RelativeTimeFormat(locale, { numeric: "auto" }).format(-days, "day");
   const year = new Date(ts).getFullYear() !== new Date(now).getFullYear();
-  return new Date(ts).toLocaleDateString(locale, { year: year ? "numeric" : undefined, month: "long", day: "numeric", weekday: "short" });
+  if (year && (locale ?? localeTag()).startsWith("ko"))
+    return `${fmt(locale, { year: "numeric", month: "long", day: "numeric" }).format(ts)} (${fmt(locale, { weekday: "short" }).format(ts)})`;
+  return fmt(locale, { year: year ? "numeric" : undefined, month: "long", day: "numeric", weekday: "short" }).format(ts);
 }
 
 const MIN = 60_000;
@@ -57,6 +75,28 @@ const sameDay = (a: Date, b: Date) => a.getFullYear() === b.getFullYear() && a.g
  * seconds, so they agree with the clock times shown beside them and all turn over together on the minute (minuteClock).
  */
 export const clockMinutes = (a: number, b: number): number => Math.floor(b / MIN) - Math.floor(a / MIN);
+
+const minuteOf = (ts: number) => Math.floor(ts / MIN);
+const SIX_HOURS = 6 * 60; // in minutes: where a relative label gives way to a clock time
+
+/**
+ * The clock minute (minutes since the epoch) at which pastLabel / messageTime of `ts` next reads differently, or null
+ * when only the day can change it (pastLabel's "오후 2:05" → "어제") or nothing can (a message's "오후 2:05").
+ */
+export function pastChange(ts: number, now: number): number | null {
+  const m = clockMinutes(ts, now);
+  if (m < 60) return minuteOf(ts) + Math.max(1, m + 1); // "방금" → "1분 전" → "2분 전" ...
+  if (m < SIX_HOURS) return minuteOf(ts) + Math.min(SIX_HOURS, (Math.floor(m / 60) + 1) * 60); // the next hour
+  return null;
+}
+
+/** The clock minute at which nextRunLabel of `ts` next reads differently, or null ("곧": it stays until the run). */
+export function nextChange(ts: number, now: number): number | null {
+  const m = clockMinutes(now, ts);
+  if (m < 1) return null;
+  if (m < SIX_HOURS) return minuteOf(now) + 1; // "2시간 30분 후" counts every minute
+  return minuteOf(ts) - (SIX_HOURS - 1); // a clock time until it comes within 6 hours (midnight: `today`)
+}
 
 /**
  * When something happened, read at a glance: the one rule for past times across the app (a message, a chat's last
@@ -68,7 +108,8 @@ export const clockMinutes = (a: number, b: number): number => Math.floor(b / MIN
  *  - yesterday: "어제 오후 9:30"
  *  - within a week: the weekday and time, "수 오후 2:05"
  *  - this year: the date, "11월 15일"; before that with the year, "2025년 11월 15일"
- * `time: false` is for a narrow list column that only needs the day: "어제", "수", and "2025년 11월" for another year.
+ * `time: false` is for a list column that only needs the day: "어제", then "N일 전" for the week (a bare "수" read as a
+ * riddle in a card corner), the date, and "2025년 11월" for another year.
  * The exact time stays in the tooltip (fullTime). `now` and `locale` are for tests and for a caller's clock (clock.now).
  */
 export function pastLabel(ts: number, now: number = Date.now(), opts: { locale?: string; time?: boolean } = {}): string {
@@ -80,15 +121,13 @@ export function pastLabel(ts: number, now: number = Date.now(), opts: { locale?:
   if (mins < 6 * 60) return t("{n}시간 전", { n: Math.floor(mins / 60) });
   const at = new Date(ts);
   const today = new Date(now);
-  const time = at.toLocaleTimeString(locale, { hour: "numeric", minute: "2-digit" });
+  const time = fmt(locale, TIME).format(ts);
   if (sameDay(at, today)) return time;
-  if (sameDay(at, new Date(today.getFullYear(), today.getMonth(), today.getDate() - 1))) return withTime ? t("어제 {time}", { time }) : t("어제");
-  if (Math.round((dayStart(now) - dayStart(ts)) / 86_400_000) < 7) { // round: a DST day is 23 or 25 hours
-    const day = at.toLocaleDateString(locale, { weekday: "short" });
-    return withTime ? `${day} ${time}` : day;
-  }
-  if (at.getFullYear() === today.getFullYear()) return at.toLocaleDateString(locale, { month: "short", day: "numeric" });
-  return at.toLocaleDateString(locale, withTime ? { year: "numeric", month: "short", day: "numeric" } : { year: "numeric", month: "short" });
+  const days = Math.round((dayStart(now) - dayStart(ts)) / 86_400_000); // round: a DST day is 23 or 25 hours
+  if (days === 1) return withTime ? t("어제 {time}", { time }) : t("어제");
+  if (days < 7) return withTime ? `${fmt(locale, { weekday: "short" }).format(ts)} ${time}` : t("{n}일 전", { n: days });
+  if (at.getFullYear() === today.getFullYear()) return fmt(locale, { month: "short", day: "numeric" }).format(ts);
+  return fmt(locale, withTime ? { year: "numeric", month: "short", day: "numeric" } : { year: "numeric", month: "short" }).format(ts);
 }
 
 /**

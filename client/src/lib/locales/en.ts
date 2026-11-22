@@ -1095,6 +1095,7 @@ export const en: Record<string, string> = {
 	"확장 요청입니다. 승인한 범위만 앱에서 수행합니다.": "An extension is asking. The app only does what you approve.",
 	"승인하고 진행": "Approve and continue",
 	"{n}분 전": "{n}m ago",
+	"{n}일 전": "{n}d ago",
 	"기기": "Devices",
 	"기기를 해지했습니다": "Device removed",
 	"웹 브라우저": "Web browser",
