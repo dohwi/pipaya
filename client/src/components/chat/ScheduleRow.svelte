@@ -13,13 +13,13 @@
 
 	/**
 	 * One scheduled task as a row of the queue above the input (QueuedList puts these after the waiting messages).
-	 * The row opens the task in Settings > Scheduled tasks; ✕ asks whether to pause or delete it; a paused task stays,
-	 * dimmed, with ▶ to switch it back on. `n`: its place among the conversation's tasks, soonest first.
+	 * Only switched-on tasks are listed. The row opens the task in Settings > Scheduled tasks; ✕ asks whether to pause it
+	 * (it leaves the queue and stays in Settings, off) or delete it. `n`: its place among the conversation's tasks, soonest first.
 	 * `blocked`: the press was a drag of the list, not a click.
 	 */
 	let { s, n, serverId, sessionId, blocked = () => false }: { s: Schedule; n: number; serverId: string; sessionId: string; blocked?: () => boolean } = $props();
 
-	const tone = $derived(s.enabled ? lastRunTone(s) : null);
+	const tone = $derived(lastRunTone(s));
 	let asking = $state(false);
 	let busy = $state(false);
 
@@ -55,30 +55,18 @@
 			app.toast(t("‘{name}’ 작업을 지웠습니다", { name }), "ok", sessionId);
 		});
 	}
-	function resume() {
-		// A one-time task whose time has passed needs a new one first: the settings form asks for it.
-		if (s.kind === "once" && (s.runAt ?? 0) <= Date.now()) return app.openScheduleEdit(s.id);
-		const api = app.api;
-		if (!api) return;
-		void run(async () => app.schedules.patch(serverId, s.id, await api.patchSchedule(s.id, { enabled: true })));
-	}
-
 	const tip = $derived(
-		[labelOf(s, 200), cadence(s), s.enabled && s.nextRunAt ? t("다음 실행 {when}", { when: fullTime(s.nextRunAt) }) : t("꺼져 있음"), resultOf(s)?.label].filter(Boolean).join(" · "),
+		[labelOf(s, 200), cadence(s), s.nextRunAt ? t("다음 실행 {when}", { when: fullTime(s.nextRunAt) }) : null, resultOf(s)?.label].filter(Boolean).join(" · "),
 	);
 </script>
 
-<button type="button" class="so" class:off={!s.enabled} onclick={() => { if (!blocked()) app.openScheduleEdit(s.id); }} title={tip}>
+<button type="button" class="so" onclick={() => { if (!blocked()) app.openScheduleEdit(s.id); }} title={tip}>
 	<span class="sb"><Badge size="sm" mono minWidth={QUEUE_BADGE_W}><span class="in"><Icon name="clock" /><span class="n">{n}</span></span></Badge></span>
 	<span class="st"><span class="name">{labelOf(s)}</span><span class="cad">{` · ${cadence(s)}`}</span></span>
 	{#if tone}<StatusDot {tone} size={6} />{/if}
-	<span class="when {tone ?? ''}">{s.enabled && s.nextRunAt ? t("다음 {when}", { when: nextRunLabel(s.nextRunAt) }) : t("꺼짐")}</span>
+	{#if s.nextRunAt}<span class="when {tone ?? ''}">{t("다음 {when}", { when: nextRunLabel(s.nextRunAt) })}</span>{/if}
 </button>
-{#if s.enabled}
-	<button type="button" class="sx" onclick={() => (asking = true)} disabled={busy} aria-label={t("{name} 멈추기", { name: labelOf(s) })} title={t("일시정지 또는 삭제")}><Icon name="x" /></button>
-{:else}
-	<button type="button" class="sx play" onclick={resume} disabled={busy} aria-label={t("{name} 켜기", { name: labelOf(s) })} title={t("켜기")}><Icon name="play" /></button>
-{/if}
+<button type="button" class="sx" onclick={() => (asking = true)} disabled={busy} aria-label={t("{name} 멈추기", { name: labelOf(s) })} title={t("일시정지 또는 삭제")}><Icon name="x" /></button>
 
 {#if asking}
 	<ConfirmDialog
@@ -86,7 +74,7 @@
 		icon="clock"
 		tone="neutral"
 		title={t("‘{name}’ 예약을 멈출까요?", { name: labelOf(s, 40) })}
-		description={t("일시정지하면 꺼진 채로 남아 언제든 다시 켤 수 있습니다. 삭제는 되돌릴 수 없습니다.")}
+		description={t("일시정지하면 대기열에서 빠지고, 설정 › 예약 작업에 꺼진 채로 남아 다시 켤 수 있습니다. 삭제는 되돌릴 수 없습니다.")}
 		oncancel={() => (asking = false)}
 		actions={[
 			{ label: t("일시정지"), variant: "primary", onclick: pause },
@@ -157,12 +145,6 @@
 	.when.danger {
 		color: var(--danger);
 	}
-	/* Paused: still listed (it can be switched back on here), dimmed like a switched-off row in Settings. */
-	.off .sb,
-	.off .st,
-	.off .when {
-		opacity: 0.55;
-	}
 	/* the same 22px ✕ as a queue row (QueuedList .qx) */
 	.sx {
 		flex: none;
@@ -186,10 +168,6 @@
 		width: 14px;
 		height: 14px;
 		stroke-width: 2;
-	}
-	/* the play triangle is a filled shape: the line icon's stroke alone reads too thin beside the ✕ of the other rows */
-	.play :global(svg) {
-		fill: currentColor;
 	}
 	/* a finger needs more than 22px, as a queue row's ✕: 40 × 26 without overlapping the next row */
 	@media (pointer: coarse) {

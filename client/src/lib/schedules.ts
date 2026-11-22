@@ -138,11 +138,11 @@ export function summarizeSchedules(list: readonly Pick<Schedule, "sessionId" | "
 }
 
 /**
- * The tasks shown above one conversation's input: still to come (not used up), soonest first, switched-off ones after
- * the switched-on ones (dimmed there). The settings page keeps the used-up ones as history; the composer does not.
+ * The tasks listed in one conversation's queue: the ones that will run (switched on), soonest first. A paused, failed-off
+ * or used-up task is not coming, so it is not in the queue; Settings > Scheduled tasks keeps it (off, or under past tasks).
  */
 export const composerSchedules = (list: readonly Schedule[], sessionId: string): Schedule[] =>
-	sortSchedules(list.filter((s) => s.sessionId === sessionId && !isUsedUp(s)));
+	sortSchedules(list.filter((s) => s.sessionId === sessionId && s.enabled));
 
 /** The last run went wrong or was skipped: the composer row marks its time. */
 export const lastRunTone = (s: Pick<Schedule, "lastStatus">): "warn" | "danger" | null =>

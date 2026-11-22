@@ -83,14 +83,14 @@ describe("ScheduleBook", () => {
 			task({ id: "other", sessionId: "y" }),
 		] })));
 		await wait(5);
-		expect(book.listOf("a", "x").map((s) => s.id)).toEqual(["soon", "late", "off"]);
+		expect(book.listOf("a", "x").map((s) => s.id)).toEqual(["soon", "late"]);
 		expect(book.listOf(null, "x")).toEqual([]);
 		expect(book.listOf("a", null)).toEqual([]);
 		book.patch("a", "soon", task({ id: "soon", sessionId: "x", enabled: false, nextRunAt: null }));
-		expect(book.listOf("a", "x").map((s) => s.id)).toEqual(["late", "off", "soon"]);
+		expect(book.listOf("a", "x").map((s) => s.id)).toEqual(["late"]); // paused here: it leaves the queue at once
 		expect(book.of("a", "x").count).toBe(1);
 		book.patch("a", "late", null);
-		expect(book.listOf("a", "x").map((s) => s.id)).toEqual(["off", "soon"]);
+		expect(book.listOf("a", "x")).toEqual([]);
 		book.patch("never-read", "x", null); // a server not read yet: nothing to change
 		expect(book.listOf("never-read", "x")).toEqual([]);
 	});

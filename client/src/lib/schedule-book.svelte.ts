@@ -29,12 +29,12 @@ export class ScheduleBook {
 	of(serverId: string, sessionId: string): ScheduleSummary {
 		return this.summaries[serverId]?.bySession.get(sessionId) ?? NO_SCHEDULES;
 	}
-	/** The tasks shown above one conversation's input (switched-off ones included, used-up ones not), soonest first. */
+	/** The tasks listed in one conversation's queue: switched-on ones, soonest first. */
 	listOf(serverId: string | null, sessionId: string | null): Schedule[] {
 		const list = serverId && sessionId ? this.lists[serverId] : undefined;
 		return list ? composerSchedules(list, sessionId!) : [];
 	}
-	/** A task changed here (paused, switched on, deleted): shown at once, before the server's event brings the list back. */
+	/** A task changed here (paused or deleted): shown at once, before the server's event brings the list back. */
 	patch(serverId: string, id: string, next: Schedule | null): void {
 		const list = this.lists[serverId];
 		if (!list) return;
