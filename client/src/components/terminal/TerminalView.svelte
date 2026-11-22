@@ -9,6 +9,7 @@
 	import TerminalKeybar from "./TerminalKeybar.svelte";
 	import { viewport } from "../../lib/viewport.svelte";
 	import { isTouch } from "../../lib/format";
+	import { shouldTakeFocus } from "../../lib/focus-guard";
 	import { applyMods, keySequence, touchLines, type Mods } from "../../lib/terminal-keys";
 	import { appTakesKey, clipboardKey, localEcho, terminalSocketUrl, type TerminalInfo } from "../../lib/terminal";
 	import { Api } from "../../lib/api";
@@ -76,7 +77,8 @@
 		requestAnimationFrame(() => refitNow?.());
 	});
 	$effect(() => {
-		if (focused && term && status !== "exited") term.focus();
+		// not while the user walks the tab strip or the sidebar with the arrows (as the composer, lib/focus-guard)
+		if (focused && term && status !== "exited" && shouldTakeFocus(document.activeElement)) term.focus();
 	});
 
 	onMount(() => {
@@ -315,7 +317,7 @@
 		host.addEventListener("touchcancel", te, opts);
 		refit();
 		void connect();
-		if (focused) xt.focus();
+		if (focused && shouldTakeFocus(document.activeElement)) xt.focus();
 
 		return () => {
 			disposed = true;

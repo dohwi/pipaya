@@ -60,7 +60,7 @@ export const en: Record<string, string> = {
 	/* ---- app shell ---- */
 	"서버에 연결해 주세요": "Connect to a server first",
 	"사이드바 너비 조절": "Resize sidebar",
-	"끌어서 너비 조절 · 더블 클릭으로 원래 크기": "Drag to resize · double-click to reset",
+	"끌어서 너비 조절 · 끝까지 끌면 접기 · 더블 클릭으로 원래 크기": "Drag to resize · drag all the way to collapse · double-click to reset",
 	"연결하는 중…": "Connecting…",
 	"서버가 토큰을 거부했습니다.": "The server rejected the token.",
 	"토큰 수정": "Edit token",
@@ -325,6 +325,7 @@ export const en: Record<string, string> = {
 	"{name} 그룹": "Group {name}",
 	"끌어서 크기 조절 · Shift: 이어진 선 함께 · Ctrl: 가이드에 맞춤 · 더블 클릭으로 반반": "Drag to resize · Shift: move the whole line · Ctrl: snap to guides · double-click to split evenly",
 	"사이드바 열기": "Open sidebar",
+	"사이드바 닫기": "Close sidebar",
 	"대화 {n}개": "{n} {n#chat|chats}",
 	"새 대화": "New chat",
 

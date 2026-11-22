@@ -14,6 +14,10 @@ describe("shouldTakeFocus", () => {
 		expect(shouldTakeFocus(inside('[role="tablist"]'))).toBe(false);
 	});
 
+	test("it leaves the keyboard in the sidebar's tree while the user walks it", () => {
+		expect(shouldTakeFocus(inside('[data-part="sidebar"] nav'))).toBe(false);
+	});
+
 	test("it leaves the keyboard in an open dialog or menu (a search opened while the conversation was still loading)", () => {
 		for (const s of ['[role="dialog"]', '[role="alertdialog"]', '[role="menu"]', "dialog[open]"]) expect(shouldTakeFocus(inside(s))).toBe(false);
 	});

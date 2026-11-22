@@ -33,6 +33,7 @@ import { composing, releasedByKeyUp, type ShortcutUpReason } from "./extensions/
 import { voice, voiceKeyPress } from "./voice.svelte";
 import { THINKING_LEVELS, type ThinkingLevel } from "./types";
 import { t } from "./i18n";
+import { viewport } from "./viewport.svelte";
 
 
 const LEVELS: ThinkingLevel[] = [...THINKING_LEVELS];
@@ -195,7 +196,7 @@ async function toggleFullscreen() {
 const RUN: Record<ActionId, () => void | Promise<void>> = {
   toggleSidebar: () => {
     // Below the desktop breakpoint the sidebar is a drawer, not a collapsible rail
-    if (matchMedia("(max-width: 860px)").matches)
+    if (viewport.narrow)
       app.sidebar.open = !app.sidebar.open;
     else app.sidebar.toggleCollapsed();
   },

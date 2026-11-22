@@ -14,6 +14,8 @@
 	import { formatCombo } from "../../lib/keys";
 	import Icon from "../ui/Icon.svelte";
 	import IconButton from "../ui/IconButton.svelte";
+	import { viewport } from "../../lib/viewport.svelte";
+	import { treeKeys } from "../../lib/tree-keys";
 	import RowMenu, { type RowMenuItem } from "../ui/RowMenu.svelte";
 	import PipayaMark from "../ui/PipayaMark.svelte";
 	import Wordmark from "../ui/Wordmark.svelte";
@@ -38,6 +40,24 @@
 	import { setSidebarCtx, type MenuTarget, type SidebarNode } from "../../lib/sidebar-ctx";
 	import ServerBlock from "./sidebar/ServerBlock.svelte";
 	const hint = $derived(app.prefs.bindings.toggleSidebar ? ` (${formatCombo(app.prefs.bindings.toggleSidebar)})` : "");
+	/** The drawer's own close button: focus goes back to the header's menu button that opened it */
+	function closeDrawer() {
+		app.sidebar.open = false;
+		document.querySelector<HTMLElement>("[data-part=header] .menu")?.focus({ preventScroll: true });
+	}
+	/**
+	 * The drawer just opened (phone): focus moves into it, to the open row if there is one, else its close button, so a
+	 * keyboard or screen reader lands in the drawer instead of behind the scrim. Not on touch: no keyboard to serve.
+	 */
+	$effect(() => {
+		if (!viewport.narrow || !app.sidebar.open || matchMedia("(pointer: coarse)").matches) return;
+		const host = listEl;
+		queueMicrotask(() => {
+			if (!host || host.contains(document.activeElement)) return;
+			const row = host.querySelector<HTMLElement>(".item.active .open, .dir.cur .dirtoggle, .proj.shown .projtoggle");
+			(row ?? host.parentElement?.querySelector<HTMLElement>(".foldbtn"))?.focus({ preventScroll: false });
+		});
+	});
 
 	/** The conversation or terminal being renamed in place, and the split tab (group) being renamed. */
 	const rename = new InlineRename();
@@ -449,16 +469,21 @@
 </script>
 
 
-<aside class="side" data-part="sidebar">
+<aside class="side" id="app-sidebar" data-part="sidebar">
 	<!-- the logo is the app's own: no extension part or style hook here (lib/pipaya-logo.ts) -->
 	<div class="brandrow" data-logo-frame>
 		<PipayaMark tone="color" size={26} />
 		<Wordmark size={16} />
-		<IconButton icon="sidebar" label={t("사이드바 접기")} title={t("사이드바 접기") + hint} class="foldbtn" onclick={() => app.sidebar.toggleCollapsed()} />
+		<!-- folds the sidebar into the rail; on a phone it closes the drawer instead (it had no visible way out but the scrim) -->
+		{#if viewport.narrow}
+			<IconButton icon="x" label={t("사이드바 닫기")} title={t("사이드바 닫기") + hint} class="foldbtn" onclick={closeDrawer} />
+		{:else}
+			<IconButton icon="sidebar" label={t("사이드바 접기")} title={t("사이드바 접기") + hint} class="foldbtn" onclick={() => app.sidebar.toggleCollapsed()} />
+		{/if}
 	</div>
 	<ExtensionMount slot="sidebar.top" />
 
-	<nav class="list" bind:this={listEl} use:slidingIndicator={{ selector: OPEN_ROW, radius: "var(--radius-sm)" }} onscroll={() => rowMenu?.close()}>
+	<nav class="list" bind:this={listEl} use:treeKeys use:slidingIndicator={{ selector: OPEN_ROW, radius: "var(--radius-sm)" }} onscroll={() => rowMenu?.close()}>
 		{#each nodes as n (n.server.id)}
 			<ServerBlock {n} single={nodes.length < 2} />
 		{/each}
@@ -744,11 +769,6 @@
 	:global(:where(.side) .item.carried),
 	:global(:where(.side) .grp:has(> .item.carried) .members .item) {
 		opacity: 0.45;
-	}
-	@media (max-width: 860px) {
-		:global(.iconbtn.foldbtn) {
-			display: none;
-		}
 	}
 	/* touch: tab rows are 40px too. Last in the sheet, so it wins over the 32px base rules above it with the same specificity. */
 	@media (pointer: coarse) {

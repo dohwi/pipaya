@@ -5,7 +5,6 @@
 	import { RENAME_KEY } from "../../lib/keys";
 	import { t } from "../../lib/i18n";
 	import Handle from "../ui/Handle.svelte";
-	import { rovingKeys } from "../../lib/roving";
 	import AgentBadge from "./AgentBadge.svelte";
 	import Icon from "../ui/Icon.svelte";
 	import { ACTIVITY_LABEL, activityOf } from "../../lib/activity";
@@ -51,7 +50,8 @@
 </script>
 
 {#if items.length}
-	<nav class="strip" aria-label={t("{name} 그룹의 대화", { name: group.name })} use:rovingKeys={{ item: ".gchip" }}>
+	<!-- the arrows walk the chips together with the tab bar's other tabs (TabBar's rovingKeys): one row, one Tab stop -->
+	<nav class="strip" aria-label={t("{name} 그룹의 대화", { name: group.name })}>
 		{#each items as x (x.id)}
 			{@const st = app.terminal(x.id) ? "idle" : activityOf(app, x.id)}
 			{@const who = whoOf(x.id)}
@@ -70,7 +70,7 @@
 				/>
 			{:else}
 				<span class="gitem">
-				<button class="gchip tap" tabindex={!open || x.id === app.activeId ? 0 : -1} class:on={open && x.id === app.activeId} aria-current={open && x.id === app.activeId ? "true" : undefined} onclick={() => app.openSession(x.id)} onkeydown={(e) => e.key === RENAME_KEY && (e.preventDefault(), rename.start(x.id, x.title))} class:carried={drag.id === x.id} use:dragSource={{ id: x.id, menu: (pt) => chipMenu(pt, x.id, x.title) }} title="{who ? `${who.title} · ` : ''}{sessionTitle(x.title)} · {ACTIVITY_LABEL[st]}">
+				<button class="gchip tap" tabindex={open && x.id === app.activeId ? 0 : -1} class:on={open && x.id === app.activeId} aria-current={open && x.id === app.activeId ? "true" : undefined} onclick={() => app.openSession(x.id)} onkeydown={(e) => e.key === RENAME_KEY && (e.preventDefault(), rename.start(x.id, x.title))} class:carried={drag.id === x.id} use:dragSource={{ id: x.id, menu: (pt) => chipMenu(pt, x.id, x.title) }} title="{who ? `${who.title} · ` : ''}{sessionTitle(x.title)} · {ACTIVITY_LABEL[st]}">
 					{#if app.terminal(x.id)}<span class="tico"><Icon name="terminal" /></span>{:else}<AgentBadge id={x.id} state={st} size={16} />{/if}
 					{#if who}<Handle text={who.text} state={st} />{/if}<span class="t">{sessionTitle(x.title)}</span>
 				</button>

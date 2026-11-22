@@ -285,17 +285,35 @@
 		resizing = true;
 		document.body.style.userSelect = "none";
 	}
+	/** Dragged this far past the narrowest width, letting go folds the sidebar into the rail (as in an editor) */
+	const FOLD_PAST = 80;
+	let foldOnRelease = $state(false);
 	function gripMove(e: PointerEvent) {
 		if (resizing && released(e)) return gripUp(); // let go where no pointerup reached us
-		if (resizing) app.sidebar.setWidth(gripFrom.w + e.clientX - gripFrom.x, false);
+		if (!resizing) return;
+		const want = gripFrom.w + e.clientX - gripFrom.x;
+		foldOnRelease = want < SIDEBAR_W.min - FOLD_PAST;
+		app.sidebar.setWidth(want, false);
 	}
 	function gripUp() {
 		if (!resizing) return;
 		resizing = false;
 		document.body.style.userSelect = "";
+		if (foldOnRelease) {
+			// the width the drag started from stays: unfolding comes back to it, not to the narrowest
+			foldOnRelease = false;
+			app.sidebar.setWidth(gripFrom.w);
+			app.sidebar.toggleCollapsed();
+			return;
+		}
 		app.sidebar.setWidth(app.sidebar.shownWidth()); // persist once, at the end of the drag
 	}
 	function gripKey(e: KeyboardEvent) {
+		if (e.key === "Home" || e.key === "End") {
+			e.preventDefault();
+			app.sidebar.setWidth(e.key === "Home" ? SIDEBAR_W.min : SIDEBAR_W.max);
+			return;
+		}
 		const d = e.key === "ArrowLeft" ? -16 : e.key === "ArrowRight" ? 16 : 0;
 		if (!d) return;
 		e.preventDefault();
@@ -457,7 +475,7 @@
 	<div class="app" data-part="app">
 		<!-- A closed drawer is only slid off screen: `inert` keeps Tab and screen readers out of it too (they walked 14 hidden
 		     controls before reaching the page). Not while a swipe is pulling it in, so it answers the moment it shows. -->
-		<div class="side" inert={viewport.narrow && !app.sidebar.open && swipe === null} bind:this={sideEl} bind:offsetWidth={sideW} class:dragging={swipe !== null} style:translate={swipe !== null ? `${swipe - drawerW}px 0` : undefined} class:open={app.sidebar.open} class:collapsed={app.sidebar.collapsed} class:resizing style:--sidebar-w={app.sidebar.width === null ? undefined : `${app.sidebar.width}px`}>
+		<div class="side" inert={viewport.narrow && !app.sidebar.open && swipe === null} bind:this={sideEl} bind:offsetWidth={sideW} class:dragging={swipe !== null} style:translate={swipe !== null ? `${swipe - drawerW}px 0` : undefined} class:open={app.sidebar.open} class:collapsed={app.sidebar.collapsed} class:resizing class:folding={resizing && foldOnRelease} style:--sidebar-w={app.sidebar.width === null ? undefined : `${app.sidebar.width}px`}>
 			<div class="full"><Sidebar /></div>
 			<div class="rail-slot"><Rail /></div>
 			{#if !app.sidebar.collapsed}
@@ -472,7 +490,7 @@
 					aria-valuemax={SIDEBAR_W.max}
 					aria-valuenow={app.sidebar.width ?? (sideW || app.sidebar.shownWidth())}
 					tabindex="0"
-					title={t("끌어서 너비 조절 · 더블 클릭으로 원래 크기")}
+					title={t("끌어서 너비 조절 · 끝까지 끌면 접기 · 더블 클릭으로 원래 크기")}
 					onpointerdown={gripDown}
 					onpointermove={gripMove}
 					onpointerup={gripUp}
@@ -798,6 +816,10 @@
 		}
 		.grip:focus-visible {
 			outline: none;
+		}
+		/* dragged past the narrowest width: letting go folds it into the rail. The list fades to say so */
+		.side.folding .full {
+			opacity: 0.4;
 		}
 		/* Folding and unfolding cross-fade the two layers while the wrapper's width animates. Both are pinned to the left
 		   edge at their own width, so neither reflows nor slides: the rail used to fill the wrapper and shrink from 288 to
