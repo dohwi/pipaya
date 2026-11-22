@@ -77,7 +77,7 @@
 	<div class="capsule">
 		<!-- the extension parts of the bar move to the graph view's header while it covers this one (GraphView .head) -->
 		{#if !app.graphOpen}<ExtensionMount slot="header.start" />{/if}
-		<button class="tool menu" onclick={() => (app.sidebar.open = true)} aria-label={t("사이드바 열기")} title={t("사이드바 열기") + hint}>
+		<button class="tool menu" onclick={() => (app.sidebar.open = true)} aria-label={t("사이드바 열기")} aria-expanded={app.sidebar.open} aria-controls="app-sidebar" title={t("사이드바 열기") + hint}>
 			<Icon name="sidebar" />
 		</button>
 

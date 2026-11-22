@@ -21,6 +21,7 @@
 	import { dragScroll } from "../../lib/drag-scroll";
 	import { edgeFade } from "../../lib/edge-fade";
 	import { rovingKeys } from "../../lib/roving";
+	import { formatCombo } from "../../lib/keys";
 	import { slidingIndicator } from "../../lib/sliding-indicator";
 	import { tabPanes, type Tab } from "../../lib/nav";
 	import { branchLabel } from "../../lib/projects";
@@ -141,6 +142,8 @@
 		else void app.close(x.id);
 	}
 	const closeLabel = (x: Tab) => (x.kind === "terminal" ? t("터미널 닫기 (셸 종료)") : t("닫기 (/resume 으로 다시 열기)"));
+	/** The front tab's × also names the key that closes it (the key closes the focused pane, so only there) */
+	const closeTip = (x: Tab) => closeLabel(x) + (x.id === activeTab && app.prefs.bindings.closeSession ? ` · ${formatCombo(app.prefs.bindings.closeSession)}` : "");
 
 	let menu: ReturnType<typeof RowMenu> | undefined = $state();
 	let menuId = $state<string | null>(null);
@@ -220,6 +223,13 @@
 		if (r.left < box.left) strip.scrollLeft -= box.left - r.left + 8;
 		else if (r.right > box.right) strip.scrollLeft += r.right - box.right + 8;
 	}
+	/** A double click on the strip's empty part (not a tab, chip, label or button): a new chat where "+" would start one */
+	function blankDouble(e: MouseEvent) {
+		const el = e.target as HTMLElement;
+		if (!app.serverId || el.closest(".tab, .gbox, .lead, button, input")) return;
+		const p = app.tabDir?.path ?? app.workdirAbs;
+		void app.openIn(app.serverId, { workdir: p === app.workspace?.root ? "." : p });
+	}
 	/** The wheel scrolls the strip sideways, as in an editor. */
 	function wheel(e: WheelEvent) {
 		if (!strip || e.ctrlKey || strip.scrollWidth <= strip.clientWidth || Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return;
@@ -287,14 +297,16 @@
 					{#if who}<Handle text={who.text} state={st} />{/if}<span class="t">{titleOf(x)}</span>{#if parentOf(x)}{@const pl = parentOf(x)!}<span class="from mono" title={pl.title}><Icon name="fork" /><span class="fn">{pl.text}</span></span>{/if}
 				{/if}
 				{#if x.kind === "group"}<span class="n mono">{x.members.length}</span>{/if}
-				{#if x.kind !== "group"}<button class="x tap" onpointerdown={(e) => e.stopPropagation()} onclick={(e) => (e.stopPropagation(), close(x))} aria-label={closeLabel(x)} title={closeLabel(x)}><Icon name="x" /></button>{/if}
+				{#if x.kind !== "group"}<button class="x tap" onpointerdown={(e) => e.stopPropagation()} onclick={(e) => (e.stopPropagation(), close(x))} aria-label={closeLabel(x)} title={closeTip(x)}><Icon name="x" /></button>{/if}
 			</div>
 {/snippet}
 
 {#if app.serverId && app.net !== "idle"}
-	<div class="bar" data-part="tabbar" class:solo={tabs.length <= 1 && tabs[0]?.kind !== "group"} class:group={app.activeTab?.tab.kind === "group"} use:dropTarget={stripTarget}>
+	<!-- a double click on the bar's empty part starts a new chat in this folder, as in a browser's tab strip -->
+	<!-- svelte-ignore a11y_no_static_element_interactions -->
+	<div class="bar" data-part="tabbar" class:solo={tabs.length <= 1 && tabs[0]?.kind !== "group"} class:group={app.activeTab?.tab.kind === "group"} use:dropTarget={stripTarget} ondblclick={blankDouble}>
 		<!-- svelte-ignore a11y_no_static_element_interactions -->
-		<div class="tabs" role="tablist" aria-label={t("탭")} bind:this={strip} onwheel={wheel} onfocusin={reveal} use:rovingKeys={{ item: '[role="tab"]' }} use:dragScroll use:edgeFade use:slidingIndicator={{ selector: ".tab.on, .gchip.on" }}>
+		<div class="tabs" role="tablist" aria-label={t("탭")} bind:this={strip} onwheel={wheel} onfocusin={reveal} use:rovingKeys={{ item: '[role="tab"], .gchip' }} use:dragScroll use:edgeFade use:slidingIndicator={{ selector: ".tab.on, .gchip.on" }}>
 			{#each tabs as x (x.id)}
 				{@const on = x.id === activeTab}
 				{@const st = stateOf(x)}
