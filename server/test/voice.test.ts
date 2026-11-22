@@ -91,7 +91,10 @@ describe("voice settings", () => {
 	test("starts off and unset, and never returns the key", async () => {
 		const { status, json } = await api("GET", "/voice");
 		expect(status).toBe(200);
-		expect(json.settings).toEqual({ enabled: false, baseUrl: "", path: "", model: "", language: "" });
+		expect(json.settings).toEqual({
+			enabled: false, baseUrl: "", path: "", model: "", language: "", mode: "file",
+			realtime: { url: "", model: "gpt-realtime-2.1", transcribeModel: "gpt-live-transcribe", keywords: [], prompt: "" },
+		});
 		expect(json.hasKey).toBe(false);
 		expect(json.endpoint).toBeNull();
 		// no test has run: every device reads "untested" from the server, not from its own storage

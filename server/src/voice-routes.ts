@@ -7,7 +7,7 @@ import type { SqliteCredentialStore } from "./store.ts";
 import type { TypeBoxProvider } from "./typebox-provider.ts";
 import {
 	DEFAULT_PATH, DEFAULT_VOICE_SETTINGS, MAX_AUDIO_BYTES, TIMEOUT_MS, VOICE_CREDENTIAL_ID, VoiceSettingsBody, VoiceSettingsResult,
-	type VoiceSettings, type VoiceSettingsValue, endpointOf, usesLanguagesList,
+	VOICE_REALTIME_CREDENTIAL_ID, type VoiceSettings, type VoiceSettingsValue, endpointOf, realtimeSocketOf, usesLanguagesList,
 } from "./voice-input.ts";
 
 /** What the transcription endpoint answered, once it is known to be a usable answer. */
@@ -169,10 +169,17 @@ export async function audioPart(form: FormData): Promise<{ bytes: Uint8Array; ty
 	return { bytes, type, name: `voice.${extension}` };
 }
 
-export function registerVoiceRoutes(server: FastifyInstance, settings: VoiceSettings, credentials: SqliteCredentialStore, bus: EventBus): void {
+/** The realtime mode's connection test (see `probeRealtime`), given by the app; absent means the mode cannot be tested. */
+export type RealtimeProbe = (settings: Required<VoiceSettingsValue>, key: string) => Promise<void>;
+
+export function registerVoiceRoutes(server: FastifyInstance, settings: VoiceSettings, credentials: SqliteCredentialStore, bus: EventBus, probe?: RealtimeProbe): void {
 	const app = server.withTypeProvider<TypeBoxProvider>();
 	const keyOf = async (): Promise<string> => {
 		const credential = await credentials.read(VOICE_CREDENTIAL_ID);
+		return credential?.type === "api_key" ? credential.key ?? "" : "";
+	};
+	const realtimeKeyOf = async (): Promise<string> => {
+		const credential = await credentials.read(VOICE_REALTIME_CREDENTIAL_ID);
 		return credential?.type === "api_key" ? credential.key ?? "" : "";
 	};
 	const view = async () => {
@@ -181,6 +188,8 @@ export function registerVoiceRoutes(server: FastifyInstance, settings: VoiceSett
 		return {
 			settings: current,
 			hasKey: (await keyOf()).length > 0,
+			hasRealtimeKey: (await realtimeKeyOf()).length > 0,
+			realtimeEndpoint: realtimeSocketOf(current.realtime),
 			defaults: DEFAULT_VOICE_SETTINGS(),
 			defaultPath: DEFAULT_PATH,
 			endpoint: endpointOf(current),
@@ -199,6 +208,11 @@ export function registerVoiceRoutes(server: FastifyInstance, settings: VoiceSett
 				const key = req.body.apiKey.trim();
 				if (key) await credentials.modify(VOICE_CREDENTIAL_ID, async () => ({ type: "api_key", key }));
 				else await credentials.delete(VOICE_CREDENTIAL_ID);
+			}
+			if (req.body.realtimeApiKey !== undefined) {
+				const key = req.body.realtimeApiKey.trim();
+				if (key) await credentials.modify(VOICE_REALTIME_CREDENTIAL_ID, async () => ({ type: "api_key", key }));
+				else await credentials.delete(VOICE_REALTIME_CREDENTIAL_ID);
 			}
 			// any change of address, path, model, language or key invalidates the test
 			settings.clearTest();
@@ -244,9 +258,13 @@ export function registerVoiceRoutes(server: FastifyInstance, settings: VoiceSett
 		handler: async (req) => {
 			const controller = new AbortController();
 			req.raw.on("close", () => { if (!req.raw.complete) controller.abort(); });
-			let text: string;
+			let text = "";
+			const current = settings.get();
 			try {
-				text = await transcribe({ settings: settings.get(), key: await keyOf(), audio: { bytes: SILENCE_WAV, type: "audio/wav", name: "test.wav" }, signal: controller.signal });
+				if (current.mode === "realtime") {
+					if (!probe) throw new HttpError(400, "not_configured", "this server cannot test the realtime mode");
+					await probe(current, await realtimeKeyOf());
+				} else text = await transcribe({ settings: current, key: await keyOf(), audio: { bytes: SILENCE_WAV, type: "audio/wav", name: "test.wav" }, signal: controller.signal });
 			} catch (cause) {
 				const reason = cause instanceof HttpError ? cause.code : "upstream_error";
 				settings.setTest({ ok: false, at: Date.now(), reason });

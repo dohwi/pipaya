@@ -17,6 +17,7 @@
 	import { abortable } from "../../lib/abortable";
 	import { recentreOn } from "../../lib/dialog";
 	import { Api, errorText } from "../../lib/api";
+	import { keepDraft } from "../../lib/settings-drafts.svelte";
 	import { t } from "../../lib/i18n";
 	import { fullTime, shortDate } from "../../lib/format";
 	import { nameInLang } from "../../lib/member-names";
@@ -125,6 +126,8 @@
 		revive: boolean;
 	};
 	let form = $state<Form | null>(null);
+	// a half-filled schedule survives leaving the section or Settings
+	keepDraft(() => `schedule:${serverId}`, () => form, (f) => (form = f));
 	let formError = $state("");
 	/** A neutral line above a form that is not wrong yet (scheduling a past task again). */
 	let formNote = $state("");

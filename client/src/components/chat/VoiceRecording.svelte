@@ -107,7 +107,7 @@
 	{#if voice.recording}
 		<span class="mark"><span class="dot" aria-hidden="true"></span></span>
 		<span class="meta">
-			<span class="label">{t("녹음 중")}</span>
+			<span class="label">{voice.realtime ? t("실시간 받아쓰기") : t("녹음 중")}</span>
 			<span class="time" aria-label={t("녹음 중 {time}", { time: formatTime(voice.elapsed) })}>{formatTime(voice.elapsed)}</span>
 		</span>
 		<canvas bind:this={canvas} class="wave" aria-hidden="true"></canvas>

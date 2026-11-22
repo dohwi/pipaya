@@ -16,6 +16,7 @@
 	import { abortable } from "../../lib/abortable";
 	import { recentreOn } from "../../lib/dialog";
 	import { errorText, type Api } from "../../lib/api";
+	import { keepDraft } from "../../lib/settings-drafts.svelte";
 	import { t } from "../../lib/i18n";
 	import { reflow, rowIn, rowOut } from "../../lib/motion";
 	import { app } from "../../lib/store.svelte";
@@ -73,6 +74,8 @@
 	/* ---------- form ---------- */
 	type Form = { original: string | null; name: string; transport: "stdio" | "http"; command: string; args: string; env: string; url: string; headers: string };
 	let form = $state<Form | null>(null);
+	// a half-filled add or edit form survives leaving the section or Settings (per server: the panel's own api)
+	keepDraft(() => `mcp:${api.baseUrl}`, () => form, (f) => (form = f));
 
 	const lines = (s: string) => s.split("\n").map(l => l.trim()).filter(Boolean);
 	const pairs = (s: string, sep: string): Record<string, string> => {

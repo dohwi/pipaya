@@ -18,6 +18,7 @@
 	import { takesTier, tierLabel } from "../../lib/service-tier";
 	import { modelDisplayName } from "../../lib/model-name";
 	import { flash } from "../../lib/settings-focus";
+	import { keepDraft } from "../../lib/settings-drafts.svelte";
 	import type {
 		ConfigurationInfo,
 		ConnectionResult,
@@ -54,6 +55,8 @@
 	let tests = $state<Record<string, ConnectionResult | "running">>({});
 	let keyFor = $state<string | null>(null);
 	let keyValue = $state("");
+	// a key typed for a connection and not saved yet survives leaving the section or Settings
+	keepDraft(() => `provider-key:${serverId}`, () => (keyFor && keyValue ? { keyFor, keyValue } : null), (d) => ({ keyFor, keyValue } = d));
 
 	/** The "add connection" picker, and a counter that makes the signed-in account list reload after it changes something. */
 	let picking = $state(false);

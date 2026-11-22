@@ -246,6 +246,29 @@
 		voiceEnter = !focused;
 	});
 
+	// Live dictation: the words heard so far replace the tail after the text the recording started from, so each word
+	// appears as it is spoken and a corrected word changes in place. When it ends the text simply stays.
+	let liveBase: { before: string; after: string } | null = null;
+	$effect(() => {
+		const live = app.liveText;
+		const mine = !!live && live.paneId === (pane.id ?? "");
+		if (!mine) {
+			liveBase = null;
+			return;
+		}
+		if (!liveBase) {
+			const current = untrack(() => text);
+			const at = untrack(() => (ta && document.activeElement === ta ? (ta.selectionStart ?? current.length) : current.length));
+			liveBase = { before: current.slice(0, at), after: current.slice(at) };
+		}
+		const said = live!.text;
+		const pre = liveBase.before && said && !/\s$/.test(liveBase.before) ? " " : "";
+		const head = liveBase.before + pre + said;
+		text = head + liveBase.after;
+		caret = head.length;
+		voiceEnter = true;
+	});
+
 	// A transcript landed in an input that has no focus: a bare Enter anywhere (nothing else focused) sends it, as if the
 	// input were focused. Any other key, typing or focusing the input ends this.
 	let voiceEnter = false;
@@ -770,7 +793,7 @@
 			<FileStrip files={attached.files} onremove={(id) => attached.removeFile(id)} />
 		{/if}
 
-		<div class="field-wrap" class:calm={voiceActive && !!text}>
+		<div class="field-wrap" class:calm={voiceActive && !!text && !voice.realtime}>
 		{#if promptHint && !voiceActive}
 			<div class="prompt-hint" aria-hidden="true" title={promptHint}>↑ {promptHint}</div>
 		{/if}
@@ -791,7 +814,7 @@
 			oncompositionend={onCompositionEnd}
 			rows="1"
 			readonly={voiceActive}
-			placeholder={promptHint ? "" : voice.recording && voiceActive ? t("말씀하세요… 끝나면 ✓를 누르세요") : voiceActive ? t("글로 바꾸는 중…") : running ? runningHint : t("에이전트에게 메시지 보내기 · / 명령")}
+			placeholder={promptHint ? "" : voice.recording && voiceActive ? (voice.realtime ? t("말씀하세요… 말하는 대로 글이 들어갑니다") : t("말씀하세요… 끝나면 ✓를 누르세요")) : voiceActive ? t("글로 바꾸는 중…") : running ? runningHint : t("에이전트에게 메시지 보내기 · / 명령")}
 			aria-label={running ? runningHint : t("에이전트에게 메시지 보내기 · / 명령")}
 			enterkeyhint="enter"
 			autocapitalize="sentences"

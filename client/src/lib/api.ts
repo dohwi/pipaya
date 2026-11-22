@@ -62,12 +62,29 @@ export interface VoiceSettings {
 	path: string;
 	model: string;
 	language: string;
+	/** `file`: upload once the recording ends; `realtime`: stream through a chat connection's Realtime API. Absent on an older server. */
+	mode?: "file" | "realtime";
+	realtime?: RealtimeVoiceSettings;
+}
+
+/** The realtime mode's connection and hints (server/src/voice-input.ts `RealtimeSettingsSchema`). */
+export interface RealtimeVoiceSettings {
+	/** The Realtime API address, e.g. wss://api.openai.com/v1/realtime */
+	url: string;
+	model: string;
+	transcribeModel: string;
+	keywords: string[];
+	prompt: string;
 }
 
 /** What GET/PUT /voice answers: the settings, whether a key is stored, and the last connection test (kept on the server). */
 export interface VoiceView {
 	settings: VoiceSettings;
 	hasKey: boolean;
+	/** The realtime mode has its own key stored. Absent on an older server. */
+	hasRealtimeKey?: boolean;
+	/** The socket the realtime mode would open, or null while its address is unset. */
+	realtimeEndpoint?: string | null;
 	defaults: VoiceSettings;
 	defaultPath: string;
 	endpoint: string | null;
@@ -295,8 +312,9 @@ export class Api {
 
 	/* ---------- voice input (server/src/voice-routes.ts) ---------- */
 	voice = (signal?: AbortSignal) => this.req<VoiceView>("GET", "/voice", undefined, signal);
-	saveVoice = (settings: VoiceSettings, apiKey: string | undefined, signal?: AbortSignal) =>
-		this.req<VoiceView>("PUT", "/voice", apiKey === undefined ? { settings } : { settings, apiKey }, signal);
+	/** A key left undefined keeps the stored one; "" removes it. */
+	saveVoice = (settings: VoiceSettings, apiKey: string | undefined, signal?: AbortSignal, realtimeApiKey?: string) =>
+		this.req<VoiceView>("PUT", "/voice", { settings, ...(apiKey === undefined ? {} : { apiKey }), ...(realtimeApiKey === undefined ? {} : { realtimeApiKey }) }, signal);
 	/** One recording in, its text out. The recording goes up as the browser made it (webm, mp4, ogg). */
 	async transcribe(blob: Blob, language: string, signal?: AbortSignal): Promise<string> {
 		const form = new FormData();

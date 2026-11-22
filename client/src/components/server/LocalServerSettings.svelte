@@ -1,5 +1,6 @@
 <script lang="ts">
 	import Notice from "../ui/Notice.svelte";
+	import { settingsDrafts } from "../../lib/settings-drafts.svelte";
 	import { onMount } from "svelte";
 	import Button from "../ui/Button.svelte";
 	import Switch from "../ui/Switch.svelte";
@@ -26,9 +27,19 @@
 		if (!b) return;
 		available = true;
 		saved = b;
-		shared = !!b.host;
-		host = b.host;
-		port = b.port ? String(b.port) : "";
+		// an unapplied change from an earlier visit wins over the applied values
+		const kept = settingsDrafts.get<{ shared: boolean; host: string; port: string }>("local-bind");
+		if (kept) ({ shared, host, port } = kept);
+		else {
+			shared = !!b.host;
+			host = b.host;
+			port = b.port ? String(b.port) : "";
+		}
+	});
+	$effect(() => {
+		if (!available) return;
+		if (dirty) settingsDrafts.set("local-bind", { shared, host, port });
+		else settingsDrafts.clear("local-bind");
 	});
 
 	async function apply() {

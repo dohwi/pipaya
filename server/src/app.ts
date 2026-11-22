@@ -24,6 +24,8 @@ import { IMAGE_TOOL, ImageModelSettings } from "./image-generation.ts";
 import { registerImageModelRoutes } from "./image-model-routes.ts";
 import { VoiceSettings } from "./voice-input.ts";
 import { registerVoiceRoutes } from "./voice-routes.ts";
+import { probeRealtime, REALTIME_SOCKET, registerRealtimeVoice, type RealtimeTarget } from "./voice-realtime.ts";
+import { realtimeSocketOf, VOICE_REALTIME_CREDENTIAL_ID, type RealtimeSettingsValue } from "./voice-input.ts";
 import { ExtensionSettings } from "./extension-settings.ts";
 import { registerExtensionSettingsRoutes } from "./extension-settings-routes.ts";
 import { ClientSettings } from "./client-settings.ts";
@@ -100,6 +102,8 @@ export interface BuildOptions {
 	mobileDelayMs?: number;
 	/** WebSocket heartbeat and slow-client limits (tests shorten them) */
 	websocket?: WebSocketOptions;
+	/** Tests: how the realtime voice relay opens its upstream socket. */
+	realtimeConnect?: (url: string, key: string) => WebSocket;
 	/** Directories scanned for server extensions (tests); defaults to `<dataDir>/extensions` and `~/.agents/extensions`. */
 	extensionDirs?: string[];
 	/** Extra extension files or folders to load. */
@@ -352,7 +356,7 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 			return new HttpError(401, "unauthorized", "missing or invalid token");
 		};
 		// Browser EventSource/WebSocket cannot set headers. REST requires a Bearer header.
-		const browserStream = req.method === "GET" && (path === "/ws" || path === "/events" || TERMINAL_SOCKET.test(path ?? "") || /^\/sessions\/[^/]+\/events$/.test(path ?? ""));
+		const browserStream = req.method === "GET" && (path === "/ws" || path === "/events" || path === REALTIME_SOCKET || TERMINAL_SOCKET.test(path ?? "") || /^\/sessions\/[^/]+\/events$/.test(path ?? ""));
 		const query = browserStream ? (req.query as { token?: string; ticket?: string } | undefined) : undefined;
 		let device: string | null;
 		if (bearer === undefined && typeof query?.ticket === "string") {
@@ -392,7 +396,7 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 	extensions.attachServer({
 		request: async ({ extension, method, url, body, signal }) => {
 			const path = url.split("?")[0] ?? "";
-			if (path === "/ws" || path === "/events" || TERMINAL_SOCKET.test(path) || /^\/sessions\/[^/]+\/events$/.test(path)) throw new Error(`${path} is a stream; use pi.subscribe for events`);
+			if (path === "/ws" || path === "/events" || path === REALTIME_SOCKET || TERMINAL_SOCKET.test(path) || /^\/sessions\/[^/]+\/events$/.test(path)) throw new Error(`${path} is a stream; use pi.subscribe for events`);
 			server.log.info({ extension, method, url: redactUrl(url) }, "extension api request");
 			const res = await server.inject({
 				method, url, signal,
@@ -709,7 +713,18 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 	sessions.setScheduler(scheduler);
 	registerSystemModelRoutes(server, systemModel, bus, () => sessions.describeAll());
 	registerImageModelRoutes(server, imageModel, bus);
-	registerVoiceRoutes(server, voice, credentials, bus);
+	// Realtime voice input: its own address and key (Settings > Voice), so any OpenAI-compatible Realtime server works.
+	const realtimeTarget = async (rt: RealtimeSettingsValue): Promise<RealtimeTarget | { error: string }> => {
+		const url = realtimeSocketOf(rt);
+		if (!url) return { error: "set the Realtime API address" };
+		const credential = await credentials.read(VOICE_REALTIME_CREDENTIAL_ID);
+		return { url, key: credential?.type === "api_key" ? credential.key ?? "" : "" };
+	};
+	registerVoiceRoutes(server, voice, credentials, bus, async (current) => {
+		const target = await realtimeTarget(current.realtime);
+		if ("error" in target) throw new HttpError(400, "not_configured", target.error);
+		await probeRealtime(target, current.realtime, current.language, opts.realtimeConnect);
+	});
 	registerFsRoutes(server, () => configuration.defaultWorkdir(), cfg.restrictWorkspace ? cfg.workspaceRoot : undefined);
 	registerFileRoutes(server, (id) => { const r = store.get(id); return r ? [...new Set([workDirOf(r), r.cwd])] : undefined; });
 	// A group the client named by default gets a better name from the system model, unless someone renamed it meanwhile.
@@ -738,6 +753,8 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 	registerLocaleRoutes(server, new LocaleStore(cfg.dataDir), bus);
 	await registerWebSocket(server, { bus, sessions, questions }, opts.websocket);
 	registerTerminalRoutes(server, terminals);
+	// Realtime voice input borrows a chat connection's address and key (the Realtime API lives next to its chat API).
+	registerRealtimeVoice(server, voice, realtimeTarget, opts.realtimeConnect);
 
 	await extensions.load();
 	mcp.start();
