@@ -17,6 +17,46 @@ export const MAX_DELEGATES_PER_RUN = 12;
 /** Model calls a subagent may use when its definition says nothing, and the most a definition may ask for. */
 export const DEFAULT_SUBAGENT_TURNS = 12;
 export const MAX_SUBAGENT_TURNS = 30;
+/** `delegate` is for short, one-off work; longer jobs have their own session via `peer`. */
+export const SUBAGENT_TIMEOUT_MS = 5 * 60_000;
+export const SUBAGENT_ABORT_GRACE_MS = 3_000;
+
+/** Time left for reporting when a tool-using turn finishes. Do not interrupt a running tool merely to report. */
+export const subagentReportReserveMs = (timeoutMs: number) => Math.min(30_000, timeoutMs / 5);
+
+/** Stop the work on expiry or parent cancellation; do not block the parent if the work ignores abort. */
+export async function runDelegateWithinDeadline(
+	run: () => Promise<void>, abort: () => void, parentSignal: AbortSignal | undefined, timeoutMs: number, graceMs = SUBAGENT_ABORT_GRACE_MS,
+): Promise<"finished" | "deadline" | "cancelled"> {
+	type Stop = "deadline" | "cancelled";
+	let stopped: Stop | undefined;
+	let grace: ReturnType<typeof setTimeout> | undefined;
+	let detach!: (reason: Stop) => void;
+	const abandoned = new Promise<Stop>((resolve) => { detach = resolve; });
+	const stop = (reason: Stop) => {
+		if (stopped) return;
+		stopped = reason;
+		abort();
+		grace = setTimeout(() => detach(reason), graceMs);
+		grace.unref?.();
+	};
+	const cancel = () => stop("cancelled");
+	if (parentSignal?.aborted) return "cancelled";
+	parentSignal?.addEventListener("abort", cancel, { once: true });
+	const timer = setTimeout(() => stop("deadline"), timeoutMs);
+	timer.unref?.();
+	try {
+		// Keep handlers on the actual run even after detaching so late completion or rejection cannot leak.
+		return await Promise.race([abandoned, run().then(() => stopped ?? "finished", (error) => {
+			if (!stopped) throw error;
+			return stopped;
+		})]);
+	} finally {
+		clearTimeout(timer);
+		clearTimeout(grace);
+		parentSignal?.removeEventListener("abort", cancel);
+	}
+}
 /** Tools a subagent never gets, whatever its definition lists: it must not delegate again (depth 1), ask the user, reach other sessions or schedule prompts. */
 const FORBIDDEN = (n: string) => n === "delegate" || n === "ask_user" || n === "peer" || n.startsWith("peer_") || n === "schedule";
 export const DEFAULT_SUBAGENT_TOOLS = ["read", "grep", "ls"];
@@ -141,7 +181,7 @@ export const subagentSystem = (def: SubagentDef, cwd: string) =>
 
 export const SUBAGENT_WRAP_UP = "This is your final model call. No tools are available. Return a concise answer based only on the evidence already available. Say what you verified, what remains unverified, and what the calling agent should do next if the work is incomplete. Do not imply that you performed work that you could not do.";
 
-export type SubagentLimit = "maxTurns" | "repeatedTools";
+export type SubagentLimit = "maxTurns" | "repeatedTools" | "deadline";
 
 /** Only detect a repeated successful built-in read with unchanged text output. Stateful tools and batches keep the normal budget. */
 export function repeatedReadSignature({ message, toolResults }: AgentTurnContext, readOnly: ReadonlySet<string>): string | undefined {
@@ -162,16 +202,18 @@ export function finalText(messages: readonly AgentMessage[]): { text: string; er
 }
 
 /** Fallback for an empty or failed wrap-up: preserve earlier text without exposing raw tool results. */
-export function subagentReport(messages: readonly AgentMessage[], limit: SubagentLimit, turns: number, maxRepeated: number): string {
+export function subagentReport(messages: readonly AgentMessage[], limit: SubagentLimit, { turns, maxRepeated, timeoutMs, timedOut }: { turns: number; maxRepeated: number; timeoutMs: number; timedOut: boolean }): string {
 	const last = messages.findLast((m) => m.role === "assistant");
 	const { text, error } = finalText(messages);
 	const askedForTools = last?.content.some((c) => c.type === "toolCall");
-	const reason = limit === "maxTurns" ? `the ${turns}-call model budget was reached (maxTurns)` : `the same read-only tool call returned unchanged results ${maxRepeated} times in a row`;
+	const reason = limit === "maxTurns" ? "the model call budget was reached (maxTurns)"
+		: limit === "repeatedTools" ? `the same read-only tool call returned unchanged results ${maxRepeated} times in a row`
+		: `the ${timeoutMs / 1000}s time limit was ${timedOut ? "reached" : "nearly reached"}`;
 	const note = `[Subagent ended after ${turns} model call${turns === 1 ? "" : "s"}: ${reason}. The answer may be incomplete.]`;
-	if (text && !error && !askedForTools) return `${text}\n\n${note}`;
+	if (!timedOut && text && !error && !askedForTools) return `${text}\n\n${note}`;
 	const assistants = messages.filter((m) => m.role === "assistant");
 	const earlier = (!error && text) || assistants.slice(0, -1).map((m) => finalText([m])).findLast((m) => m.text && !m.error)?.text;
-	const problem = error ? "The final model call failed." : askedForTools ? "The final model call requested unavailable tools." : "The final model call returned no text.";
+	const problem = timedOut ? "The subagent did not finish before the deadline." : error ? "The final model call failed." : askedForTools ? "The final model call requested unavailable tools." : "The final model call returned no text.";
 	return `${note}\n${problem}${earlier ? `\n\nPartial assistant text (not a final answer):\n${earlier}` : ""}`;
 }
 

@@ -32,7 +32,7 @@ import { IMAGE_TOOL, imageTool, type ImageModelSettings } from "./image-generati
 import { fitImagesInContext } from "./image-guard.ts";
 import { describeTools, enabledTools, planTools } from "./tool-plan.ts";
 import { afterTurn, isEmptyFailedReply, runawayReason, type RunStopCause } from "./run-guard.ts";
-import { chooseModel, DelegateLimits, finalText, freeRole, repeatedReadSignature, subagentReport, subagentUsage, loadSubagents, SUBAGENT_NAME, SUBAGENT_WRAP_UP, subagentSystem, type SubagentDef, type SubagentLimit } from "./subagents.ts";
+import { chooseModel, DelegateLimits, finalText, freeRole, repeatedReadSignature, runDelegateWithinDeadline, subagentReport, subagentReportReserveMs, subagentUsage, loadSubagents, SUBAGENT_NAME, SUBAGENT_TIMEOUT_MS, SUBAGENT_WRAP_UP, subagentSystem, type SubagentDef, type SubagentLimit } from "./subagents.ts";
 import { classifyUpstreamError, DEFAULT_UPSTREAM_RETRY, logUnknownUpstreamError, retryReason, sleepAbortable, STREAM_RETRY, withUpstreamRetry } from "./upstream-retry.ts";
 import { autoTitle, DESCRIBE_MAX_TOKENS, DESCRIBE_SYSTEM, describeRequest, parseDescription, type SystemModelSettings } from "./system-model.ts";
 
@@ -167,6 +167,7 @@ export class SessionManager {
 		private delegatePolicy: () => DelegatePolicyValue = () => DEFAULT_DELEGATE_POLICY,
 		/** Subagent roles the user switched off (`scope/name`); `delegate` treats them as missing. */
 		private disabledSubagents: () => string[] = () => [],
+		private delegateTimeoutMs = SUBAGENT_TIMEOUT_MS,
 	) {
 		this.sweeper = setInterval(() => this.evictIdle(), 5 * 60_000);
 		this.sweeper.unref?.();
@@ -1384,14 +1385,16 @@ export class SessionManager {
 		const readOnly = new Set(names.filter((n) => (n === "read" || n === "grep" || n === "ls") && defs2[n] === TOOL_DEFS[n]));
 		let turns = 0, repeatCount = 0;
 		let lastRead: string | undefined, limit: SubagentLimit | undefined;
+		let startedAt = 0, stopping = false;
 		const agent = new Agent({
 			initialState: { systemPrompt: subagentSystem(def, workDirOf(rec)) + (oneCall ? `\n\n${SUBAGENT_WRAP_UP}` : ""), model, thinkingLevel: this.subagentThinking(rec, def.thinking, provider, modelId), tools: oneCall ? [] : tools, messages: [] },
 			streamFn: withUpstreamRetry((m, ctx, opts) => streamAtTier(this.registry, m, ctx, opts, tier), DEFAULT_UPSTREAM_RETRY),
-			prepareRequest: () => { turns++; },
+			prepareRequest: (_request, requestSignal) => { requestSignal?.throwIfAborted(); turns++; },
 			prepareNextTurnWithContext: (turn) => {
 				if (repeatCount >= MAX_REPEATED_CALLS) limit = "repeatedTools";
 				else if (turns >= cap - 1) limit = "maxTurns";
-				if (!limit) return;
+				else if (performance.now() - startedAt >= this.delegateTimeoutMs - subagentReportReserveMs(this.delegateTimeoutMs)) limit = "deadline";
+				if (!limit || stopping) return;
 				progress(`${def.name}: reporting partial results`);
 				// The loop syncs tool declarations from this context before the provider request.
 				return { context: { ...turn.context, tools: [] }, messages: [{ role: "system", content: SUBAGENT_WRAP_UP, timestamp: Date.now() }] };
@@ -1406,27 +1409,30 @@ export class SessionManager {
 				repeatCount = !read ? 0 : read === lastRead ? repeatCount + 1 : 1;
 				lastRead = read;
 			},
-			beforeToolCall: async (c) => this.extensionToolCall(sessionId, c),
-			afterToolCall: async (c) => this.extensionToolResult(sessionId, c),
+			beforeToolCall: async (c) => stopping ? { block: true, reason: "The subagent was stopped" } : this.extensionToolCall(sessionId, c),
+			afterToolCall: async (c) => { if (!stopping) return this.extensionToolResult(sessionId, c); },
 		});
-		const stop = () => agent.abort();
 		agent.subscribe((e) => {
-			if (e.type === "tool_execution_start" && !limit && !oneCall) progress(`${def.name}: ${e.toolName}`);
+			if (e.type === "tool_execution_start" && !stopping && !limit && !oneCall) progress(`${def.name}: ${e.toolName}`);
 		});
+		if (signal?.aborted) throw new Error("delegate aborted");
 		const release = this.delegates.acquire(sessionId, { calls: pol.maxCalls, running: pol.maxConcurrent });
-		try {
-			signal?.addEventListener("abort", stop, { once: true });
-			if (!signal?.aborted) await agent.prompt(input.task);
-			if (signal?.aborted) throw new Error("delegate aborted");
-			const messages = agent.state.messages;
-			const { text: answer, error } = finalText(messages);
-			if (error && !limit) throw new Error(`subagent ${def.name} failed: ${error}`);
-			const text = limit ? subagentReport(messages, limit, turns, MAX_REPEATED_CALLS) : answer || "(the subagent returned no text)";
-			return { content: [{ type: "text" as const, text }], details: { role: def.name, model: `${provider}/${modelId}`, thinking: agent.state.thinkingLevel, turns, limited: !!limit, ...(limit && { limit }), usage: subagentUsage(messages), task: input.task.slice(0, 500) } };
-		} finally {
-			signal?.removeEventListener("abort", stop);
-			release();
-		}
+		startedAt = performance.now();
+		const outcome = await runDelegateWithinDeadline(
+			async () => {
+				// A detached tool still occupies a slot until it settles; retries must not pile up stuck work.
+				try { await agent.prompt(input.task); } finally { release(); }
+			},
+			() => { stopping = true; agent.abort(); }, signal, this.delegateTimeoutMs,
+		);
+		if (outcome === "cancelled" || signal?.aborted) throw new Error("delegate aborted");
+		const timedOut = outcome === "deadline";
+		if (timedOut) limit = "deadline";
+		const messages = agent.state.messages;
+		const { text: answer, error } = finalText(messages);
+		if (error && !limit) throw new Error(`subagent ${def.name} failed: ${error}`);
+		const text = limit ? subagentReport(messages, limit, { turns, maxRepeated: MAX_REPEATED_CALLS, timeoutMs: this.delegateTimeoutMs, timedOut }) : answer || "(the subagent returned no text)";
+		return { content: [{ type: "text" as const, text }], details: { role: def.name, model: `${provider}/${modelId}`, thinking: agent.state.thinkingLevel, turns, durationMs: Math.round(performance.now() - startedAt), limited: !!limit, ...(limit && { limit }), usage: subagentUsage(messages), task: input.task.slice(0, 500) } };
 	}
 
 	/** Stops a run that has gone past the turn budget or keeps issuing the identical tool call. */

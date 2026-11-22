@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { buildApp } from "../src/app.ts";
 import { buildTools, modelList } from "../src/tools.ts";
 import { readFileSync } from "node:fs";
-import { chooseModel, DEFAULT_SUBAGENT_TURNS, DelegateLimits, freeRole, subagentUsage, listSubagents, loadSubagents, removeSubagent, saveSubagent } from "../src/subagents.ts";
+import { chooseModel, DEFAULT_SUBAGENT_TURNS, DelegateLimits, freeRole, subagentUsage, listSubagents, loadSubagents, removeSubagent, runDelegateWithinDeadline, saveSubagent } from "../src/subagents.ts";
 import { ECHO_MODEL, echoProviderBody, startEchoUpstream } from "./support/openai-upstream.ts";
 
 const def = (dir: string, name: string, front: string, body = "Be brief.") => {
@@ -101,6 +101,34 @@ describe("DelegateLimits", () => {
 	});
 });
 
+describe("delegate deadline", () => {
+	test("skips already cancelled work and does not abort finished or failed work later", async () => {
+		const parent = new AbortController();
+		let aborted = 0;
+		const abort = () => { aborted++; };
+		expect(await runDelegateWithinDeadline(async () => {}, abort, parent.signal, 15)).toBe("finished");
+		await expect(runDelegateWithinDeadline(async () => { throw new Error("original failure"); }, abort, parent.signal, 15)).rejects.toThrow("original failure");
+		parent.abort();
+		expect(await runDelegateWithinDeadline(async () => { throw new Error("should not start"); }, abort, parent.signal, 15)).toBe("cancelled");
+		await Bun.sleep(30);
+		expect(aborted).toBe(0);
+	});
+
+	test("returns after the grace period if work ignores abort, without releasing its slot or leaking a late rejection", async () => {
+		const limits = new DelegateLimits({ calls: 4, running: 1 });
+		const release = limits.acquire("session");
+		let rejectWork!: (error: Error) => void;
+		const pending = new Promise<void>((_, reject) => { rejectWork = reject; }).finally(release);
+		let aborted = 0;
+		expect(await runDelegateWithinDeadline(() => pending, () => { aborted++; }, undefined, 15, 15)).toBe("deadline");
+		expect(aborted).toBe(1);
+		expect(() => limits.acquire("session")).toThrow(/wait for one to finish/);
+		rejectWork(new Error("late failure"));
+		await Bun.sleep(0);
+		limits.acquire("session")();
+	});
+});
+
 describe("chooseModel", () => {
 	test("defined: the role's model only; allowlist: listed models only; any: whatever is asked", () => {
 		const d = { policy: "defined" as const, models: [] };
@@ -154,6 +182,7 @@ describe("delegate tool", () => {
 	const taskOf = (body: any) => textOf(body?.messages?.find((m: any) => m.role === "user")?.content);
 	const budgetRequests = (variant: string) => upstream.requests.map((r) => r.body).filter((b) => taskOf(b) === budgetTask(variant));
 	let startReport: (() => void) | undefined, unblockReport: (() => void) | undefined;
+	const timeoutMs = 2500;
 	beforeAll(async () => {
 		dir = mkdtempSync(join(tmpdir(), "pipaya-delegate-"));
 		mkdirSync(join(dir, "ws"), { recursive: true });
@@ -168,15 +197,17 @@ describe("delegate tool", () => {
 			const results = body.messages.filter((m: any) => m.role === "tool");
 			const tool = { name: "read", args: JSON.stringify({ path: variant === "failed reads" ? "missing.txt" : variant === "changing reads" ? "changing.txt" : "budget.txt" }) };
 			if (variant === "changing reads") writeFileSync(join(dir, "ws", "changing.txt"), `version ${results.length}`);
+			if (variant === "near deadline" && !results.length) await Bun.sleep(timeoutMs * 0.84);
+			if (variant === "stalled first call" || (variant === "stalled report" && results.length)) return new Response(new ReadableStream(), { headers: { "content-type": "text/event-stream" } });
 			if (variant === "early failure" || (variant === "final failure" && results.length)) return Response.json({ error: { message: "mock provider rejected the request" } }, { status: 400 });
-			if (body.tools?.length) return { text: variant === "empty report" || variant === "final failure" ? "The read is queued." : "", tool };
+			if (body.tools?.length) return { text: variant === "empty report" || variant === "final failure" || variant === "stalled report" ? "The read is queued." : "", tool };
 			if (variant === "empty report" || variant === "no text at all") return { text: "" };
 			if (variant === "ignore removed tools") return { text: "", tool };
 			if (variant === "cancel report") await new Promise<void>((resolve) => { unblockReport = resolve; startReport?.(); });
 			if (variant === "one call") return { text: "No tools were available, so I could not verify the file." };
 			return { text: `Report based on evidence: ${textOf(results.at(-1)?.content)}` };
 		});
-		app = await buildApp({ host: "0.0.0.0", port: 0, dataDir: dir, dbPath: join(dir, "t.db"), token: "t", workspaceRoot: join(dir, "ws"), logLevel: "silent" }, { strictResponses: true, extensionDirs: [], home: join(dir, "home") });
+		app = await buildApp({ host: "0.0.0.0", port: 0, dataDir: dir, dbPath: join(dir, "t.db"), token: "t", workspaceRoot: join(dir, "ws"), logLevel: "silent" }, { strictResponses: true, extensionDirs: [], home: join(dir, "home"), delegateTimeoutMs: timeoutMs });
 		await app.server.listen({ host: "0.0.0.0", port: 0 });
 		base = `http://127.0.0.1:${(app.server.server.address() as { port: number }).port}`;
 		await api("PUT", "/configuration/providers/echo", echoProviderBody(upstream.baseUrl));
@@ -322,6 +353,39 @@ describe("delegate tool", () => {
 			expect(result.details).toMatchObject({ turns: 12, limited: true, limit: "maxTurns" });
 		}
 	});
+
+	for (const [variant, role, turns] of [["stalled first call", "loop", 1], ["stalled report", "two", 2]] as const) {
+		test(`a ${variant} is bounded by the deadline`, async () => {
+			const result = await delegateResult(role, budgetTask(variant));
+			expect(result.content[0].text).toContain("did not finish before the deadline");
+			if (turns === 2) expect(result.content[0].text).toContain("Partial assistant text (not a final answer):\nThe read is queued.");
+			expect(result.details).toMatchObject({ turns, limited: true, limit: "deadline" });
+			expect(result.details.durationMs).toBeGreaterThanOrEqual(timeoutMs - 25);
+			expect(budgetRequests(variant)).toHaveLength(turns);
+		}, 8_000);
+	}
+
+	test("near the deadline, the next call reports even with plenty of turns left", async () => {
+		const variant = "near deadline";
+		const result = await delegateResult("loop", budgetTask(variant));
+		const requests = budgetRequests(variant);
+		expect(requests).toHaveLength(2);
+		expect(requests[1].tools ?? []).toEqual([]);
+		expect(result.content[0].text).toContain("Report based on evidence: verified fixture evidence");
+		expect(result.content[0].text).toContain("time limit was nearly reached");
+		expect(result.details).toMatchObject({ turns: 2, limited: true, limit: "deadline" });
+	}, 8_000);
+
+	test("expiry also stops a running shell command and preserves earlier text", async () => {
+		def(join(dir, "home", ".agents", "subagents"), "shell-deadline", "tools: [bash]\nmaxTurns: 3");
+		// Record the PID of this test's own child, and check it is gone when the delegate returns.
+		const result = await delegateResult("shell-deadline", `!bash ${JSON.stringify({ command: "echo $$ > deadline.pid; exec sleep 345" })}`);
+		const pid = Number(readFileSync(join(dir, "ws", "deadline.pid"), "utf8"));
+		expect(pid).toBeGreaterThan(0);
+		expect(() => process.kill(pid, 0)).toThrow(expect.objectContaining({ code: "ESRCH" }));
+		expect(result.content[0].text).toContain("Running bash…");
+		expect(result.details).toMatchObject({ turns: 1, limited: true, limit: "deadline" });
+	}, 8_000);
 
 	test("parent cancellation also interrupts the report", async () => {
 		const id = (await api("POST", "/sessions", { cwd: join(dir, "ws") })).json.id as string;
