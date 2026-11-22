@@ -264,7 +264,7 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 	// A group pane shows a session or a terminal; terminal ids carry their own prefix so the two never clash.
 	// generate_image can be switched off like an extension tool, while an image model makes it exist at all.
 	configuration.setSwitchableSource(() => [...TOGGLEABLE_TOOLS, ...extensions.switchableTools(), ...(imageModel.resolve() ? [IMAGE_TOOL] : [])]);
-	const groups = new GroupManager(db, bus, (id) => (isTerminalId(id) ? terminals.has(id) : store.get(id) !== undefined), () => store.activeNames());
+	const groups = new GroupManager(db, bus, (id) => (isTerminalId(id) ? terminals.has(id) : store.get(id) !== undefined), () => store.allNames());
 	groups.evictWhere(isTerminalId);
 	sessions.setGroupSource(() => groups.list().map((g) => ({ name: g.name, sessionIds: panesOf(g.layout).filter((id) => !isTerminalId(id)) })));
 	sessions.setGroupOps(peerGroupOps(groups));

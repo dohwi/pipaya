@@ -77,8 +77,8 @@
 			.map(([cwd, list]) => ({ cwd, list, updatedAt: list[0]?.updatedAt ?? 0 }))
 			.sort((a, b) => b.updatedAt - a.updatedAt);
 	});
-	/** Names the open chats answer to. A closed chat whose old name one of them carries now shows no handle: the dialog
-	   never lists one `@name` twice, and the one it shows is the one that answers. */
+	/** Names the open chats answer to. A closed chat keeps its name now, but one closed before that may share it with an
+	   open chat that took it meanwhile: that closed chat shows no handle, so the dialog never lists one `@name` twice. */
 	const openNames = $derived(new Set((sessions ?? []).filter((s) => !s.closed && s.name).map((s) => s.name.toLowerCase())));
 	const handleOf = (s: Session) => (s.closed && openNames.has(s.name.toLowerCase()) ? undefined : peerLabel(s));
 	const nIn = (list: Session[]) => list.filter((s) => picked[s.id]).length;

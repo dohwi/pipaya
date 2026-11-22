@@ -213,21 +213,24 @@ export class PeerService {
 
 	// ── names ───────────────────────────────────────────────────────────────
 
-	/** Lower-cased names a session must not take: the active sessions' and the tags of the groups. */
+	/** Lower-cased names a session must not take: every session's (a closed one keeps its name) and the tags of the groups. */
 	taken(): Set<string> {
-		const taken = this.host.store.activeNames();
+		const taken = this.host.store.allNames();
 		for (const g of this.host.groups()) taken.add(nameKey(groupHandle(g.name)));
 		return taken;
 	}
 
-	/** A free name for a new session, one no closed session carries either while there is one. Names are stored in Korean whatever the UI language (see member-names.ts). */
+	/** A free name for a new session. Names are stored in Korean whatever the UI language (see member-names.ts). */
 	newName(): string {
-		return nextMemberName(this.taken(), undefined, this.host.store.closedNames());
+		return nextMemberName(this.taken());
 	}
 
-	/** The name a session takes back when reopened: its own, unless another session has it by now (or it never had one). */
+	/**
+	 * The name a session has when reopened: its own, which nobody could take while it was closed. Only a session that never
+	 * had one, or one from before closed sessions kept their names whose name an open session took meanwhile, gets a new one.
+	 */
 	resumedName(r: SessionRecord): string {
-		return r.name && !this.taken().has(nameKey(r.name)) ? r.name : this.newName();
+		return r.name && !this.host.store.activeNames().has(nameKey(r.name)) ? r.name : this.newName();
 	}
 
 	// ── addressing ──────────────────────────────────────────────────────────
