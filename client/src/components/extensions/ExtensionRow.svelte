@@ -2,6 +2,7 @@
 	import type { Snippet } from "svelte";
 	import { t } from "../../lib/i18n";
 	import Icon from "../ui/Icon.svelte";
+	import Spinner from "../ui/Spinner.svelte";
 
 	/**
 	 * One extension in the list: a card whose open button shows its name, a small state line and a short description,
@@ -51,7 +52,7 @@
 			</span>
 			<span class="chev"><Icon name="chevron-right" /></span>
 		</button>
-		{#if busy}<span class="spinner" role="status" aria-label={t("처리 중")}></span>{/if}
+		{#if busy}<Spinner label={t("처리 중")} />{/if}
 		{#if control}{@render control()}{/if}
 	</div>
 	{#if notices}{@render notices()}{/if}

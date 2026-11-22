@@ -1,5 +1,6 @@
 <script lang="ts">
 	import IconButton from "../ui/IconButton.svelte";
+	import Spinner from "../ui/Spinner.svelte";
 	import { onDestroy, untrack } from "svelte";
 	import { t } from "../../lib/i18n";
 	import { app } from "../../lib/store.svelte";
@@ -114,7 +115,7 @@
 		{/snippet}
 		<div class="body">
 			{#if loading}
-				<div class="note"><span class="spinner"></span></div>
+				<div class="note"><Spinner /></div>
 			{:else if failed}
 				<div class="note">{failed}</div>
 			{:else if kind === "image" && url}

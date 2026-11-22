@@ -6,6 +6,7 @@
 	import { schedule, unschedule } from "../../lib/frame";
 	import Handle from "../ui/Handle.svelte";
 	import Icon from "../ui/Icon.svelte";
+	import InlineRenameField from "../ui/InlineRenameField.svelte";
 	import SessionStrip from "./SessionStrip.svelte";
 	import AgentBadge from "./AgentBadge.svelte";
 	import TabControls from "./TabControls.svelte";
@@ -188,10 +189,6 @@
 		else if (x?.kind === "terminal") void app.renameTerminal(done.id, done.name);
 		else void app.rename(done.id, done.name);
 	}
-	function focusSelect(node: HTMLInputElement) {
-		node.focus();
-		node.select();
-	}
 
 	let strip: HTMLElement | undefined = $state();
 	$effect(() => {
@@ -279,19 +276,15 @@
 					<span class="ico"><AgentBadge id={x.id} state={st} size={16} />{#if pinned}<PinMark />{/if}</span>
 				{/if}
 				{#if rename.is(x.id)}
-					<input
-						class="rename"
+					<InlineRenameField
+						variant="tab"
 						value={rename.draft}
 						maxlength={x.kind === "group" ? 100 : undefined}
-						aria-label={t("이름 바꾸기")}
-						use:focusSelect
-						oninput={(e) => (rename.draft = e.currentTarget.value)}
-						onblur={commitRename}
-						onclick={(e) => e.stopPropagation()}
-						onkeydown={(e) => {
-							if (e.key === "Enter") commitRename();
-							if (e.key === "Escape") rename.cancel();
-						}}
+						ariaLabel={t("이름 바꾸기")}
+						oninput={(v) => (rename.draft = v)}
+						oncommit={commitRename}
+						oncancel={() => rename.cancel()}
+						stopClick
 					/>
 				{:else}
 					{#if who}<Handle text={who.text} state={st} />{/if}<span class="t">{titleOf(x)}</span>{#if parentOf(x)}{@const pl = parentOf(x)!}<span class="from mono" title={pl.title}><Icon name="fork" /><span class="fn">{pl.text}</span></span>{/if}
@@ -642,19 +635,6 @@
 	.tab.on .t {
 		font-weight: 600;
 	}
-	.rename {
-		flex: 1 1 auto;
-		width: 0;
-		min-width: 0;
-		height: 22px;
-		padding: 0 4px;
-		border: 1px solid var(--accent);
-		border-radius: var(--radius-xs);
-		background: var(--bg);
-		color: var(--text);
-		font-size: var(--fs-sm);
-		outline: 0;
-	}
 	.n {
 		flex: none;
 		font-size: var(--fs-2xs);
@@ -782,7 +762,7 @@
 		.t {
 			flex: 0 1 auto;
 		}
-		.rename {
+		.tab :global(.inline-rename) {
 			flex: none;
 			width: 140px;
 		}

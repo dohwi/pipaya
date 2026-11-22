@@ -13,6 +13,7 @@
 	import type { Session } from "../../../lib/types";
 	import type { TerminalInfo } from "../../../lib/terminal";
 	import Icon from "../../ui/Icon.svelte";
+	import InlineRenameField from "../../ui/InlineRenameField.svelte";
 	import PinMark from "../../ui/PinMark.svelte";
 	import GroupBlock from "./GroupBlock.svelte";
 	import ListButton from "./ListButton.svelte";
@@ -31,10 +32,6 @@
 	let { n, d, inProject = false }: { n: SidebarNode; d: Dir; inProject?: false | "git" | "manual" } = $props();
 
 	const sb = getSidebarCtx();
-	function focusSelect(node: HTMLInputElement) {
-		node.focus();
-		node.select();
-	}
 	const key = $derived(dirKey(n.server.id, d.path));
 	const folded = $derived(sb.isDirFolded(key, !!inProject));
 	/** Inside a project: the folder is named by the branch checked out there (a project lists one repository's worktrees) */
@@ -74,20 +71,15 @@
 			<span class="dicon">{#if branch}<Icon name="fork" />{:else}<Icon name="folder" />{/if}{#if pinned}<PinMark />{/if}</span>
 			<span class="dlabel">
 				{#if sb.dirRename.is(key)}
-					<!-- svelte-ignore a11y_autofocus -->
-					<input
-						class="dnameinput"
+					<InlineRenameField
+						variant="heading"
 						value={sb.dirRename.draft}
-						maxlength="60"
-						oninput={(e) => (sb.dirRename.draft = e.currentTarget.value)}
-						use:focusSelect
-						onclick={(e) => e.stopPropagation()}
-						onblur={() => sb.commitDirRename(n, d.path)}
-						onkeydown={(e) => {
-							e.stopPropagation();
-							if (e.key === "Enter") sb.commitDirRename(n, d.path);
-							if (e.key === "Escape") sb.dirRename.cancel();
-						}}
+						maxlength={60}
+						oninput={(v) => (sb.dirRename.draft = v)}
+						oncommit={() => sb.commitDirRename(n, d.path)}
+						oncancel={() => sb.dirRename.cancel()}
+						stopClick
+						stopKeys
 					/>
 				{:else if branch && !app.sidebar.dirName(n.server.id, d.path)}
 					<!-- a path inside the worktree keeps its last folder (`…/alpha`): the end is what tells sibling folders apart -->
@@ -120,19 +112,6 @@
 </div>
 
 <style>
-	.dnameinput {
-		flex: 1;
-		min-width: 0;
-		height: 24px;
-		padding: 0 4px;
-		border-radius: var(--radius-sm);
-		border: 1px solid var(--accent);
-		background: var(--bg);
-		outline: 0;
-		font-size: var(--fs-sm);
-		font-weight: 600;
-		color: var(--text);
-	}
 	.dicon > :global(svg) { /* the folder glyph only: the pinned mark (PinMark) keeps its own 9px pin */
 		width: 14px;
 		height: 14px;

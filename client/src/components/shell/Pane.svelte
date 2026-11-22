@@ -7,6 +7,7 @@
 	import { workDir } from "../../lib/nav";
 	import { t } from "../../lib/i18n";
 	import Icon from "../ui/Icon.svelte";
+	import InlineRenameField from "../ui/InlineRenameField.svelte";
 	import AgentBadge from "./AgentBadge.svelte";
 	import EmptyHero from "../chat/EmptyHero.svelte";
 	import Welcome from "./Welcome.svelte";
@@ -83,10 +84,6 @@
 		if (!done) return;
 		void (app.terminal(done.id) ? app.renameTerminal(done.id, done.name) : app.rename(done.id, done.name));
 	}
-	function focusSelect(node: HTMLInputElement) {
-		node.focus();
-		node.select();
-	}
 
 	/** Right click / long press on the title bar: what its buttons do, with renaming and closing. */
 	function paneMenu(pt: Point) {
@@ -132,18 +129,14 @@
 				<AgentBadge {id} {state} size={16} />
 			{/if}
 			{#if rename.is(id)}
-				<input
-					class="rename"
+				<InlineRenameField
+					variant="bar"
 					value={rename.draft}
-					aria-label={t("이름 바꾸기")}
-					use:focusSelect
-					oninput={(e) => (rename.draft = e.currentTarget.value)}
-					onblur={commitRename}
-					onpointerdown={(e) => e.stopPropagation()}
-					onkeydown={(e) => {
-						if (e.key === "Enter") commitRename();
-						if (e.key === "Escape") rename.cancel();
-					}}
+					ariaLabel={t("이름 바꾸기")}
+					oninput={(v) => (rename.draft = v)}
+					oncommit={commitRename}
+					oncancel={() => rename.cancel()}
+					stopPointer
 				/>
 			{:else}
 			<span class="tt">
@@ -314,18 +307,6 @@
 		font-size: var(--fs-xs);
 		font-weight: 600;
 		color: var(--text-dim);
-	}
-	.rename {
-		flex: 1;
-		min-width: 0;
-		height: 28px;
-		padding: 0 8px;
-		border: 1px solid var(--accent);
-		border-radius: var(--radius-sm);
-		background: var(--bg);
-		color: var(--text);
-		font-size: var(--fs-sm);
-		outline: 0;
 	}
 	.who {
 		margin-right: 4px;

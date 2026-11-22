@@ -2,6 +2,7 @@
 	import type { Snippet } from "svelte";
 	import type { ClassValue } from "svelte/elements";
 	import type { HTMLButtonAttributes } from "svelte/elements";
+	import Spinner from "./Spinner.svelte";
 
 	/**
 	 * The one text button. The look is the global `.btn` (app.css); this only names its variants so a call site reads
@@ -13,6 +14,7 @@
 	 *  type     "button" unless it submits a form (a bare <button> inside a <form> submits, so the default is explicit)
 	 *  class    extra classes for the caller's own layout rules
 	 *  focus    take focus when it appears (the default answer of a confirm sheet; Modal keeps a child's own focus)
+	 *  busy     disables the button, marks `aria-busy`, and prepends a `<Spinner />`
 	 */
 	let {
 		variant = "default",
@@ -20,6 +22,8 @@
 		type = "button",
 		class: cls = "",
 		focus = false,
+		busy = false,
+		disabled = false,
 		children,
 		...rest
 	}: {
@@ -28,8 +32,10 @@
 		type?: "button" | "submit";
 		class?: ClassValue;
 		focus?: boolean;
+		busy?: boolean;
+		disabled?: boolean;
 		children: Snippet;
-	} & Omit<HTMLButtonAttributes, "type" | "class" | "children"> = $props();
+	} & Omit<HTMLButtonAttributes, "type" | "class" | "children" | "disabled"> = $props();
 </script>
 
 <script lang="ts" module>
@@ -39,4 +45,13 @@
 	};
 </script>
 
-<button {type} class={["btn", variant !== "default" && variant, size === "sm" && "sm", cls]} use:focusOnMount={focus} {...rest}>{@render children()}</button>
+<button
+	{type}
+	class={["btn", variant !== "default" && variant, size === "sm" && "sm", cls]}
+	disabled={disabled || busy}
+	aria-busy={busy || undefined}
+	use:focusOnMount={focus}
+	{...rest}
+>
+	{#if busy}<Spinner />{/if}{@render children()}
+</button>

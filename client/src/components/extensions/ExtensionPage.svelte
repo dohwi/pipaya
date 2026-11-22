@@ -2,6 +2,7 @@
 	import type { Snippet } from "svelte";
 	import { t } from "../../lib/i18n";
 	import Icon from "../ui/Icon.svelte";
+	import Spinner from "../ui/Spinner.svelte";
 	import Notice from "../ui/Notice.svelte";
 	import Button from "../ui/Button.svelte";
 	import { viewport } from "../../lib/viewport.svelte";
@@ -55,7 +56,7 @@
 			<span class="facts">{sub}</span>
 		</div>
 		<div class="actions">
-			{#if busy}<span class="spinner" role="status" aria-label={t("처리 중")}></span>{/if}
+			{#if busy}<Spinner label={t("처리 중")} />{/if}
 			{#if control}{@render control()}{/if}
 		</div>
 	</div>
