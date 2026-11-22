@@ -16,18 +16,15 @@ import { mergeServers, replaceServers } from "./configuration-servers";
 
 /** How many off-screen transcripts stay loaded so switching back to them is instant. */
 const KEEP_CHATS = 8;
-/** Away longer than this and a mobile OS may have killed the streams: coming back forces a full resync. */
-const LONG_AWAY_MS = 30_000;
 import { ServerLink, type NetState as LinkNet } from "./server-link.svelte";
 import { applyLinkEvent, applyLiveEvent } from "./server-link-model";
 import { dropListCache } from "./list-cache";
 import { viewport } from "./viewport.svelte";
-import { sessionOrder, sidebarDirs, tabOf, tabPanes, workDir, type DirBlock, type Tab } from "./nav";
+import { sidebarDirs, tabOf, tabPanes, workDir, type DirBlock, type Tab } from "./nav";
 import { flattenBlocks, projectBlocks, projectKey, type SidebarBlock } from "./projects";
 import { dirKey } from "./sidebar-model";
 import { MAX_PANES, append, has as layoutHas, pair, panesOf, place, remove as layoutRemove, replaceSession, worthKeeping, type Layout, type Zone } from "./layout";
 import { extensions } from "./extensions/host.svelte";
-import { appEventsOf, serverEventOf } from "./extensions/event-forward";
 import { extensionUpdates } from "./extension-updates.svelte";
 import { notifications } from "./notifications";
 import { ServerSettingsSync } from "./server-settings";
@@ -39,18 +36,23 @@ import { CloseGuard } from "./close-guard.svelte";
 import { SessionCloseGuard } from "./session-close-guard.svelte";
 import { sessionTitle } from "./session-title";
 import { PairingFlow } from "./pairing-flow.svelte";
-import { getLang, LocalizedError, onLangChange, setRemotePacks, t } from "./i18n";
+import { getLang, onLangChange, setRemotePacks, t } from "./i18n";
 import { queuedShown } from "./queue";
 import { graphRuns } from "./graph-runs.svelte";
 import { fetchLocalePacks } from "./locale-sync";
 import { configureUiEnv } from "./ui-env.svelte";
 import { groupNameFor } from "./group-name";
-import { parseConfiguration, parseKeybindings, type ConfigurationDocument } from "./extensions/configuration";
+import { parseConfiguration, type ConfigurationDocument } from "./extensions/configuration";
 import { rehydrateSettingsFromDurable } from "./durable-storage";
 import { K, read, write } from "./persist";
 import { Preferences } from "./prefs.svelte";
 import { ServerPrefs, serverPrefKeys } from "./server-prefs.svelte";
-import { announces, Feedback, type Toast } from "./feedback.svelte";
+import { Feedback, type Toast } from "./feedback.svelte";
+import { watchWake } from "./store/wake";
+import { applyDraftPatch, resolveDraftFallback, shouldAdoptServerDefault, startingTierOf } from "./store/draft-model";
+import { canAddToGroup, findSessionNeighbour, stripSessionFromGroups } from "./store/groups-ops";
+import { parseAppBackup } from "./store/configuration-ops";
+import { cueBackgroundEvent, handleOpenServerEvent } from "./store/event-handler";
 import type { SettingsTabId } from "./settings-search";
 import type { SettingsFocus } from "./settings-focus";
 import { SidebarState, reorder } from "./sidebar.svelte";
@@ -85,7 +87,7 @@ export type { PaletteItem, PaletteSpec, Draft, Server } from "./store-model";
 export { defaultServerUrl } from "./store-model";
 import { draftFromDefault, loadServers, normalizeThinking, pinLocal, readDraft } from "./store-model";
 import type { Draft, PaletteSpec, Server } from "./store-model";
-import type { ServiceTier, ThinkingLevel } from "./types";
+import type { ServiceTier } from "./types";
 import type { SettingsProblem } from "./settings-problems";
 import { forgetDraft } from "./composer/saved-drafts";
 import { forgetAttachments } from "./composer/saved-attachments";
@@ -610,37 +612,7 @@ class AppStore {
       language = getLang();
       extensions.emit({ type: "language_changed", sessionId: null, at: Date.now() });
     });
-    // Mobile OSes silently kill background sockets (EventSource gets no error), and a /health ping succeeds on a fresh
-    // connection while the old stream is dead. So coming back reopens the streams, however short the absence.
-    // Android WebViews sometimes skip visibilitychange, so focus/pageshow wake too; `wake` merges the bursts.
-    // Coming back never reloads the lists or the open transcript: the stream reopens from the last event id and replays
-    // what was missed, so nothing on screen is rebuilt. A full resync is left to a stream that really failed (its own
-    // retry does it) and to the network coming back on a dead route.
-    let wokeAt = 0;
-    let leftAt = 0;
-    const left = () => {
-      if (!leftAt) leftAt = Date.now();
-    };
-    const wake = () => {
-      const now = Date.now();
-      if (now - wokeAt < 2000) return;
-      wokeAt = now;
-      const away = leftAt ? now - leftAt : Infinity;
-      leftAt = 0;
-      // A long absence may have cost the socket on a phone (the OS drops it without an error): reopen it outright
-      // instead of trusting it. Still no reload: the replay covers the gap.
-      this.resyncLinks(away >= LONG_AWAY_MS);
-    };
-    const onVisibility = () => {
-      if (document.hidden) left();
-      else wake();
-    };
-    const onOnline = () => this.resyncLinks(true); // the network changed: the old stream is on a dead route
-    window.addEventListener("blur", left);
-    document.addEventListener("visibilitychange", onVisibility);
-    window.addEventListener("focus", wake);
-    window.addEventListener("pageshow", wake);
-    window.addEventListener("online", onOnline);
+    const stopWake = watchWake((force) => this.resyncLinks(force));
     const saved = read<string | null>(K.currentServer, null);
     const first = this.servers.find((s) => s.id === saved) ?? this.servers[0];
     this.syncLinks(); // every saved server goes live at once; `first` is only the one in view
@@ -648,11 +620,7 @@ class AppStore {
     void this.ensureLocalServer();
     const dispose = () => {
       stopLang();
-      window.removeEventListener("blur", left);
-      document.removeEventListener("visibilitychange", onVisibility);
-      window.removeEventListener("focus", wake);
-      window.removeEventListener("pageshow", wake);
-      window.removeEventListener("online", onOnline);
+      stopWake();
       if (this.stopInit === dispose) this.stopInit = null;
     };
     this.stopInit = dispose;
@@ -957,21 +925,11 @@ class AppStore {
     for (const l of Object.values(this.links)) void l.resume(force);
   }
 
-  /**
-   * Sound and in-app strip for a server that is not in view, with the same rules as the one in view: a stopped run is
-   * silent, and an agent-to-agent run is silent while that server's own "quiet peers" is on (read from its stored value,
-   * since `serverPrefs` holds only the open server's). Runs before `applyLinkEvent`, which changes the counts it reads.
-   */
   private cueBackground(link: ServerLink, e: PipayaEvent) {
-    const sid = e.sessionId;
-    if (!sid) return;
-    if (e.type === "run_finished") {
-      const quiet = e.data.origin === "peer" && read<unknown>(`${K.quietPeers}.${link.id}`, null) !== false;
-      if (e.data.status === "aborted" || quiet) return;
-      const bad = e.data.status === "error";
-      this.prefs.cue(bad ? "failed" : "done");
-      this.feedback.announce(sid, bad ? "failed" : "done", link.id);
-    } else if (e.type === "question_requested" && !link.data.awaiting[sid]) this.prefs.cue("ask");
+    cueBackgroundEvent(link, e, {
+      cue: (kind) => this.prefs.cue(kind),
+      announce: (sid, kind, serverId) => this.feedback.announce(sid, kind, serverId),
+    });
   }
 
   /** A server's event arrived: the one in view reacts in full, the others just keep their lists and activity current. */
@@ -1053,228 +1011,60 @@ class AppStore {
   }
 
   private ensureDraftModel() {
-    const usable = (p: string, id: string) =>
-      this.models.some((m) => m.provider === p && m.id === id && m.configured && m.available !== false);
-    if (usable(this.draft.provider, this.draft.model)) return;
-    const d = this.serverDefault;
-    if (d && usable(d.provider, d.model))
-      return void this.updateDraft(draftFromDefault(d));
-    const pick = this.models.find((m) => m.configured && m.available !== false) ?? this.models.find((m) => m.configured) ?? this.models[0];
-    if (pick) this.updateDraft({ provider: pick.provider, model: pick.id });
+    const fallback = resolveDraftFallback(this.models, this.draft, this.serverDefault);
+    if (fallback) this.updateDraft(fallback);
   }
 
-  /**
-   * The speed a chat on this model starts at, as the server decides it: the saved new-chat choice when it is this very
-   * model (null there = OpenRouter's own routing), else the model's own default.
-   */
   private startingTier(provider: string, id: string): ServiceTier | null {
-    const d = this.serverDefault;
-    if (d && d.provider === provider && d.model === id && d.serviceTier !== undefined) return d.serviceTier;
-    return this.models.find((m) => m.provider === provider && m.id === id)?.defaultServiceTier ?? null;
-  }
-
-  /** The strength a connection names for this model as its starting point, if it names one. */
-  private modelDefaultLevel(provider: string, id: string): ThinkingLevel | undefined {
-    const m = this.models.find((x) => x.provider === provider && x.id === id);
-    return m?.reasoning ? m.defaultThinkingLevel : undefined;
+    return startingTierOf(this.models, this.serverDefault, provider, id);
   }
 
   updateDraft(patch: Partial<Draft>) {
-    const next = { ...this.draft, ...patch };
-    // A model and its starting strength travel together: a model that names one keeps it unless a level comes with the patch.
-    if (patch.thinkingLevel === undefined && (patch.provider !== undefined || patch.model !== undefined))
-      next.thinkingLevel = this.modelDefaultLevel(next.provider, next.model) ?? next.thinkingLevel;
-    if (patch.serviceTier === undefined && (next.provider !== this.draft.provider || next.model !== this.draft.model)) next.serviceTier = this.startingTier(next.provider, next.model);
-    this.draft = next;
+    this.draft = applyDraftPatch(this.draft, patch, this.models, this.serverDefault);
     write(K.draft, this.draft);
   }
 
   /* ---------- events ---------- */
 
   private handle(e: PipayaEvent) {
-    const sid = e.sessionId;
-    // Client extensions hear only metadata (see extensions/event-forward.ts); what server extensions publish goes as is.
-    for (const ev of appEventsOf(e)) extensions.emit(ev);
-    const fromServer = serverEventOf(e);
-    if (fromServer) {
-      if (fromServer.kind === "entry" && sid) this.chats[sid]?.addEntry(e.data as { id: number; extension: string; type: string; data: unknown; createdAt?: number });
-      extensions.emitServer(fromServer);
-    } else if (e.type === "extensions_updated") {
-      void this.refreshServerExtensions();
-    }
-    switch (e.type) {
-      case "notification": {
-        const data = e.data as { deviceId: string; notification: import("./notification-contract").NotificationSpec & { id: string; at: number } };
-        void notifications.receive(data.deviceId, data.notification).catch(() => {});
-        break;
-      }
-      case "session_unread": {
-        const u = e.data as { sessionId: string; kind: "done" | "failed" | null };
-        delete this.unread[u.sessionId];
-        delete this.failed[u.sessionId];
-        if (u.kind === "done") this.unread[u.sessionId] = true;
-        else if (u.kind === "failed") this.failed[u.sessionId] = true;
-        break;
-      }
-      case "device_revoked": {
-        notifications.revoked((e.data as { deviceId: string }).deviceId);
-        break;
-      }
-      case "session_created": {
-        const s = e.data as Session;
-        if (!s.closed && !this.sessions.some((x) => x.id === s.id)) this.sessions.unshift(s);
-        void this.refreshWorkspace();
-        break;
-      }
-      case "session_updated": {
-        const s = e.data as Session;
-        const hide = s.closed;
-        const next = hide ? this.neighbourOf(s.id) : undefined;
-        if (hide) this.forgetInGroups(s.id);
-        const i = this.sessions.findIndex((x) => x.id === s.id);
-        if (i >= 0) this.sessions.splice(i, 1);
-        if (s.closed) {
-          // Closed sessions leave the sidebar; only /resume brings them back.
-          this.running[s.id] = false;
-          this.awaiting[s.id] = 0;
-          delete this.unread[s.id];
-          delete this.failed[s.id];
-          if (this.activeId === s.id) this.leave(next);
-          break;
-        }
-        this.sessions.unshift(s);
-        break;
-      }
-      case "group_created":
-      case "group_updated": {
-        const g = e.data as Group;
-        const i = this.groups.findIndex((x) => x.id === g.id);
-        if (i >= 0) this.groups[i] = g;
-        else this.groups.push(g);
-        break;
-      }
-      case "group_deleted":
-        this.groups = this.groups.filter((x) => x.id !== (e.data as { id: string }).id);
-        this.dropFull((e.data as { id: string }).id);
-        break;
-      case "terminal_created":
-      case "terminal_updated": {
-        const x = e.data as TerminalInfo;
-        const i = this.terminals.findIndex((y) => y.id === x.id);
-        if (i >= 0) this.terminals[i] = x;
-        else this.terminals.push(x);
-        break;
-      }
-      case "terminal_closed":
-        this.dropTerminal((e.data as { id: string }).id);
-        break;
-      case "session_deleted": {
-        const id = e.data.id as string;
-        const next = this.neighbourOf(id);
-        this.forgetInGroups(id);
-        this.sessions = this.sessions.filter((x) => x.id !== id);
-        delete this.running[id];
-        delete this.awaiting[id];
-        delete this.unread[id];
-        delete this.failed[id];
-        if (this.activeId === id) this.leave(next);
-        break;
-      }
-      case "compaction_started":
-        if (sid) this.running[sid] = true;
-        break;
-      case "compaction_finished":
-      case "compaction_failed":
-        if (sid && !this.chats[sid]?.running) this.running[sid] = false;
-        break;
-      case "run_started":
-        if (sid) {
-          this.running[sid] = true;
-          delete this.failed[sid];
-          const i = this.sessions.findIndex((x) => x.id === sid);
-          if (i > 0) {
-            const [s] = this.sessions.splice(i, 1);
-            this.sessions.unshift({ ...s!, updatedAt: e.ts });
-          }
-        }
-        break;
-      case "run_finished":
-        if (sid) {
-          this.running[sid] = false;
-          this.awaiting[sid] = 0;
-          const bad = e.data.status === "error";
-          // The unread mark itself comes from the server (`session_unread`), so every device agrees on it.
-          // A stopped run is the user's own doing: no sound.
-          // A run another session started (origin "peer") is agent-to-agent traffic: silent while "quiet peers" is on.
-          const quiet = e.data.origin === "peer" && this.serverPrefs.quietPeers;
-          if (e.data.status !== "aborted" && !quiet)
-            this.prefs.cue(bad ? "failed" : "done");
-          // Say it whenever the user is on another session: a pane of the group, another tab, another folder
-          if (announces(sid, this.activeId, e.data.status, quiet))
-            this.feedback.announce(sid, bad ? "failed" : "done");
-        }
-        break;
-      case "question_requested":
-        if (sid) {
-          const first = !this.awaiting[sid];
-          this.awaiting[sid] = (this.awaiting[sid] ?? 0) + 1;
-          if (first) this.prefs.cue("ask");
-        }
-        break;
-      case "question_resolved":
-        if (sid)
-          this.awaiting[sid] = Math.max(0, (this.awaiting[sid] ?? 0) - 1);
-        break;
-      case "provider_updated":
-        void this.refreshProviders();
-        break;
-      case "skills_updated":
-        this.skillsTick++;
-        break;
-      case "mcp_updated":
-        this.mcpTick++;
-        break;
-      case "schedules_updated":
-        this.schedulesTick++;
-        break;
-      case "locales_updated":
-        void this.syncLocales();
-        break;
-      case "client_settings_updated":
-        void this.settingsSync?.onEvent(e.data as { key?: unknown; updatedAt?: unknown; origin?: unknown });
-        break;
-      case "extension_settings_updated":
-        // Another device saved or deleted an extension's settings: take that one value, not the whole list.
-        void extensions.onSettingsEvent(e.data as { id?: unknown; action?: unknown; updatedAt?: unknown; origin?: unknown });
-        break;
-      case "configuration_updated":
-        this.configTick++;
-        // The connection test lives on the server, so a test on the phone must show the microphone here.
-        if ((e.data as { scope?: string } | undefined)?.scope === "voice") this.voiceTick++;
-        void this.refreshProviders();
-        if ((e.data as { scope?: string } | undefined)?.scope === "tools") {
-          this.toolsInfo = e.data as ToolsInfo;
-        }
-        if ((e.data as { scope?: string } | undefined)?.scope === "workdir") {
-          this.workdirInfo = {
-            saved: (e.data as WorkdirInfo).saved,
-            effective: (e.data as WorkdirInfo).effective,
-            fallback: (e.data as WorkdirInfo).fallback,
-          };
-          void this.refreshWorkspace();
-        }
-        break;
-    }
-    const chat = sid ? this.chats[sid] : undefined;
-    if (chat) {
-      chat.apply(e);
-      if (e.type === "run_finished" || e.type === "compaction_finished") {
-        void this.refreshUsage(chat);
-        void chat.refreshContext();
-      }
-      if (e.type === "session_updated") void chat.refreshContext();
-      if (e.type === "compaction_finished" || e.type === "compaction_failed") void this.flushHeld(chat);
-    }
+    handleOpenServerEvent(
+      {
+        activeId: this.activeId,
+        quietPeers: this.serverPrefs.quietPeers,
+        sessions: this.sessions,
+        groups: this.groups,
+        terminals: this.terminals,
+        running: this.running,
+        awaiting: this.awaiting,
+        unread: this.unread,
+        failed: this.failed,
+        chats: this.chats,
+        setSessions: (next) => { this.sessions = next; },
+        setGroups: (next) => { this.groups = next; },
+        setToolsInfo: (next) => { this.toolsInfo = next; },
+        setWorkdirInfo: (next) => { this.workdirInfo = next; },
+        neighbourOf: (id) => this.neighbourOf(id),
+        forgetInGroups: (id) => this.forgetInGroups(id),
+        leave: (next) => this.leave(next),
+        dropFull: (id) => this.dropFull(id),
+        dropTerminal: (id) => this.dropTerminal(id),
+        cue: (kind) => this.prefs.cue(kind),
+        announce: (sid, kind) => this.feedback.announce(sid, kind),
+        bumpSkills: () => { this.skillsTick++; },
+        bumpMcp: () => { this.mcpTick++; },
+        bumpSchedules: () => { this.schedulesTick++; },
+        bumpConfig: () => { this.configTick++; },
+        bumpVoice: () => { this.voiceTick++; },
+        refreshWorkspace: () => { void this.refreshWorkspace(); },
+        refreshProviders: () => { void this.refreshProviders(); },
+        refreshServerExtensions: () => { void this.refreshServerExtensions(); },
+        syncLocales: () => { void this.syncLocales(); },
+        onClientSettings: (data) => { void this.settingsSync?.onEvent(data); },
+        refreshUsage: (chat) => { void this.refreshUsage(chat); },
+        flushHeld: (chat) => { void this.flushHeld(chat); },
+      },
+      e,
+    );
   }
 
   /**
@@ -1300,11 +1090,7 @@ class AppStore {
     if (!(await link.refreshCatalog()) || link !== this.link) return;
     const now = this.serverDefault;
     // The default was changed (here or from another client): new chats follow it, model and strength together.
-    if (
-      now &&
-      (now.provider !== before?.provider || now.model !== before?.model || now.thinkingLevel !== before?.thinkingLevel || now.serviceTier !== before?.serviceTier) &&
-      this.models.some((m) => m.provider === now.provider && m.id === now.model && m.configured && m.available !== false)
-    ) {
+    if (shouldAdoptServerDefault(before, now, this.models)) {
       this.updateDraft(draftFromDefault(now));
     }
     if (!now && before && this.draft.provider === before.provider && this.draft.model === before.model) {
@@ -1650,51 +1436,31 @@ class AppStore {
     }
   }
 
-  /**
-   * The session that should take focus when `id` goes away. In a group: the next pane of that group, or the previous
-   * when it was last. Otherwise (or when it was alone in its group): the next session in sidebar order, or the previous
-   * when it was last. Undefined when nothing else is open. Call it before `id` leaves the list.
-   */
   private neighbourOf(id: string): string | undefined {
-    const g = this.groupOf(id);
-    if (g) {
-      const ids = panesOf(g.layout).filter((x) => this.shows(x));
-      const i = ids.indexOf(id);
-      const inGroup = i < 0 ? undefined : (ids[i + 1] ?? ids[i - 1]);
-      if (inGroup) return inGroup;
-    }
-    // the next tab of the same folder (the previous when it was last): closing never carries you off to another folder
-    const at = this.activeTabOf(id);
-    if (at) {
-      const i = at.dir.tabs.findIndex((x) => x.id === at.tab.id);
-      const sib = at.dir.tabs[i + 1] ?? at.dir.tabs[i - 1];
-      const pane = sib && (this.lastPane[sib.id] && this.shows(this.lastPane[sib.id]) ? this.lastPane[sib.id] : tabPanes(sib)[0]);
-      if (pane) return pane;
-    }
-    const order = sessionOrder(this.sessions, this.groups, this.currentDirOrder, this.currentTabOrder, this.terminals, this.currentPinnedTabs);
-    const i = order.indexOf(id);
-    return i < 0 ? undefined : (order[i + 1] ?? order[i - 1]);
+    return findSessionNeighbour({
+      id,
+      group: this.groupOf(id),
+      dirs: this.dirs,
+      lastPane: this.lastPane,
+      sessions: this.sessions,
+      groups: this.groups,
+      terminals: this.terminals,
+      dirOrder: this.currentDirOrder,
+      tabOrder: this.currentTabOrder,
+      pinnedTabs: this.currentPinnedTabs,
+      shows: (x) => this.shows(x),
+    });
   }
 
-  private activeTabOf(id: string) {
-    return tabOf(this.dirs, id);
-  }
-
-  /**
-   * A session left (closed or deleted): take it out of its group right away, and dissolve the group when a single
-   * session is left. The server does the same and says so with a group event; doing it here too means the survivor
-   * is a plain session at once, not a one-pane group until that event arrives.
-   */
   private forgetInGroups(id: string) {
-    const g = this.groupOf(id);
-    if (!g) return;
-    const next = layoutRemove(g.layout, id);
-    if (worthKeeping(next)) {
-      const i = this.groups.findIndex((x) => x.id === g.id);
-      if (i >= 0) this.groups[i] = { ...g, layout: next };
-    } else {
-      this.groups = this.groups.filter((x) => x.id !== g.id);
-    }
+    const next = stripSessionFromGroups(this.groups, id);
+    if (next) this.groups = next;
+  }
+
+  private guardGroupLimit(group: Group | undefined, sessionId?: string): boolean {
+    if (canAddToGroup(group, sessionId)) return true;
+    this.toast(t("그룹에는 대화를 최대 {n}개까지 넣을 수 있습니다", { n: MAX_PANES }), "error");
+    return false;
   }
 
   /** The focused session is gone: focus its neighbour (see `neighbourOf`) if there is one, else fall back to a blank chat. */
@@ -2421,8 +2187,7 @@ class AppStore {
     if (!this.api || id === target) return;
     const g = this.groupOf(target);
     if (g) {
-      if (!layoutHas(g.layout, id) && panesOf(g.layout).length >= MAX_PANES)
-        return void this.toast(t("그룹에는 대화를 최대 {n}개까지 넣을 수 있습니다", { n: MAX_PANES }), "error");
+      if (!this.guardGroupLimit(g, id)) return;
       const next = place(g.layout, id, target, zone);
       if (next) await this.saveLayout(g.id, next);
     } else {
@@ -2441,10 +2206,7 @@ class AppStore {
     const from = this.session(target) ?? this.terminal(target);
     if (!api || !from) return null;
     const g = this.groupOf(target);
-    if (g && panesOf(g.layout).length >= MAX_PANES) {
-      this.toast(t("그룹에는 대화를 최대 {n}개까지 넣을 수 있습니다", { n: MAX_PANES }), "error");
-      return null;
-    }
+    if (!this.guardGroupLimit(g)) return null;
     const base = this.session(target);
     const d = this.draft;
     if (!base && !d.model) {
@@ -2502,8 +2264,7 @@ class AppStore {
       if (!this.sessions.some((x) => x.id === from!.id)) this.sessions.unshift(from);
     }
     const g = this.groupOf(from.id);
-    if (g && panesOf(g.layout).length >= MAX_PANES)
-      return void this.toast(t("그룹에는 대화를 최대 {n}개까지 넣을 수 있습니다", { n: MAX_PANES }), "error");
+    if (!this.guardGroupLimit(g)) return;
     let made: Session;
     try {
       made = await api.createSession({
@@ -2550,13 +2311,7 @@ class AppStore {
       this.toast(t("이 서버는 터미널이 꺼져 있습니다 (PIPAYA_TERMINAL=0)"), "error");
       return null;
     }
-    if (beside) {
-      const g = this.groupOf(beside.target);
-      if (g && panesOf(g.layout).length >= MAX_PANES) {
-        this.toast(t("그룹에는 대화를 최대 {n}개까지 넣을 수 있습니다", { n: MAX_PANES }), "error");
-        return null;
-      }
-    }
+    if (beside && !this.guardGroupLimit(this.groupOf(beside.target))) return null;
     let made: TerminalInfo;
     try {
       made = await api.createTerminal({ cwd: workdir && workdir !== "." ? workdir : undefined });
@@ -2586,9 +2341,7 @@ class AppStore {
     if (!api) return;
     if (!d.model)
       return void this.toast(t("사용할 수 있는 모델이 없습니다. 모델 선택창에서 연결을 추가하세요."), "error");
-    const g = this.groupOf(target);
-    if (g && panesOf(g.layout).length >= MAX_PANES)
-      return void this.toast(t("그룹에는 대화를 최대 {n}개까지 넣을 수 있습니다", { n: MAX_PANES }), "error");
+    if (!this.guardGroupLimit(this.groupOf(target))) return;
     try {
       const made = await api.createSession({ cwd, provider: d.provider, model: d.model, thinkingLevel: normalizeThinking(d.thinkingLevel), serviceTier: d.serviceTier });
       if (!this.sessions.some((x) => x.id === made.id)) this.sessions.unshift(made);
@@ -2653,8 +2406,7 @@ class AppStore {
     if (!this.api) return;
     const g = this.groups.find((x) => x.id === groupId);
     if (!g || layoutHas(g.layout, id)) return;
-    if (panesOf(g.layout).length >= MAX_PANES)
-      return void this.toast(t("그룹에는 대화를 최대 {n}개까지 넣을 수 있습니다", { n: MAX_PANES }), "error");
+    if (!this.guardGroupLimit(g, id)) return;
     await this.saveLayout(g.id, append(g.layout, id));
     await this.refreshGroups();
   }
@@ -2709,9 +2461,8 @@ class AppStore {
       if (!this.sessions.some((x) => x.id === s.id)) this.sessions.unshift(s);
       // Forked from inside a group: the branch joins that group, right beside its source.
       const g = this.groupOf(id);
-      if (g && !layoutHas(g.layout, s.id)) {
-        if (panesOf(g.layout).length < MAX_PANES) await this.dropSession(s.id, id, "right");
-        else this.toast(t("그룹에는 대화를 최대 {n}개까지 넣을 수 있습니다", { n: MAX_PANES }), "error");
+      if (g && !layoutHas(g.layout, s.id) && this.guardGroupLimit(g, s.id)) {
+        await this.dropSession(s.id, id, "right");
       }
       await this.openSession(s.id, true);
       this.toast(t("새 대화로 분기했습니다"), "ok", s.id);
@@ -2793,16 +2544,11 @@ class AppStore {
     if (this.serverId && !servers.some(s => s.id === this.serverId)) this.closeServer();
   }
   restoreConfiguration(value: unknown) {
-    const raw = value as { servers: Server[]; preferences: ConfigurationDocument["preferences"]; bindings?: Record<string, string> };
-    if (!raw || !Array.isArray(raw.servers)) throw new LocalizedError(t("잘못된 앱 백업"));
-    const checked = parseConfiguration({ schemaVersion: 1, servers: raw.servers.map(s => ({ name: s.name, baseUrl: s.baseUrl })), extensions: [], preferences: raw.preferences });
-    if (raw.servers.some(s => typeof s.id !== "string" || typeof s.token !== "string")) throw new LocalizedError(t("잘못된 서버 백업"));
-    this.replaceServerList(raw.servers.map((s, i) => ({ ...checked.servers[i]!, id: s.id, token: s.token })));
-    this.prefs.apply(checked.preferences);
+    const parsed = parseAppBackup(value);
+    this.replaceServerList(parsed.servers);
+    this.prefs.apply(parsed.preferences);
     // A backup taken before shortcuts were part of it has none: leave the current ones.
-    if (raw.bindings && typeof raw.bindings === "object") {
-      this.prefs.replaceBindings(parseKeybindings(raw.bindings));
-    }
+    if (parsed.bindings) this.prefs.replaceBindings(parsed.bindings);
   }
 }
 
