@@ -36,6 +36,7 @@
 	import VoiceRecording from "./VoiceRecording.svelte";
 	import AttachmentStrip from "./AttachmentStrip.svelte";
 	import QueuedList from "./QueuedList.svelte";
+	import ScheduledList from "./ScheduledList.svelte";
 	import StatusLine from "./StatusLine.svelte";
 	import ExtensionPanels from "../extensions/ExtensionPanels.svelte";
 	import SlashMenu from "./SlashMenu.svelte";
@@ -64,6 +65,8 @@
 	const menuOptionId = (i: number) => `${domId}-menu-opt-${i}`;
 	const pane = getPane();
 	const chat = $derived(app.chatOf(pane.id));
+	/** This conversation's scheduled tasks (the open server's list, kept current by App), paused ones included. */
+	const scheduled = $derived(app.schedules.listOf(app.serverId, pane.id));
 	/** A new chat is a real, still empty session (outside a group); its folder can be changed until the first message. */
 	const freshSession = $derived(!!pane.id && !app.groupOf(pane.id) && !!chat?.ready && !chat.loadError && chat.items.length === 0);
 	const whereShown = $derived(!pane.id || freshSession);
@@ -752,6 +755,10 @@
 	<div class="box" data-part="composer.box" class:glow-working={running || compacting} class:glow-compacting={compacting} class:disabled={app.net !== "online"} data-level={running && !compacting && app.effectiveModelOf(pane.id)?.reasoning ? app.effectiveOf(pane.id).thinkingLevel : undefined}>
 		{#if slashOpen}
 			<SlashMenu items={menuItems} index={slashIndex} label={menuKind === "cd" ? msg("폴더") : menuKind === "file" ? msg("파일") : menuKind === "mention" ? msg("멘션") : argSuggestions ? t("{cmd} 값 선택", { cmd: commandText(argSuggestions.cmd) }) : msg("명령")} empty={menuKind === "cd" ? msg("일치하는 폴더가 없습니다") : menuKind === "file" ? msg("일치하는 파일이 없습니다") : argSuggestions?.empty} listId={menuListId} optionId={menuOptionId} onpick={pickRecommendation} onhover={(i) => (slashIndex = i)} />
+		{/if}
+		{#if scheduled.length && app.serverId && pane.id}
+			<!-- this conversation's scheduled tasks, folded to the soonest; the message queue (delivered sooner) stays nearer the input -->
+			{#key pane.id}<ScheduledList items={scheduled} serverId={app.serverId} sessionId={pane.id} divided={!!chat?.waiting.length} />{/key}
 		{/if}
 		{#if chat?.waiting.length}
 			<!-- keyed by session: a height pulled in one conversation does not carry over when the pane switches to another -->

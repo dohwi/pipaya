@@ -160,6 +160,16 @@
 		untrack(() => add(id));
 	});
 
+	// A task's row above the input opens this page with that task in the edit form (a used-up or past one-time task
+	// asks for a new time, as "다시 예약" does). Waits for the list; a task that is gone by then just shows the list.
+	$effect(() => {
+		const id = app.scheduleEdit;
+		if (!id || !list) return;
+		app.scheduleEdit = null;
+		const s = list.find((x) => x.id === id);
+		if (s) untrack(() => edit(s, s.kind === "once" && (isUsedUp(s) || (!s.enabled && (s.runAt ?? 0) <= Date.now()))));
+	});
+
 	async function submit(e: Event) {
 		e.preventDefault();
 		const f = form;

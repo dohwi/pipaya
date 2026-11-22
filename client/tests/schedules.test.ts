@@ -12,10 +12,13 @@ import {
 	MAX_EVERY_MS,
 	MIN_EVERY_MS,
 	cadence,
+	composerSchedules,
 	everyMs,
 	everyProblem,
 	isUsedUp,
 	labelOf,
+	lastRunTone,
+	nextRunLabel,
 	parseLocal,
 	purgeAt,
 	resultOf,
@@ -211,5 +214,32 @@ describe("summarizeSchedules", () => {
 		const none = summarizeSchedules([]);
 		expect(none.all).toEqual({ count: 0, next: null });
 		expect(none.bySession.size).toBe(0);
+	});
+});
+
+describe("above the input", () => {
+	test("one conversation's tasks still to come: on ones soonest first, paused after, used-up ones left out", () => {
+		const list = [
+			task({ id: "b", nextRunAt: 30 }),
+			task({ id: "off", enabled: false, nextRunAt: null, createdAt: 2 }),
+			task({ id: "a", nextRunAt: 10 }),
+			task({ id: "used", kind: "once", enabled: false, lastStatus: "ok" }),
+			task({ id: "elsewhere", sessionId: "z" }),
+		];
+		expect(composerSchedules(list, "s").map((s) => s.id)).toEqual(["a", "b", "off"]);
+		expect(composerSchedules(list, "none")).toEqual([]);
+	});
+	test("the last run's trouble as a tone", () => {
+		expect(lastRunTone(task({ lastStatus: null }))).toBeNull();
+		expect(lastRunTone(task({ lastStatus: "ok" }))).toBeNull();
+		expect(lastRunTone(task({ lastStatus: "skipped_busy" }))).toBe("warn");
+		expect(lastRunTone(task({ lastStatus: "skipped_closed" }))).toBe("warn");
+		expect(lastRunTone(task({ lastStatus: "error" }))).toBe("danger");
+	});
+	test("the next run: the time alone today, the day with it otherwise", () => {
+		const now = new Date(2026, 10, 22, 9, 0).getTime();
+		expect(nextRunLabel(new Date(2026, 10, 22, 14, 30).getTime(), now, "en-GB")).toBe("14:30");
+		expect(nextRunLabel(new Date(2026, 10, 23, 9, 5).getTime(), now, "en-GB")).toBe("23 Nov, 09:05");
+		expect(nextRunLabel(new Date(2026, 10, 22, 14, 30).getTime(), now, "ko-KR")).toBe("오후 02:30");
 	});
 });

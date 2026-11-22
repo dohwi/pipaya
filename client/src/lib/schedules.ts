@@ -136,3 +136,27 @@ export function summarizeSchedules(list: readonly Pick<Schedule, "sessionId" | "
 	}
 	return { all, bySession };
 }
+
+/**
+ * The tasks shown above one conversation's input: still to come (not used up), soonest first, switched-off ones after
+ * the switched-on ones (dimmed there). The settings page keeps the used-up ones as history; the composer does not.
+ */
+export const composerSchedules = (list: readonly Schedule[], sessionId: string): Schedule[] =>
+	sortSchedules(list.filter((s) => s.sessionId === sessionId && !isUsedUp(s)));
+
+/** The last run went wrong or was skipped: the composer row marks its time. */
+export const lastRunTone = (s: Pick<Schedule, "lastStatus">): "warn" | "danger" | null =>
+	s.lastStatus === "error" ? "danger" : s.lastStatus?.startsWith("skipped") ? "warn" : null;
+
+/**
+ * The next run in a few characters: the time alone today ("14:30", "오후 2:30"), else the day and time ("11월 23일 09:00").
+ * `now` and `locale` are for tests.
+ */
+export function nextRunLabel(ts: number, now: number = Date.now(), locale?: string): string {
+	const a = new Date(ts);
+	const b = new Date(now);
+	const today = a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+	return today
+		? a.toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" })
+		: a.toLocaleString(locale, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+}

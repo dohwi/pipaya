@@ -1,6 +1,6 @@
 import { abortable } from "./abortable";
 import { isUnsupportedRoute, type Api } from "./api";
-import { NO_SCHEDULES, summarizeSchedules, type ScheduleSummary } from "./schedules";
+import { NO_SCHEDULES, composerSchedules, summarizeSchedules, type ScheduleSummary } from "./schedules";
 import type { Schedule } from "./types";
 
 /** Events come in bursts (a task runs, saves, runs again): read the list once after they pause. */
@@ -28,6 +28,17 @@ export class ScheduleBook {
 	/** Switched-on tasks of one conversation. */
 	of(serverId: string, sessionId: string): ScheduleSummary {
 		return this.summaries[serverId]?.bySession.get(sessionId) ?? NO_SCHEDULES;
+	}
+	/** The tasks shown above one conversation's input (switched-off ones included, used-up ones not), soonest first. */
+	listOf(serverId: string | null, sessionId: string | null): Schedule[] {
+		const list = serverId && sessionId ? this.lists[serverId] : undefined;
+		return list ? composerSchedules(list, sessionId!) : [];
+	}
+	/** A task changed here (paused, switched on, deleted): shown at once, before the server's event brings the list back. */
+	patch(serverId: string, id: string, next: Schedule | null): void {
+		const list = this.lists[serverId];
+		if (!list) return;
+		this.lists[serverId] = next ? list.map((s) => (s.id === id ? next : s)) : list.filter((s) => s.id !== id);
 	}
 	/** False once the server turned out to be too old to have scheduled tasks. */
 	supported(serverId: string | null): boolean {
