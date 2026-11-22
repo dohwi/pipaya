@@ -572,6 +572,7 @@ export const en: Record<string, string> = {
 	"지난 작업 {n}개를 지웠습니다": "Deleted {n} past {n#task|tasks}",
 	"예약 작업을 지우지 못했습니다": "Could not delete the scheduled task",
 	"이 대화의 예약 작업": "Scheduled tasks of this chat",
+	"{n}개 더": "{n} more",
 	"다음 {when}": "Next {when}",
 	"{name} 멈추기": "Stop {name}",
 	"일시정지 또는 삭제": "Pause or delete",

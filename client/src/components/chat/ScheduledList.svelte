@@ -8,12 +8,14 @@
 	import { t } from "../../lib/i18n";
 	import { reflow, rowIn, rowOut } from "../../lib/motion";
 	import { cadence, labelOf, lastRunTone, nextRunLabel, resultOf } from "../../lib/schedules";
+	import { QUEUE_BADGE_W } from "../../lib/queue";
 	import { app } from "../../lib/store.svelte";
 	import type { Schedule } from "../../lib/types";
 
 	/**
 	 * The scheduled tasks of one conversation, above its input like the message queue (QueuedList). Folded by default:
-	 * the soonest task and a "+N" that unfolds the rest. A row opens the task in Settings > Scheduled tasks; the button
+	 * the soonest task, and under it one centred button ("N개 더" / "접기") that unfolds and folds the rest. It stays put
+	 * when the list opens (the composer is anchored at the bottom, rows grow upwards), so the same spot folds it again. A row opens the task in Settings > Scheduled tasks; the button
 	 * at its end (✕, like the queue's) asks whether to pause or delete it, or switches a paused task back on. Paused tasks stay, dimmed.
 	 * `divided`: the message queue follows, so a hairline separates the two lists.
 	 */
@@ -22,6 +24,8 @@
 	let open = $state(false);
 	const shown = $derived(open ? items : items.slice(0, 1));
 	const more = $derived(items.length - 1);
+	/** Two digits wide: a badge numbered 10 is as wide as one numbered 1, so the names stay on one line (QueueBadge too). */
+	const BADGE_W = QUEUE_BADGE_W;
 	// Once one task is left there is nothing to unfold: the next time there are more it starts folded again.
 	$effect(() => {
 		if (items.length < 2) open = false;
@@ -100,14 +104,11 @@
 			{@const tone = s.enabled ? lastRunTone(s) : null}
 			<li class:off={!s.enabled} animate:reflow in:rowIn out:rowOut>
 				<button type="button" class="so" onclick={() => app.openScheduleEdit(s.id)} title={tipOf(s)}>
-					<span class="sb"><Badge size="sm" mono><span class="in"><Icon name="clock" /><span class="n">{open ? i + 1 : items.length}</span></span></Badge></span>
+					<span class="sb"><Badge size="sm" mono minWidth={BADGE_W}><span class="in"><Icon name="clock" /><span class="n">{i + 1}</span></span></Badge></span>
 					<span class="st"><span class="name">{labelOf(s)}</span> · {cadence(s)}</span>
 					{#if tone}<StatusDot {tone} size={6} />{/if}
 					<span class="when {tone ?? ''}">{s.enabled && s.nextRunAt ? t("다음 {when}", { when: nextRunLabel(s.nextRunAt) }) : t("꺼짐")}</span>
 				</button>
-				{#if i === 0 && more > 0 && !open}
-					<button type="button" class="tog" onclick={() => (open = true)} aria-expanded="false" title={t("펼치기")} aria-label={t("펼치기")}><span class="plus">+{more}</span><Icon name="chevron-down" /></button>
-				{/if}
 				{#if s.enabled}
 					<button type="button" class="sx" onclick={() => (asking = s)} disabled={busy} aria-label={t("{name} 멈추기", { name: labelOf(s) })} title={t("일시정지 또는 삭제")}><Icon name="x" /></button>
 				{:else}
@@ -116,9 +117,11 @@
 			</li>
 		{/each}
 	</ul>
-	{#if open}
-		<!-- under the list, not in the first row: a button there pushed that row's time off the column of the others -->
-		<button type="button" class="fold" onclick={() => (open = false)} aria-expanded="true" title={t("접기")} aria-label={t("접기")}><Icon name="chevron-up" /></button>
+	{#if more > 0}
+		<!-- one button in one place for both: under the list, centred (in the first row it pushed that row's time off the column) -->
+		<button type="button" class="fold" onclick={() => (open = !open)} aria-expanded={open}>
+			<span>{open ? t("접기") : t("{n}개 더", { n: more })}</span><Icon name={open ? "chevron-up" : "chevron-down"} />
+		</button>
 	{/if}
 </div>
 
@@ -176,15 +179,28 @@
 	.fade-top.fade-bottom {
 		mask-image: linear-gradient(to bottom, transparent, #000 16px, #000 calc(100% - 16px), transparent);
 	}
-	/* a 16px strip under the list (on the 4px row gap), centred like QueuedList's grip */
+	/* A 16px line under the list (after the 4px row gap), centred on the box: label + chevron, sized to its content. */
 	.fold {
-		display: grid;
-		place-items: center;
-		width: 32px;
+		position: relative;
+		display: flex;
+		align-items: center;
+		gap: 4px;
 		height: 16px;
 		margin: 4px auto 0;
+		padding: 0 8px;
 		border-radius: var(--radius-xs);
 		color: var(--text-faint);
+		font-size: var(--fs-xs);
+		line-height: 16px; /* whole-pixel label beside the 14px chevron (rule 3) */
+		font-variant-numeric: tabular-nums;
+	}
+	/* a finger needs more than 16px: the hit box grows 4px up and down (into the row gap and the space below) */
+	@media (pointer: coarse) {
+		.fold::after {
+			content: "";
+			position: absolute;
+			inset: -4px 0;
+		}
 	}
 	.sched li {
 		display: flex;
@@ -258,21 +274,6 @@
 	.off .when {
 		opacity: 0.55;
 	}
-	.tog {
-		flex: none;
-		display: inline-flex;
-		align-items: center;
-		gap: 4px;
-		height: 22px;
-		padding: 0 4px;
-		border-radius: var(--radius-sm);
-		color: var(--text-faint);
-		font-size: var(--fs-xs);
-		font-variant-numeric: tabular-nums;
-	}
-	.plus {
-		line-height: 16px;
-	}
 	.sx {
 		flex: none;
 		display: grid;
@@ -284,14 +285,12 @@
 		color: var(--text-faint);
 	}
 	@media (hover: hover) {
-		.tog:hover,
 		.fold:hover,
 		.sx:hover:not(:disabled) {
 			color: var(--text);
 			background: var(--bg-hover);
 		}
 	}
-	.tog :global(svg),
 	.fold :global(svg),
 	.sx :global(svg) {
 		width: 14px;

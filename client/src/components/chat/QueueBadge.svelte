@@ -1,7 +1,7 @@
 <script lang="ts">
 	import Badge from "../ui/Badge.svelte";
 	import Icon from "../ui/Icon.svelte";
-	import { queuedLabel, queuedTone, type QueuedView } from "../../lib/queue";
+	import { QUEUE_BADGE_W, queuedLabel, queuedTone, type QueuedView } from "../../lib/queue";
 
 	/** Icon + order number only; the full mode name stays in the tooltip and the accessible label. */
 	let { q }: { q: QueuedView } = $props();
@@ -9,7 +9,7 @@
 </script>
 
 <span class="qb" title={label} aria-label={label} role="img">
-	<Badge variant="soft" size="sm" mono tone={queuedTone(q.mode)}>
+	<Badge variant="soft" size="sm" mono tone={queuedTone(q.mode)} minWidth={QUEUE_BADGE_W}>
 		<span class="in"><Icon name={q.mode === "steer" ? "bolt" : "list"} /><span class="n">{q.n}</span></span>
 	</Badge>
 </span>
