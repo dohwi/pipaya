@@ -286,11 +286,18 @@
 		color: var(--text-faint);
 	}
 	@media (hover: hover) {
-		.fold:hover,
 		.sx:hover:not(:disabled) {
 			color: var(--text);
 			background: var(--bg-hover);
 		}
+		/* text only, like a queue row: a filled box here read as a border floating between the list and the input
+		   (and stayed after a click, since the pointer rests on it while the list opens upwards) */
+		.fold:hover {
+			color: var(--text);
+		}
+	}
+	.fold:focus-visible {
+		color: var(--text);
 	}
 	.fold :global(svg),
 	.sx :global(svg) {
