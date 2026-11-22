@@ -356,7 +356,7 @@
 		display: flex;
 		align-items: center;
 		gap: 4px;
-		padding: 12px 12px;
+		padding: 12px;
 		pointer-events: none;
 	}
 	.bar > * {
