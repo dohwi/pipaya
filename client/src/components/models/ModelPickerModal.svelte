@@ -4,7 +4,7 @@
 	import TierOptions from "./TierOptions.svelte";
 	import type { ServiceTier } from "../../lib/types";
 	import { t } from "../../lib/i18n";
-	import { slidingIndicator } from "../../lib/sliding-indicator";
+	import Ladder from "../ui/Ladder.svelte";
 	import { collapseIn, collapseOut } from "../../lib/motion";
 	import Icon from "../ui/Icon.svelte";
 	import Badge from "../ui/Badge.svelte";
@@ -173,13 +173,9 @@
 
 	{#snippet after()}
 		{#if reasoning}
-		<div class="sec" class:gone={!sel} in:collapseIn out:collapseOut>
+		<div class="sec" in:collapseIn out:collapseOut>
 			<div class="section-label">{t("추론 강도")}</div>
-			<div class="seg" role="group" aria-label={t("추론 강도")} use:slidingIndicator={{ selector: "button.on", variant: "level", radius: "calc(var(--radius) - 3px)", mirror: ["data-level"] }}>
-				{#each available as l (l)}
-					<button type="button" class:on={shownLvl === l} aria-pressed={shownLvl === l} data-level={l} disabled={!sel} onclick={() => strength(l)}>{l}</button>
-				{/each}
-			</div>
+			<Ladder label={t("추론 강도")} options={available.map((l) => ({ id: l, label: l, level: l }))} value={shownLvl} disabled={!sel} onchange={strength} />
 		</div>
 		{/if}
 		{#if tierApi && info && (info.openRouterTiers || selectedTier) && !info.imageGeneration}
@@ -254,29 +250,6 @@
 		flex-direction: column;
 		gap: 4px;
 		transition: opacity var(--motion-fast) var(--ease-std);
-	}
-	.sec.gone {
-		opacity: 0.4;
-	}
-	.seg {
-		display: grid;
-		grid-auto-flow: column;
-		grid-auto-columns: minmax(0, 1fr);
-	}
-	.seg button {
-		padding: 0;
-		font-size: var(--fs-2xs);
-	}
-	/* no coloured dot before the other strengths (the model page dropped it in #311): only the chosen one carries its colour */
-	.seg button.on {
-		background: var(--lv-soft);
-		color: var(--lv);
-		box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--lv) 45%, transparent);
-		font-weight: 600;
-	}
-	.seg:global([data-indicator-ready]) button.on {
-		background: transparent;
-		box-shadow: none;
 	}
 	.manage {
 		display: inline-flex;
