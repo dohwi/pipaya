@@ -105,7 +105,7 @@
 	}
 </script>
 
-<svelte:window onpointerdown={outside} onkeydown={(e) => e.key === "Escape" && shown && close()} />
+<svelte:window onpointerdown={outside} onkeydown={(e) => { if (e.key === "Escape" && shown) { e.preventDefault(); e.stopPropagation(); close(); } }} />
 
 {#if shown}
 	<!-- The menu container only routes keys to its items (arrows, Esc); the items are the interactive elements. -->

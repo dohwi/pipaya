@@ -50,9 +50,10 @@ if "--seed" in sys.argv:
 SEEDS = {"pipaya.servers": json.dumps([{"id": "dev", "name": "dev", "baseUrl": base, "token": tok}]), "pipaya.server": json.dumps("dev")}
 FORCE = "()=>{const s=document.createElement('style');s.textContent='.side .dirnew,.side .listbtn{opacity:1 !important}.side .acts{display:flex !important}';document.head.appendChild(s)}"
 MEASURE = """()=>{const R=e=>e.getBoundingClientRect();const q=s=>[...document.querySelectorAll(s)].filter(e=>R(e).width>0);
- const cx=s=>{const e=q(s)[0];if(!e)return null;const b=R(e.querySelector('svg,img'));return b.left+b.width/2};
+ const cx=s=>{const e=q(s)[0];if(!e)return null;const g=e.querySelector('svg,img')??e;const b=R(g);return b.left+b.width/2};
  const box=s=>{const e=q(s)[0];if(!e)return null;const r=R(e);return [r.left,r.top,r.right,r.bottom]};
- return {W:R(q('.side')[0]).width,
+ const side=q('.side')[0];
+ return {W:side?R(side).width:0,
   cols:[['chevron',cx('.dir .chev')],['folder icon',cx('.dir .dicon')],['tab icon',cx('.item.nested.tab .lead')],['list button',cx('.dir .listbtn')],['+ ⋯ ↺',cx('.dir .dirnew:not(.listbtn)')]],
   extra:[['group icon',cx('.grprow .lead')],['pane icon',cx('.item.member .lead')],['⋯ (tab)',cx('.item.tab .more')],['server chevron',cx('.srvhead .chev')],['server +',cx('.srvhead .dirnew:not(.listbtn)')]],
   brand:box('.brandrow'),card:box('.srv.band'),

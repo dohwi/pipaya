@@ -45,6 +45,8 @@
 
 	// Touch: tap = steer, long-press = choose steer / queue. The queue circle is hidden there (see CSS).
 	let menu = $state(false);
+	let menuEl = $state<HTMLDivElement | null>(null);
+	let steerBtn = $state<HTMLButtonElement | null>(null);
 	let timer: ReturnType<typeof setTimeout> | undefined;
 	let longPressed = false;
 	const coarse = () => typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches;
@@ -72,17 +74,52 @@
 		// touch: the queue choice hides behind a long press, which nothing on screen shows; say it once
 		if (coarse()) hintOnce("steer-hold", t("끼워 넣기 버튼을 길게 누르면 대기열에 넣을 수도 있습니다"));
 	}
+	function closeMenu(returnFocus = false) {
+		menu = false;
+		if (returnFocus) steerBtn?.focus();
+	}
 	function pick(fn: () => void) {
 		menu = false;
 		fn();
 	}
+	function menuKey(e: KeyboardEvent) {
+		if (e.key === "Escape") {
+			e.preventDefault();
+			e.stopPropagation();
+			closeMenu(true);
+			return;
+		}
+		const items = [...(menuEl?.querySelectorAll<HTMLElement>('[role="menuitem"]') ?? [])];
+		if (!items.length) return;
+		const at = items.indexOf(document.activeElement as HTMLElement);
+		const next =
+			e.key === "ArrowDown" ? (at + 1) % items.length
+			: e.key === "ArrowUp" ? (at - 1 + items.length) % items.length
+			: e.key === "Home" ? 0
+			: e.key === "End" ? items.length - 1
+			: -1;
+		if (next < 0) return;
+		e.preventDefault();
+		items[next]!.focus();
+	}
 	$effect(() => {
 		if (!menu) return;
-		const close = () => (menu = false);
+		const first = menuEl?.querySelector<HTMLElement>('[role="menuitem"]');
+		if (first) first.focus();
+		const close = () => closeMenu();
+		const onKey = (e: KeyboardEvent) => {
+			if (e.key === "Escape") {
+				e.preventDefault();
+				e.stopPropagation();
+				closeMenu(true);
+			}
+		};
 		const id = setTimeout(() => addEventListener("pointerdown", close, { once: true }), 0);
+		addEventListener("keydown", onKey, true);
 		return () => {
 			clearTimeout(id);
 			removeEventListener("pointerdown", close);
+			removeEventListener("keydown", onKey, true);
 		};
 	});
 	$effect(() => {
@@ -109,7 +146,9 @@
 					{#if hasInput}
 					<div class="steerwrap">
 						{#if menu}
-							<div class="menu" role="menu" in:surfaceIn={{ y: 8 }} out:surfaceOut={{ y: 8 }}>
+							<!-- The menu container only routes arrow/Esc keys to its menuitem buttons. -->
+							<!-- svelte-ignore a11y_no_static_element_interactions -->
+							<div class="menu" role="menu" tabindex="-1" bind:this={menuEl} onkeydown={menuKey} in:surfaceIn={{ y: 8 }} out:surfaceOut={{ y: 8 }}>
 								<button class="opt" role="menuitem" onpointerdown={(e) => e.stopPropagation()} onclick={() => pick(onsteer)}>
 									<span class="ico bolt"><Icon name="bolt" /></span><span class="lbl">{t("끼워 넣기")}</span><span class="desc">{t("지금 답변 중에 전달")}</span>
 								</button>
@@ -119,7 +158,10 @@
 							</div>
 						{/if}
 						<button
+							bind:this={steerBtn}
 							class="mode primary"
+							aria-haspopup="menu"
+							aria-expanded={menu}
 							onpointerdown={pressStart}
 							onpointerup={pressEnd}
 							onpointerleave={pressEnd}

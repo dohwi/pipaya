@@ -584,7 +584,10 @@ class AppStore {
 
   /* ---------- boot / connection ---------- */
 
-  init() {
+  private stopInit: (() => void) | null = null;
+
+  init(): () => void {
+    if (this.stopInit) return this.stopInit;
     this.bindUpdateHints();
     void rehydrateSettingsFromDurable().then((restored) => {
       if (restored) {
@@ -601,7 +604,7 @@ class AppStore {
     // Session @names are stored once (Korean) and written per UI language at render (lib/member-names), so a switch renames nothing.
     // Client extensions hear the change too (they may keep text in it).
     let language = getLang();
-    onLangChange(() => {
+    const stopLang = onLangChange(() => {
       if (getLang() === language) return;
       language = getLang();
       extensions.emit({ type: "language_changed", sessionId: null, at: Date.now() });
@@ -627,22 +630,32 @@ class AppStore {
       // instead of trusting it. Still no reload: the replay covers the gap.
       this.resyncLinks(away >= LONG_AWAY_MS);
     };
-    window.addEventListener("blur", left);
-    document.addEventListener("visibilitychange", () => {
+    const onVisibility = () => {
       if (document.hidden) left();
       else wake();
-    });
+    };
+    const onOnline = () => this.resyncLinks(true); // the network changed: the old stream is on a dead route
+    window.addEventListener("blur", left);
+    document.addEventListener("visibilitychange", onVisibility);
     window.addEventListener("focus", wake);
     window.addEventListener("pageshow", wake);
-    window.addEventListener(
-      "online",
-      () => this.resyncLinks(true), // the network changed: the old stream is on a dead route
-    );
+    window.addEventListener("online", onOnline);
     const saved = read<string | null>(K.currentServer, null);
     const first = this.servers.find((s) => s.id === saved) ?? this.servers[0];
     this.syncLinks(); // every saved server goes live at once; `first` is only the one in view
     if (first) this.openServer(first.id);
     void this.ensureLocalServer();
+    const dispose = () => {
+      stopLang();
+      window.removeEventListener("blur", left);
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("focus", wake);
+      window.removeEventListener("pageshow", wake);
+      window.removeEventListener("online", onOnline);
+      if (this.stopInit === dispose) this.stopInit = null;
+    };
+    this.stopInit = dispose;
+    return dispose;
   }
 
   /**

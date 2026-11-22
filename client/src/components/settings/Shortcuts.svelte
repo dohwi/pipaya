@@ -1,5 +1,5 @@
 <script lang="ts">
-	import Button from "../ui/Button.svelte";
+	import ConfirmButton from "../ui/ConfirmButton.svelte";
 	import SearchField from "../ui/SearchField.svelte";
 	import { msg, t } from "../../lib/i18n";
 	import { onDestroy } from "svelte";
@@ -236,7 +236,7 @@
 	{/if}
 
 	<div class="foot">
-		<Button size="sm" disabled={!changed} onclick={() => { app.prefs.resetBindings(); extensions.resetShortcutCombos(); }}>{t("모두 기본값으로")}</Button>
+		<ConfirmButton size="sm" confirmLabel={t("정말 초기화")} disabled={!changed} onconfirm={() => { app.prefs.resetBindings(); extensions.resetShortcutCombos(); }}>{t("모두 기본값으로")}</ConfirmButton>
 	</div>
 </section>
 

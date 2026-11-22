@@ -2056,4 +2056,5 @@ export const en: Record<string, string> = {
 	"실시간 변환 서버 주소를 입력하세요.": "Enter the realtime transcription server address.",
 	"변경 취소": "Discard changes",
 	"저장하지 않은 변경이 있습니다. 다른 화면에 다녀와도 남아 있습니다.": "Unsaved changes. They stay here while you look at other screens.",
+	"정말 초기화": "Confirm reset",
 };

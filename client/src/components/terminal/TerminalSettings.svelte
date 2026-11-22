@@ -1,13 +1,14 @@
 <script lang="ts">
-	import Button from "../ui/Button.svelte";
+	import ConfirmButton from "../ui/ConfirmButton.svelte";
 	import { t } from "../../lib/i18n";
 	import { app } from "../../lib/store.svelte";
-	import { DEFAULT_TERMINAL_FONT, TERMINAL_LIMITS } from "../../lib/terminal-prefs";
+	import { DEFAULT_TERMINAL, DEFAULT_TERMINAL_FONT, TERMINAL_LIMITS } from "../../lib/terminal-prefs";
 	import Switch from "../ui/Switch.svelte";
 	import Select from "../ui/Select.svelte";
 	import SettingRow from "../ui/SettingRow.svelte";
 
 	const p = $derived(app.prefs.terminal);
+	const changed = $derived(JSON.stringify(p) !== JSON.stringify(DEFAULT_TERMINAL));
 	const L = TERMINAL_LIMITS;
 	const quote = (name: string) => (/^[\w-]+$/.test(name) ? name : `"${name}"`);
 	/** The value is a whole font-family list; each preset is one such list, the first being the default. */
@@ -21,7 +22,7 @@
 
 <div class="head">
 	<div class="section-label">{t("터미널")}</div>
-	<Button size="sm" onclick={() => app.prefs.resetTerminal()}>{t("기본값으로")}</Button>
+	<ConfirmButton size="sm" confirmLabel={t("정말 초기화")} disabled={!changed} onconfirm={() => app.prefs.resetTerminal()}>{t("기본값으로")}</ConfirmButton>
 </div>
 <SettingRow label={t("글꼴")} for="terminal-font">
 	<Select
