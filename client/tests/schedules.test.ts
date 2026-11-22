@@ -218,15 +218,16 @@ describe("summarizeSchedules", () => {
 });
 
 describe("above the input", () => {
-	test("one conversation's tasks still to come: on ones soonest first, paused after, used-up ones left out", () => {
+	test("one conversation's queue lists the tasks that will run, soonest first: paused, failed-off and used-up ones are left out", () => {
 		const list = [
 			task({ id: "b", nextRunAt: 30 }),
 			task({ id: "off", enabled: false, nextRunAt: null, createdAt: 2 }),
 			task({ id: "a", nextRunAt: 10 }),
 			task({ id: "used", kind: "once", enabled: false, lastStatus: "ok" }),
+			task({ id: "failed", enabled: false, nextRunAt: null, lastStatus: "error", failCount: 5 }),
 			task({ id: "elsewhere", sessionId: "z" }),
 		];
-		expect(composerSchedules(list, "s").map((s) => s.id)).toEqual(["a", "b", "off"]);
+		expect(composerSchedules(list, "s").map((s) => s.id)).toEqual(["a", "b"]);
 		expect(composerSchedules(list, "none")).toEqual([]);
 	});
 	test("the last run's trouble as a tone", () => {

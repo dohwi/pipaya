@@ -6,7 +6,7 @@ export type IconName =
 	| "menu" | "plus" | "send" | "stop" | "mic" | "mic-rec" | "chat" | "trash" | "edit" | "copy" | "check" | "x" | "chevron-down"
 	| "chevron-right" | "chevron-left" | "settings" | "sun" | "moon" | "monitor" | "image" | "terminal" | "file" | "attach" | "search"
 	| "folder" | "pencil" | "brain" | "fork" | "reply" | "retry" | "shield" | "alert" | "wifi-off" | "key" | "arrow-down" | "arrow-up"
-	| "undo" | "download" | "bolt" | "list" | "more" | "sidebar" | "star" | "cache" | "gauge" | "clock" | "columns" | "unlink" | "clip" | "skill" | "prompt" | "keyboard" | "server" | "widgets" | "phone" | "expand" | "shrink" | "group" | "group-open" | "sparkles" | "arrow-left" | "arrow-right" | "plug" | "pin" | "bot" | "bell" | "bell-off" | "repo" | "globe" | "pause" | "play" | "chevron-up";
+	| "undo" | "download" | "bolt" | "list" | "more" | "sidebar" | "star" | "cache" | "gauge" | "clock" | "columns" | "unlink" | "clip" | "skill" | "prompt" | "keyboard" | "server" | "widgets" | "phone" | "expand" | "shrink" | "group" | "group-open" | "sparkles" | "arrow-left" | "arrow-right" | "plug" | "pin" | "bot" | "bell" | "bell-off" | "repo" | "globe";
 
 export const ICON_PATHS: Record<IconName, string> = {
 	menu: "M4 7h16M4 12h16M4 17h16",
@@ -20,8 +20,6 @@ export const ICON_PATHS: Record<IconName, string> = {
 	// recording: the microphone with a filled dot, so it never reads as the agent's square stop button
 	"mic-rec": "M12 3a3 3 0 0 1 3 3v5a3 3 0 0 1-6 0V6a3 3 0 0 1 3-3M5 11a7 7 0 0 0 14 0M12 18v3M9 21h6M19.5 4.5h.01",
 	stop: "M7 7h10v10H7z",
-	pause: "M9 6v12M15 6v12",
-	play: "M8 5.5v13l10.5-6.5z",
 	// drawn 0.75 higher than its first sketch: the bubble with its tail spans 4.77-19.25, centred on 12 like every other glyph
 	chat: "M21 11.25a8 8 0 0 1-11.6 7.1L4 19.25l1-4.6A8 8 0 1 1 21 11.25z",
 	trash: "M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3",
@@ -32,7 +30,6 @@ export const ICON_PATHS: Record<IconName, string> = {
 	check: "M5 12.5l4.5 4.5L19 7.5",
 	x: "M6 6l12 12M18 6L6 18",
 	"chevron-down": "M6 9l6 6 6-6",
-	"chevron-up": "M6 15l6-6 6 6",
 	"chevron-right": "M9 6l6 6-6 6",
 	"chevron-left": "M15 6l-6 6 6 6",
 	settings: "M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z",
