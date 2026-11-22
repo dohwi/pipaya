@@ -176,10 +176,10 @@
 		</div>
 	{/if}
 	<div class="foot">
-		<!-- the agent decides: its recommendation when it gave one. A quiet text action, never a second primary button. -->
-		<button type="button" class="leave" class:on={left(tab)} onclick={() => settle(null)} title={cur.recommended ? t("추천: {option}", { option: cur.recommended }) : undefined}>
+		<!-- the agent decides (its recommendation when it gave one): an outlined button like the options, never a second primary -->
+		<Button size="sm" class={["leave", left(tab) && "on"]} aria-pressed={items ? left(tab) : undefined} onclick={() => settle(null)} title={cur.recommended ? t("추천: {option}", { option: cur.recommended }) : undefined}>
 			<Icon name="sparkles" />{t("알아서 정해 줘")}
-		</button>
+		</Button>
 		{#if cur.multiple}
 			<Button variant="primary" size="sm" disabled={!multiAnswer.length} onclick={sendPicks}>
 				{multiAnswer.length ? t("{n}개 선택 완료", { n: multiAnswer.length }) : t("선택 완료")}
@@ -373,34 +373,17 @@
 		align-items: center;
 		justify-content: space-between;
 		gap: 8px;
-		min-height: 32px;
 	}
-	.leave {
-		display: inline-flex;
-		align-items: center;
-		gap: 4px;
-		height: 32px;
-		padding: 0 8px;
-		margin-left: -8px; /* the glyph, not the button, on the card's 12px inner line (DESIGN rule 5) */
-		border-radius: var(--radius-sm);
-		color: var(--text-dim);
-		font-size: var(--fs-xs);
-		transition:
-			background var(--motion-fast) var(--ease-std),
-			color var(--motion-fast) var(--ease-std);
-	}
-	@media (hover: hover) {
-		.leave:hover {
-			color: var(--text);
-			background: color-mix(in srgb, var(--warn) 12%, transparent);
-		}
-	}
-	.leave.on {
-		color: var(--warn);
-	}
-	.leave :global(svg) {
+	/* the sparkle in the card's warn colour: the same mark as a recommended option, so it reads "the agent's pick" */
+	.foot :global(.btn.leave svg) {
 		width: 14px;
 		height: 14px;
+		color: var(--warn);
+	}
+	/* chosen on a tab of several questions: the picked option's look (a clear border) */
+	.foot :global(.btn.leave.on) {
+		border-color: var(--text);
+		box-shadow: inset 0 0 0 1px var(--text);
 	}
 	/* the recommended answer looks like every other button (so it never reads as "already chosen"); only a small sparkle
 	   leads its text. The sparkle is part of the text, so a long answer wraps around it and nothing is covered. */
