@@ -177,7 +177,7 @@
 		</div>
 		{/if}
 		{#if tierApi && info && (takesTier(info) || selectedTier) && !info.imageGeneration}
-			{#key info.provider + ":" + info.id}<TierOptions api={tierApi} model={info.id} lookup={!!info.openRouterTiers} offered={info.serviceTiers} value={selectedTier} onchange={apply} />{/key}
+			{#key info.provider + ":" + info.id}<TierOptions api={tierApi} model={info.tierCatalogId ?? info.id} lookup={!!info.openRouterTiers || !!info.tierCatalogId} offered={info.serviceTiers} proxy={!info.openRouterTiers} value={selectedTier} onchange={apply} />{/key}
 		{/if}
 	{/snippet}
 

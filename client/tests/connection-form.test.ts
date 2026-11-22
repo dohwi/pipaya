@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { ALL_LEVELS, applyMatch, isLastLevel, collectModels, formFromProvider, headerError, ctxLabel, newForm, newRow, shownLevels, slug, snapshot, toggleLevel, type Form } from "../src/lib/connection-form";
+import { ALL_LEVELS, applyMatch, isLastLevel, collectModels, formFromProvider, headerError, ctxLabel, newForm, newRow, shownLevels, slug, snapshot, toggleLevel, type Form, type Row } from "../src/lib/connection-form";
 import type { CatalogModel, CustomProvider } from "../src/lib/types";
 
 const filled = (over: Partial<Form> = {}): Form => ({ ...newForm(), name: "Proxy", id: "proxy", baseUrl: "http://x/v1", ...over });
@@ -212,4 +212,19 @@ test("a proxy model's speeds round-trip only on an OpenAI-format connection that
 	expect(render()).not.toHaveProperty("serviceTiers");
 	f.baseUrl = "http://127.0.0.1:8317/v1"; f.rows[0]!.imageGeneration = true;
 	expect(render()).not.toHaveProperty("serviceTiers");
+});
+
+test("a matched proxy model follows the catalog's speeds until a list of its own, and an empty list means none", () => {
+	const f = filled({ baseUrl: "http://127.0.0.1:8317/v1", rows: [row({ defaultServiceTier: "priority" })] });
+	const matched = () => "openai/gpt-x";
+	const render = (hit: (r: Row) => string | undefined = matched) => (collectModels(f, true, hit, true) as { out: CustomProvider["models"] }).out[0];
+	// following the catalog: no list is sent, the starting speed is kept for the server to check against the catalog
+	expect(render()).toMatchObject({ catalogId: "openai/gpt-x", defaultServiceTier: "priority" });
+	expect(render()).not.toHaveProperty("serviceTiers");
+	// without a match and a list there is nothing to follow
+	expect(render(none)).not.toHaveProperty("defaultServiceTier");
+	f.rows[0]!.serviceTiers = [];
+	expect(render()).toMatchObject({ serviceTiers: [] });
+	expect(render()).not.toHaveProperty("defaultServiceTier");
+	expect(formFromProvider({ ...f, models: [render()] } as unknown as CustomProvider).rows[0]?.serviceTiers).toEqual([]);
 });

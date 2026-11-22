@@ -11,39 +11,52 @@ export const isOpenRouterChat = (m: Pick<Model<Api>, "api" | "baseUrl"> | undefi
 /** The OpenAI request formats that carry `service_tier` as is; a proxy speaking Anthropic Messages would read it differently. */
 export const PROXY_TIER_APIS: readonly string[] = ["openai-completions", "openai-responses"];
 
+type TierTarget = Pick<Model<Api>, "api" | "baseUrl"> | undefined;
+const isProxy = (m: TierTarget): m is Pick<Model<Api>, "api" | "baseUrl"> => !!m && !isOpenRouterChat(m) && PROXY_TIER_APIS.includes(m.api);
+
 /**
- * The faster or slower speeds the owner said this proxy model accepts (a CLIProxyAPI GPT model takes `priority`).
- * pi-ai's `Model` has no slot for it, so the configuration carries it on the model object; an OpenRouter model reads its
- * speeds from the catalog instead, so it never has one.
+ * The speeds the owner listed for this proxy model (a CLIProxyAPI GPT model takes `priority`): `undefined` = none listed,
+ * so it follows the OpenRouter model it is matched to; `[]` = switched off. pi-ai's `Model` has no slot for it, so the
+ * configuration carries it on the model object; an OpenRouter model reads its speeds from the catalog, so it never has one.
  */
-export function proxyTiers(m: Pick<Model<Api>, "api" | "baseUrl"> | undefined): ServiceTier[] {
-	if (!m || isOpenRouterChat(m) || !PROXY_TIER_APIS.includes(m.api)) return [];
+export function ownTiers(m: TierTarget): ServiceTier[] | undefined {
+	if (!isProxy(m)) return undefined;
 	const v = (m as { serviceTiers?: unknown }).serviceTiers;
-	return Array.isArray(v) ? v.filter((t): t is ServiceTier => t === "flex" || t === "priority" || t === "ultrafast") : [];
+	return Array.isArray(v) ? v.filter((t): t is ServiceTier => t === "flex" || t === "priority" || t === "ultrafast") : undefined;
 }
 
-/** A model a speed can be sent to: a direct OpenRouter chat, or a proxy model whose owner listed the speeds it takes. */
-export const takesServiceTier = (m: Pick<Model<Api>, "api" | "baseUrl"> | undefined) => isOpenRouterChat(m) || proxyTiers(m).length > 0;
+/** The OpenRouter model whose speeds a proxy model follows (set by the configuration when it has a match and no own list). */
+export function tierCatalogId(m: TierTarget): string | undefined {
+	if (!isProxy(m) || ownTiers(m)) return undefined;
+	const v = (m as { tierCatalogId?: unknown }).tierCatalogId;
+	return typeof v === "string" && v ? v : undefined;
+}
 
-/** Standard is always allowed where any speed is; a proxy model takes only the speeds its owner listed. */
-const proxyAllows = (m: Pick<Model<Api>, "api" | "baseUrl"> | undefined, tier: ServiceTier) => proxyTiers(m).length > 0 && (tier === "default" || proxyTiers(m).includes(tier));
+/** A model a speed can be sent to: a direct OpenRouter chat, or a proxy model with its own speeds or an OpenRouter match. */
+export const takesServiceTier = (m: TierTarget) => isOpenRouterChat(m) || !!ownTiers(m)?.length || !!tierCatalogId(m);
 
-const NO_TIER = "service tier requires an OpenRouter connection or a model with listed speeds";
+const NO_TIER = "service tier requires an OpenRouter connection, or a proxy model matched to OpenRouter or with listed speeds";
 
 /** OpenRouter accepts service_tier on all three chat APIs; a proxy model on the OpenAI formats. Check the final, auth-resolved target too. */
 export function withServiceTier(opts: SimpleStreamOptions | undefined, tier: ServiceTier): SimpleStreamOptions {
 	return { ...opts, onPayload: async (body, target) => {
-		if (!isOpenRouterChat(target) && !proxyAllows(target, tier)) throw badRequest(NO_TIER);
+		if (!takesServiceTier(target)) throw badRequest(NO_TIER);
 		const payload = await opts?.onPayload?.(body, target) ?? body;
 		return { ...(payload as object), service_tier: tier };
 	} };
 }
 
+/** A proxy model takes standard and its own speeds, else the speeds OpenRouter lists for the model it is matched to. */
 export async function checkServiceTier(reg: ModelRegistry, provider: string, id: string, tier: ServiceTier) {
 	const m = reg.models.getModel(provider, id);
 	if (isOpenRouterChat(m)) return checkAdvertisedTier(reg.serviceTiers, id, tier);
-	if (!proxyTiers(m).length) throw badRequest(NO_TIER);
-	if (!proxyAllows(m, tier)) throw badRequest("service tier is not available for this model");
+	if (!takesServiceTier(m)) throw badRequest(NO_TIER);
+	const own = ownTiers(m);
+	if (own) {
+		if (tier !== "default" && !own.includes(tier)) throw badRequest("service tier is not available for this model");
+		return;
+	}
+	await checkAdvertisedTier(reg.serviceTiers, tierCatalogId(m)!, tier);
 }
 
 /** Standard is an explicit routing instruction, not an optional paid endpoint in the catalog. */
@@ -105,6 +118,8 @@ export interface ModelInfo {
 	openRouterTiers?: boolean;
 	/** A proxy model's own speeds besides standard (absent on OpenRouter models, which list theirs from the catalog) */
 	serviceTiers?: ServiceTier[];
+	/** A proxy model that follows the speeds OpenRouter lists for this catalog id */
+	tierCatalogId?: string;
 	contextWindow: number;
 	maxTokens: number;
 	vision: boolean;
@@ -128,7 +143,9 @@ export async function describeModels(reg: ModelRegistry, provider?: string, unav
 		name: m.name,
 		api: m.api,
 		...(isOpenRouterChat(m) ? { openRouterTiers: true, defaultServiceTier: modelDefaultTier(m) } : {}),
-		...(proxyTiers(m).length ? { serviceTiers: proxyTiers(m), ...(modelDefaultTier(m) ? { defaultServiceTier: modelDefaultTier(m) } : {}) } : {}),
+		...(ownTiers(m)?.length ? { serviceTiers: ownTiers(m) } : {}),
+		...(tierCatalogId(m) ? { tierCatalogId: tierCatalogId(m) } : {}),
+		...(!isOpenRouterChat(m) && modelDefaultTier(m) ? { defaultServiceTier: modelDefaultTier(m) } : {}),
 		reasoning: m.reasoning,
 		// Every strength the model accepts, `off` included: "empty" means the model has no reasoning at all.
 		thinkingLevels: m.reasoning ? getSupportedThinkingLevels(m).filter((l): l is ThinkingLevel => THINKING_LEVELS.includes(l as ThinkingLevel)) : [],

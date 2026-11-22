@@ -42,7 +42,7 @@ export const CustomProviderBody = Type.Object({
 		catalogId: Type.Optional(Type.Union([Type.String({ minLength: 1, maxLength: 200 }), Type.Null()], { description: "The OpenRouter catalog model this upstream model corresponds to. null = deliberately none (manual values); left out = match by name." })),
 		defaultThinkingLevel: Type.Optional(Thinking),
 		defaultServiceTier: Type.Optional(Tier),
-		serviceTiers: Type.Optional(Type.Array(Type.Union([Type.Literal("flex"), Type.Literal("priority"), Type.Literal("ultrafast")]), { uniqueItems: true, description: "Speeds besides standard this model accepts as `service_tier`, on a proxy that passes it on (CLIProxyAPI: priority for GPT models). Only for OpenAI-format connections that are not OpenRouter, whose speeds come from its catalog." })),
+		serviceTiers: Type.Optional(Type.Array(Type.Union([Type.Literal("flex"), Type.Literal("priority"), Type.Literal("ultrafast")]), { uniqueItems: true, description: "Speeds besides standard this model accepts as `service_tier`, on a proxy that passes it on (CLIProxyAPI: priority for GPT models). Left out: the speeds OpenRouter lists for the matched model; empty: none. Only for OpenAI-format connections that are not OpenRouter, whose speeds come from its catalog." })),
 	}), { maxItems: 100, description: "May be empty: a connection can be saved first and its models added afterwards." }),
 }, { additionalProperties: false });
 /**
@@ -415,9 +415,12 @@ export class Configuration {
 			}
 			if (m.defaultServiceTier) {
 				if (m.imageGeneration) throw badRequest("a default service tier requires a chat model");
+				const match = router || !PROXY_TIER_APIS.includes(input.api) || m.serviceTiers ? undefined : catalogFor(this.catalog, m);
 				if (router) await checkAdvertisedTier(this.registry.serviceTiers, m.id.trim(), m.defaultServiceTier);
-				else if (!m.serviceTiers?.length) throw badRequest("a default service tier requires an OpenRouter chat model or listed speeds");
-				else if (m.defaultServiceTier !== "default" && !m.serviceTiers.includes(m.defaultServiceTier)) throw badRequest(`${m.id.trim()}: the default service tier must be standard or one of the listed speeds`);
+				else if (m.serviceTiers?.length) {
+					if (m.defaultServiceTier !== "default" && !m.serviceTiers.includes(m.defaultServiceTier)) throw badRequest(`${m.id.trim()}: the default service tier must be standard or one of the listed speeds`);
+				} else if (match) await checkAdvertisedTier(this.registry.serviceTiers, match.id, m.defaultServiceTier);
+				else throw badRequest("a default service tier requires an OpenRouter chat model, an OpenRouter match or listed speeds");
 			}
 			if (!m.defaultThinkingLevel) continue;
 			if (!m.reasoning || m.imageGeneration) throw badRequest(`${m.id.trim()}: only a reasoning model can have a default thinking level`);
@@ -593,11 +596,12 @@ export class Configuration {
 	}
 
 	private buildProvider(p: CustomProvider) {
-		const models: (Model<CustomProvider["api"]> & { defaultThinkingLevel?: ThinkingLevel; imageApi?: ImageApi; serviceTiers?: string[] })[] = p.models.filter((m) => !m.disabled).map((m) => ({
+		const models: (Model<CustomProvider["api"]> & { defaultThinkingLevel?: ThinkingLevel; imageApi?: ImageApi; serviceTiers?: string[]; tierCatalogId?: string })[] = p.models.filter((m) => !m.disabled).map((m) => ({
 			id: m.id, name: m.name ?? m.id, api: p.api, provider: p.id, baseUrl: p.baseUrl,
 			...(m.defaultServiceTier ? { defaultServiceTier: m.defaultServiceTier } : {}),
-			// read by proxyTiers (models.ts), which ignores it unless the transport is an OpenAI-format proxy
-			...(m.serviceTiers?.length && !m.imageGeneration ? { serviceTiers: m.serviceTiers } : {}),
+			// read by ownTiers / tierCatalogId (models.ts), which ignore them unless the transport is an OpenAI-format proxy:
+			// the owner's own speeds (empty = none), else the OpenRouter model it is matched to
+			...(m.imageGeneration ? {} : m.serviceTiers ? { serviceTiers: m.serviceTiers } : catalogFor(this.catalog, m) ? { tierCatalogId: catalogFor(this.catalog, m)!.id } : {}),
 			...(m.imageApi ? { imageApi: m.imageApi } : {}),
 			reasoning: m.imageGeneration ? false : m.reasoning, input: m.vision ? ["text", "image"] : ["text"],
 			// Strengths the owner listed win; otherwise they are looked up by name in the OpenRouter catalog, and unknown names keep the defaults.

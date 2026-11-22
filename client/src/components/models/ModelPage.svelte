@@ -64,11 +64,25 @@
 	const iconName = $derived(r.icon ? (isImageIcon(r.icon) ? t("올린 이미지") : (ICON_LABEL[r.icon] ?? r.icon)) : t("자동"));
 	/** The strengths this model really offers (the owner's own list or the matched catalog's), in canonical order. */
 	const levels = $derived(shownLevels(r, matched));
-	/** The speeds this proxy model takes besides standard; dropping one also drops it as the starting speed. */
-	const offered = $derived(r.serviceTiers ?? []);
-	function toggleTier(id: (typeof EXTRA_TIERS)[number]) {
+	/** The speeds OpenRouter lists for the matched model (what a proxy model follows until its owner changes it). */
+	type Extra = (typeof EXTRA_TIERS)[number];
+	let catalogTiers = $state<Extra[]>([]);
+	$effect(() => {
+		catalogTiers = [];
+		const id = matched?.id;
+		if (!proxyTiers || !id || !catalogApi) return;
+		const controller = new AbortController();
+		catalogApi.scoped(controller.signal).catalogTiers(id).then((res) => { if (!controller.signal.aborted) catalogTiers = EXTRA_TIERS.filter((x) => res.tiers.includes(x)); }).catch(() => {});
+		return () => controller.abort();
+	});
+	/** Following the catalog: no list of its own and a match. Like the strengths, a tap narrows it into the owner's own list. */
+	const follows = $derived(!r.serviceTiers && !!matched);
+	const offered = $derived<Extra[]>(r.serviceTiers ?? (matched ? catalogTiers : []));
+	function toggleTier(id: Extra) {
 		const next = EXTRA_TIERS.filter((x) => (x === id ? !offered.includes(x) : offered.includes(x)));
-		r.serviceTiers = next.length ? next : undefined;
+		// Picking exactly the catalog's speeds again means "follow the catalog"; without a match none left means none.
+		const same = !!matched && next.length === catalogTiers.length && next.every((x) => catalogTiers.includes(x));
+		r.serviceTiers = same ? undefined : matched ? next : next.length ? next : undefined;
 		if (r.defaultServiceTier && (!next.length || (r.defaultServiceTier !== "default" && !(next as ServiceTier[]).includes(r.defaultServiceTier)))) r.defaultServiceTier = undefined;
 	}
 	/** "새 대화 기본 강도: 자동" unless a strength this model offers was chosen. */
@@ -103,7 +117,7 @@
 			{:else if !hit && r.catalogId === undefined && r.id.trim() && !r.imageGeneration}
 				<p class="hint note src bad"><Icon name="alert" /> {t("OpenRouter에서 자동으로 찾지 못했습니다. 모델을 직접 고르거나 아래 값을 입력하세요.")}</p>
 			{/if}
-			{#if !router && hit && !r.imageGeneration && catalogApi}
+			{#if !router && !proxyTiers && hit && !r.imageGeneration && catalogApi}
 				{#key hit.id}<TierOptions api={catalogApi} model={hit.id} />{/key}
 			{/if}
 		{/if}
@@ -190,11 +204,21 @@
 				selected={offered}
 				ontoggle={toggleTier}
 			/>
-			<p class="hint note">{offered.length ? t("고른 속도를 service_tier로 그대로 보냅니다. 고속 등급은 추가 요금이 들 수 있습니다.") : t("프록시가 속도 지정(service_tier)을 처리하는 모델만 켜세요. CLIProxyAPI는 GPT 모델에서 Fast를 처리합니다.")}</p>
+			<p class="hint note">
+				{#if follows && offered.length}
+					{t("OpenRouter에서 찾은 모델이 지원하는 속도를 따르고, 고른 속도를 service_tier로 그대로 보냅니다. 프록시가 처리하지 않는 모델이면 눌러서 끄세요.")}
+				{:else if offered.length}
+					{t("고른 속도를 service_tier로 그대로 보냅니다. 고속 등급은 추가 요금이 들 수 있습니다.")}
+				{:else if matched && !r.serviceTiers}
+					{t("OpenRouter에서 찾은 모델은 속도 등급을 지원하지 않습니다.")}
+				{:else}
+					{t("프록시가 속도 지정(service_tier)을 처리하는 모델만 켜세요. CLIProxyAPI는 GPT 모델에서 Fast를 처리합니다.")}
+				{/if}
+			</p>
 			</div>
 			{#if offered.length && catalogApi}
 				<div class="next">
-					<TierOptions api={catalogApi} model={r.id.trim()} offered={offered} label={t("새 대화 기본 속도")} value={r.defaultServiceTier ?? null} onchange={v => (r.defaultServiceTier = v ?? undefined)} />
+					<TierOptions api={catalogApi} model={r.id.trim()} offered={offered} proxy label={t("새 대화 기본 속도")} value={r.defaultServiceTier ?? null} onchange={v => (r.defaultServiceTier = v ?? undefined)} />
 				</div>
 			{/if}
 		</section>
