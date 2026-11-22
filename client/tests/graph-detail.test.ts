@@ -1,7 +1,10 @@
 import { describe, expect, test } from "bun:test";
-import { buildGraph, type DelegateRun, type GraphServer } from "../src/lib/graph";
+import { buildGraph, endpointKey, modelCardId, providerCardId, type DelegateRun, type GraphServer } from "../src/lib/graph";
 import { callState, roleStats, splitLive, under } from "../src/lib/graph-detail";
 import type { Session } from "../src/lib/types";
+
+const pid = (p = "p") => providerCardId(endpointKey(p));
+const mid = (p = "p", m = "m") => modelCardId(endpointKey(p), m);
 
 const session = (id: string, over: Partial<Session> = {}): Session =>
 	({ id, title: id, name: id, purpose: "", cwd: "/w", provider: "p", model: "m", thinkingLevel: "off", systemPrompt: "", tools: [], parentId: null, closed: false, createdAt: 1, updatedAt: 1, ...over }) as Session;
@@ -13,12 +16,17 @@ const server = (id: string, sessions: Session[], runs: DelegateRun[] = []): Grap
 
 describe("under", () => {
 	test("lists the chats below a card, branched ones included, and stops at its own subtree", () => {
-		const g = buildGraph([server("a", [session("s1"), session("s2", { parentId: "s1" }), session("s3", { model: "m2" }), session("s4", { provider: "q" })])]);
+		const g = buildGraph([
+			server("a", [session("s1"), session("s2", { parentId: "s1" }), session("s3", { model: "m2" }), session("s4", { provider: "q" })]),
+			server("b", [session("sb1")]),
+		]);
 		expect(under(g, "v:a", "session").map((c) => c.session!.id).sort()).toEqual(["s1", "s2", "s3", "s4"]);
-		expect(under(g, "p:a/p", "session").map((c) => c.session!.id).sort()).toEqual(["s1", "s2", "s3"]);
-		expect(under(g, "m:a/p/m", "session").map((c) => c.session!.id).sort()).toEqual(["s1", "s2"]);
-		expect(under(g, "p:a/p", "model").map((c) => c.id).sort()).toEqual(["m:a/p/m", "m:a/p/m2"]);
-		expect(under(g, "v:a", "provider").map((c) => c.id).sort()).toEqual(["p:a/p", "p:a/q"]);
+		expect(under(g, "v:b", "session").map((c) => c.session!.id).sort()).toEqual(["sb1"]);
+		expect(under(g, pid("p"), "session").map((c) => c.session!.id).sort()).toEqual(["s1", "s2", "s3", "sb1"]);
+		expect(under(g, mid("p", "m"), "session").map((c) => c.session!.id).sort()).toEqual(["s1", "s2", "sb1"]);
+		expect(under(g, pid("p"), "model").map((c) => c.id).sort()).toEqual([mid("p", "m"), mid("p", "m2")].sort());
+		expect(under(g, "v:a", "provider").map((c) => c.id).sort()).toEqual([pid("p"), pid("q")].sort());
+		expect(under(g, "v:b", "model").map((c) => c.id).sort()).toEqual([mid("p", "m")]);
 		expect(under(g, "nope", "session")).toEqual([]);
 	});
 });

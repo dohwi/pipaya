@@ -49,9 +49,18 @@
 				// the names the owner gave models and connections (the ids when none)
 				modelName: (provider: string, id: string) => modelDisplayName(link?.models ?? [], provider, id),
 				providerName: (id: string) => providerDisplayName(link?.providers ?? [], id),
+				endpoint: (id: string) => {
+					const custom = link?.customProviders.find((p) => p.id === id);
+					if (custom) return { id: custom.id, name: custom.name, baseUrl: custom.baseUrl, api: custom.api, builtin: false };
+					const info = link?.providers.find((p) => p.id === id);
+					if (info) return { id: info.id, name: info.name, builtin: info.builtin };
+					return undefined;
+				},
 			};
 		}),
 	);
+	const multiServer = $derived(servers.length > 1);
+	const serverNames = $derived(new Map(servers.map((s) => [s.id, s.name])));
 	$effect(() => {
 		const map = new Map(app.servers.flatMap((s) => {
 			const link = app.links[s.id];
@@ -127,9 +136,10 @@
 	/** A chat: its name with the time beside it, its title below (what it is doing while it works is live text: it never widens a column). */
 	function chatWidth(c: Card): number {
 		const s = c.session!;
+		const srv = multiServer ? (serverNames.get(c.server) ?? c.server) : "";
 		const name = s.name ? `@${s.name}` : sessionTitle(s.title);
 		const title = sessionTitle(s.title);
-		const key = `session|${name}|${title}`;
+		const key = `session|${srv}|${name}|${title}`;
 		const hit = widthCache.get(key);
 		if (hit !== undefined) return hit;
 		const nm = measure!.querySelector<HTMLElement>('[data-kind="session"]');
@@ -141,7 +151,7 @@
 		// room for the widest of the forms its time takes as it ages (pastLabel), so the column does not twitch over time
 		let wWhen = 0;
 		for (const x of WHEN_SAMPLES()) {
-			when.textContent = x;
+			when.textContent = srv ? `${srv} · ${x}` : x;
 			wWhen = Math.max(wWhen, when.getBoundingClientRect().width);
 		}
 		const line = Math.max(nm.getBoundingClientRect().width + 12 + wWhen, tl.getBoundingClientRect().width);
@@ -156,7 +166,16 @@
 	function metaOf(c: Card): { parts: { text: string; mono?: boolean; bold?: boolean }[]; extra: number } {
 		const n = (text: string) => ({ text });
 		if (c.kind === "server") return { parts: [n(c.host ?? ""), c.online ? n(t("대화 {n}개", { n: c.count })) : { text: t("연결 안 됨"), bold: true }], extra: 0 };
-		if (c.kind === "provider") return { parts: [n(t("모델 {n}개", { n: c.children.length })), n(t("대화 {n}개", { n: c.count }))], extra: 0 };
+		if (c.kind === "provider") {
+			return {
+				parts: [
+					...(c.servers && c.servers.length > 1 ? [n(t("서버 {n}개", { n: c.servers.length }))] : []),
+					n(t("모델 {n}개", { n: c.children.length })),
+					n(t("대화 {n}개", { n: c.count })),
+				],
+				extra: 0,
+			};
+		}
 		if (c.kind === "model") return { parts: [n(modelSource(c)), n(t("대화 {n}개", { n: c.count }))], extra: 0 };
 		if (c.kind !== "subagent") return { parts: [], extra: 0 };
 		const m = c.model;
@@ -165,6 +184,7 @@
 			...(m ? [{ text: m.name, mono: true }] : []), // `.mn` is always set in mono
 			n(t("{n}회", { n: c.count })),
 			...(c.free ? [n(t("즉석"))] : []),
+			...(multiServer ? [n(serverNames.get(c.server) ?? c.server)] : []),
 		];
 		// the model's 14px logo + 4px gap
 		return { parts, extra: m ? 18 : 0 };
@@ -596,8 +616,21 @@
 	const faded = (id: string) => quiet.has(id) && !focus?.has(id) && selected !== id;
 	/** What a model card says it comes from: its maker, else its connection's name. */
 	const modelSource = (c: Card) => (c.brand ? BRAND_LABEL[c.brand] : providerDisplayName(app.links[c.server]?.providers ?? [], c.provider)); // not `graph`: widths are measured while it is built
-	/** The mark the owner picked for a model on that server, if any. */
-	const iconOf = (server: string, provider: string | undefined, id: string) => modelIcon(app.links[server]?.models ?? [], provider, id);
+	const linkOf = (c: Card) => {
+		if (app.links[c.server]?.conn) return app.links[c.server];
+		const id = c.servers?.find((s) => app.links[s]?.conn);
+		return id ? app.links[id] : app.links[c.server];
+	};
+	/** The mark the owner picked for a model on any server sharing it, if any. */
+	const iconOf = (server: string, provider: string | undefined, id: string, serversList?: string[]) => {
+		const hit = modelIcon(app.links[server]?.models ?? [], provider, id);
+		if (hit || !serversList) return hit;
+		for (const s of serversList) {
+			const x = modelIcon(app.links[s]?.models ?? [], provider, id);
+			if (x) return x;
+		}
+		return undefined;
+	};
 	const toolNow = (c: Card) => app.links[c.server]?.data.tool[c.session!.id];
 	const summary = $derived.by(() => {
 		const up = servers.filter((v) => v.online).length;
@@ -654,12 +687,6 @@
 		style:background-position="{view.x}px {view.y}px"
 	>
 		<div class="world" style:transform="translate({Math.round(view.x)}px, {Math.round(view.y)}px) scale({view.k})">
-			{#if graph.bands.length > 1}
-				<!-- two or more servers: a hairline in the gap between one server's cards and the next (no frames behind them) -->
-				{#each graph.bands.slice(1) as b, i (b.server)}
-					<div class="split" style:top="{(graph.bands[i]!.y1 + b.y0) / 2}px" style:width="{graph.width}px"></div>
-				{/each}
-			{/if}
 			<svg class="edges" aria-hidden="true">
 				<defs>
 				</defs>
@@ -673,7 +700,8 @@
 						{@const b = at(cb)}
 						{@const on = !focus || (focus.has(e.from) && focus.has(e.to))}
 						{@const call = e.kind === "delegate"}
-						{@const d = edgePath(a, b, r, call ? "curve" : "elbow")}
+						{@const edgeStyle = call || (ca.kind === "server" && cb.kind === "provider") ? "curve" : "elbow"}
+						{@const d = edgePath(a, b, r, edgeStyle)}
 						{@const full = r >= 1 && !ghost}
 						<g class="e-{e.kind}" class:live={e.live && !ghost} class:dim={!on} class:hot={!!focus && on} class:quiet={on && (faded(e.from) || faded(e.to))}>
 							<path class="base" {d} style:stroke-width={call && !e.live ? 1.25 + Math.min(2, Math.log2(e.weight) * 0.5) : undefined} />
@@ -686,7 +714,7 @@
 								<!-- work travelling: sparks glide down the line at an even speed (sparkPlan: a long line gets more of them, not
 								     faster ones), each fading in as it leaves the card and out as it arrives, a soft two-step tail behind it.
 								     Timed on the layout's line, not the easing one, so a card settling does not restart them. -->
-								{@const sp = sparkPlan(edgeLength(ca, cb, call ? "curve" : "elbow"), call)}
+								{@const sp = sparkPlan(edgeLength(ca, cb, edgeStyle), call)}
 								<g class="moving" transition:glowFade>
 								{#each { length: sp.n } as _, i (i)}
 									{@const t0 = (-sp.dur * i) / sp.n}
@@ -735,9 +763,9 @@
 					{:else if c.kind === "provider"}
 						<span class="lead"><Icon name="plug" /></span>
 						<span class="nm fl" title={c.name !== c.label ? `${c.name} · ${c.label}` : c.name} use:marquee={c.name}>{@render flow(c.name)}</span>
-						<span class="meta"><span>{t("모델 {n}개", { n: c.children.length })}</span><i>·</i><span>{t("대화 {n}개", { n: c.count })}</span></span>
+						<span class="meta">{#if c.servers && c.servers.length > 1}<span>{t("서버 {n}개", { n: c.servers.length })}</span><i>·</i>{/if}<span>{t("모델 {n}개", { n: c.children.length })}</span><i>·</i><span>{t("대화 {n}개", { n: c.count })}</span></span>
 					{:else if c.kind === "model"}
-						<span class="lead"><ModelLogo conn={app.links[c.server]?.conn} icon={iconOf(c.server, c.provider, c.label)} provider={c.provider} model={c.label} size={24} colored /></span>
+						<span class="lead"><ModelLogo conn={linkOf(c)?.conn} icon={iconOf(c.server, c.provider, c.label, c.servers)} provider={c.provider} model={c.label} size={24} colored /></span>
 						{#if c.name === c.label}<span class="nm mono fl mid" title={c.name} use:marquee={c.name}>{@render flow(c.name, true)}</span>
 						{:else}<span class="nm fl" title={`${c.name} · ${c.provider}/${c.label}`} use:marquee={c.name}>{@render flow(c.name)}</span>{/if}
 						<span class="meta"><span class="give fl" use:marquee={modelSource(c)}>{@render flow(modelSource(c))}</span><i>·</i><span>{t("대화 {n}개", { n: c.count })}</span></span>
@@ -755,6 +783,7 @@
 							{/if}
 							<span>{t("{n}회", { n: c.count })}</span>
 							{#if c.free}<i>·</i><span title={t("역할 파일 없이 에이전트가 이름을 정한 서브에이전트입니다. 읽기 전용 도구만 쓰고 작업 내용이 곧 지침입니다")}>{t("즉석")}</span>{/if}
+							{#if multiServer}<i>·</i><span>{serverNames.get(c.server) ?? c.server}</span>{/if}
 						</span>
 						{#if c.running && c.calls?.length}
 							<!-- who runs it now (the card says on what model): the newest caller's handle in the working colour -->
@@ -772,7 +801,11 @@
 						<span class="lead"><AgentBadge id={s.id} server={c.server} state={c.activity} size={24} /></span>
 						{@const name = s.name ? `@${s.name}` : sessionTitle(s.title)}
 						<span class="nm fl" class:who={!!s.name} title={name} use:marquee={name}>{@render flow(name)}</span>
-						{#if !busy}<span class="when">{livePast(s.updatedAt, { time: false })}</span>{/if}
+						{#if !busy || multiServer}
+							<span class="when">
+								{#if multiServer}<span class="srv">{serverNames.get(c.server) ?? c.server}</span>{/if}{#if multiServer && !busy}<i>·</i>{/if}{#if !busy}{livePast(s.updatedAt, { time: false })}{/if}
+							</span>
+						{/if}
 						<span class="title fl" title={sessionTitle(s.title)} use:marquee={sessionTitle(s.title)}>{@render flow(sessionTitle(s.title))}</span>
 						{#if busy}
 							<span class="doing" class:ask={c.activity === "asking"} in:glowFade={{ delay: 120 }}>
@@ -1237,6 +1270,15 @@
 		line-height: 16px;
 		color: var(--text-faint);
 		white-space: nowrap;
+	}
+	.when i {
+		margin: 0 4px;
+		font-style: normal;
+		opacity: 0.6;
+	}
+	.when .srv {
+		color: var(--text-dim);
+		font-weight: 500;
 	}
 	/* a chat's `@name` takes its badge's state colour, as the handle does in the sidebar, the tabs and the strip (Handle) */
 	.working .nm.who {

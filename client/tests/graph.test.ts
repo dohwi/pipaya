@@ -1,7 +1,10 @@
 import { describe, expect, test } from "bun:test";
-import { BAND_GAP, ROW_GAP, ROLE_STALE_MS, buildGraph, roleCardId, staleRoles, quietCards, CARD_W_MAX, isMouseWheel, springStep, CARD_H, CARD_H_LIVE, edgeLength, edgePath, edgeTip, sparkPlan, fitGraph, fitView, focusCards, FIT_MIN, FIT_PAD, growthPlan, leavePlan, modelName, related, type DelegateRun, type GraphServer } from "../src/lib/graph";
+import { ROW_GAP, ROLE_STALE_MS, buildGraph, endpointKey, modelCardId, providerCardId, roleCardId, staleRoles, quietCards, CARD_W_MAX, isMouseWheel, springStep, CARD_H, CARD_H_LIVE, edgeLength, edgePath, edgeTip, sparkPlan, fitGraph, fitView, focusCards, FIT_MIN, FIT_PAD, growthPlan, leavePlan, modelName, related, type DelegateRun, type GraphServer } from "../src/lib/graph";
 import type { Activity } from "../src/lib/activity";
 import type { Session } from "../src/lib/types";
+
+const pid = (p = "p") => providerCardId(endpointKey(p));
+const mid = (p = "p", m = "m") => modelCardId(endpointKey(p), m);
 
 const session = (id: string, over: Partial<Session> = {}): Session =>
 	({ id, title: id, name: id, purpose: "", cwd: "/w", provider: "p", model: "m", thinkingLevel: "off", systemPrompt: "", tools: [], parentId: null, closed: false, createdAt: 1, updatedAt: 1, ...over }) as Session;
@@ -27,10 +30,10 @@ describe("buildGraph", () => {
 			modelName: (provider, id) => names[`${provider}/${id}`] ?? id,
 			providerName: (id) => (id === "p" ? "My Proxy" : id),
 		})]);
-		expect(g.cards.get("p:a/p")!.label).toBe("p");
-		expect(g.cards.get("p:a/p")!.name).toBe("My Proxy");
-		expect(g.cards.get("m:a/p/m")!.name).toBe("Fast model");
-		expect(g.cards.get("m:a/p/m2")!.name).toBe("m2"); // no name given: the id
+		expect(g.cards.get(pid("p"))!.label).toBe("p");
+		expect(g.cards.get(pid("p"))!.name).toBe("My Proxy");
+		expect(g.cards.get(mid("p", "m"))!.name).toBe("Fast model");
+		expect(g.cards.get(mid("p", "m2"))!.name).toBe("m2"); // no name given: the id
 		expect(g.cards.get(roleCardId("a", "explore", "p/sub"))!.model!.name).toBe("Helper model");
 		expect(g.cards.get(roleCardId("a", "explore", "q/raw"))!.model!.name).toBe("raw");
 		expect(g.cards.get("v:a")!.name).toBe("a");
@@ -40,13 +43,13 @@ describe("buildGraph", () => {
 		const g = buildGraph([server("a", [session("s1"), session("s2", { model: "m2" }), session("s3", { provider: "q" })])]);
 		const kinds = (k: string) => [...g.cards.values()].filter((c) => c.kind === k).map((c) => c.id).sort();
 		expect(kinds("server")).toEqual(["v:a"]);
-		expect(kinds("provider")).toEqual(["p:a/p", "p:a/q"]);
-		expect(kinds("model")).toEqual(["m:a/p/m", "m:a/p/m2", "m:a/q/m"]);
+		expect(kinds("provider")).toEqual([pid("p"), pid("q")].sort());
+		expect(kinds("model")).toEqual([mid("p", "m"), mid("p", "m2"), mid("q", "m")].sort());
 		expect(g.cards.get("v:a")!.count).toBe(3);
-		expect(g.cards.get("p:a/p")!.count).toBe(2);
-		expect([g.cards.get("v:a")!.col, g.cards.get("p:a/p")!.col, g.cards.get("m:a/p/m")!.col, g.cards.get("s:a/s1")!.col]).toEqual([0, 1, 2, 3]);
+		expect(g.cards.get(pid("p"))!.count).toBe(2);
+		expect([g.cards.get("v:a")!.col, g.cards.get(pid("p"))!.col, g.cards.get(mid("p", "m"))!.col, g.cards.get("s:a/s1")!.col]).toEqual([0, 1, 2, 3]);
 		// a hub sits in the middle of what is under it
-		const p = g.cards.get("p:a/p")!, m1 = g.cards.get("m:a/p/m")!, m2 = g.cards.get("m:a/p/m2")!;
+		const p = g.cards.get(pid("p"))!, m1 = g.cards.get(mid("p", "m"))!, m2 = g.cards.get(mid("p", "m2"))!;
 		expect(p.y).toBe((m1.y + m2.y) / 2);
 	});
 
@@ -61,8 +64,8 @@ describe("buildGraph", () => {
 		const g = buildGraph([server("a", [session("root"), session("kid", { parentId: "root" }), session("orphan", { parentId: "gone" }), session("self", { parentId: "self" })])]);
 		expect(g.cards.get("s:a/kid")!.col).toBe(g.cards.get("s:a/root")!.col + 1);
 		expect(g.edges.find((e) => e.to === "s:a/kid")).toMatchObject({ kind: "spawn", from: "s:a/root" });
-		expect(g.edges.find((e) => e.to === "s:a/orphan")!.from).toBe("m:a/p/m");
-		expect(g.edges.find((e) => e.to === "s:a/self")!.from).toBe("m:a/p/m");
+		expect(g.edges.find((e) => e.to === "s:a/orphan")!.from).toBe(mid("p", "m"));
+		expect(g.edges.find((e) => e.to === "s:a/self")!.from).toBe(mid("p", "m"));
 	});
 
 	test("chats that want the user come first; a working chat is taller and lights its line to the server", () => {
@@ -72,7 +75,7 @@ describe("buildGraph", () => {
 		expect([...ys].sort((x, y) => x - y)).toEqual(ys);
 		expect(g.cards.get("s:a/work")!.h).toBe(CARD_H_LIVE);
 		expect(g.cards.get("s:a/idle")!.h).toBe(CARD_H);
-		expect(["v:a", "p:a/p", "m:a/p/m"].every((id) => g.cards.get(id)!.live)).toBe(true);
+		expect(["v:a", pid("p"), mid("p", "m")].every((id) => g.cards.get(id)!.live)).toBe(true);
 		expect(g.edges.find((e) => e.to === "s:a/work")!.live).toBe(true);
 		expect(g.edges.find((e) => e.to === "s:a/idle")!.live).toBe(false);
 	});
@@ -137,32 +140,78 @@ describe("buildGraph", () => {
 		const states: Record<string, Activity> = { busy: "working", ask: "asking", done: "done", rest: "idle", kid: "idle" };
 		const g = buildGraph([
 			server("a", [session("busy"), session("ask", { model: "m2" }), session("done", { model: "m3" }), session("rest", { model: "m4" }), session("kid", { model: "m4", parentId: "rest" })], { states }),
-			server("off", [session("x")], { online: false, states: { x: "working" } }),
+			server("off", [session("x", { provider: "off-p" })], { online: false, states: { x: "working" } }),
 		]);
 		const q = quietCards(g, 0);
 		// at rest: the idle chats and the model with nothing but idle chats under it
-		expect(["s:a/rest", "s:a/kid", "m:a/p/m4"].every((id) => q.has(id))).toBe(true);
+		expect(["s:a/rest", "s:a/kid", mid("p", "m4")].every((id) => q.has(id))).toBe(true);
 		// in use: what works, asks or has something new, the hubs above them and the online server
-		expect(["s:a/busy", "s:a/ask", "s:a/done", "m:a/p/m", "m:a/p/m2", "m:a/p/m3", "p:a/p", "v:a"].some((id) => q.has(id))).toBe(false);
+		expect(["s:a/busy", "s:a/ask", "s:a/done", mid("p", "m"), mid("p", "m2"), mid("p", "m3"), pid("p"), "v:a"].some((id) => q.has(id))).toBe(false);
 		// a role steps back when it runs nothing and only resting chats call it
 		const r = buildGraph([server("a", [session("busy"), session("rest")], { states, runs: [run("rest", "explore"), run("rest", "runner"), run("busy", "runner"), run("rest", "ui", { running: true, doneAt: null })] })]);
 		const rq = quietCards(r, 0);
 		expect([roleCardId("a", "explore", "p/m"), roleCardId("a", "runner", "p/m"), roleCardId("a", "ui", "p/m")].map((id) => rq.has(id))).toEqual([true, false, false]);
 		// an offline server's cards all step back, even a chat it last saw working
-		expect(["v:off", "p:off/p", "m:off/p/m", "s:off/x"].every((id) => q.has(id))).toBe(true);
+		expect(["v:off", pid("off-p"), mid("off-p", "m"), "s:off/x"].every((id) => q.has(id))).toBe(true);
 	});
 
-	test("two servers: hubs are per server, the second below the first with the gap for the hairline between them", () => {
-		const g = buildGraph([server("a", [session("s1")]), server("b", [session("s1")])]);
-		expect(g.cards.has("p:a/p") && g.cards.has("p:b/p")).toBe(true);
-		expect(g.bands.map((b) => b.server)).toEqual(["a", "b"]);
-		expect(g.bands[1]!.y0 - g.bands[0]!.y1).toBe(BAND_GAP);
+	test("servers cluster tightly on the left and merge identical built-in providers and custom endpoints", () => {
+		const g = buildGraph([
+			server("a", [session("s1"), session("s2", { provider: "c1", model: "gpt" })], {
+				endpoint: (id) => (id === "c1" ? { id, name: "Proxy A", baseUrl: "https://Proxy.Local/v1/", api: "openai-completions" } : undefined),
+				states: { s1: "working" },
+			}),
+			server("b", [session("s1"), session("s2", { provider: "c2", model: "gpt" }), session("s3", { provider: "other", model: "m3" })], {
+				endpoint: (id) =>
+					id === "c2"
+						? { id, name: "Proxy B", baseUrl: "https://proxy.local/v1", api: "openai-completions" }
+						: id === "other"
+							? { id, name: "Other", baseUrl: "https://other.local/v1", api: "openai-completions" }
+							: undefined,
+			}),
+		]);
+		// servers sit stacked together at col 0 with ROW_GAP between them
+		const va = g.cards.get("v:a")!, vb = g.cards.get("v:b")!;
+		expect([va.col, vb.col]).toEqual([0, 0]);
+		expect(vb.y - va.y).toBe(CARD_H + ROW_GAP);
+		expect(va.count).toBe(2);
+		expect(vb.count).toBe(3);
+
+		// built-in `p` and identical custom endpoint (`c1` & `c2` normalized URL + API) merged across servers
+		const sharedBuiltin = g.cards.get(pid("p"))!;
+		expect(sharedBuiltin.servers).toEqual(["a", "b"]);
+		expect(sharedBuiltin.count).toBe(2);
+		const epKey = endpointKey("c1", { id: "c1", baseUrl: "https://proxy.local/v1", api: "openai-completions" });
+		const sharedCustom = g.cards.get(providerCardId(epKey))!;
+		expect(sharedCustom.servers).toEqual(["a", "b"]);
+		expect(sharedCustom.ep?.byServer).toEqual({ a: "c1", b: "c2" });
+		expect(sharedCustom.count).toBe(2);
+		expect(g.cards.get(modelCardId(epKey, "gpt"))!.servers).toEqual(["a", "b"]);
+
+		// only server A's edge into shared `p` lights up while server B is idle
+		expect(g.edges.find((e) => e.from === "v:a" && e.to === pid("p"))!.live).toBe(true);
+		expect(g.edges.find((e) => e.from === "v:b" && e.to === pid("p"))!.live).toBe(false);
+		expect(va.live).toBe(true);
+		expect(vb.live).toBe(false);
+	});
+
+	test("endpoints with the same id on two servers stay separate if their URLs or API formats differ", () => {
+		const g = buildGraph([
+			server("a", [session("s1", { provider: "proxy" })], {
+				endpoint: () => ({ id: "proxy", baseUrl: "http://10.0.0.1:8080/v1", api: "openai-completions" }),
+			}),
+			server("b", [session("s1", { provider: "proxy" })], {
+				endpoint: () => ({ id: "proxy", baseUrl: "http://10.0.0.2:8080/v1", api: "openai-completions" }),
+			}),
+		]);
+		const providers = [...g.cards.values()].filter((c) => c.kind === "provider");
+		expect(providers).toHaveLength(2);
 	});
 
 	test("one width per column: a measured long name widens its whole column, up to CARD_W_MAX", () => {
 		const g = buildGraph([server("a", [session("s1", { model: "a-very-long-model-id" }), session("s2")])], { widths: (c) => (c.label.length > 10 ? 300 : 0) });
-		expect(g.cards.get("m:a/p/a-very-long-model-id")!.w).toBe(300);
-		expect(g.cards.get("m:a/p/m")!.w).toBe(300);
+		expect(g.cards.get(mid("p", "a-very-long-model-id"))!.w).toBe(300);
+		expect(g.cards.get(mid("p", "m"))!.w).toBe(300);
 		const wide = buildGraph([server("a", [session("s1")])], { widths: () => 999 });
 		expect(wide.cards.get("v:a")!.w).toBe(CARD_W_MAX);
 	});
@@ -201,13 +250,26 @@ describe("helpers", () => {
 	test("modelName drops the provider", () => {
 		expect([modelName("p/m"), modelName("p/org/m"), modelName("m")]).toEqual(["m", "org/m", "m"]);
 	});
-	test("related: a chat brings its line to the server, the chats it started and the roles it called", () => {
-		const g = buildGraph([server("a", [session("s1"), session("s2"), session("kid", { parentId: "s1" })], { runs: [run("s1", "explore")] })]);
+	test("related: tracks paths accurately across merged providers without spilling into other servers", () => {
+		const g = buildGraph([
+			server("a", [session("s1"), session("s2"), session("kid", { parentId: "s1" })], { runs: [run("s1", "explore")] }),
+			server("b", [session("sb1")]),
+		]);
 		const r = related(g, "s:a/s1");
-		expect(["v:a", "p:a/p", "m:a/p/m", "s:a/kid", roleCardId("a", "explore", "p/m")].every((id) => r.has(id))).toBe(true);
+		expect(["v:a", pid("p"), mid("p", "m"), "s:a/kid", roleCardId("a", "explore", "p/m")].every((id) => r.has(id))).toBe(true);
 		expect(r.has("s:a/s2")).toBe(false);
-		// from the role's side: its callers and their line up
-		expect(related(g, roleCardId("a", "explore", "p/m")).has("v:a")).toBe(true);
+		expect(r.has("v:b")).toBe(false);
+		expect(r.has("s:b/sb1")).toBe(false);
+		// from the role's side: its callers and their line up to its server only
+		const rr = related(g, roleCardId("a", "explore", "p/m"));
+		expect(rr.has("v:a")).toBe(true);
+		expect(rr.has("v:b")).toBe(false);
+		// from the server side: only that server's own chats
+		const rs = related(g, "v:a");
+		expect(rs.has("s:a/s1") && rs.has(pid("p")) && !rs.has("s:b/sb1") && !rs.has("v:b")).toBe(true);
+		// from the merged provider side: both servers and all chats under it
+		const rp = related(g, pid("p"));
+		expect(["v:a", "v:b", "s:a/s1", "s:b/sb1"].every((id) => rp.has(id))).toBe(true);
 	});
 	test("edgePath goes from the right edge to the left edge, or loops back out of the right side", () => {
 		const a = { x: 0, y: 0, w: 100 } as never, b = { x: 300, y: 50, w: 100 } as never, same = { x: 0, y: 100, w: 100 } as never;
@@ -303,9 +365,9 @@ describe("growth", () => {
 		const p = growthPlan(g1, () => undefined, () => false, 1000, T);
 		const at = (id: string) => p.cards.get(id)!;
 		expect(at("v:v")).toBe(1000);
-		expect(at("p:v/cliproxy")).toBe(1000 + 80 + 380);
-		expect(at("m:v/cliproxy/opus")).toBe(at("p:v/cliproxy") + 80 + 380);
-		expect(at("s:v/a")).toBe(at("m:v/cliproxy/opus") + 80 + 380);
+		expect(at(pid("cliproxy"))).toBe(1000 + 80 + 380);
+		expect(at(mid("cliproxy", "opus"))).toBe(at(pid("cliproxy")) + 80 + 380);
+		expect(at("s:v/a")).toBe(at(mid("cliproxy", "opus")) + 80 + 380);
 		// every line starts a moment after the card it leaves, and ends as the next one appears
 		for (const e of g1.edges) expect(p.edges.get(e.id)! + T.draw).toBe(at(e.to));
 	});
@@ -319,16 +381,16 @@ describe("growth", () => {
 	});
 	test("leaving runs right to left: the line pulls back after the card at its end has faded", () => {
 		const L = { fade: 200, retract: 260 };
-		const gone = new Set(["m:v/cliproxy/opus", "s:v/a"]);
+		const gone = new Set([mid("cliproxy", "opus"), "s:v/a"]);
 		const edges = g1.edges.filter((e) => gone.has(e.to));
 		const p = leavePlan(gone, edges, 0, L);
 		expect(p.cards.get("s:v/a")).toBe(0);
 		expect(p.edges.get("t:s:v/a")).toBe(200);
-		expect(p.cards.get("m:v/cliproxy/opus")).toBe(200 + 260);
-		expect(p.edges.get("t:m:v/cliproxy/opus")).toBe(200 + 260 + 200);
+		expect(p.cards.get(mid("cliproxy", "opus"))).toBe(200 + 260);
+		expect(p.edges.get(`t:${mid("cliproxy", "opus")}`)).toBe(200 + 260 + 200);
 	});
 	test("a cut-short curve starts where the whole one does and ends on it", () => {
-		const a = g1.cards.get("v:v")!, b = g1.cards.get("p:v/cliproxy")!;
+		const a = g1.cards.get("v:v")!, b = g1.cards.get(pid("cliproxy"))!;
 		const full = edgePath(a, b), half = edgePath(a, b, 0.5), none = edgePath(a, b, 0);
 		expect(half.split("C")[0]).toBe(full.split("C")[0]);
 		expect(half).not.toBe(full);
@@ -383,7 +445,7 @@ describe("many chats", () => {
 	});
 	test("a routed line ends level on its card, from the bus, without crossing its column", () => {
 		const g = buildGraph([many(12)], { lanes: 3 });
-		const m = g.cards.get("m:a/p/m")!, c = g.cards.get("s:a/s9")!;
+		const m = g.cards.get(mid("p", "m"))!, c = g.cards.get("s:a/s9")!;
 		const d = edgePath(m, c, 1, "elbow");
 		expect(d).toEndWith(`L${c.x - c.w / 2} ${c.y}`);
 		expect(d).toContain(` ${c.y + c.bus!.dy}`);

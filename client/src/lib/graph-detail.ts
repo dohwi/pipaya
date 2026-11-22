@@ -9,11 +9,24 @@ import type { CustomProvider, ProviderInfo } from "./types";
 
 /** The cards of `kind` under `id`, in the order the graph shows them (its columns are sorted by urgency, then size). */
 export function under(g: Graph, id: string, kind: CardKind): Card[] {
+	const start = g.cards.get(id);
+	if (!start) return [];
 	const out: Card[] = [];
+	const seen = new Set<string>();
+	const serverFilter = start.kind === "server" ? start.server : undefined;
+	const matchesServer = (c: Card) => !serverFilter || (c.servers ? c.servers.includes(serverFilter) : c.server === serverFilter);
+	const childrenOf = (x: string): string[] => {
+		const c = g.cards.get(x);
+		if (!c) return [];
+		if (c.kind === "server") return g.edges.filter((e) => e.from === x && e.kind !== "delegate").map((e) => e.to);
+		return c.children;
+	};
 	const walk = (x: string) => {
-		for (const k of g.cards.get(x)?.children ?? []) {
+		for (const k of childrenOf(x)) {
+			if (seen.has(k)) continue;
 			const c = g.cards.get(k);
-			if (!c) continue;
+			if (!c || !matchesServer(c)) continue;
+			seen.add(k);
 			if (c.kind === kind) out.push(c);
 			walk(k);
 		}
