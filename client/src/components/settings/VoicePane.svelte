@@ -156,8 +156,7 @@
 		flex-direction: column;
 		gap: var(--dlg-gap-sm);
 	}
-	.row > span,
-	.row > label {
+	.row > span {
 		font-size: var(--fs-sm);
 		line-height: 20px;
 		color: var(--text-dim);
