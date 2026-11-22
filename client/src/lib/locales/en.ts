@@ -2054,4 +2054,6 @@ export const en: Record<string, string> = {
 	"실시간 변환 API 키": "Realtime transcription API key",
 	"음성 입력의 다른 키와 따로 저장되고, 다시 표시되지 않습니다. 비우고 저장하면 키를 지웁니다.": "Stored apart from the other voice key and never shown again. Save it empty to remove the key.",
 	"실시간 변환 서버 주소를 입력하세요.": "Enter the realtime transcription server address.",
+	"변경 취소": "Discard changes",
+	"저장하지 않은 변경이 있습니다. 다른 화면에 다녀와도 남아 있습니다.": "Unsaved changes. They stay here while you look at other screens.",
 };

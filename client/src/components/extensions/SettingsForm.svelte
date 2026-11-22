@@ -10,6 +10,8 @@
 	import { displayValue } from "../../lib/extensions/translations";
 	import { extensions } from "../../lib/extensions/host.svelte";
 	import { followsSaved } from "../../lib/extensions/form-draft";
+	import { keepDraft } from "../../lib/settings-drafts.svelte";
+	import { app } from "../../lib/store.svelte";
 
 	interface Props {
 		id: string;
@@ -50,6 +52,16 @@
 	/** The saved value the draft was taken from: see `followsSaved`. */
 	let base = untrack(() => signature);
 	let jsonDraft = $state<string | null>(null);
+	// what was typed and not saved survives leaving this page or Settings; once it matches the saved value it is dropped
+	keepDraft(
+		() => `ext:${app.serverId ?? ""}:${id}`,
+		() => ({ draft, jsonDraft }),
+		(d) => {
+			draft = d.draft;
+			jsonDraft = d.jsonDraft;
+		},
+		(d) => d.jsonDraft !== null || JSON.stringify(formOf(d.draft)) !== untrack(() => signature),
+	);
 
 	const clean = $derived(formOf(draft));
 	const resolved = $derived(resolveSettings(fields, clean));

@@ -8,6 +8,9 @@
 	import { extensions } from "../../lib/extensions/host.svelte";
 	import { voice } from "../../lib/voice.svelte";
 	import type { RealtimeVoiceSettings, VoiceSettings } from "../../lib/api";
+	import { untrack } from "svelte";
+	import { app } from "../../lib/store.svelte";
+	import { settingsDrafts } from "../../lib/settings-drafts.svelte";
 
 	/**
 	 * Settings > Voice. The connection lives on the server (so every device shares it) and the key is written once and
@@ -28,9 +31,26 @@
 	let saving = $state(false);
 	let message = $state<{ ok: boolean; text: string } | null>(null);
 
-	// The server's settings arrive after the first render (and again when the server changes).
+	/**
+	 * Unsaved input survives leaving this section (another tab, another server, closing Settings) and coming back: both
+	 * modes' fields are one draft, so switching file <-> realtime never drops what was typed for the other.
+	 */
+	type Draft = { draft: VoiceSettings; keywordText: string; key: string; keyTouched: boolean; rtKey: string; rtKeyTouched: boolean };
+	const draftKey = $derived(`voice:${app.serverId ?? ""}`);
+	let restored = false;
+
+	// The server's settings arrive after the first render (and again when the server changes or another device saves).
 	$effect(() => {
 		if (!voice.loaded) return;
+		const kept = untrack(() => (!restored ? settingsDrafts.get<Draft>(draftKey) : undefined));
+		if (kept) {
+			({ draft, keywordText, key, keyTouched, rtKey, rtKeyTouched } = kept);
+			restored = true;
+			return;
+		}
+		// an unsaved edit is not overwritten by a reload from the server (the first load always fills the form)
+		if (restored && untrack(() => dirty)) return;
+		restored = true;
 		draft = { ...voice.settings, mode: voice.settings.mode ?? "file", realtime: { ...REALTIME_DEFAULTS, ...voice.settings.realtime } };
 		keywordText = (voice.settings.realtime?.keywords ?? []).join("\n");
 		rtKey = "";
@@ -38,6 +58,24 @@
 		key = "";
 		keyTouched = false;
 	});
+
+	// keep the draft while it differs from what is saved; once it matches again (saved, or typed back) it is dropped
+	$effect(() => {
+		if (!voice.loaded || !restored) return;
+		const snapshot: Draft = { draft, keywordText, key, keyTouched, rtKey, rtKeyTouched };
+		if (dirty) settingsDrafts.set(draftKey, snapshot);
+		else settingsDrafts.clear(draftKey);
+	});
+
+	/** Back to what the server has: the unsaved input of both modes is dropped. */
+	function revert() {
+		settingsDrafts.clear(draftKey);
+		draft = { ...voice.settings, mode: voice.settings.mode ?? "file", realtime: { ...REALTIME_DEFAULTS, ...voice.settings.realtime } };
+		keywordText = (voice.settings.realtime?.keywords ?? []).join("\n");
+		key = rtKey = "";
+		keyTouched = rtKeyTouched = false;
+		message = null;
+	}
 
 	/** The old microphone extension, if it is installed: two microphones with two settings would confuse anyone. */
 	const oldExtension = $derived(extensions.installed.find((e) => e.package.manifest.id === "voice-input") ?? null);
@@ -82,10 +120,8 @@
 			message = { ok: false, text: error };
 			return false;
 		}
-		key = "";
-		keyTouched = false;
-		rtKey = "";
-		rtKeyTouched = false;
+		// what the server stored (it trims and drops repeated keywords) becomes the form again
+		revert();
 		message = { ok: true, text: t("저장했습니다") };
 		return true;
 	}
@@ -176,7 +212,9 @@
 	<div class="actions">
 		<Button size="sm" disabled={!dirty || saving || keywords.length > 20} onclick={save}>{t("저장")}</Button>
 		<Button size="sm" variant="ghost" disabled={voice.testing || voice.loading} onclick={test}>{voice.testing ? t("확인 중…") : t("연결 확인")}</Button>
+		{#if dirty}<Button size="sm" variant="ghost" disabled={saving} onclick={revert}>{t("변경 취소")}</Button>{/if}
 	</div>
+	{#if dirty && !message}<span class="note" role="status">{t("저장하지 않은 변경이 있습니다. 다른 화면에 다녀와도 남아 있습니다.")}</span>{/if}
 	{#if message}<span class="note" class:bad={!message.ok} role="status">{message.text}</span>{/if}
 </section>
 {:else}
@@ -221,7 +259,9 @@
 	<div class="actions">
 		<Button size="sm" disabled={!dirty || saving} onclick={save}>{t("저장")}</Button>
 		<Button size="sm" variant="ghost" disabled={voice.testing || voice.loading} onclick={test}>{voice.testing ? t("확인 중…") : t("연결 확인")}</Button>
+		{#if dirty}<Button size="sm" variant="ghost" disabled={saving} onclick={revert}>{t("변경 취소")}</Button>{/if}
 	</div>
+	{#if dirty && !message}<span class="note" role="status">{t("저장하지 않은 변경이 있습니다. 다른 화면에 다녀와도 남아 있습니다.")}</span>{/if}
 	{#if message}<span class="note" class:bad={!message.ok} role="status">{message.text}</span>{/if}
 </section>
 {/if}

@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { untrack } from "svelte";
+	import { keepDraft } from "../../lib/settings-drafts.svelte";
 	import Badge from "../ui/Badge.svelte";
 	import Button from "../ui/Button.svelte";
 	import Icon from "../ui/Icon.svelte";
@@ -69,6 +70,8 @@
 		prompt: string;
 	};
 	let form = $state<Form | null>(null);
+	// a half-written role survives leaving the section or Settings
+	keepDraft(() => `subagent:${serverId}`, () => form, (f) => (form = f));
 
 	const DEFAULT_TOOLS = ["read", "grep", "ls"];
 	function add() {

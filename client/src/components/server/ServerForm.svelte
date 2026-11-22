@@ -22,6 +22,7 @@
 	import { Api, ApiError, describeConnectError, errorText, normalizeUrl, verifyServer } from "../../lib/api";
 	import type { WorkdirInfo } from "../../lib/types";
 	import { isPlainHttpOnOpenNetwork } from "../../lib/pairing";
+	import { keepDraft } from "../../lib/settings-drafts.svelte";
 
 	/**
 	 * `"new"` to add, or the id of the server being edited. `embedded` draws it as a page inside the settings window
@@ -48,6 +49,15 @@
 	let name = $state(editing?.name ?? "");
 	let url = $state(editing?.baseUrl ?? (app.servers.length ? "" : defaultServerUrl()));
 	let token = $state(editing?.token ?? "");
+	/** The server as stored now (the form may have saved since it opened). */
+	const saved = () => (editing ? (app.servers.find((s) => s.id === editing.id) ?? null) : null);
+	// edits of the address, name or token survive leaving the section or Settings until they are saved or cancelled
+	keepDraft(
+		() => `server:${target}`,
+		() => ({ name, url, token }),
+		(d) => ({ name, url, token } = d),
+		(d) => (saved() ? d.name !== (saved()!.name ?? "") || d.url !== saved()!.baseUrl || d.token !== saved()!.token : !!(d.name || d.token || (d.url && d.url !== defaultServerUrl()))),
+	);
 	let showToken = $state(false);
 	let busy = $state(false);
 	let error = $state("");

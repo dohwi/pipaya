@@ -30,6 +30,7 @@
 	import UnreadableCard from "./UnreadableCard.svelte";
 	import { ExtensionTasks } from "../../lib/extension-tasks.svelte";
 	import { manifestDescription, manifestName } from "../../lib/extensions/translations";
+	import { keepDraft } from "../../lib/settings-drafts.svelte";
 
 	/** Every extension of one server, whichever kind it is underneath (a package this app runs, or code inside the server): one list, one "확장". */
 	let { selected = $bindable(null), marketFor = $bindable(null), installFor = $bindable(null), serverId = null }: { /** The server whose extensions this lists (the one picked in the settings window); the open server when unset */ serverId?: string | null; /** The extension whose detail is open (chosen in the settings sidebar or from a row); null shows the list */ selected?: string | null; /** A server extension to look up in the marketplace as soon as the tab opens */ marketFor?: string | null; /** A client extension to fetch and preview for install as soon as the tab opens */ installFor?: string | null } = $props();
@@ -214,7 +215,9 @@
 		return fetchCompanion(id);
 	}
 	const tasks = new ExtensionTasks();
+	// the raw-JSON settings typed for each extension survive leaving this page or Settings until saved
 	let drafts = $state<Record<string, string>>({});
+	keepDraft(() => `ext-json:${serverId ?? ""}`, () => (Object.keys(drafts).length ? drafts : null), (d) => (drafts = d));
 	/** The server extension that carries the open client extension as its client half. */
 	const bundleOwner = $derived(selected ? serverSide.find((e) => e.companion === selected && e.clientPackage) : undefined);
 	/** The server extension on the open server that pairs with the open client extension */
