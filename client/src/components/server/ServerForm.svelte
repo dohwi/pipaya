@@ -271,6 +271,7 @@
 	.embedded .body.pane {
 		margin: 0 -4px;
 		padding: 0 4px 8px; /* the settings pane already spaces its title from the content */
+		overflow: visible; /* the settings page scrolls, not this box: a scroll box of its own (that never scrolled) held a sticky form footer in place */
 	}
 	/* in the settings pane the page already has the gutters: no side padding of its own (footer.df outranks DialogFooter's .safe) */
 	.embedded :global(footer.df) {

@@ -157,7 +157,7 @@
 				</FormField>
 			{/if}
 			<p class="hint">{t("저장된 비밀 값은 ••••••••로 가려 보입니다. 그대로 두면 기존 값이 유지됩니다.")}</p>
-			<div class="actions">
+			<div class="actions form-actions">
 				<Button onclick={() => (form = null)} disabled={busy}>{t("취소")}</Button>
 				<Button variant="primary" type="submit" disabled={busy}>{t("저장")}</Button>
 			</div>

@@ -317,7 +317,7 @@
 					</div>
 				</FormField>
 			{/if}
-			<div class="actions">
+			<div class="actions form-actions">
 				<Button onclick={() => (form = null)} disabled={busy}>{t("취소")}</Button>
 				<Button variant="primary" type="submit" disabled={busy}>{form.revive ? t("다시 예약") : t("저장")}</Button>
 			</div>

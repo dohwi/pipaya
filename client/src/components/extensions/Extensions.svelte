@@ -522,11 +522,6 @@
 	<section aria-labelledby="extensions-installed">
 		<div class="bar">
 			<h3 id="extensions-installed" class="section-label bar-title">{t("설치된 확장 ({n})", { n: list.length + unreadable.length + serverSide.length })}</h3>
-			<Button size="sm" class="add" disabled={tasks.busy.$import} onclick={() => (market = true)}><Icon name="search" /> {t("마켓플레이스")}</Button>
-			<label class="btn sm add" class:disabled={tasks.busy.$import}>
-				<input type="file" accept="application/json,.json" disabled={tasks.busy.$import} onchange={selectFile} />
-				<Icon name="plus" /> {t("확장 추가")}
-			</label>
 			{#if pending.length > 1}<Button size="sm" variant="update" class="add" disabled={!!tasks.busy.$all || tasks.busy.$import} onclick={updateAll}><Icon name="download" /> {tasks.busy.$all ? t("업데이트하는 중…") : t("모두 업데이트 ({n})", { n: pending.length })}</Button>{/if}
 		</div>
 		{#if tasks.busy.$import}<p class="hint" role="status">{t("파일을 읽는 중…")}</p>{/if}
@@ -566,8 +561,16 @@
 				</ExtensionRow>
 		{/each}
 		{#if !list.length && !unreadable.length && !serverSide.length}
-			<EmptyState as="p" tone="dashed" compact>{t("이 서버에 설치된 확장이 없습니다")}</EmptyState>
+			<EmptyState as="p" compact>{t("이 서버에 설치된 확장이 없습니다")}</EmptyState>
 		{/if}
+		<!-- the two ways in, as the dashed "add" slots every other list ends with: browse the marketplace, or a package file -->
+		<div class="adds">
+			<Button variant="dashed" disabled={tasks.busy.$import} onclick={() => (market = true)}><Icon name="search" /> {t("마켓플레이스")}</Button>
+			<label class="btn dashed file" class:disabled={tasks.busy.$import}>
+				<input type="file" accept="application/json,.json" disabled={tasks.busy.$import} onchange={selectFile} />
+				<Icon name="plus" /> {t("파일로 추가")}
+			</label>
+		</div>
 	</section>
 
 	<!-- The same settings group as the other panes: a heading, a SettingRow and a hint line. Not folded: the switch is the way back when an extension misbehaves. -->
@@ -610,10 +613,13 @@
 
 	.bar { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
 	.bar-title { margin-right: auto; }
-	.extensions .bar > :global(.add) { position: relative; display: inline-flex; align-items: center; gap: 4px; cursor: pointer; }
-	.extensions .bar > :global(.add.disabled) { opacity: 0.5; cursor: default; }
-	.extensions .bar > :global(.add input) { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: inherit; }
-	.extensions .bar > :global(.add svg) { width: 16px; height: 16px; }
+	.adds { display: flex; gap: 8px; }
+	.adds > :global(.btn) { flex: 1 1 0; min-width: 0; }
+	/* a <label> styled as the button: the file input fills it, invisible, so a click anywhere opens the picker; the ring follows the input */
+	.file { position: relative; cursor: pointer; }
+	.file.disabled { opacity: 0.5; cursor: default; }
+	.file input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: inherit; }
+	.file:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
 	.trouble { display: flex; flex-direction: column; gap: 8px; }
 	/* the recovery query is typed by hand: mono, on one line, never split at "?" */
 	.trouble code { font-family: var(--mono); font-size: var(--fs-xs); color: var(--text-dim); white-space: nowrap; }

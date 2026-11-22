@@ -12,7 +12,7 @@ export const SETTINGS_TABS = [
 	{ id: "general", label: msg("내 설정"), icon: "settings", sub: msg("언어 · 테마 · 알림 · 터미널"), server: false },
 	{ id: "keys", label: msg("단축키"), icon: "keyboard", sub: msg("키 지정과 초기화"), server: false },
 	{ id: "backup", label: msg("백업"), icon: "download", sub: msg("설정 내보내기 · 가져오기"), server: false },
-	{ id: "info", label: msg("정보"), icon: "server", sub: "", server: true },
+	{ id: "info", label: msg("정보"), icon: "server", sub: msg("이름 · 주소 · 버전"), server: true },
 	{ id: "models", label: msg("모델"), icon: "key", sub: msg("모델 연결 · 기본 모델 · 이미지 모델"), server: true },
 	{ id: "voice", label: msg("음성 입력"), icon: "mic", sub: msg("말해서 입력하기"), server: true },
 	{ id: "tools", label: msg("에이전트 도구"), icon: "widgets", sub: msg("도구 허용 · 서브에이전트 위임"), server: true },
@@ -20,7 +20,7 @@ export const SETTINGS_TABS = [
 	{ id: "sessions", label: msg("대화"), icon: "chat", sub: msg("기본 작업 폴더 · 자동 삭제"), server: true },
 	{ id: "schedules", label: msg("예약 작업"), icon: "clock", sub: msg("정해진 때에 대화로 프롬프트 보내기"), server: true },
 	{ id: "srvext", label: msg("확장"), icon: "bolt", sub: msg("설치 · 권한 · 설정"), server: true },
-	{ id: "devices", label: msg("기기"), icon: "phone", sub: "", server: true },
+	{ id: "devices", label: msg("기기"), icon: "phone", sub: msg("접속한 기기 · 폰 연결"), server: true },
 ] as const;
 export type SettingsTabId = (typeof SETTINGS_TABS)[number]["id"];
 
