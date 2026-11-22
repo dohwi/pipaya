@@ -8,6 +8,7 @@
 	import { copyText } from "../../lib/clipboard";
 	import QrCode from "./QrCode.svelte";
 	import Icon from "../ui/Icon.svelte";
+	import Notice from "../ui/Notice.svelte";
 
 	let { serverId }: { serverId: string } = $props();
 	const server = $derived(app.servers.find((s) => s.id === serverId));
@@ -93,10 +94,7 @@
 		<input class="field mono" bind:value={address} oninput={addressChanged} inputmode="url" autocapitalize="off" autocomplete="off" spellcheck="false" placeholder="http://100.x.x.x:8787" />
 	</label>
 	{#if loopback}
-		<div class="warn" role="alert">
-			<Icon name="alert" />
-			<span>{t("localhost 주소는 폰에서 이 PC가 아니라 폰 자신을 가리킵니다. Tailscale 주소나 PC의 LAN 주소로 바꿔 주세요.")}</span>
-		</div>
+		<Notice tone="warn">{t("localhost 주소는 폰에서 이 PC가 아니라 폰 자신을 가리킵니다. Tailscale 주소나 PC의 LAN 주소로 바꿔 주세요.")}</Notice>
 	{/if}
 
 	{#if link && !expired}
@@ -117,7 +115,7 @@
 		</Button>
 	{/if}
 
-	{#if error}<div class="warn" role="alert"><Icon name="alert" /><span>{error}</span></div>{/if}
+	{#if error}<Notice tone="warn">{error}</Notice>{/if}
 
 	<p class="hint">{t("한 번만, 2분 안에 쓸 수 있는 코드입니다. 접근 토큰은 들어 있지 않습니다.")}</p>
 	{#if handedOut}<p class="hint">{t("복사한 링크는 이 창을 닫아도 2분 동안 쓸 수 있습니다.")}</p>{/if}
@@ -198,24 +196,6 @@
 		align-self: center;
 		height: 44px;
 		padding: 0 28px;
-	}
-	.warn {
-		display: flex;
-		gap: 8px;
-		align-items: flex-start;
-		padding: 8px 12px;
-		border-radius: var(--radius);
-		background: var(--warn-soft);
-		color: var(--warn);
-		font-size: var(--fs-sm);
-		line-height: 1.5;
-	}
-	.warn :global(svg) {
-		width: 17px;
-		height: 17px;
-		flex: none;
-		margin-top: 1px;
-		stroke-width: 1.8;
 	}
 	.hint {
 		margin: 0;

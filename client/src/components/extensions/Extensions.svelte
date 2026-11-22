@@ -4,6 +4,7 @@
 	import { LocalizedError, t } from "../../lib/i18n";
 	import Icon from "../ui/Icon.svelte";
 	import Badge from "../ui/Badge.svelte";
+	import EmptyState from "../ui/EmptyState.svelte";
 	import Notice from "../ui/Notice.svelte";
 	import VersionBump from "./VersionBump.svelte";
 	import SettingRow from "../ui/SettingRow.svelte";
@@ -565,7 +566,7 @@
 				</ExtensionRow>
 		{/each}
 		{#if !list.length && !unreadable.length && !serverSide.length}
-			<p class="none">{t("이 서버에 설치된 확장이 없습니다")}</p>
+			<EmptyState as="p" tone="dashed" compact>{t("이 서버에 설치된 확장이 없습니다")}</EmptyState>
 		{/if}
 	</section>
 
@@ -617,14 +618,5 @@
 	/* the recovery query is typed by hand: mono, on one line, never split at "?" */
 	.trouble code { font-family: var(--mono); font-size: var(--fs-xs); color: var(--text-dim); white-space: nowrap; }
 
-	.none {
-		margin: 4px 0 4px;
-		padding: 12px;
-		border: 1px dashed var(--border);
-		border-radius: var(--radius);
-		color: var(--text-faint);
-		font-size: var(--fs-sm);
-		text-align: center;
-	}
 
 </style>

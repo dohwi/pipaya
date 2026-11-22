@@ -2,6 +2,7 @@
 	import type { ActionId } from "../../lib/keys";
 	import Button from "./Button.svelte";
 	import DialogFooter from "./DialogFooter.svelte";
+	import EmptyState from "./EmptyState.svelte";
 	import Icon from "./Icon.svelte";
 	import type { Snippet } from "svelte";
 	import { t } from "../../lib/i18n";
@@ -26,6 +27,7 @@
 		layer = 4,
 		minList = "120px",
 		list,
+		empty,
 		after,
 		footerStart,
 	}: {
@@ -39,6 +41,8 @@
 		/** the list never shrinks below this, so a filter with few hits does not collapse the dialog */
 		minList?: string;
 		list: Snippet;
+		/** the one "nothing matches" line, drawn under the list; pass it only when the filter has no hits */
+		empty?: string;
 		/** below the list, above the footer (e.g. the reasoning strength row) */
 		after?: Snippet;
 		/** the footer's left side (e.g. "manage connections") */
@@ -87,6 +91,7 @@
 		<!-- svelte-ignore a11y_no_static_element_interactions -->
 		<div class="pk-list" bind:this={listEl} style:min-height={minList} onkeydown={listKeys}>
 			{@render list()}
+			{#if empty}<EmptyState tone="plain" compact>{empty}</EmptyState>{/if}
 		</div>
 		{@render after?.()}
 	</div>
@@ -133,7 +138,7 @@
 		margin: 0 -4px; /* 4px of room for the rows' focus ring, taken back so the rows stay on the gutter */
 		padding: 0 4px;
 	}
-	/* group labels and the empty line are plain markup from the caller */
+	/* group labels are plain markup from the caller */
 	.pk-list :global(.pk-group) {
 		display: flex;
 		align-items: center;
@@ -146,13 +151,6 @@
 		letter-spacing: 0.04em;
 		text-transform: lowercase;
 		color: var(--text-faint);
-	}
-	.pk-list :global(.pk-empty) {
-		padding: 16px;
-		text-align: center;
-		color: var(--text-faint);
-		font-size: var(--fs-sm);
-		line-height: 20px;
 	}
 	@media (max-width: 640px) {
 		.pk-search {

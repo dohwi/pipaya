@@ -7,6 +7,8 @@
 	import { DirBrowser } from "../../lib/dir-browser.svelte";
 	import { msg, t, tc } from "../../lib/i18n";
 	import { onDestroy } from "svelte";
+	import EmptyState from "../ui/EmptyState.svelte";
+	import Notice from "../ui/Notice.svelte";
 	import Icon from "../ui/Icon.svelte";
 	import Modal from "../ui/Modal.svelte";
 	import { app } from "../../lib/store.svelte";
@@ -173,9 +175,9 @@
 
 	<div class="list" class:loading={browser.loading}>
 		{#if browser.error}
-			<p class="err">{browser.error}</p>
+			<Notice tone="danger" size="sm">{browser.error}</Notice>
 		{:else if browser.missing}
-			<p class="empty">{t('"{path}" 폴더를 찾을 수 없습니다', { path: splitTyped(browser.typed.trim()).dir })}</p>
+			<EmptyState as="p" tone="plain" compact>{t('"{path}" 폴더를 찾을 수 없습니다', { path: splitTyped(browser.typed.trim()).dir })}</EmptyState>
 		{:else if browser.listing}
 			{#if browser.listing.parent && !browser.part}
 				<!-- the label is a word, not "..": two dots have no ink height and sat 3px below the arrow -->
@@ -186,9 +188,9 @@
 					<Icon name="folder" /><span class="mono name">{d.name}</span>
 				</button>
 			{:else}
-				<p class="empty">{browser.part ? t('"{name}"(으)로 시작하는 폴더가 없습니다', { name: browser.part }) : t("하위 폴더가 없습니다")}</p>
+				<EmptyState as="p" tone="plain" compact>{browser.part ? t('"{name}"(으)로 시작하는 폴더가 없습니다', { name: browser.part }) : t("하위 폴더가 없습니다")}</EmptyState>
 			{/each}
-			{#if browser.listing.truncated}<p class="empty">{t("폴더가 너무 많아 일부만 보입니다. 위 경로 입력칸을 이용하세요.")}</p>{/if}
+			{#if browser.listing.truncated}<EmptyState as="p" tone="plain" compact>{t("폴더가 너무 많아 일부만 보입니다. 위 경로 입력칸을 이용하세요.")}</EmptyState>{/if}
 		{/if}
 	</div>
 
@@ -356,15 +358,6 @@
 	}
 	.grow {
 		flex: 1;
-	}
-	.empty,
-	.err {
-		margin: 16px 12px;
-		font-size: var(--fs-sm);
-		color: var(--text-faint);
-	}
-	.err {
-		color: var(--danger);
 	}
 	.swrow {
 		display: inline-flex;

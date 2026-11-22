@@ -3,6 +3,7 @@
 	import Icon from "../ui/Icon.svelte";
 	import { t } from "../../lib/i18n";
 	import { ago, compact } from "../../lib/format";
+	import EmptyState from "../ui/EmptyState.svelte";
 	import PickerModal from "../ui/PickerModal.svelte";
 	import CapTags from "./CapTags.svelte";
 	import PickerOption from "../ui/PickerOption.svelte";
@@ -70,7 +71,7 @@
 	</PickerOption>
 {/snippet}
 
-<PickerModal title={t("OpenRouter에서 찾은 모델")} {onclose} bind:query={filter} placeholder={t("모델 검색")} width="440px" minList="200px">
+<PickerModal title={t("OpenRouter에서 찾은 모델")} {onclose} bind:query={filter} placeholder={t("모델 검색")} width="440px" minList="200px" empty={!rows.length && !showSuggested ? t("일치하는 모델이 없습니다") : undefined}>
 	{#snippet footerStart()}
 		{#if onrefresh}
 			<button type="button" class="src" onclick={onrefresh} disabled={refreshing} title={detail}>
@@ -93,9 +94,7 @@
 		{#if rows.length}
 			<div class="pk-group">OpenRouter</div>
 			{#each rows as c (c.id)}{@render opt(c, false)}{/each}
-			{#if hits.length > LIMIT}<div class="pk-empty">{t("검색어를 더 입력해 좁혀 보세요 ({n}개 더 있음)", { n: hits.length - LIMIT })}</div>{/if}
-		{:else if !showSuggested}
-			<div class="pk-empty">{t("일치하는 모델이 없습니다")}</div>
+			{#if hits.length > LIMIT}<EmptyState tone="plain" compact>{t("검색어를 더 입력해 좁혀 보세요 ({n}개 더 있음)", { n: hits.length - LIMIT })}</EmptyState>{/if}
 		{/if}
 	{/snippet}
 </PickerModal>

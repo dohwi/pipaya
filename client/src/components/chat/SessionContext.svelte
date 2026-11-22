@@ -115,9 +115,9 @@
 						</div>
 						{/if}
 					{:else}
-						<div class="empty">{t("적용된 AGENTS.md가 없습니다. (전역·상위 폴더·프로젝트 모두 없음)")}</div>
+						<EmptyState tone="dashed" compact>{t("적용된 AGENTS.md가 없습니다. (전역·상위 폴더·프로젝트 모두 없음)")}</EmptyState>
 					{/each}
-					{#if data.instructions.length && !partCount(part)}<div class="empty">{t("이 범위에 적용된 AGENTS.md가 없습니다.")}</div>{/if}
+					{#if data.instructions.length && !partCount(part)}<EmptyState tone="dashed" compact>{t("이 범위에 적용된 AGENTS.md가 없습니다.")}</EmptyState>{/if}
 				</section>
 				<div class="rest">
 					<h2 class="part">{t("시스템 정의")}</h2>
@@ -217,8 +217,6 @@
 	.inner > .source, .inner > .note { margin: 0; }
 	/* a group caption after a row starts a new block: 16px above it, 8px to its own rows */
 	.inner > .source + .note { margin-top: 8px; }
-	/* same box as a collapsed row, so "nothing applied" reads as a muted row rather than stray body text */
-	.empty { padding: 12px; border: 1px dashed var(--border); border-radius: var(--radius); font-size: var(--fs-2xs); line-height: 16px; color: var(--text-faint); }
 	.note { margin: 0 0 8px; font-size: var(--fs-2xs); line-height: 16px; color: var(--text-faint); }
 	.when-line { display: block; margin-top: 4px; font-size: var(--fs-2xs); line-height: 16px; color: var(--text-faint); overflow-wrap: anywhere; }
 </style>

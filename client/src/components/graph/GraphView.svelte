@@ -12,6 +12,7 @@
 	import { toolSummary } from "../../lib/tools";
 	import { graphRuns } from "../../lib/graph-runs.svelte";
 	import { isMouseWheel, edgeLength, edgePath, edgeTip, sparkPlan, fitGraph, fitView, focusCards, growthPlan, leavePlan, quietCards, related, springStep, type Card, type Edge, type Graph, type GraphServer } from "../../lib/graph";
+	import EmptyState from "../ui/EmptyState.svelte";
 	import Icon from "../ui/Icon.svelte";
 	import ModelLogo from "../models/ModelLogo.svelte";
 	import AgentBadge from "../shell/AgentBadge.svelte";
@@ -786,7 +787,7 @@
 		</div>
 
 		{#if !graph.cards.size}
-			<p class="empty">{t("저장된 서버가 없습니다")}</p>
+			<div class="empty"><EmptyState tone="plain">{t("저장된 서버가 없습니다")}</EmptyState></div>
 		{/if}
 
 		<div class="bar">
@@ -932,8 +933,7 @@
 		display: grid;
 		place-items: center;
 		margin: 0;
-		color: var(--text-faint);
-		font-size: var(--fs-sm);
+		pointer-events: none;
 	}
 
 	/* ---- lines ---- */

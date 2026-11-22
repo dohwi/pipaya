@@ -4,6 +4,7 @@
 	import { app } from "../../lib/store.svelte";
 	import QueueBadge from "./QueueBadge.svelte";
 	import QueueText from "./QueueText.svelte";
+	import EmptyState from "../ui/EmptyState.svelte";
 	import Icon from "../ui/Icon.svelte";
 	import Button from "../ui/Button.svelte";
 	import IconButton from "../ui/IconButton.svelte";
@@ -151,7 +152,7 @@
 					<button type="button" class="rm" tabindex="-1" aria-label={t("{name} 취소", { name: queuedShown(q.text) })} title={t("대기열에서 빼기")} onclick={(e) => { e.stopPropagation(); index = i; void remove(q); }}><Icon name="x" /></button>
 				</li>
 			{:else}
-				<li class="empty">{t("대기 중인 메시지가 없습니다")}</li>
+				<EmptyState as="li" tone="plain" compact>{t("대기 중인 메시지가 없습니다")}</EmptyState>
 			{/each}
 		</ul>
 		</div>
@@ -184,7 +185,7 @@
 	ul:focus {
 		outline: none;
 	}
-	li:not(.empty) {
+	li {
 		cursor: pointer;
 	}
 	li.on {
@@ -211,10 +212,6 @@
 	.rm :global(svg) {
 		width: 16px;
 		height: 16px;
-	}
-	.empty {
-		color: var(--text-faint);
-		justify-content: center;
 	}
 	.when {
 		display: flex;
