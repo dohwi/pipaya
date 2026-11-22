@@ -2,14 +2,35 @@
 	import { t } from "../../lib/i18n";
 	import QueueBadge from "./QueueBadge.svelte";
 	import QueueText from "./QueueText.svelte";
+	import ScheduleRow from "./ScheduleRow.svelte";
+	import type { Schedule } from "../../lib/types";
 	import Icon from "../ui/Icon.svelte";
 	import { orderQueued, queuedLabel, queuedShown, queuedTone } from "../../lib/queue";
 	import { reflow, rowIn, rowOut } from "../../lib/motion";
 	import { released } from "../../lib/pointer";
 
 	type Queued = { mode: "steer" | "follow_up"; text: string; deferred?: boolean };
-	/** Messages sent while the agent works and not delivered yet (steer: into this run; queue: after it). */
-	let { queued, oncancel, onopen }: { queued: Queued[]; oncancel: (q: Queued) => void; onopen: (q: Queued) => void } = $props();
+	/**
+	 * Messages sent while the agent works and not delivered yet (steer: into this run; queue: after it), then the
+	 * conversation's scheduled tasks (soonest first, paused ones last): one list, so the input has one queue above it.
+	 * Tasks come last: a waiting message goes in with the next turn, a task only at its time. `scheduleOf`: the server and
+	 * session the tasks belong to (needed to pause, resume or delete them).
+	 */
+	let {
+		queued,
+		oncancel,
+		onopen,
+		schedules = [],
+		scheduleOf = null,
+	}: {
+		queued: Queued[];
+		oncancel: (q: Queued) => void;
+		onopen: (q: Queued) => void;
+		schedules?: Schedule[];
+		scheduleOf?: { serverId: string; sessionId: string } | null;
+	} = $props();
+	const tasks = $derived(scheduleOf ? schedules : []);
+	const total = $derived(queued.length + tasks.length);
 
 	// The list has a fixed max height and scrolls inside it, so a long queue never pushes the input down.
 	// Touch scrolls by swipe; a mouse can drag the list itself (a small move first, so the cancel buttons still click).
@@ -33,7 +54,7 @@
 		ro.observe(pane);
 		return () => ro.disconnect();
 	});
-	const contentH = $derived(queued.length * ROW + Math.max(0, queued.length - 1) * GAP);
+	const contentH = $derived(total * ROW + Math.max(0, total - 1) * GAP);
 	const maxH = $derived(Math.max(baseH, Math.min(contentH, Math.round((paneH || vh) * 0.4))));
 	const canGrow = $derived(contentH > baseH);
 	let userH = $state<number | null>(null);
@@ -107,7 +128,7 @@
 		thumb = { top: (scrollTop / (scrollHeight - clientHeight)) * (clientHeight - height), height };
 	}
 	$effect(() => {
-		void queued.length;
+		void total;
 		void listH;
 		syncFade();
 	});
@@ -144,14 +165,15 @@
 		onpointerdown={onGripDown} onmousedown={keepFocus} onpointermove={onGripMove} onpointerup={onGripUp} onpointercancel={onGripUp} onlostpointercapture={() => (resize = null)} ondblclick={() => (userH = null)} onkeydown={onGripKey}></div>
 {/if}
 {#if thumb || canGrow}
-	<p class="count" role="status" aria-label={t("{n}개 대기 중", { n: queued.length })}>
+	<p class="count" role="status" aria-label={t("{n}개 대기 중", { n: total })}>
 		{#if steerN}<span class="c {queuedTone("steer")}" title={queuedLabel({ mode: "steer", text: "", n: steerN })}><Icon name="bolt" />{steerN}</span>{/if}
 		{#if followN}<span class="c {queuedTone("follow_up")}" title={queuedLabel({ mode: "follow_up", text: "", n: followN })}><Icon name="list" />{followN}</span>{/if}
+		{#if tasks.length}<span class="c" title={t("예약 {n}개", { n: tasks.length })}><Icon name="clock" />{tasks.length}</span>{/if}
 	</p>
 {/if}
 <div class="scroll">
 {#if thumb}<span class="thumb" aria-hidden="true" style:top="{thumb.top}px" style:height="{thumb.height}px"></span>{/if}
-<ul class="queued" style:max-height="{listH}px" class:fade-top={fadeTop} class:fade-bottom={fadeBottom} onscroll={syncFade} bind:this={ul} onpointerdown={onDown} onpointermove={onMove} onpointerup={onUp} onpointercancel={onUp} aria-label={t("전달 대기 중인 메시지")}>
+<ul class="queued" style:max-height="{listH}px" class:fade-top={fadeTop} class:fade-bottom={fadeBottom} onscroll={syncFade} bind:this={ul} onpointerdown={onDown} onpointermove={onMove} onpointerup={onUp} onpointercancel={onUp} aria-label={tasks.length ? t("대기 중인 메시지와 예약 작업") : t("전달 대기 중인 메시지")}>
 	{#each orderQueued(queued) as q (q.mode + q.n)}
 		<li animate:reflow in:rowIn out:rowOut>
 			<!-- The row shows one cut line; a click opens the whole message (and its copy / remove) in the queue dialog. -->
@@ -162,6 +184,11 @@
 			<button type="button" class="qx" onclick={() => oncancel({ mode: q.mode, text: q.text })} aria-label={t("{name} 취소", { name: queuedShown(q.text) })} title={t("취소")}><Icon name="x" /></button>
 		</li>
 	{/each}
+	{#if scheduleOf}
+		{#each tasks as task, i (task.id)}
+			<li animate:reflow in:rowIn out:rowOut><ScheduleRow s={task} n={i + 1} serverId={scheduleOf.serverId} sessionId={scheduleOf.sessionId} blocked={() => dragged} /></li>
+		{/each}
+	{/if}
 </ul>
 </div>
 </div>
@@ -339,6 +366,11 @@
 			content: "";
 			position: absolute;
 			inset: -2px -9px; /* 22 + 4 = 26 high, 22 + 18 = 40 wide */
+		}
+		/* the last row's box stops at the row: 2px past it made the list 2px taller than its rows, so a phone showed the
+		   scroll summary and thumb for a list that fits */
+		li:last-child .qx::after {
+			bottom: 0;
 		}
 	}
 	.qx :global(svg) {
