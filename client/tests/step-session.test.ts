@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { stepRowTarget, stepWorkspaceTarget, type StepServer } from "../src/lib/step-session";
+import { attentionTarget, stepRowTarget, stepWorkspaceTarget, type AttentionMarks, type StepServer } from "../src/lib/step-session";
 import { dirKey, groupKey } from "../src/lib/sidebar-model";
 import type { DirBlock } from "../src/lib/nav";
 
@@ -24,10 +24,10 @@ describe("stepRowTarget", () => {
 	});
 	test("a folded folder is one row: it opens its first tab and the walk goes on from it", () => {
 		const onlyB = open(dirKey("A", "/b"));
-		expect(row([A, B], onlyB, "A", "a3", -1)).toEqual({ server: "A", id: "a1" });
+		expect(row([A, B], onlyB, "A", "a3", -1)).toEqual({ server: "A", id: "a1", dir: "/a" });
 		expect(row([A, B], onlyB, "A", "a2", 1)).toEqual({ server: "A", id: "a3" });
-		expect(row([A, B], onlyB, "A", "a3", 1)).toEqual({ server: "B", id: "b1" });
-		expect(row([A, B], onlyB, "B", "b2", 1)).toEqual({ server: "A", id: "a1" });
+		expect(row([A, B], onlyB, "A", "a3", 1)).toEqual({ server: "B", id: "b1", dir: "/c" });
+		expect(row([A, B], onlyB, "B", "b2", 1)).toEqual({ server: "A", id: "a1", dir: "/a" });
 	});
 	test("a folded split tab shows its first pane only; a folded server or project is passed by", () => {
 		const G: StepServer = { id: "A", dirs: [dir("/a", "x"), { path: "/g", tabs: [grp("g", "p", "q")] }, dir("/z", "y")] };
@@ -46,8 +46,14 @@ describe("stepRowTarget", () => {
 });
 
 describe("stepWorkspaceTarget", () => {
-	const ws = (servers: StepServer[], folded: string[], server: string | null, id: string | null, n: 1 | -1) =>
-		stepWorkspaceTarget(servers, folded, { server, id }, n);
+	// where it lands (the folder it names is checked on its own below)
+	const ws = (servers: StepServer[], folded: string[], server: string | null, id: string | null, n: 1 | -1) => {
+		const to = stepWorkspaceTarget(servers, folded, { server, id }, n);
+		return to && { server: to.server, id: to.id };
+	};
+	test("names the folder it lands on, so the caller can open the tab last used there", () => {
+		expect(stepWorkspaceTarget([A, B], [], { server: "A", id: "a1" }, 1)).toEqual({ server: "A", id: "a3", dir: "/b" });
+	});
 	test("goes to the next folder's first pane, crossing into the next server", () => {
 		expect(ws([A, B], [], "A", "a2", 1)).toEqual({ server: "A", id: "a3" });
 		expect(ws([A, B], [], "A", "a3", 1)).toEqual({ server: "B", id: "b1" });
@@ -79,7 +85,10 @@ describe("stepWorkspaceTarget", () => {
 });
 
 describe("stepWorkspaceTarget with projects", () => {
-	const ws = (servers: StepServer[], server: string | null, id: string | null, n: 1 | -1) => stepWorkspaceTarget(servers, [], { server, id }, n);
+	const ws = (servers: StepServer[], server: string | null, id: string | null, n: 1 | -1) => {
+		const to = stepWorkspaceTarget(servers, [], { server, id }, n);
+		return to && { server: to.server, id: to.id };
+	};
 	// /p and /p-x are one project (listed together), /n a plain folder
 	const S: StepServer = { id: "A", dirs: [dir("/p", "p1"), dir("/p-x", "x1", "x2"), dir("/n", "n1")] };
 	test("each worktree row is a stop, landing on its first tab", () => {
@@ -92,5 +101,27 @@ describe("stepWorkspaceTarget with projects", () => {
 		expect(ws([F], "A", "m1", 1)).toEqual({ server: "A", id: "n1" });
 		// from inside the folded project (its tab is open) the step walks out of it
 		expect(ws([F], "A", "x1", 1)).toEqual({ server: "A", id: "n1" });
+	});
+});
+
+describe("attentionTarget", () => {
+	const none: AttentionMarks = { awaiting: {}, failed: {}, unread: {} };
+	const with_ = (s: StepServer, m: Partial<AttentionMarks>) => ({ ...s, marks: { ...none, ...m } });
+	test("a question beats a failure, a failure an unseen finish, across servers", () => {
+		const servers = [with_(A, { unread: { a2: true } }), with_(B, { awaiting: { b2: 1 } })];
+		expect(attentionTarget(servers, { server: "A", id: "a1" })).toEqual({ server: "B", id: "b2" });
+		const fail = [with_(A, { unread: { a2: true } }), with_(B, { failed: { b1: true } })];
+		expect(attentionTarget(fail, { server: "A", id: "a1" })).toEqual({ server: "B", id: "b1" });
+	});
+	test("pressing again walks on to the next one in the same state, and wraps", () => {
+		const servers = [with_(A, { awaiting: { a1: 1, a3: 1 } }), with_(B, { awaiting: { b2: 1 } })];
+		expect(attentionTarget(servers, { server: "A", id: "a1" })).toEqual({ server: "A", id: "a3" });
+		expect(attentionTarget(servers, { server: "A", id: "a3" })).toEqual({ server: "B", id: "b2" });
+		expect(attentionTarget(servers, { server: "B", id: "b2" })).toEqual({ server: "A", id: "a1" });
+	});
+	test("the open pane alone, or an unreachable server's stale marks, give nothing", () => {
+		expect(attentionTarget([with_(A, { awaiting: { a1: 1 } })], { server: "A", id: "a1" })).toBeNull();
+		expect(attentionTarget([with_(A, {}), { ...with_(B, { awaiting: { b1: 1 } }), hidden: true }], { server: "A", id: "a1" })).toBeNull();
+		expect(attentionTarget([with_(A, { unread: { a2: true } })], { server: null, id: null })).toEqual({ server: "A", id: "a2" });
 	});
 });

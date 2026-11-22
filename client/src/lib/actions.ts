@@ -4,9 +4,9 @@ import { isTauri } from "./tauri";
 import { findChat, runCommand } from "./commands";
 import { paneToward, panesOf, type Edge } from "./layout";
 import { connectionState, orderServers, unreachable } from "./sidebar-model";
-import { stepRowTarget, stepWorkspaceTarget } from "./step-session";
+import { attentionTarget, stepRowTarget, stepWorkspaceTarget, type StepTarget } from "./step-session";
 import { projectKey } from "./projects";
-import { needsLook, stepFrom, tabPanes } from "./nav";
+import { stepFrom, tabPanes } from "./nav";
 import { appTakesKey } from "./terminal";
 import {
   actionFor,
@@ -92,44 +92,73 @@ function foldedProjectDirs(serverId: string): string[] {
   return (app.blocksByServer[serverId] ?? []).flatMap((b) => (b.kind === "project" && app.sidebar.folded.includes(projectKey(serverId, b.root)) ? b.dirs.map((d) => d.path) : []));
 }
 
-function goTo(to: { server: string; id: string } | null) {
-  if (!to) return;
+/** Focus pane `id` of the open server. A zoomed pane covers its neighbours: it shrinks back so the new one is seen. */
+function focusPane(id: string) {
+  if (app.zoomId && app.zoomId !== id) app.zoomId = null;
+  void app.openSession(id);
+}
+
+/**
+ * Go where a step landed. A folder row (`dir`) opens like a click on it, on the tab last used there; a tab row opens
+ * that pane. Nothing to go to says so, instead of a key that seems dead.
+ */
+function goTo(to: StepTarget | null, none: string) {
+  if (!to) return void app.toast(none, "info");
+  if (to.dir !== undefined) {
+    if (to.server === app.serverId && app.activeTab?.dir.path === to.dir) return void app.toast(none, "info");
+    if (to.server === app.serverId) app.zoomId = null;
+    return app.showDir(to.server, to.dir);
+  }
   if (to.server !== app.serverId) app.openIn(to.server, { session: to.id });
-  else if (to.id !== app.activeId) void app.openSession(to.id);
+  else if (to.id !== app.activeId) focusPane(to.id);
 }
 
-/** Previous / next row of the sidebar, across servers: a tab (a pane of a split tab), or a folded folder's first tab. */
+/** Previous / next row of the sidebar, across servers: a tab (a pane of a split tab), or a folded folder's row. */
 function stepRow(step: 1 | -1) {
-  goTo(stepRowTarget(stepBands(), app.sidebar.folded, (server, path) => app.dirFolded(server, path), { server: app.serverId, id: app.activeId }, step));
+  goTo(stepRowTarget(stepBands(), app.sidebar.folded, (server, path) => app.dirFolded(server, path), { server: app.serverId, id: app.activeId }, step), t("이동할 다른 줄이 없습니다"));
 }
 
-/** Previous / next workspace (a folder row in the sidebar: a plain folder or a worktree in a project), across servers: opens its first tab. */
+/** Previous / next workspace (a folder row in the sidebar: a plain folder or a worktree in a project), across servers. */
 function stepWorkspace(step: 1 | -1) {
-  goTo(stepWorkspaceTarget(stepBands(), app.sidebar.folded, { server: app.serverId, id: app.activeId }, step));
+  goTo(stepWorkspaceTarget(stepBands(), app.sidebar.folded, { server: app.serverId, id: app.activeId }, step), t("이동할 다른 작업 폴더가 없습니다"));
 }
 
-/** Previous / next tab of the tab bar (the active workspace's tabs), wrapping. A split group counts as one tab per pane. */
+/**
+ * Previous / next tab of the tab bar (the open folder's or project's tabs), wrapping. A split group counts as one tab per
+ * pane. From a new chat (nothing focused) forward starts at the first tab, back at the last.
+ */
 function stepTab(step: 1 | -1) {
-  const at = app.activeTab;
-  if (!at || !app.activeId) return;
   const order = app.stripDirs.flatMap((d) => d.tabs.flatMap((x) => tabPanes(x))).filter((id) => app.shows(id));
   const id = stepFrom(order, app.activeId, step);
-  if (id && id !== app.activeId) void app.openSession(id);
+  if (id && id !== app.activeId) focusPane(id);
+  else app.toast(t("이동할 다른 탭이 없습니다"), "info");
 }
 
+/** Back to the pane focused before this one, also on another server. */
 function lastSession() {
   const id = app.previousId;
-  if (id && app.shows(id)) void app.openSession(id);
+  const server = app.previousServer;
+  if (id && server && server !== app.serverId) {
+    const d = app.links[server]?.data;
+    if (d && (d.sessions.some((s) => s.id === id) || d.terminals.some((x) => x.id === id))) return app.openIn(server, { session: id });
+  }
+  if (id && id !== app.activeId && app.shows(id)) focusPane(id);
   else app.toast(t("돌아갈 이전 대화가 없습니다"), "error");
 }
 
-/** Jump to the conversation that most needs the user: asking first, then failed, then finished unseen. */
+/**
+ * Jump to the conversation that most needs the user, on any server: asking first, then failed, then finished unseen.
+ * Pressing again goes on to the next one in the same state (see `attentionTarget`).
+ */
 function nextAttention() {
-  // the sidebar's own order (a project's folders together) within a state
-  const order = [...new Set(app.dirs.flatMap((d) => d.tabs.flatMap((x) => tabPanes(x))))];
-  const id = needsLook(order, { awaiting: app.awaiting, failed: app.failed, unread: app.unread }, app.activeId);
-  if (id) void app.openSession(id);
-  else app.toast(t("확인할 대화가 없습니다"), "error");
+  const bands = stepBands().map((b) => {
+    const d = app.links[b.id]?.data;
+    return { ...b, marks: { awaiting: d?.awaiting ?? {}, failed: d?.failed ?? {}, unread: d?.unread ?? {} } };
+  });
+  const to = attentionTarget(bands, { server: app.serverId, id: app.activeId });
+  if (!to) return void app.toast(t("확인할 대화가 없습니다"), "error");
+  if (to.server !== app.serverId) app.openIn(to.server, { session: to.id });
+  else focusPane(to.id);
 }
 
 /** Focus the neighbouring pane of the open group, by screen direction. */
@@ -375,8 +404,10 @@ export function onShortcut(e: KeyboardEvent) {
   const fromTerminal = inTerminal(e);
   if (fromTerminal && !appTakesKey(e, app.prefs.bindings, app.prefs.terminal.appKeysFirst)) return;
   // Esc stops the agent even while an IME composition is open (Korean/Japanese input leaves isComposing set). A
-  // shortcut the app took from a terminal wins over the IME too: a half-composed Korean syllable must not eat it.
-  if (e.isComposing && e.key !== "Escape" && !fromTerminal) return;
+  // shortcut the app took from a terminal wins over the IME too: a half-composed Korean syllable must not eat it. So does
+  // a Ctrl/⌘ combo anywhere: the last Korean syllable typed stays "composing" until the next key, so every shortcut
+  // pressed right after typing (Mod+J, Mod+Shift+]) needed a second press.
+  if (e.isComposing && e.key !== "Escape" && !fromTerminal && !(e.ctrlKey || e.metaKey)) return;
   if (MODIFIER_CODE.test(e.code)) return;
   // AltGr arrives as Ctrl+Alt on Windows and Linux: on a German layout AltGr+ß types "\", which must not run Ctrl+Alt+-.
   // Where text is typed, a key with AltGr down is a character, not a shortcut.

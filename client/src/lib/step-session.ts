@@ -13,6 +13,9 @@ export interface StepServer {
 export interface StepTarget {
 	server: string;
 	id: string;
+	/** The step landed on a folder row as a whole (a folded folder, or a workspace step): `id` is its first pane, and the
+	 * caller may open the tab last used there instead, as a click on the folder does */
+	dir?: string;
 }
 
 /**
@@ -30,7 +33,7 @@ export function stepRowTarget(
 	step: 1 | -1,
 ): StepTarget | null {
 	const single = servers.length < 2;
-	const rows: { server: string; ids: string[]; hidden: boolean }[] = [];
+	const rows: { server: string; ids: string[]; hidden: boolean; dir?: string }[] = [];
 	for (const s of servers) {
 		const off = !single && (s.hidden === true || folded.includes(s.id));
 		const inFolded = new Set(s.foldedDirs ?? []);
@@ -39,7 +42,7 @@ export function stepRowTarget(
 			if (!panes.length) continue;
 			const hidden = off || inFolded.has(d.path);
 			if (dirFolded(s.id, d.path)) {
-				rows.push({ server: s.id, ids: panes, hidden });
+				rows.push({ server: s.id, ids: panes, hidden, dir: d.path });
 				continue;
 			}
 			for (const t of d.tabs) {
@@ -56,7 +59,7 @@ export function stepRowTarget(
 		const r = rows[i]!;
 		if (r.hidden) continue;
 		if (i === at) return null;
-		return { server: r.server, id: r.ids[0]! };
+		return r.dir === undefined ? { server: r.server, id: r.ids[0]! } : { server: r.server, id: r.ids[0]!, dir: r.dir };
 	}
 	return null;
 }
@@ -75,13 +78,13 @@ export function stepWorkspaceTarget(
 	step: 1 | -1,
 ): StepTarget | null {
 	const single = servers.length < 2;
-	const blocks: { server: string; panes: string[]; hidden: boolean }[] = [];
+	const blocks: { server: string; panes: string[]; hidden: boolean; dir: string }[] = [];
 	for (const s of servers) {
 		const off = !single && (s.hidden === true || folded.includes(s.id));
 		const inFolded = new Set(s.foldedDirs ?? []);
 		for (const d of s.dirs) {
 			const panes = d.tabs.flatMap((t) => tabPanes(t));
-			if (panes.length) blocks.push({ server: s.id, panes, hidden: off || inFolded.has(d.path) });
+			if (panes.length) blocks.push({ server: s.id, panes, hidden: off || inFolded.has(d.path), dir: d.path });
 		}
 	}
 	if (!blocks.length) return null;
@@ -91,7 +94,45 @@ export function stepWorkspaceTarget(
 		const i = at < 0 ? (step === 1 ? k - 1 : blocks.length - k) : (((at + step * k) % blocks.length) + blocks.length) % blocks.length;
 		const b = blocks[i]!;
 		if (b.hidden) continue;
-		return { server: b.server, id: b.panes[0]! };
+		return { server: b.server, id: b.panes[0]!, dir: b.dir };
 	}
 	return null;
+}
+
+/** What each server says needs the user (its live marks). */
+export interface AttentionMarks {
+	awaiting: Record<string, number>;
+	failed: Record<string, boolean>;
+	unread: Record<string, boolean>;
+}
+
+/**
+ * The conversation that most needs the user, across servers: one asking first, then one that failed, then one that
+ * finished unseen. Within a state the search starts right after the open pane in sidebar order and wraps, so pressing
+ * again walks every asking conversation in turn instead of bouncing between the first two. Unreachable servers (`hidden`)
+ * are passed by: their marks are stale. Folds do not matter: something that needs a look is worth unfolding for.
+ */
+export function attentionTarget(
+	servers: readonly (StepServer & { marks: AttentionMarks })[],
+	current: { server: string | null; id: string | null },
+): StepTarget | null {
+	const list: { server: string; id: string; marks: AttentionMarks }[] = [];
+	const seen = new Set<string>();
+	for (const s of servers) {
+		if (s.hidden) continue;
+		for (const d of s.dirs)
+			for (const id of d.tabs.flatMap((t) => tabPanes(t))) {
+				const k = `${s.id}\u0000${id}`;
+				if (seen.has(k)) continue;
+				seen.add(k);
+				list.push({ server: s.id, id, marks: s.marks });
+			}
+	}
+	const at = current.id ? list.findIndex((e) => e.server === current.server && e.id === current.id) : -1;
+	const order = at < 0 ? list : [...list.slice(at + 1), ...list.slice(0, at)];
+	const hit =
+		order.find((e) => (e.marks.awaiting[e.id] ?? 0) > 0) ??
+		order.find((e) => e.marks.failed[e.id]) ??
+		order.find((e) => e.marks.unread[e.id]);
+	return hit ? { server: hit.server, id: hit.id } : null;
 }
