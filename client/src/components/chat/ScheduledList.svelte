@@ -14,7 +14,8 @@
 
 	/**
 	 * The scheduled tasks of one conversation, above its input like the message queue (QueuedList). Folded by default:
-	 * the soonest task, and under it one centred button ("N개 더" / "접기") that unfolds and folds the rest. It stays put
+	 * the soonest task, and under it one centred button that unfolds and folds the rest ("N개 더 보기" / "N개 숨기기": the
+	 * same count and shape both ways, so it reads as one control and keeps about its width). It stays put
 	 * when the list opens (the composer is anchored at the bottom, rows grow upwards), so the same spot folds it again. A row opens the task in Settings > Scheduled tasks; the button
 	 * at its end (✕, like the queue's) asks whether to pause or delete it, or switches a paused task back on. Paused tasks stay, dimmed.
 	 * `divided`: the message queue follows, so a hairline separates the two lists.
@@ -120,7 +121,7 @@
 	{#if more > 0}
 		<!-- one button in one place for both: under the list, centred (in the first row it pushed that row's time off the column) -->
 		<button type="button" class="fold" onclick={() => (open = !open)} aria-expanded={open}>
-			<span>{open ? t("접기") : t("{n}개 더", { n: more })}</span><Icon name={open ? "chevron-up" : "chevron-down"} />
+			<span>{open ? t("{n}개 숨기기", { n: more }) : t("{n}개 더 보기", { n: more })}</span><Icon name={open ? "chevron-up" : "chevron-down"} />
 		</button>
 	{/if}
 </div>
