@@ -1,6 +1,6 @@
 import { createAssistantMessageEventStream, type Api, type AssistantMessage, type AssistantMessageEventStream, type Context, type Model, type SimpleStreamOptions } from "@earendil-works/pi-ai";
 import { HttpError } from "./errors.ts";
-import { checkServiceTier, isOpenRouterChat, withServiceTier, type ModelRegistry } from "./models.ts";
+import { checkServiceTier, isOpenRouterChat, withServiceTier, withVisibleReasoning, type ModelRegistry } from "./models.ts";
 import type { ServiceTier } from "./openrouter-catalog.ts";
 
 /** What a reply records about its speed: the tier it asked for (absent = OpenRouter's own routing) and the one that served it. */
@@ -40,6 +40,7 @@ export async function checkRunTier(reg: ModelRegistry, provider: string, id: str
  * so its served tier would report a fallback that did not happen.
  */
 export async function streamAtTier(reg: ModelRegistry, m: Model<Api>, ctx: Context, opts: SimpleStreamOptions | undefined, tier: ServiceTier | null): Promise<AssistantMessageEventStream> {
+	opts = withVisibleReasoning(opts, m);
 	if (tier) await checkRunTier(reg, m.provider, m.id, tier);
 	else if (!isOpenRouterChat(m)) return reg.models.streamSimple(m, ctx, opts);
 	if (!isOpenRouterChat(m)) return stampTier(reg.models.streamSimple(m, ctx, withServiceTier(opts, tier!)), () => ({ requestedTier: tier! }));
