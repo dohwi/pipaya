@@ -13,7 +13,7 @@ export const en: Record<string, string> = {
 	"새 대화 기본 속도": "Default speed for new chats",
 	"새 대화는 {tier} 속도로 시작합니다.": "New chats start at {tier} speed.",
 	"새 대화의 응답 속도는 OpenRouter 설정을 따릅니다.": "New chats follow OpenRouter’s speed settings.",
-	"OpenRouter 응답 등급: {tiers} (참고용)": "OpenRouter service tiers: {tiers} (reference only)",
+	"OpenRouter 응답 등급: {tiers}. 속도는 OpenRouter에 직접 연결할 때만 고를 수 있습니다.": "OpenRouter service tiers: {tiers}. Speed can only be chosen on a direct OpenRouter connection.",
 	"응답 등급을 확인하지 못했습니다.": "Could not check service tiers.",
 	/* ---- first run and empty conversation ---- */
 	"pipaya 서버에 연결해 대화를 시작합니다. 서버는 에이전트가 실제로 일하는 컴퓨터에서 돌아갑니다.": "Connect to a pipaya server to start. The server runs on the computer where the agent does its work.",
@@ -533,7 +533,7 @@ export const en: Record<string, string> = {
 	"검색어를 더 입력해 좁혀 보세요 ({n}개 더 있음)": "Type more to narrow down ({n} more)",
 	"업스트림이 제공하는 ID입니다. 요청에 그대로 쓰이므로 OpenRouter 선택으로 바뀌지 않습니다.": "The ID the upstream provides. It is sent as-is and never changed by the OpenRouter choice.",
 	"OpenRouter에서 자동으로 찾지 못했습니다. 모델을 직접 고르거나 아래 값을 입력하세요.": "Not found on OpenRouter automatically. Pick the model or enter the values below by hand.",
-	"추론 강도: {levels}": "Reasoning effort: {levels}",
+	"추론 강도:": "Reasoning effort:",
 	"선택 가능한 추론 강도": "Available reasoning efforts",
 	"하나는 남겨 두어야 합니다": "At least one must stay on",
 	"OpenRouter에서 찾은 모델이 지원하는 강도를 따릅니다. 눌러서 제외할 수 있습니다.": "Follows the efforts the OpenRouter model supports. Click to exclude.",

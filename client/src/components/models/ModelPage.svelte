@@ -87,7 +87,7 @@
 			{#if hit && r.imageGeneration}
 				<p class="hint note src ok"><Icon name="check" /> {t("이미지를 만드는 모델입니다")}</p>
 			{:else if hit && hit.reasoning && r.reasoning}
-				<p class="hint note mono src ok"><Icon name="check" /> {t("추론 강도: {levels}", { levels: hit.levels.join(", ") })}</p>
+				<p class="hint note src ok"><Icon name="check" /> {t("추론 강도:")} <span class="mono">{hit.levels.join(", ")}</span></p>
 			{:else if !hit && r.catalogId === undefined && r.id.trim() && !r.imageGeneration}
 				<p class="hint note src bad"><Icon name="alert" /> {t("OpenRouter에서 자동으로 찾지 못했습니다. 모델을 직접 고르거나 아래 값을 입력하세요.")}</p>
 			{/if}
@@ -134,6 +134,7 @@
 		{@const shown = shownLevels(r, matched)}
 		<section class="fsec set-group">
 			<div class="section-label">{t("선택 가능한 추론 강도")}</div>
+			<div class="stack">
 			<Ladder
 				label={t("선택 가능한 추론 강도")}
 				options={ALL_LEVELS.map((l) => ({ id: l, label: l, level: l, disabled: isLastLevel(r, matched, l), title: isLastLevel(r, matched, l) ? t("하나는 남겨 두어야 합니다") : undefined }))}
@@ -149,8 +150,10 @@
 					{t("고르지 않으면 모델 이름으로 자동 설정하고, 찾지 못하면 minimal부터 high까지 보여줍니다.")}
 				{/if}
 			</p>
+			</div>
 
-			<div class="section-label">{t("새 대화 기본 강도")}</div>
+			<div class="section-label next">{t("새 대화 기본 강도")}</div>
+			<div class="stack">
 			<Ladder
 				label={t("새 대화 기본 강도")}
 				options={[{ id: "auto" as const, label: t("자동") }, ...levels.map((l) => ({ id: l, label: l, level: l }))]}
@@ -158,6 +161,7 @@
 				onchange={(l) => (r.defaultThinkingLevel = l === "auto" ? undefined : l)}
 			/>
 			<p class="hint note">{r.defaultThinkingLevel ? t("이 모델로 새 대화를 시작하면 {level}로 시작합니다.", { level: r.defaultThinkingLevel }) : t("자동이면 이 기기의 지난 강도로 시작합니다.")}</p>
+			</div>
 		</section>
 	{/if}
 	{#if router && !r.imageGeneration && r.id.trim() && catalogApi}
@@ -390,6 +394,16 @@
 	}
 	.note {
 		margin: 0;
+	}
+	/* a ladder and its hint: the hint 4px under the ladder it explains, not 12px like the next block */
+	.stack {
+		display: flex;
+		flex-direction: column;
+		gap: 4px;
+	}
+	/* the second ladder's label starts a new block: 24px above it, so it does not read as the first ladder's hint's */
+	.section-label.next {
+		margin-top: 12px;
 	}
 	label > span {
 		font-size: var(--fs-xs);
