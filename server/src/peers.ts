@@ -226,8 +226,8 @@ export class PeerService {
 	}
 
 	/**
-	 * The name a session has when reopened: its own, which nobody could take while it was closed. Only a session that never
-	 * had one, or one from before closed sessions kept their names whose name an open session took meanwhile, gets a new one.
+	 * The name a session has when reopened: its own, which nobody could take while it was closed (the last migration split
+	 * the names shared before that). Only a session that never had one gets a new one; the check stays as a safety net.
 	 */
 	resumedName(r: SessionRecord): string {
 		return r.name && !this.host.store.activeNames().has(nameKey(r.name)) ? r.name : this.newName();

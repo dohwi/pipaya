@@ -45,6 +45,31 @@ describe("migrations", () => {
 		expect(db.query("SELECT COUNT(*) AS n FROM sessions").get()).toEqual({ n: 6 }); // nothing deleted
 	});
 
+	test("no two sessions share a name, closed ones included: an open one keeps it, else the oldest closed one", () => {
+		const db = openDb(":memory:");
+		const add = db.query("INSERT INTO sessions (id, title, name, cwd, provider, model, thinking_level, system_prompt, tools, closed, created_at, updated_at) VALUES ($id, 't', $name, '/', 'p', 'm', 'off', '', '[]', $closed, $at, $at)");
+		add.run({ id: "old", name: "철수", closed: 1, at: 1 }); // closed, then an open session took its name
+		add.run({ id: "open", name: "철수", closed: 0, at: 2 });
+		add.run({ id: "c1", name: "미나", closed: 1, at: 3 }); // two closed holders: the older one keeps it
+		add.run({ id: "c2", name: "Mina", closed: 1, at: 4 });
+		add.run({ id: "solo", name: "가온", closed: 1, at: 5 }); // nobody else has it: untouched
+		add.run({ id: "none", name: "", closed: 1, at: 6 }); // never had one: stays without
+		const step = MIGRATIONS.at(-1)!;
+		if (typeof step !== "string") step(db);
+		const names = () => Object.fromEntries((db.query("SELECT id, name FROM sessions").all() as { id: string; name: string }[]).map((r) => [r.id, r.name]));
+		const after = names();
+		expect(after.open).toBe("철수");
+		expect(after.c1).toBe("미나");
+		expect(after.solo).toBe("가온");
+		expect(after.none).toBe("");
+		expect(["철수", "미나", "가온"]).not.toContain(after.old);
+		expect(["철수", "미나", "가온", after.old]).not.toContain(after.c2);
+		// running it again changes nothing
+		if (typeof step !== "string") step(db);
+		expect(names()).toEqual(after);
+		expect(db.query("SELECT COUNT(*) AS n FROM sessions").get()).toEqual({ n: 6 });
+	});
+
 	test("scheduled tasks: the table is created by v32, which can run again and keeps the rows", () => {
 		const db = openDb(":memory:");
 		db.query("INSERT INTO sessions (id, title, cwd, provider, model, thinking_level, system_prompt, tools, parent_id, created_at, updated_at, closed, purpose) VALUES ('s', 't', '/', 'p', 'm', 'off', '', '[]', NULL, 1, 1, 0, '')").run();
