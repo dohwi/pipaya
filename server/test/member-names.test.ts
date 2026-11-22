@@ -5,7 +5,10 @@ describe("member names", () => {
 	test("romanizes Hangul syllable by syllable and keeps anything else", () => {
 		expect(romanize("민수")).toBe("Minsu");
 		expect(romanize("abc")).toBe("Abc");
+		expect(MEMBER_NAMES_KO).toHaveLength(500);
+		expect(new Set(MEMBER_NAMES_KO).size).toBe(MEMBER_NAMES_KO.length);
 		expect(MEMBER_NAMES_EN).toHaveLength(MEMBER_NAMES_KO.length);
+		expect(new Set(MEMBER_NAMES_EN.map((n) => n.toLowerCase())).size).toBe(MEMBER_NAMES_EN.length);
 	});
 
 	test("a stored name is always the Korean one, whatever form it was saved in", () => {
@@ -15,12 +18,16 @@ describe("member names", () => {
 		expect(koreanName("custom")).toBe("custom");
 	});
 
-	test("hands out the first free name, then numbers the first one", () => {
+	test("hands out the first free name, then cycles through the pool with 1, 2, 3...", () => {
 		expect(nextMemberName(new Set())).toBe(MEMBER_NAMES_KO[0]!);
 		const all = new Set(MEMBER_NAMES_KO.map((n) => n.toLowerCase()));
+		expect(nextMemberName(all)).toBe(`${MEMBER_NAMES_KO[0]}1`);
+		all.add(`${MEMBER_NAMES_KO[0]}1`.toLowerCase());
+		expect(nextMemberName(all)).toBe(`${MEMBER_NAMES_KO[1]}1`);
+		for (const n of MEMBER_NAMES_KO) all.add(`${n}1`.toLowerCase());
 		expect(nextMemberName(all)).toBe(`${MEMBER_NAMES_KO[0]}2`);
 		all.add(`${MEMBER_NAMES_KO[0]}2`.toLowerCase());
-		expect(nextMemberName(all)).toBe(`${MEMBER_NAMES_KO[0]}3`);
+		expect(nextMemberName(all)).toBe(`${MEMBER_NAMES_KO[1]}2`);
 	});
 
 	test("shows a name in the language asked for, numbered ones included, and leaves strangers alone", () => {
