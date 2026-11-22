@@ -1,11 +1,14 @@
 /**
  * The graph view's model: every saved server's open chats, as columns of cards joined by lines.
  *
- *   server → provider → model → chat (→ chats it branched or started) → subagent roles it delegated to, one card per
- *   role and model (the same role run on two models is two cards, side by side)
+ *   servers (clustered on the left) → shared endpoints / providers → shared models → chats (→ branched chats) → subagents
  *
- * Pure (no Svelte, no DOM): `buildGraph` turns what the client already keeps per server (its sessions and activity, the
- * server's `GET /delegates`) into cards with a column and a centre; `GraphView.svelte` only draws and moves them.
+ * Servers are placed together as one block on the left; identical endpoints (custom connections with the same normalized
+ * baseUrl and API format, or built-in providers with the same id) and their models merge across servers so the graph
+ * compacts around shared infrastructure while keeping each server's sessions and subagents distinct.
+ *
+ * Pure (no Svelte, no DOM): `buildGraph` turns what the client already keeps per server into cards with a column and a
+ * centre; `GraphView.svelte` only draws and moves them.
  */
 import type { Activity } from "./activity";
 import { brandOf, type Brand } from "./brand";
@@ -27,6 +30,15 @@ export interface DelegateRun {
 	tokens: number | null;
 }
 
+/** Provider / custom endpoint metadata for one server's provider id, used to merge shared endpoints across servers. */
+export interface GraphEndpoint {
+	id: string;
+	name?: string;
+	baseUrl?: string;
+	api?: string;
+	builtin?: boolean;
+}
+
 /** What the graph reads of one server. `runs` null = the server has no `GET /delegates` (older) or it failed. */
 export interface GraphServer {
 	id: string;
@@ -40,6 +52,8 @@ export interface GraphServer {
 	/** What the app calls a model (its display name from the connection settings) and a connection; the id when left out. */
 	modelName?: (provider: string, id: string) => string;
 	providerName?: (id: string) => string;
+	/** Endpoint details for a provider id on this server, so matching endpoints merge across servers. */
+	endpoint?: (id: string) => GraphEndpoint | undefined;
 }
 
 export type CardKind = "server" | "provider" | "model" | "session" | "subagent";
@@ -60,13 +74,45 @@ export interface RoleModel {
 	brand: Brand | null;
 }
 
+/** Shared endpoint metadata attached to a merged provider card. */
+export interface CardEndpoint {
+	baseUrl?: string;
+	api?: string;
+	host?: string;
+	/** Provider id used on each server (`serverId -> providerId`). */
+	byServer: Record<string, string>;
+}
+
+/** Normalize an endpoint URL for comparison: lowercase scheme+host, strip trailing slashes on path. */
+export function normalizeEndpointUrl(raw: string): string {
+	const trimmed = raw.trim();
+	try {
+		const u = new URL(trimmed);
+		return `${u.protocol.toLowerCase()}//${u.host.toLowerCase()}${u.pathname.replace(/\/+$/, "")}`;
+	} catch {
+		return trimmed.replace(/\/+$/, "").toLowerCase();
+	}
+}
+
+/** Canonical endpoint key: custom connections match by `(api, normalized baseUrl)`; built-in providers match by `id`. */
+export function endpointKey(providerId: string, ep?: GraphEndpoint): string {
+	if (ep?.baseUrl) return `url:${ep.api ?? ""}:${normalizeEndpointUrl(ep.baseUrl)}`;
+	return `id:${ep?.id ?? providerId}`;
+}
+
+export const providerCardId = (epKey: string) => `p:${epKey}`;
+export const modelCardId = (epKey: string, model: string) => `m:${epKey}/${model}`;
+
 /** A subagent card's id: one per server, role and model. */
 export const roleCardId = (server: string, role: string, model: string) => `r:${server}/${role}@${model}`;
 
 export interface Card {
 	id: string;
 	kind: CardKind;
+	/** Primary server id (for merged provider/model cards, an online server if any, else the first server). */
 	server: string;
+	/** All servers sharing this card (set on merged provider and model cards). */
+	servers?: string[];
 	/** What identifies it on its server: the server's name, the provider or model id, the role's name. */
 	label: string;
 	/** What it reads as: a provider's or model's display name (the label when it has none). */
@@ -88,6 +134,7 @@ export interface Card {
 	online?: boolean;
 	provider?: string;
 	brand?: Brand | null;
+	ep?: CardEndpoint;
 	session?: Session;
 	activity?: Activity;
 	queued?: number;
@@ -122,7 +169,7 @@ export interface Edge {
 	live: boolean;
 }
 
-/** The rows one server's cards take (with two or more servers a hairline runs in the gap between two of them). */
+/** Kept on `Graph` for callers; servers now cluster together without horizontal divider bands. */
 export interface Band {
 	server: string;
 	y0: number;
@@ -151,8 +198,6 @@ export const CARD_W_MAX = 400;
 export const CARD_H_LIVE = 112;
 export const COL_GAP = 64;
 export const ROW_GAP = 12;
-/** Between two servers' cards: 24 above the hairline that splits them, 24 below. */
-export const BAND_GAP = 48;
 /** A card with this many chats or more may wrap them into columns (at least 3 rows each, up to `lanes`). */
 export const WRAP_MIN = 6;
 const WRAP_ROWS = 3;
@@ -165,6 +210,14 @@ export const isLive = (a: Activity | undefined) => a === "working" || a === "ask
 
 /** `provider/model` → model id (what a card shows; the provider is the column to its left). */
 export const modelName = (m: string) => (m.includes("/") ? m.slice(m.indexOf("/") + 1) : m);
+
+function hostOfUrl(raw: string): string {
+	try {
+		return new URL(raw).host;
+	} catch {
+		return raw;
+	}
+}
 
 /**
  * Builds the cards and lays them out in columns. `widths` measures a card that needs more than its kind's width (a long
@@ -188,29 +241,109 @@ export function buildGraph(servers: GraphServer[], opts: LayoutOpts = {}): Graph
 	};
 	const link = (parent: string, child: string) => cards.get(parent)!.children.push(child);
 	const delegateEdges = new Map<string, Edge>();
+	/** Unique `(server card id, provider card id)` pairs plus whether that server has a live session under that provider. */
+	const serverProviderPairs = new Map<string, { server: string; provider: string; serverId: string; epKey: string }>();
+	const serverOpenCounts = new Map<string, number>();
+	const serverOnline = new Map(servers.map((v) => [v.id, v.online]));
 
 	for (const v of servers) {
 		const vid = `v:${v.id}`;
 		const nameOf = (provider: string, id: string) => v.modelName?.(provider, id) || id;
 		add({ id: vid, kind: "server", server: v.id, label: v.name, count: 0, parent: null, w: CARD_W.server, h: CARD_H, host: v.host, online: v.online });
 		const open = v.sessions.filter((s) => !s.closed);
+		serverOpenCounts.set(vid, open.length);
 		const ids = new Set(open.map((s) => s.id));
 		const byId = new Map(open.map((s) => [s.id, s]));
+		const sessionEpKey = new Map<string, string>();
+
 		for (const s of open) {
-			// provider and model cards are per server: one provider name on two servers is two connections
-			const pid = `p:${v.id}/${s.provider}`, mid = `m:${v.id}/${s.provider}/${s.model}`;
-			if (!cards.has(pid)) { add({ id: pid, kind: "provider", server: v.id, label: s.provider, name: v.providerName?.(s.provider) || s.provider, count: 0, parent: vid, w: CARD_W.provider, h: CARD_H }); link(vid, pid); }
-			if (!cards.has(mid)) { add({ id: mid, kind: "model", server: v.id, label: s.model, name: nameOf(s.provider, s.model), count: 0, parent: pid, w: CARD_W.model, h: CARD_H, provider: s.provider, brand: brandOf(s.provider, s.model) }); link(pid, mid); }
+			const ep = v.endpoint?.(s.provider);
+			const ek = endpointKey(s.provider, ep);
+			sessionEpKey.set(s.id, ek);
+			const pid = providerCardId(ek);
+			const mid = modelCardId(ek, s.model);
+			const pName = ep?.name?.trim() || v.providerName?.(s.provider) || s.provider;
+
+			const existingP = cards.get(pid);
+			if (!existingP) {
+				add({
+					id: pid,
+					kind: "provider",
+					server: v.id,
+					servers: [v.id],
+					label: s.provider,
+					name: pName,
+					count: 0,
+					parent: null,
+					w: CARD_W.provider,
+					h: CARD_H,
+					ep: {
+						baseUrl: ep?.baseUrl,
+						api: ep?.api,
+						host: ep?.baseUrl ? hostOfUrl(ep.baseUrl) : undefined,
+						byServer: { [v.id]: s.provider },
+					},
+				});
+			} else {
+				if (!existingP.servers!.includes(v.id)) existingP.servers!.push(v.id);
+				existingP.ep!.byServer[v.id] = s.provider;
+				// prefer an online server's display name / primary reference over an offline one
+				if (!serverOnline.get(existingP.server) && v.online) {
+					existingP.server = v.id;
+					existingP.label = s.provider;
+					existingP.name = pName;
+				}
+			}
+			const pairKey = `${vid}->${pid}`;
+			if (!serverProviderPairs.has(pairKey)) serverProviderPairs.set(pairKey, { server: vid, provider: pid, serverId: v.id, epKey: ek });
+
+			const existingM = cards.get(mid);
+			if (!existingM) {
+				add({
+					id: mid,
+					kind: "model",
+					server: v.id,
+					servers: [v.id],
+					label: s.model,
+					name: nameOf(s.provider, s.model),
+					count: 0,
+					parent: pid,
+					w: CARD_W.model,
+					h: CARD_H,
+					provider: s.provider,
+					brand: brandOf(s.provider, s.model),
+				});
+				link(pid, mid);
+			} else {
+				if (!existingM.servers!.includes(v.id)) existingM.servers!.push(v.id);
+				if (!serverOnline.get(existingM.server) && v.online) {
+					existingM.server = v.id;
+					existingM.provider = s.provider;
+					existingM.name = nameOf(s.provider, s.model);
+					existingM.brand = brandOf(s.provider, s.model);
+				}
+			}
+
 			const activity = v.activity(s.id);
 			add({
-				id: `s:${v.id}/${s.id}`, kind: "session", server: v.id, label: s.name ? `@${s.name}` : s.title, count: 1, parent: null,
-				w: CARD_W.session, h: isLive(activity) ? CARD_H_LIVE : CARD_H, session: s, activity, queued: v.queued(s.id),
+				id: `s:${v.id}/${s.id}`,
+				kind: "session",
+				server: v.id,
+				label: s.name ? `@${s.name}` : s.title,
+				count: 1,
+				parent: null,
+				w: CARD_W.session,
+				h: isLive(activity) ? CARD_H_LIVE : CARD_H,
+				session: s,
+				activity,
+				queued: v.queued(s.id),
 			});
 		}
 		// a chat branched from (or started by) another open chat sits right of it; otherwise under its model
 		for (const s of open) {
 			const sid = `s:${v.id}/${s.id}`;
-			const parent = s.parentId && ids.has(s.parentId) && s.parentId !== s.id ? `s:${v.id}/${s.parentId}` : `m:${v.id}/${s.provider}/${s.model}`;
+			const ek = sessionEpKey.get(s.id)!;
+			const parent = s.parentId && ids.has(s.parentId) && s.parentId !== s.id ? `s:${v.id}/${s.parentId}` : modelCardId(ek, s.model);
 			cards.get(sid)!.parent = parent;
 			link(parent, sid);
 		}
@@ -244,10 +377,17 @@ export function buildGraph(servers: GraphServer[], opts: LayoutOpts = {}): Graph
 		c.calls!.sort((a, b) => b.at - a.at);
 		if (c.running) c.h = CARD_H_LIVE;
 	}
-	return layout(cards, servers, [...delegateEdges.values()], opts);
+	return layout(cards, servers, [...serverProviderPairs.values()], serverOpenCounts, [...delegateEdges.values()], opts);
 }
 
-function layout(cards: Map<string, Card>, servers: GraphServer[], delegates: Edge[], opts: LayoutOpts): Graph {
+function layout(
+	cards: Map<string, Card>,
+	servers: GraphServer[],
+	serverLinks: { server: string; provider: string; serverId: string; epKey: string }[],
+	serverOpenCounts: Map<string, number>,
+	delegates: Edge[],
+	opts: LayoutOpts,
+): Graph {
 	const get = (id: string) => cards.get(id)!;
 	const count = (id: string): number => {
 		const c = get(id);
@@ -318,34 +458,68 @@ function layout(cards: Map<string, Card>, servers: GraphServer[], delegates: Edg
 			cursor = Math.max(cursor + lift, top + c.h + ROW_GAP);
 		}
 	};
-	const roles = [...cards.values()].filter((c) => c.kind === "subagent");
-	const bands: Band[] = [];
-	servers.forEach((v, i) => {
+
+	// count sessions per server directly (shared provider/model trees can span multiple servers)
+	for (const v of servers) {
 		const root = get(`v:${v.id}`);
-		if (i) cursor += BAND_GAP - ROW_GAP;
-		const top = cursor;
-		count(root.id);
-		place(root.id, 0);
-		// a server's subagents sit beside the chats that call them, without overlapping: one role's cards (one per model) in
-		// one run, the model used last on top, the roles in the order of their callers
-		const groups = new Map<string, Card[]>();
-		for (const r of roles) if (r.server === v.id) groups.set(r.label, [...(groups.get(r.label) ?? []), r]);
-		const runs = [...groups.values()].map((g) => {
-			const ys = g.flatMap((r) => delegates.filter((e) => e.to === r.id).map((e) => get(e.from).y));
-			return { cards: g.sort((a, b) => b.last! - a.last! || a.id.localeCompare(b.id)), y: ys.reduce((a, b) => a + b, 0) / ys.length };
-		});
-		runs.sort((a, b) => a.y - b.y || a.cards[0]!.label.localeCompare(b.cards[0]!.label));
-		let below = top; // the bottom of the cards placed so far, plus the gap
-		for (const g of runs) {
-			const tall = g.cards.reduce((n, r) => n + r.h, 0) + ROW_GAP * (g.cards.length - 1);
-			let y = Math.max(below, g.y - tall / 2);
-			for (const r of g.cards) { r.y = y + r.h / 2; y += r.h + ROW_GAP; }
-			below = y;
-		}
-		if (runs.length) cursor = Math.max(cursor, below);
-		bands.push({ server: v.id, y0: top, y1: cursor - ROW_GAP, online: v.online });
+		root.col = 0;
+		root.count = serverOpenCounts.get(root.id) ?? 0;
+	}
+
+	// order shared providers by the average index of the servers using them, minimizing server→provider edge crossings
+	const serverIndex = new Map(servers.map((v, i) => [v.id, i]));
+	const bary = (c: Card) => {
+		const list = c.servers ?? [c.server];
+		return list.reduce((sum, sid) => sum + (serverIndex.get(sid) ?? 0), 0) / list.length;
+	};
+	const providers = [...cards.values()].filter((c) => c.kind === "provider");
+	for (const p of providers) count(p.id);
+	providers.sort((a, b) => bary(a) - bary(b) || b.count - a.count || a.name.localeCompare(b.name));
+	for (const p of providers) place(p.id, 1);
+
+	// subagent cards sit in the rightmost column beside their calling chats, grouped per (server, role)
+	const roles = [...cards.values()].filter((c) => c.kind === "subagent");
+	const roleGroups = new Map<string, Card[]>();
+	for (const r of roles) {
+		const gk = `${r.server}\u0000${r.label}`;
+		roleGroups.set(gk, [...(roleGroups.get(gk) ?? []), r]);
+	}
+	const runs = [...roleGroups.values()].map((g) => {
+		const ys = g.flatMap((r) => delegates.filter((e) => e.to === r.id).map((e) => get(e.from).y));
+		return { cards: g.sort((a, b) => b.last! - a.last! || a.id.localeCompare(b.id)), y: ys.reduce((a, b) => a + b, 0) / ys.length };
 	});
+	runs.sort((a, b) => a.y - b.y || a.cards[0]!.server.localeCompare(b.cards[0]!.server) || a.cards[0]!.label.localeCompare(b.cards[0]!.label));
+	let below = 0;
+	for (const g of runs) {
+		const tall = g.cards.reduce((n, r) => n + r.h, 0) + ROW_GAP * (g.cards.length - 1);
+		let y = Math.max(below, g.y - tall / 2);
+		for (const r of g.cards) { r.y = y + r.h / 2; y += r.h + ROW_GAP; }
+		below = y;
+	}
+	if (runs.length) cursor = Math.max(cursor, below);
 	for (const r of roles) r.col = maxCol + 1;
+
+	// place servers stacked tightly together on the left, centred on the right-hand tree
+	const rightBottom = Math.max(0, cursor - ROW_GAP);
+	const serverBlockH = servers.length ? servers.reduce((n, v) => n + get(`v:${v.id}`).h, 0) + ROW_GAP * (servers.length - 1) : 0;
+	const rightCards = [...cards.values()].filter((c) => c.kind !== "server");
+	const rightCentre = rightCards.length ? (Math.min(...rightCards.map((c) => c.y - c.h / 2)) + Math.max(...rightCards.map((c) => c.y + c.h / 2))) / 2 : serverBlockH / 2;
+	let sy = rightCentre - serverBlockH / 2;
+	if (sy < 0 && rightCards.length) {
+		const shift = -sy;
+		for (const c of rightCards) c.y += shift;
+		for (const [k, b] of busY) busY.set(k, b + shift);
+		cursor += shift;
+		sy = 0;
+	} else if (sy < 0) {
+		sy = 0;
+	}
+	for (const v of servers) {
+		const sv = get(`v:${v.id}`);
+		sv.y = sy + sv.h / 2;
+		sy += sv.h + ROW_GAP;
+	}
+	const totalH = Math.max(rightBottom, sy - ROW_GAP, Math.max(0, cursor - ROW_GAP));
 
 	// one width per column, the widest card's (a long model id widens its column, up to `maxW`; never below its kind's width)
 	const cols: { x: number; w: number }[] = [];
@@ -365,22 +539,44 @@ function layout(cards: Map<string, Card>, servers: GraphServer[], delegates: Edg
 		if (pin) { c.x = pin.x; c.y = pin.y; c.bus = undefined; } // moved by hand: a plain line to wherever it is
 	}
 
-	// live: a working chat, every card above it, and a role with a running call
-	const live = (id: string): boolean => {
+	// live: a working chat, every card above it in the tree, and each server with a live chat (and its own server→provider lines)
+	const liveTree = (id: string): boolean => {
 		const c = get(id);
 		let on = c.kind === "session" && isLive(c.activity);
-		for (const k of c.children) on = live(k) || on;
+		for (const k of c.children) on = liveTree(k) || on;
 		c.live = on;
 		return on;
 	};
-	for (const v of servers) live(`v:${v.id}`);
+	for (const p of providers) liveTree(p.id);
+	const serverLive = new Set<string>();
+	const serverProviderLive = new Set<string>();
+	for (const c of cards.values()) {
+		if (c.kind !== "session" || !isLive(c.activity)) continue;
+		serverLive.add(c.server);
+		// find its ancestor provider card so only that server's own server→provider edge lights up
+		let p = c.parent;
+		while (p && get(p).kind === "session") p = get(p).parent;
+		if (p && get(p).kind === "model") p = get(p).parent;
+		if (p && get(p).kind === "provider") serverProviderLive.add(`v:${c.server}->${p}`);
+	}
+	for (const v of servers) get(`v:${v.id}`).live = serverLive.has(v.id);
 	for (const r of roles) r.live = r.running! > 0;
 
 	const edges: Edge[] = [];
+	for (const sp of serverLinks) {
+		edges.push({
+			id: `t:${sp.server}->${sp.provider}`,
+			kind: "tree",
+			from: sp.server,
+			to: sp.provider,
+			weight: 1,
+			live: serverProviderLive.has(`${sp.server}->${sp.provider}`),
+		});
+	}
 	for (const c of cards.values())
 		for (const k of c.children) edges.push({ id: `t:${k}`, kind: c.kind === "session" ? "spawn" : "tree", from: c.id, to: k, weight: 1, live: get(k).live });
 	edges.push(...delegates);
-	return { cards, edges, bands, cols, width: Math.max(0, x - COL_GAP), height: Math.max(0, cursor - ROW_GAP) };
+	return { cards, edges, bands: [], cols, width: Math.max(0, x - COL_GAP), height: Math.max(0, totalH) };
 }
 
 /** A drawn line: cubic curves and straight runs, each from where the last one ended. */
@@ -391,10 +587,10 @@ const TURN = 12;
 
 /**
  * A line from the right edge of `a` to the left edge of `b` (or back out of the right side when `b` is not to its right).
- * `elbow` (the structure: server → … → chat) runs square through the middle of the gap with round corners, so the lines
- * out of one card share one spine instead of fanning out; a chat in a wrapped block's later column is reached along its
- * bus above the block and a spine left of its column (see `Card.bus`). `curve` (a delegate call, across columns) is one
- * S-curve. `p` < 1 draws only the first part (a line growing from `a` toward `b`).
+ * `elbow` (the structure: provider → model → chat) runs square through the middle of the gap with round corners, so the
+ * lines out of one card share one spine instead of fanning out; a chat in a wrapped block's later column is reached along
+ * its bus above the block and a spine left of its column (see `Card.bus`). `curve` (server → provider merge, or a
+ * delegate call) is one S-curve. `p` < 1 draws only the first part (a line growing from `a` toward `b`).
  */
 export function edgePath(a: Card, b: Card, p = 1, style: "curve" | "elbow" = "curve"): string {
 	let segs = edgeSegs(a, b, style);
@@ -611,7 +807,7 @@ export function staleRoles(g: Graph, now: number): Set<string> {
 /**
  * The cards that step back, so what is at work (or wants the user) reads first. One rule for every kind:
  *  - a chat at rest (idle: not working, not asking, nothing new to look at)
- *  - a provider or model whose chats are all at rest
+ *  - a provider or model whose chats are all at rest (or whose connected servers are all offline)
  *  - a role's card with no call running and only resting chats calling it, or on a model it moved off (`staleRoles`)
  *  - everything of a server that is offline, the server card too
  * A server that is online stays (it is the root its lines hang from).
@@ -619,12 +815,13 @@ export function staleRoles(g: Graph, now: number): Set<string> {
 export function quietCards(g: Graph, now: number): Set<string> {
 	const out = staleRoles(g, now);
 	const down = new Set([...g.cards.values()].filter((c) => c.kind === "server" && !c.online).map((c) => c.server));
+	const cardDown = (c: Card) => (c.servers?.length ? c.servers.every((s) => down.has(s)) : down.has(c.server));
 	const resting = (c: Card): boolean => {
 		if (c.kind === "session") return c.activity === "idle" && c.children.every((k) => resting(g.cards.get(k)!));
 		return c.children.length > 0 && c.children.every((k) => resting(g.cards.get(k)!));
 	};
 	for (const c of g.cards.values()) {
-		if (down.has(c.server)) out.add(c.id);
+		if (cardDown(c)) out.add(c.id);
 		else if (c.kind === "session" ? c.activity === "idle" : (c.kind === "provider" || c.kind === "model") && resting(c)) out.add(c.id);
 	}
 	for (const c of g.cards.values()) {
@@ -635,16 +832,72 @@ export function quietCards(g: Graph, now: number): Set<string> {
 	return out;
 }
 
-/** The cards a pointer on `id` is about: its line up to the server, everything below it, and both ends of its delegate edges. */
+/**
+ * The cards a pointer on `id` is about:
+ *  - on a server: the providers/models it uses, and only that server's own chats
+ *  - on a chat: its branch subtree, its delegate targets, and its path up to its own server only
+ *  - on a subagent: its callers and their paths up to its own server only
+ *  - on a merged provider or model: all servers connected to it, and all models/chats beneath it
+ */
 export function related(g: Graph, id: string): Set<string> {
 	const out = new Set<string>([id]);
-	const parentOf = new Map<string, string>();
-	for (const c of g.cards.values()) for (const k of c.children) parentOf.set(k, c.id);
-	const up = (x: string) => { for (let p: string | undefined = x; p; p = parentOf.get(p)) out.add(p); };
-	const down = (x: string) => { out.add(x); for (const k of g.cards.get(x)?.children ?? []) down(k); };
+	const target = g.cards.get(id);
+	if (!target) return out;
+	const parentsOf = new Map<string, string[]>();
+	for (const e of g.edges) {
+		if (e.kind === "delegate") continue;
+		parentsOf.set(e.to, [...(parentsOf.get(e.to) ?? []), e.from]);
+	}
+	const belongsTo = (c: Card, serverId: string) => (c.servers ? c.servers.includes(serverId) : c.server === serverId);
+	const up = (x: string, serverFilter?: string) => {
+		for (const p of parentsOf.get(x) ?? []) {
+			const pc = g.cards.get(p);
+			if (!pc) continue;
+			if (serverFilter && pc.kind === "server" && pc.server !== serverFilter) continue;
+			if (!out.has(p)) {
+				out.add(p);
+				up(p, serverFilter);
+			} else {
+				up(p, serverFilter);
+			}
+		}
+	};
+	const down = (x: string, serverFilter?: string) => {
+		for (const k of g.cards.get(x)?.children ?? []) {
+			const kc = g.cards.get(k);
+			if (!kc) continue;
+			if (serverFilter && !belongsTo(kc, serverFilter)) continue;
+			if (!out.has(k)) {
+				out.add(k);
+				down(k, serverFilter);
+			}
+		}
+	};
+	if (target.kind === "server") {
+		for (const e of g.edges) {
+			if (e.from !== id || e.kind === "delegate") continue;
+			out.add(e.to);
+			down(e.to, target.server);
+		}
+		return out;
+	}
+	if (target.kind === "session") {
+		up(id, target.server);
+		down(id);
+		for (const e of g.edges) if (e.kind === "delegate" && e.from === id) out.add(e.to);
+		return out;
+	}
+	if (target.kind === "subagent") {
+		for (const e of g.edges) {
+			if (e.kind === "delegate" && e.to === id) {
+				out.add(e.from);
+				up(e.from, target.server);
+			}
+		}
+		return out;
+	}
 	up(id);
 	down(id);
-	for (const e of g.edges) if (e.kind === "delegate") { if (e.from === id) up(e.to); if (e.to === id) up(e.from); }
 	return out;
 }
 
@@ -653,7 +906,7 @@ export const FIT_PAD = { x: 32, y: 56 };
 /** The fitted zoom: never above 100%, never below 50% (names stay legible; zoom in for the rest). */
 export const FIT_MIN = 0.5;
 
-/** What the cards take up (the hairlines between servers lie inside it). */
+/** What the cards take up. */
 function bounds(g: Graph) {
 	let [x0, y0, x1, y1] = [Infinity, Infinity, -Infinity, -Infinity];
 	for (const c of g.cards.values()) {

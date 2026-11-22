@@ -43,9 +43,18 @@
 	$effect(() => {
 		if (!card) onclose();
 	});
-	const link = $derived(card ? app.links[card.server] : undefined);
+	const cardServers = $derived(card ? (card.servers ?? [card.server]) : []);
+	const multiServers = $derived(cardServers.length > 1);
+	const serverDisplayName = (sid: string) => app.servers.find((s) => s.id === sid)?.name ?? sid;
+	const link = $derived(card ? (app.links[card.server] ?? cardServers.map((s) => app.links[s]).find(Boolean)) : undefined);
 	const saved = $derived(card ? app.servers.find((s) => s.id === card.server) : undefined);
 	const serverName = $derived(saved?.name ?? card?.server ?? "");
+	const providerIdOn = (sid: string) => {
+		if (!card) return "";
+		if (card.kind === "provider") return card.ep?.byServer[sid] ?? card.label;
+		if (card.kind === "model") return graph.cards.get(card.parent ?? "")?.ep?.byServer[sid] ?? card.provider ?? "";
+		return card.label;
+	};
 
 	const ago = (ts: number) => livePast(ts, { time: false });
 
@@ -55,11 +64,11 @@
 	const chatGroups = $derived(splitLive(chats));
 	const providers = $derived(card?.kind === "server" ? under(graph, card.id, "provider") : []);
 	const models = $derived(card?.kind === "provider" ? under(graph, card.id, "model") : []);
-	/** The subagent cards that ran on this model. */
+	/** The subagent cards that ran on this model (across any server sharing it). */
 	const modelRoles = $derived.by(() => {
 		if (card?.kind !== "model") return [];
-		const ref = `${card.provider}/${card.label}`;
-		return [...graph.cards.values()].filter((c) => c.kind === "subagent" && c.server === card.server && c.model?.model === ref);
+		const refs = new Map(cardServers.map((sid) => [sid, `${providerIdOn(sid)}/${card.label}`]));
+		return [...graph.cards.values()].filter((c) => c.kind === "subagent" && refs.get(c.server) === c.model?.model);
 	});
 	/** The same role's cards on other models, the one used last first. */
 	const siblings = $derived(
@@ -72,11 +81,12 @@
 	const serverState = $derived(connectionState(link?.net ?? "connecting"));
 
 	/** A connection the owner added: its address, API format and key (built-in providers have none of these). */
-	const custom = $derived(card?.kind === "provider" ? link?.customProviders.find((p) => p.id === card.label) : undefined);
+	const primaryPid = $derived(card ? providerIdOn(card.server) : "");
+	const custom = $derived(card?.kind === "provider" ? link?.customProviders.find((p) => p.id === primaryPid) : undefined);
 	const FORMAT: Record<string, string> = { "openai-completions": "OpenAI Chat Completions", "openai-responses": "OpenAI Responses", "anthropic-messages": "Anthropic Messages" };
 	const keyText = $derived(!custom ? "" : custom.hasStoredKey ? t("저장됨") : custom.authRequired ? t("필요하지만 저장 안 됨") : t("필요 없음"));
-	const providerInfo = $derived(card?.kind === "provider" ? link?.providers.find((p) => p.id === card.label) : undefined);
-	const providerModels = $derived(card?.kind === "provider" ? (link?.models ?? []).filter((m) => m.provider === card.label && m.available) : []);
+	const providerInfo = $derived(card?.kind === "provider" ? link?.providers.find((p) => p.id === primaryPid) : undefined);
+	const providerModels = $derived(card?.kind === "provider" ? (link?.models ?? []).filter((m) => m.provider === primaryPid && m.available) : []);
 	const signIn = $derived.by(() => {
 		const p = providerInfo;
 		if (!p) return null;
@@ -85,8 +95,29 @@
 		if (p.storedCredential) return t("API 키");
 		return t("연결됨");
 	});
+	const serverSummary = (sid: string) => {
+		const sLink = app.links[sid];
+		if (!sLink) return t("연결 안 됨");
+		const st = connectionState(sLink.net);
+		if (st !== "online") return STATE_TEXT[st]();
+		const pid = providerIdOn(sid);
+		const cp = sLink.customProviders.find((p) => p.id === pid);
+		if (cp) return cp.hasStoredKey ? t("API 키") : cp.authRequired ? t("키 없음") : t("연결됨");
+		const pi = sLink.providers.find((p) => p.id === pid);
+		if (!pi) return STATE_TEXT[st]();
+		if (!pi.configured) return t("연결 안 됨");
+		return pi.storedCredential === "oauth" ? (pi.accountEmail ?? "OAuth") : pi.storedCredential ? t("API 키") : t("연결됨");
+	};
 
-	const modelInfo = $derived(card?.kind === "model" ? link?.models.find((m) => m.provider === card.provider && m.id === card.label) : undefined);
+	const modelInfo = $derived.by(() => {
+		if (card?.kind !== "model") return undefined;
+		for (const sid of [card.server, ...cardServers]) {
+			const pid = providerIdOn(sid);
+			const hit = app.links[sid]?.models.find((m) => m.provider === pid && m.id === card.label);
+			if (hit) return hit;
+		}
+		return undefined;
+	});
 
 	// the calls of this card (its role on its model), counted like the card (calls from open chats), and its file (read from
 	// the folder of the chat that called it last: a project's role files win over the global ones)
@@ -129,29 +160,40 @@
 	/** A model's provider by the connection's name, a model or a call's model by the name the owner gave it. */
 	const providerName = (id: string | undefined) => providerDisplayName(link?.providers ?? [], id);
 	const refName = (ref: string) => { const r = splitModelRef(ref); return modelDisplayName(link?.models ?? [], r.provider, r.id); };
-	const iconOf = (provider: string | undefined, id: string) => modelIcon(link?.models ?? [], provider, id);
+	const iconOf = (provider: string | undefined, id: string) => {
+		const hit = modelIcon(link?.models ?? [], provider, id);
+		if (hit || !multiServers) return hit;
+		for (const sid of cardServers) {
+			const x = modelIcon(app.links[sid]?.models ?? [], providerIdOn(sid) || provider, id);
+			if (x) return x;
+		}
+		return undefined;
+	};
 	const sub = $derived.by(() => {
 		if (!card) return "";
 		if (card.kind === "server") return card.host ?? "";
-		if (card.kind === "provider") return serverName;
-		if (card.kind === "model") return [providerName(card.provider), serverName].join(" · ");
+		if (card.kind === "provider") return cardServers.map(serverDisplayName).join(", ");
+		if (card.kind === "model") return [providerName(card.provider), cardServers.map(serverDisplayName).join(", ")].join(" · ");
 		return [t("서브에이전트"), card.model?.name, serverName].filter(Boolean).join(" · ");
 	});
+	const serverChatCount = (c: Card) => (card?.kind === "server" ? under(graph, c.id, "session").filter((s) => s.server === card.server).length : c.count);
 
 	// ---- footer ----
 	/** Opens the settings on this card's own row: its connection, its model in that connection's list, its role. */
 	function openSettings() {
 		if (!card) return;
-		const pid = card.kind === "model" ? card.provider : card.label;
-		const builtin = link?.providers.find((p) => p.id === pid && p.builtin);
-		const target = settingsTarget(card, { custom: link?.customProviders.find((p) => p.id === pid), builtin, roleScope: def?.scope ?? null });
-		const server = card.server;
+		const sid = cardServers.find((s) => app.links[s]?.online) ?? card.server;
+		const sLink = app.links[sid];
+		const pid = card.kind === "model" || card.kind === "provider" ? providerIdOn(sid) : card.label;
+		const builtin = sLink?.providers.find((p) => p.id === pid && p.builtin);
+		const normalized = card.kind === "provider" ? { ...card, label: pid } : card.kind === "model" ? { ...card, provider: pid } : card;
+		const target = settingsTarget(normalized, { custom: sLink?.customProviders.find((p) => p.id === pid), builtin, roleScope: def?.scope ?? null });
 		onclose();
-		app.openSettings(target.tab, server, target.focus);
+		app.openSettings(target.tab, sid, target.focus);
 	}
 	/** The server's address, or a connection's endpoint. */
 	async function copyAddress() {
-		const url = card?.kind === "provider" ? custom?.baseUrl : saved?.baseUrl;
+		const url = card?.kind === "provider" ? (card.ep?.baseUrl ?? custom?.baseUrl) : saved?.baseUrl;
 		if (!url) return;
 		const ok = await copyText(url);
 		app.toast(ok ? t("주소를 복사했습니다") : t("복사하지 못했습니다"), ok ? "ok" : "error");
@@ -165,7 +207,7 @@
 			<span class="mark"><AgentBadge id={s.id} server={c.server} state={c.activity} size={20} /></span>
 			<span class="nm {c.activity}" class:who={!!s.name}>{s.name ? `@${s.name}` : sessionTitle(s.title)}</span>
 			{#if s.name}<span class="sub">{sessionTitle(s.title)}</span>{/if}
-			<span class="end" title={fullTime(s.updatedAt)}>{ago(s.updatedAt)}</span>
+			<span class="end" title={fullTime(s.updatedAt)}>{#if multiServers}<span>{serverDisplayName(c.server)}</span><i>·</i>{/if}{ago(s.updatedAt)}</span>
 		</button>
 	</li>
 {/snippet}
@@ -306,14 +348,30 @@
 				{/if}
 			</dl>
 
+			{#if multiServers && (card.kind === "provider" || card.kind === "model")}
+				<ListGroup title={t("서버")} count={String(cardServers.length)}>
+					<ul class="list">
+						{#each cardServers as sid (sid)}
+							<li>
+								<button class="row" onclick={() => onpick(`v:${sid}`)}>
+									<span class="mark"><Icon name="server" /></span>
+									<span class="nm">{serverDisplayName(sid)}</span>
+									<span class="end">{serverSummary(sid)}</span>
+									<span class="chev"><Icon name="chevron-right" /></span>
+								</button>
+							</li>
+						{/each}
+					</ul>
+				</ListGroup>
+			{/if}
 			{#if providers.length}
 				<ListGroup title={t("프로바이더")} count={String(providers.length)}>
-					<ul class="list">{#each providers as c (c.id)}{@render cardRow(c, t("대화 {n}개", { n: c.count }))}{/each}</ul>
+					<ul class="list">{#each providers as c (c.id)}{@render cardRow(c, t("대화 {n}개", { n: serverChatCount(c) }))}{/each}</ul>
 				</ListGroup>
 			{/if}
 			{#if models.length}
 				<ListGroup title={t("모델")} count={String(models.length)}>
-					<ul class="list">{#each models as c (c.id)}{@render cardRow(c, t("대화 {n}개", { n: c.count }))}{/each}</ul>
+					<ul class="list">{#each models as c (c.id)}{@render cardRow(c, t("대화 {n}개", { n: serverChatCount(c) }))}{/each}</ul>
 				</ListGroup>
 			{/if}
 			{#if modelRoles.length}
