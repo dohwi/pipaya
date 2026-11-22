@@ -13,12 +13,22 @@ is stored on the server and never sent back; the screen only says whether one is
 | Use voice input | the on/off switch |
 | Server address | the transcription server's origin, e.g. `https://api.openai.com` (no path) |
 | Path | the request path; empty means `/v1/audio/transcriptions`. Gateways often mount it elsewhere (`/v0/management/audio/transcriptions`) |
-| Model | e.g. `gpt-transcribe` (OpenAI's recommendation), `whisper-1`; empty sends no model |
+| Model | free text, the name the transcription server takes: `gpt-transcribe` (OpenAI), `voxtral-mini-transcribe-3-0` (Mistral), `whisper-1` (most self-hosted servers); empty sends no model and the server picks its default |
 | Language | optional hint (`ko`); empty lets the server decide. `gpt-transcribe` is sent `languages[]` instead |
 | API key | written once, never shown again; saving it empty removes it |
 
 Any OpenAI-compatible transcription endpoint works: the server posts `multipart/form-data` with `file`, `model` and
-`language` (or `languages[]`) and reads `{ "text": "..." }`.
+`language` (or `languages[]`) and reads `{ "text": "..." }`. Examples:
+
+| Server | Address | Path | Model | Key |
+|---|---|---|---|---|
+| OpenAI | `https://api.openai.com` | (empty) | `gpt-transcribe` | OpenAI API key |
+| Mistral | `https://api.mistral.ai` | (empty) | `voxtral-mini-transcribe-3-0` | Mistral API key |
+| CLIProxyAPI with the `openai-manager` or `mistral-support` plugin | the CLIProxyAPI address | `/v0/management/audio/transcriptions` | the plugin's model (`gpt-transcribe`, `voxtral-mini-transcribe-3-0`) | the management key |
+
+When the transcription server refuses a request it usually says why (an unknown model, a missing account); that
+sentence is shown after the error, so a wrong model name reads as such. A rate or quota limit (HTTP 429) is reported
+as a passing problem and does not turn the microphone off.
 
 ## When the microphone shows
 
