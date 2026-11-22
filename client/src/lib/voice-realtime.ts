@@ -39,6 +39,37 @@ export type RealtimeMessage =
 	| { type: "done" };
 
 /**
+ * The phrases of one recording in the order they were spoken: each shows its words as they arrive, and its final text
+ * replaces them when the phrase is done. `text` is everything heard so far.
+ */
+export class PhraseList {
+	private order: string[] = [];
+	private parts = new Map<string, { text: string; final: boolean }>();
+
+	apply(msg: RealtimeMessage): boolean {
+		if (msg.type !== "delta" && msg.type !== "phrase") return false;
+		let part = this.parts.get(msg.item);
+		if (!part) {
+			part = { text: "", final: false };
+			this.parts.set(msg.item, part);
+			this.order.push(msg.item);
+		}
+		if (msg.type === "delta") {
+			if (part.final) return false;
+			part.text += msg.text;
+		} else {
+			part.text = msg.text;
+			part.final = true;
+		}
+		return true;
+	}
+
+	get text(): string {
+		return this.order.map((id) => this.parts.get(id)!.text.trim()).filter(Boolean).join(" ");
+	}
+}
+
+/**
  * Captures the microphone stream as PCM16 frames of about 100 ms. A ScriptProcessor rather than an AudioWorklet: it
  * needs no separate module file (the Tauri CSP and the dev server both serve one bundle), and 100 ms frames are
  * well within what it handles on the main thread.

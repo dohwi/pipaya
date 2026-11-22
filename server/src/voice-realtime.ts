@@ -53,12 +53,21 @@ export function realtimeUrl(baseUrl: string, model: string): string | null {
 	return url.toString();
 }
 
+/**
+ * A streaming ("live") transcription model sends words while the user is still speaking and takes no voice activity
+ * detection: the turn ends when the user stops. Other models (gpt-transcribe) start once a pause ends a phrase.
+ */
+export const isLiveModel = (model: string) => /(^|-)live-transcribe/.test(model.trim().toLowerCase());
+
 /** The `session.update` that makes the session transcription only, with the hints. */
 export function sessionUpdate(rt: RealtimeSettingsValue, language: string) {
+	const live = isLiveModel(rt.transcribeModel);
 	const transcription: Record<string, unknown> = { model: rt.transcribeModel };
 	if (language) transcription.languages = [language];
 	if (rt.keywords.length) transcription.keywords = rt.keywords;
 	if (rt.prompt) transcription.prompt = rt.prompt;
+	// "low" measured best: the first words about a second after speech, names kept as the keywords spell them
+	if (live) transcription.delay = "low";
 	return {
 		type: "session.update",
 		session: {
@@ -68,7 +77,7 @@ export function sessionUpdate(rt: RealtimeSettingsValue, language: string) {
 				input: {
 					format: { type: "audio/pcm", rate: PCM_RATE },
 					transcription,
-					turn_detection: { type: "server_vad", silence_duration_ms: SILENCE_MS, create_response: false, interrupt_response: false },
+					turn_detection: live ? null : { type: "server_vad", silence_duration_ms: SILENCE_MS, create_response: false, interrupt_response: false },
 				},
 			},
 		},

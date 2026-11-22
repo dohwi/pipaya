@@ -28,7 +28,9 @@ export const TIMEOUT_MS = 60_000;
  */
 export const VoiceMode = Type.Union([Type.Literal("file"), Type.Literal("realtime")]);
 export const DEFAULT_REALTIME_MODEL = "gpt-realtime-2.1";
-export const DEFAULT_TRANSCRIBE_MODEL = "gpt-transcribe";
+export const DEFAULT_TRANSCRIBE_MODEL = "gpt-live-transcribe";
+/** How far the live model may lag behind speech: lower is sooner, higher spells names more reliably. */
+export const LIVE_DELAYS = ["minimal", "low", "medium", "high"] as const;
 export const MAX_KEYWORDS = 20;
 export const RealtimeSettingsSchema = Type.Object(
 	{

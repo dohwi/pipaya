@@ -93,7 +93,7 @@ describe("voice settings", () => {
 		expect(status).toBe(200);
 		expect(json.settings).toEqual({
 			enabled: false, baseUrl: "", path: "", model: "", language: "", mode: "file",
-			realtime: { provider: "", model: "gpt-realtime-2.1", transcribeModel: "gpt-transcribe", keywords: [], prompt: "" },
+			realtime: { provider: "", model: "gpt-realtime-2.1", transcribeModel: "gpt-live-transcribe", keywords: [], prompt: "" },
 		});
 		expect(json.hasKey).toBe(false);
 		expect(json.endpoint).toBeNull();

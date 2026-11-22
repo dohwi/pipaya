@@ -12,7 +12,7 @@ import { app } from "./store.svelte";
 import { t } from "./i18n";
 import { swallowClick } from "./press-menu";
 import { REC_START_MS } from "./sound";
-import { capturePcm, realtimeSocketUrl, type RealtimeMessage } from "./voice-realtime";
+import { capturePcm, PhraseList, realtimeSocketUrl, type RealtimeMessage } from "./voice-realtime";
 import {
 	AVAILABILITY_TEXT, MAX_RECORD_MS, MAX_UPLOAD_BYTES, MIN_RECORD_MS, FAILURE_TEXT, failureHasFix, failureTone, isConfigFailure, micAvailability, micFailure, pickMimeType, upstreamDetail,
 	PressToTalk, serverFailure, voiceState, type VoiceFailure, type VoiceState,
@@ -268,6 +268,7 @@ class VoiceStore {
 		socket.binaryType = "arraybuffer";
 		this.socket = socket;
 		const paneId = this.paneId;
+		const heard = new PhraseList();
 		let failed = false;
 		// the audio flows from the first moment: the server holds it until the upstream session is ready
 		this.stopCapture = capturePcm(stream, (pcm) => {
@@ -280,17 +281,18 @@ class VoiceStore {
 			} catch {
 				return;
 			}
-			if (msg.type === "phrase" && msg.text) {
-				this.phrases++;
-				app.insertIntoComposer(paneId ?? "", msg.text);
+			if (msg.type === "delta" || msg.type === "phrase") {
+				// every word as it comes: the composer redraws what was heard so far after the text it started with
+				if (heard.apply(msg)) app.liveText = { paneId: paneId ?? "", text: heard.text };
+				if (msg.type === "phrase" && msg.text) this.phrases++;
 			} else if (msg.type === "error") {
 				failed = true;
 				this.endRealtime();
 				this.fail(serverFailure(msg.code), msg.message);
 			} else if (msg.type === "done") {
-				const heard = this.phrases;
+				const count = this.phrases || (heard.text ? 1 : 0);
 				this.endRealtime();
-				if (!heard && !failed) this.fail("empty");
+				if (!count && !failed) this.fail("empty");
 			}
 		};
 		socket.onclose = () => {
@@ -304,6 +306,7 @@ class VoiceStore {
 
 	/** Realtime mode: everything of this session is over (done, failed or cancelled). */
 	private endRealtime() {
+		app.liveText = null;
 		this.recording = false;
 		this.transcribing = false;
 		clearInterval(this.timer);

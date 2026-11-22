@@ -19,7 +19,7 @@
 	 * The page reads in the order the setup happens: switch it on, fill the connection top to bottom (address, model,
 	 * key, then the optional path and language), then check it. The status block at the bottom only reports.
 	 */
-	const REALTIME_DEFAULTS: RealtimeVoiceSettings = { provider: "", model: "gpt-realtime-2.1", transcribeModel: "gpt-transcribe", keywords: [], prompt: "" };
+	const REALTIME_DEFAULTS: RealtimeVoiceSettings = { provider: "", model: "gpt-realtime-2.1", transcribeModel: "gpt-live-transcribe", keywords: [], prompt: "" };
 	let draft = $state<VoiceSettings>({ enabled: false, baseUrl: "", path: "", model: "", language: "", mode: "file", realtime: { ...REALTIME_DEFAULTS } });
 	/** The keywords as the user types them, one per line; turned into the list when saved. */
 	let keywordText = $state("");
@@ -121,7 +121,7 @@
 			options={[{ id: "file", label: t("녹음 후 변환") }, { id: "realtime", label: t("실시간") }]}
 			onchange={(id) => (draft = { ...draft, mode: id })}
 		/>
-		<span class="hint">{realtime ? t("말하는 동안 소리를 보내고, 말을 잠깐 멈출 때마다 그 구간이 입력창에 바로 들어갑니다. 키워드로 이름 표기를 맞출 수 있습니다.") : t("녹음을 끝내면 한 번에 보내 글로 바꿉니다. OpenAI 호환 변환 서버면 어디든 됩니다.")}</span>
+		<span class="hint">{realtime ? t("말하는 동안 소리를 보내고, 들리는 단어를 입력창에 바로 넣습니다. 키워드로 이름 표기를 맞출 수 있습니다. 마이크를 켜 둔 시간만큼 연결의 사용량이 듭니다.") : t("녹음을 끝내면 한 번에 보내 글로 바꿉니다. OpenAI 호환 변환 서버면 어디든 됩니다.")}</span>
 	</section>
 {/if}
 

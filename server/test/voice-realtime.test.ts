@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { buildApp, type App } from "../src/app.ts";
 import type { Config } from "../src/config.ts";
-import { realtimeUrl, sessionUpdate } from "../src/voice-realtime.ts";
+import { isLiveModel, realtimeUrl, sessionUpdate } from "../src/voice-realtime.ts";
 import { DEFAULT_REALTIME_SETTINGS } from "../src/voice-input.ts";
 
 /**
@@ -95,7 +95,7 @@ afterAll(async () => {
 
 const realtimeSettings = (patch: Record<string, unknown> = {}) => ({
 	enabled: true, baseUrl: "", path: "", model: "", language: "ko", mode: "realtime",
-	realtime: { provider: "gw", model: "gpt-realtime-2.1", transcribeModel: "gpt-transcribe", keywords: [" Pipaya ", "Tailscale", "Pipaya", ""], prompt: "개발 작업 지시", ...patch },
+	realtime: { provider: "gw", model: "gpt-realtime-2.1", transcribeModel: "gpt-live-transcribe", keywords: [" Pipaya ", "Tailscale", "Pipaya", ""], prompt: "개발 작업 지시", ...patch },
 });
 
 describe("realtime voice settings", () => {
@@ -103,7 +103,7 @@ describe("realtime voice settings", () => {
 		const { status, json } = await api("PUT", "/voice", { settings: realtimeSettings() });
 		expect(status).toBe(200);
 		expect(json.settings.mode).toBe("realtime");
-		expect(json.settings.realtime).toEqual({ provider: "gw", model: "gpt-realtime-2.1", transcribeModel: "gpt-transcribe", keywords: ["Pipaya", "Tailscale"], prompt: "개발 작업 지시" });
+		expect(json.settings.realtime).toEqual({ provider: "gw", model: "gpt-realtime-2.1", transcribeModel: "gpt-live-transcribe", keywords: ["Pipaya", "Tailscale"], prompt: "개발 작업 지시" });
 	});
 	test("a client from before the realtime mode keeps the stored mode and hints", async () => {
 		const { json } = await api("PUT", "/voice", { settings: { enabled: true, baseUrl: "", path: "", model: "", language: "ko" } });
@@ -135,9 +135,8 @@ describe("GET /voice/realtime", () => {
 		expect(new URL(s.url).pathname).toBe("/v1/realtime");
 		expect(new URL(s.url).searchParams.get("model")).toBe("gpt-realtime-2.1");
 		const input = s.update.session.audio.input;
-		expect(input.transcription).toEqual({ model: "gpt-transcribe", languages: ["ko"], keywords: ["Pipaya", "Tailscale"], prompt: "개발 작업 지시" });
-		expect(input.turn_detection.type).toBe("server_vad");
-		expect(input.turn_detection.create_response).toBe(false);
+		expect(input.transcription).toEqual({ model: "gpt-live-transcribe", languages: ["ko"], keywords: ["Pipaya", "Tailscale"], prompt: "개발 작업 지시", delay: "low" });
+		expect(input.turn_detection).toBeNull();
 		expect(got.map((m) => m.type)).toEqual(["ready", "delta", "phrase", "done"]);
 		expect(got.find((m) => m.type === "phrase").text).toBe("커밋하고 푸시해줘 (3)");
 		// the key never travels to the browser
@@ -168,9 +167,17 @@ describe("pure helpers", () => {
 		expect(realtimeUrl("not a url", "m")).toBeNull();
 	});
 	test("the session update leaves out empty hints", () => {
-		const u = sessionUpdate(DEFAULT_REALTIME_SETTINGS(), "");
+		const u = sessionUpdate({ ...DEFAULT_REALTIME_SETTINGS(), transcribeModel: "gpt-transcribe" }, "");
 		expect(u.session.audio.input.transcription).toEqual({ model: "gpt-transcribe" });
 		expect(u.session.output_modalities).toEqual(["text"]);
+		expect(u.session.audio.input.turn_detection?.type).toBe("server_vad");
+	});
+	test("a live model streams words with a low delay and no voice activity detection (the user's stop ends the turn)", () => {
+		const u = sessionUpdate(DEFAULT_REALTIME_SETTINGS(), "ko");
+		expect(u.session.audio.input.transcription).toEqual({ model: "gpt-live-transcribe", languages: ["ko"], delay: "low" });
+		expect(u.session.audio.input.turn_detection).toBeNull();
+		expect(isLiveModel("gpt-live-transcribe")).toBe(true);
+		expect(isLiveModel("gpt-transcribe")).toBe(false);
 	});
 });
 

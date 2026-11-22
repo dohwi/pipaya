@@ -288,6 +288,11 @@ class AppStore {
   prefill = $state<string | null>(null);
   /** Text to put into the composer at the caret, once: voice input's transcript (a plain append would add a line break). */
   insertText = $state<{ paneId: string; text: string } | null>(null);
+  /**
+   * Live dictation in a composer: everything heard so far in this recording, rewritten as words arrive. The composer
+   * shows it after the text that was there when the recording began; null when no live dictation is running.
+   */
+  liveText = $state<{ paneId: string; text: string } | null>(null);
   /** Message the next prompt answers (the Reply button); the composer shows it as a badge and quotes it on send. */
   replyTo = $state<{ text: string; who?: string } | null>(null);
   settingsOpen = $state(false);
