@@ -192,7 +192,7 @@
 			<FormField label={t("최대 모델 호출")} group hint={t("한 번 일하는 동안 모델을 부를 수 있는 횟수 (위의 상한을 넘지 않습니다)")}>
 				<Select width="120px" label={t("최대 모델 호출")} value={form.maxTurns} options={turnOptions(form.maxTurns)} onchange={(n) => { if (form) form.maxTurns = n; }} />
 			</FormField>
-			<div class="actions">
+			<div class="actions form-actions">
 				<Button onclick={() => (form = null)} disabled={busy}>{t("취소")}</Button>
 				<Button variant="primary" type="submit" disabled={busy}>{t("저장")}</Button>
 			</div>

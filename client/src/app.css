@@ -537,6 +537,21 @@ input[type="range"]:focus-visible {
 	background: transparent;
 	border-color: transparent;
 }
+/* The 취소 / 저장 row of a long inline form (MCP server, subagent role, schedule). On a phone the form is taller than the
+   sheet, so the row sticks to the bottom of the scrolling body, edge to edge with a hairline like a dialog footer, instead
+   of waiting below the fold. It takes the surface and gutter it sits on: the dialog body's by default, a settings card's
+   (.set-group sets --fa-bg / --fa-px) when the form is inside one. */
+@media (max-width: 640px) {
+	.form-actions {
+		position: sticky;
+		bottom: 0;
+		z-index: 1;
+		margin-inline: calc(-1 * var(--fa-px, var(--dlg-px)));
+		padding: 12px var(--fa-px, var(--dlg-px));
+		background: var(--fa-bg, var(--bg-side));
+		border-top: 1px solid var(--border);
+	}
+}
 /* Full-width dashed "add" slot, centered, used under lists */
 .btn.dashed {
 	width: 100%;
@@ -828,6 +843,8 @@ kbd {
 .set-group {
 	padding: var(--dlg-gap);
 	background: var(--bg-set);
+	--fa-bg: var(--bg-set); /* a sticky form footer inside (.form-actions) covers the card's own colour, edge to edge */
+	--fa-px: var(--dlg-gap);
 	border-radius: var(--radius);
 	/* choice cards inside: unselected sit flat on the group, the selected one lifts onto the page colour with a dark ring */
 	--card-bg: transparent;

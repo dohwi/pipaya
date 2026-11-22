@@ -14,6 +14,8 @@
 	import { notifications } from "../../lib/notifications";
 	import type { NotificationDevice } from "../../lib/notification-contract";
 	import Icon from "../ui/Icon.svelte";
+	import IconButton from "../ui/IconButton.svelte";
+	import ExtrasIntro from "../ui/ExtrasIntro.svelte";
 	import PairPanel from "./PairPanel.svelte";
 	import { buildPairingLink, isLoopbackUrl } from "../../lib/pairing";
 	import { copyText } from "../../lib/clipboard";
@@ -146,26 +148,12 @@
 </script>
 
 <div class="devices">
-	<p class="lead">{t("이 서버에 접속한 기기입니다. 해지해도 다시 접속할 수 있으니, 완전히 막으려면 서버 토큰을 바꾸세요.")}</p>
-	<div class="add">
-		<div class="add-row">
-			<Button aria-expanded={adding} onclick={() => (adding = !adding)}>
-				<Icon name={adding ? "x" : "plus"} /> {adding ? t("닫기") : t("폰 추가")}
-			</Button>
-			{#if !adding && paired !== null}
-				<Button onclick={shareLink} disabled={sharing}><Icon name="copy" /> {t("연결 링크 복사")}</Button>
-			{/if}
-		</div>
-		{#if adding}
-			<div class="addbody">{#key serverId}<PairPanel {serverId} />{/key}</div>
-		{/if}
-	</div>
-
+	<ExtrasIntro what={t("이 서버에 접속한 기기입니다.")} how={t("해지해도 다시 접속할 수 있으니, 완전히 막으려면 서버 토큰을 바꾸세요.")} />
 	{#if error}<Notice tone="danger">{error}</Notice>{/if}
 	{#if devices === null && !error}
 		<EmptyState loading tone="plain" as="p" />
 	{:else if devices && devices.length === 0}
-		<p class="hint">{t("연결된 기기가 없습니다")}</p>
+		<EmptyState as="p" compact>{t("연결된 기기가 없습니다")}</EmptyState>
 	{:else if devices}
 		<ul>
 			{#each shown as d (d.id)}
@@ -185,6 +173,22 @@
 				</li>
 			{/each}
 		</ul>
+	{/if}
+
+	<!-- the dashed "add" slots every list ends with; the QR panel opens in their place, in a card with its own close -->
+	{#if adding}
+		<section class="addbody" aria-label={t("폰 추가")}>
+			<div class="addhead">
+				<h4 class="section-label">{t("폰 추가")}</h4>
+				<IconButton icon="x" size="sm" label={t("닫기")} tip onclick={() => (adding = false)} />
+			</div>
+			{#key serverId}<PairPanel {serverId} />{/key}
+		</section>
+	{:else}
+		<div class="adds">
+			<Button variant="dashed" aria-expanded={false} onclick={() => (adding = true)}><Icon name="plus" /> {t("폰 추가")}</Button>
+			{#if paired !== null}<Button variant="dashed" onclick={shareLink} disabled={sharing}><Icon name="copy" /> {t("연결 링크 복사")}</Button>{/if}
+		</div>
 	{/if}
 
 	{#if paired && paired.length}
@@ -216,32 +220,39 @@
 	.paired h4 {
 		margin: 0;
 	}
-	.add {
+	.adds {
 		display: flex;
-		flex-direction: column;
-		gap: 12px;
-		padding-top: 4px;
-	}
-	.add-row {
-		display: flex;
-		flex-wrap: wrap;
 		gap: 8px;
 	}
+	.adds > :global(.btn) {
+		flex: 1 1 0;
+		min-width: 0;
+	}
+	/* the QR panel takes the slots' place as a card of the list's own frame */
 	.addbody {
-		padding-top: 4px;
-		border-top: 1px solid var(--border);
+		display: flex;
+		flex-direction: column;
+		gap: 8px;
+		padding: 8px 8px 16px 16px;
+		border: 1px solid var(--border);
+		border-radius: var(--radius-panel);
+	}
+	.addbody > :global(.pair) {
+		padding-right: 8px;
+	}
+	.addhead {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 8px;
+	}
+	.addhead h4 {
+		margin: 0;
 	}
 	.devices {
 		display: flex;
 		flex-direction: column;
 		gap: 12px;
-	}
-	.lead {
-		margin: 0;
-		font-size: var(--fs-sm);
-		line-height: 1.55;
-		color: var(--text-dim);
-		word-break: keep-all;
 	}
 	.hint {
 		margin: 0;

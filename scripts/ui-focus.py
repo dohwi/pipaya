@@ -108,7 +108,7 @@ SCREENS = [
     ("role-form", settings("에이전트 도구") + ['button:text-is("서브에이전트 역할 추가")'], 'form .chips'),
     ("schedule-form", settings("예약 작업") + ['button:text-is("예약 추가")'], 'form textarea'),
     ("extension-detail", settings("확장") + ['.extensions .expand:has-text("Focus audit")'], '.extensions .page input'),
-    ("extension-market", settings("확장") + ['button:text-is("마켓플레이스")'], 'input[aria-label="확장 검색"]'),
+    ("extension-market", settings("확장") + ['button:has-text("마켓플레이스")'], 'input[aria-label="확장 검색"]'),
     ("sessions-panel", [".listbtn"], '[data-part="sessions"]'),
     ("sessions-selected", [".listbtn", '.sessions .gh input'], '.sessions .gh input:checked'),
     ("dir-picker", [".where"], '.path input'),
