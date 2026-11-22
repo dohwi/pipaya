@@ -57,7 +57,7 @@
 		width: 100%;
 		max-width: 680px;
 		min-height: min(240px, 100%);
-		padding: 16px 16px;
+		padding: 16px;
 		position: relative;
 		display: flex;
 		flex-direction: column;

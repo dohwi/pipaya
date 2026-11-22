@@ -596,7 +596,7 @@
 <style>
 	.extensions,
 	section { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
-	.extensions { gap: 24px; color: var(--text); font-size: var(--fs-md); line-height: 1.5; }
+	.extensions { gap: 16px; color: var(--text); font-size: var(--fs-md); line-height: 1.5; }
 	.feedback { display: flex; flex-direction: column; gap: 8px; }
 	/* The live region stays mounted, but while it holds no element (only Svelte's {#if} anchor comments, so :empty never matches) it must not take a flex gap */
 	.feedback:not(:has(*)) { position: absolute; }
@@ -610,8 +610,6 @@
 	.needline :global(svg) { flex: none; width: 16px; height: 16px; stroke-width: 1.8; }
 	.need-text { flex: 1; min-width: 0; overflow-wrap: anywhere; word-break: keep-all; }
 	.needline :global(.btn) { flex: none; }
-
-
 	.extensions :global(.btn.sm) { height: auto; min-height: var(--control-h-sm); padding: 4px 12px; white-space: normal; }
 
 	.bar { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }

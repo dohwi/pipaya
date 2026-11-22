@@ -43,7 +43,7 @@
 		background: var(--accent);
 		color: var(--accent-fg);
 		font-size: var(--fs-xs);
-		line-height: 1.2;
+		line-height: 16px;
 		user-select: none;
 	}
 	/* In the dark theme the accent is near white, which makes a glaring bar: use the raised dark surface instead. */

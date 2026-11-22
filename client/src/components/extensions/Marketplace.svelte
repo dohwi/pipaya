@@ -279,11 +279,11 @@
 	.hints .hint { margin: 0; }
 	.hint { overflow-wrap: anywhere; }
 	.list { font-size: var(--fs-md); line-height: 1.5; list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 8px; }
-	.item { display: flex; flex-direction: column; gap: 8px; padding: 12px 16px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg-elev); }
+	.item { display: flex; flex-direction: column; gap: 8px; padding: 12px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg-elev); }
 	.top { display: flex; align-items: center; gap: 8px; min-width: 0; }
 	.name { font-size: var(--fs-md); font-weight: 600; min-width: 0; overflow-wrap: anywhere; }
 	.ver { margin-left: auto; flex: none; font-family: var(--mono); font-size: var(--fs-2xs); color: var(--text-faint); }
-	.foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: auto; padding-top: 4px; }
+	.foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: auto; }
 	.foot .facts { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; margin: 0; min-width: 0; }
 	.star { display: inline-flex; align-items: center; gap: 4px; }
 	.star :global(svg) { width: 12px; height: 12px; fill: currentColor; stroke: none; }

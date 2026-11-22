@@ -38,7 +38,7 @@
 		border-bottom: 1px solid color-mix(in srgb, var(--tone) 25%, var(--border-strong));
 		color: var(--text);
 		font-size: var(--fs-sm);
-		line-height: 1.4;
+		line-height: 18px;
 	}
 	.strip.compact {
 		min-height: 40px; /* a shorter strip, the same 16px text line as every other strip */

@@ -268,7 +268,7 @@
 	}
 	.md :global(pre) {
 		margin: 0;
-		padding: 12px 12px;
+		padding: 12px;
 		overflow-x: auto;
 		-webkit-overflow-scrolling: touch;
 		font-family: var(--mono);

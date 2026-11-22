@@ -73,7 +73,7 @@
 		const r = trigger.getBoundingClientRect();
 		const below = window.innerHeight - r.bottom - 12;
 		const above = r.top - 12;
-		const want = Math.min(280, options.length * 36 + 10);
+		const want = Math.min(280, options.length * 35 + 10);
 		const up = below < want && above > below;
 		const w = Math.max(r.width, 160);
 		pos = {
@@ -252,6 +252,7 @@
 		id={listId}
 		class="list"
 		class:up={pos.up}
+		class:sm={size === "sm"}
 		class:mono
 		role="listbox"
 		tabindex="-1"
@@ -313,7 +314,7 @@
 	}
 	.sm .trigger {
 		height: var(--control-h-sm);
-		padding: 0 8px 0 8px;
+		padding: 0 8px;
 		font-size: var(--fs-md);
 	}
 	.mono .trigger {
@@ -402,13 +403,14 @@
 		align-items: center;
 		gap: 8px;
 		min-height: 34px;
-		padding: 0 8px 0 8px;
+		padding: 0 8px;
 		border-radius: var(--radius-sm);
-		font-size: var(--fs-md);
+		font-size: var(--fs-lg); /* same size as the md trigger: no jump when it opens */
 		color: var(--text);
 		cursor: pointer;
 		transition: background-color var(--motion-fast) var(--ease-std);
 	}
+	.list.sm .opt { font-size: var(--fs-md); }
 	.opt.act {
 		background: var(--bg-hover);
 	}

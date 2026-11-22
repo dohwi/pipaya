@@ -43,7 +43,7 @@
 		white-space: nowrap;
 		color: var(--badge-fg);
 		background: var(--badge-bg);
-		border: 1px solid var(--badge-border, transparent);
+		border: 0;
 		--badge-fg: var(--text-dim);
 		--badge-bg: var(--bg-active);
 	}
@@ -57,7 +57,8 @@
 	}
 	.sm {
 		height: 18px;
-		padding: 0 8px 1px;
+		/* 6px horizontal inset keeps the 18px pill tighter than md without crowding the text */
+		padding: 0 6px 1px;
 		font-size: var(--fs-2xs);
 	}
 	/* an icon inside a badge follows its text size */
@@ -100,7 +101,7 @@
 	/* variants */
 	.outline {
 		background: transparent;
-		--badge-border: var(--border-strong);
+		border: 1px solid var(--badge-border, var(--border-strong));
 		font-weight: 500;
 	}
 	.outline.neutral {

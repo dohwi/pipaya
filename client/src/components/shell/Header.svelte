@@ -203,7 +203,7 @@
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
-		line-height: 1.2;
+		line-height: 17px;
 	}
 	.title :global(.header-rename) {
 		flex: none;
@@ -216,7 +216,7 @@
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
-		line-height: 1.2;
+		line-height: 13px;
 	}
 	.tool {
 		display: grid;

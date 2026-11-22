@@ -52,8 +52,8 @@
 			<span class="top">
 				<h4 class="ename">{name}</h4>
 				{#if meta}{@render meta()}{/if}
+				{#if sub && sub !== name}<span class="facts">{sub}</span>{/if}
 			</span>
-			<span class="facts">{sub}</span>
 		</div>
 		<div class="actions">
 			{#if busy}<Spinner label={t("처리 중")} />{/if}
@@ -70,7 +70,7 @@
 </div>
 
 <style>
-	.page { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+	.page { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
 	.page:focus { outline: none; }
 	.line { display: flex; align-items: center; gap: 12px; }
 	/* spinner and switch share one row, vertically centred on the name block like the list rows */

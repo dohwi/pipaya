@@ -321,7 +321,7 @@
 		{@render kids(node.children, off)}
 		{@render note(node.id, message)}
 		<div class="actions">
-			<Button variant="primary" type="submit" disabled={off}>{node.submitLabel}</Button>
+			<Button variant="primary" size="sm" type="submit" disabled={off}>{node.submitLabel}</Button>
 		</div>
 	</form>
 {:else if node.type === "text"}
@@ -394,7 +394,7 @@
 						<span class="list-title">{item.title}</span>
 						{#if item.description}<span class="muted">{item.description}</span>{/if}
 					</div>
-					{#if item.badge}<Badge>{item.badge}</Badge>{/if}
+					{#if item.badge}<Badge size="sm">{item.badge}</Badge>{/if}
 				</li>
 			{/each}
 		</ul>
@@ -497,7 +497,7 @@
 <style>
 	/* tones: one set of custom properties drives text, badges and alerts */
 	.tone-neutral { --tone: var(--text-dim); --tone-soft: var(--bg-active); }
-	.tone-info { --tone: var(--lv-low); --tone-soft: color-mix(in srgb, var(--lv-low) 14%, transparent); }
+	.tone-info { --tone: var(--info); --tone-soft: var(--info-soft); }
 	.tone-success { --tone: var(--ok); --tone-soft: var(--ok-soft); }
 	.tone-warning { --tone: var(--warn); --tone-soft: var(--warn-soft); }
 	.tone-danger { --tone: var(--danger); --tone-soft: var(--danger-soft); }
@@ -506,25 +506,23 @@
 	.stack, .grid { min-width: 0; }
 	.stack { display: flex; }
 	.stack.column { flex-direction: column; }
-	/* A row lines its items up on the first line's baseline: a badge next to small text ("연결됨 · 26초 전 확인") reads as
-	   one line, and buttons of one height still share a top. The badge's own `align-self: flex-start` (it keeps it from
-	   stretching in a column) must not opt it out here. */
-	.stack.row { flex-direction: row; flex-wrap: wrap; align-items: baseline; }
-	.stack.row > :global(.badge) { align-self: baseline; }
+	/* Centre items in a horizontal row so badges, small text and buttons line up cleanly on one line. */
+	.stack.row { flex-direction: row; flex-wrap: wrap; align-items: center; }
+	.stack.row > :global(.ext-badge), .stack.row > :global(.badge) { align-self: center; }
 	.stack > :global(*) { min-width: 0; }
 	.gap-small { gap: 4px; }
-	.gap-medium { gap: 12px; }
-	.gap-large { gap: 20px; }
+	.gap-medium { gap: 8px; }
+	.gap-large { gap: 16px; }
 	.grid { display: grid; --cols: 2; --min: 9rem; grid-template-columns: repeat(auto-fit, minmax(min(100%, max(var(--min), calc((100% - (var(--cols) - 1) * 20px) / var(--cols)))), 1fr)); align-items: stretch; }
 	.grid.gap-small { gap: 4px; }
-	.grid.gap-medium { gap: 12px; }
-	.grid.gap-large { gap: 20px; }
+	.grid.gap-medium { gap: 8px; }
+	.grid.gap-large { gap: 16px; }
 	.grid.cols-1 { --cols: 1; }
 	.grid.cols-2 { --cols: 2; }
 	.grid.cols-3 { --cols: 3; }
 	.grid > :global(*) { min-width: 0; }
 
-	.card { display: flex; flex-direction: column; gap: 12px; min-width: 0; padding: 12px 16px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg-elev); }
+	.card { display: flex; flex-direction: column; gap: 8px; min-width: 0; padding: 12px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg-elev); }
 	.card-head { display: flex; flex-direction: column; gap: 4px; }
 	h4, p { margin: 0; }
 	.card-head h4 { font-size: var(--fs-base); font-weight: 600; overflow-wrap: anywhere; }
@@ -572,42 +570,42 @@
 	td { overflow-wrap: anywhere; min-width: 6rem; }
 
 	.list { display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; border: 1px solid var(--border); border-radius: var(--radius-sm); }
-	/* A row's badge sits on the row's vertical centre, beside both lines of text, and keeps to one line: it is a status
-	   next to the item, not a third line hanging from the title. */
+	/* Keep list rows compact: title and description sit on one baseline when wide, wrapping tightly on narrow panes. */
 	.list li { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 12px; }
 	.list li + li { border-top: 1px solid var(--border); }
-	.list-text { display: flex; flex: 1; flex-direction: column; gap: 4px; min-width: 0; }
+	.list-text { display: flex; flex: 1; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; min-width: 0; }
 	.list li > :global(.badge) { flex: none; align-self: center; white-space: nowrap; }
-	.list-title { font-size: var(--fs-md); font-weight: 550; }
+	.list-title { font-size: var(--fs-sm); font-weight: 550; line-height: 20px; }
 
 	/* tabs */
-	.tabs { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+	.tabs { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
 	.tablist { --ind-color: var(--accent); min-width: 0; }
-	.tabpanel { display: flex; flex-direction: column; gap: 12px; min-width: 0; border-radius: var(--radius-sm); }
+	.tabpanel { display: flex; flex-direction: column; gap: 8px; min-width: 0; border-radius: var(--radius-sm); }
 
 	/* forms + controls */
-	.form { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+	.form { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
 	.actions { display: flex; gap: 8px; flex-wrap: wrap; }
 	.ui-field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
-	label { font-size: var(--fs-sm); font-weight: 550; color: var(--text); }
+	label { font-size: var(--fs-xs); font-weight: 550; line-height: 20px; color: var(--text); }
 	.req { color: var(--danger); }
-	.control { width: 100%; min-width: 0; padding: 8px 8px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); background: var(--bg); color: var(--text); font-size: var(--fs-lg); line-height: 1.4; transition: border-color var(--motion-fast) var(--ease-std), box-shadow var(--motion-fast) var(--ease-std); }
-	textarea.control { resize: vertical; min-height: 4.5rem; }
+	.control { width: 100%; min-width: 0; box-sizing: border-box; height: var(--control-h); padding: 0 12px; border: 1px solid var(--border-strong); border-radius: var(--radius-control); background: var(--bg-code); color: var(--text); font-size: var(--fs-lg); line-height: 1.4; transition: border-color var(--motion-fast) var(--ease-std), box-shadow var(--motion-fast) var(--ease-std); }
+	textarea.control { height: auto; padding: 8px 12px; resize: vertical; min-height: 4.5rem; }
 	.control::placeholder { color: var(--text-faint); }
 	.control:focus-visible { outline: 2px solid transparent; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
 	.control[aria-invalid="true"] { border-color: var(--danger); }
 	.control[aria-invalid="true"]:focus-visible { box-shadow: 0 0 0 3px var(--danger-soft); }
 	.control:disabled, .btn:disabled, .check input:disabled { opacity: 0.55; cursor: not-allowed; }
 	.check { display: flex; align-items: flex-start; gap: 8px; }
-	.check input { flex: none; width: 17px; height: 17px; margin: 4px 0 0; accent-color: var(--accent); }
+	/* 17px checkbox centred on the 20px first line: (20 - 17) / 2 = 1.5px */
+	.check input { flex: none; width: 17px; height: 17px; margin: 1.5px 0 0; accent-color: var(--accent); }
 	.check input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 	.check input[aria-invalid="true"] { outline: 2px solid var(--danger); outline-offset: 1px; }
-	.check label { font-weight: 450; }
+	.check label { font-size: var(--fs-sm); font-weight: 450; line-height: 20px; }
 	.error { margin: 0; font-size: var(--fs-xs); line-height: 1.45; color: var(--danger); }
 	.error:empty { display: none; }
 
 	.button-wrap { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; min-width: 0; }
-	.btn { height: auto; min-height: 38px; max-width: 100%; padding: 8px 16px; line-height: 1.3; font-weight: 600; white-space: normal; overflow-wrap: anywhere; }
+	.btn { height: auto; min-height: var(--control-h-sm); max-width: 100%; padding: 4px 12px; border-radius: var(--radius-control); font-size: var(--fs-sm); line-height: 1.3; font-weight: 600; white-space: normal; overflow-wrap: anywhere; }
 	.btn.primary { background: var(--accent); color: var(--accent-fg); }
 	@media (hover: hover) {
 		.btn.primary:hover:not(:disabled) { background: var(--accent-hover); }
