@@ -119,8 +119,14 @@ export class ServerLink {
 	private attempt: AbortController | null = null;
 	private token = 0;
 	private stopped = false;
+	private probing = false;
 	/** The newest event id that reached `hooks.event`: where a reopened stream resumes from. */
 	private cursor = 0;
+
+	/** Bound this link's API to a deadline (falls back cleanly for test doubles without `scoped`). */
+	private boundedApi(ms: number): Api {
+		return typeof this.api.scoped === "function" ? this.api.scoped(AbortSignal.timeout(ms)) : this.api;
+	}
 
 	constructor(
 		readonly server: Server,
@@ -178,7 +184,7 @@ export class ServerLink {
 		if (!ask.length) return;
 		for (const p of ask) this.reposAsked.add(p);
 		try {
-			const r = await this.api.repos(ask);
+			const r = await this.boundedApi(10_000).repos(ask);
 			if (this.stopped) return;
 			this.repos = { ...this.repos, ...Object.fromEntries(ask.map((p) => [p, r.repos[p] ?? null])) };
 		} catch (e) {
@@ -217,6 +223,7 @@ export class ServerLink {
 
 	stop(): void {
 		this.stopped = true;
+		this.probing = false;
 		this.token++;
 		this.attempt?.abort();
 		this.disarmStable();
@@ -226,6 +233,26 @@ export class ServerLink {
 		this.stopSaving = null;
 		this.unsubscribe?.();
 		this.unsubscribe = null;
+	}
+
+	/**
+	 * A user action failed with a network error while this link still claimed to be online (half-open socket / dropped
+	 * tailnet): verify quickly with `/health` and kick off a reconnect if the server is no longer answering.
+	 */
+	async probe(): Promise<void> {
+		if (this.stopped || !this.online || this.probing) return;
+		this.probing = true;
+		const token = this.token;
+		try {
+			await this.api.health(AbortSignal.timeout(3000));
+		} catch {
+			if (token === this.token && !this.stopped && this.online) {
+				this.net = "offline";
+				void this.sync();
+			}
+		} finally {
+			this.probing = false;
+		}
 	}
 
 	private armStable(token: number, onStable?: () => void): void {
@@ -308,7 +335,7 @@ export class ServerLink {
 	async refreshActivity(): Promise<void> {
 		const token = this.token;
 		try {
-			const activity = await this.api.activity();
+			const activity = await this.boundedApi(10_000).activity();
 			if (token !== this.token) return;
 			this.applyActivity(activity);
 		} catch {
@@ -324,7 +351,7 @@ export class ServerLink {
 	 */
 	private async catchUp(): Promise<void> {
 		const token = this.token;
-		const api = this.api;
+		const api = this.boundedApi(8_000);
 		try {
 			const [activity, terminals, support, latestId] = await Promise.all([
 				api.activity().catch(() => null),
@@ -455,6 +482,7 @@ export class ServerLink {
 			this.versions = { version: health.version, protocol: health.protocol, minClientProtocol: health.minClientProtocol };
 			if (compat(this.versions) === "update-app") {
 				// Every other call would be refused (426) or answered in a shape this app cannot read: say why instead.
+				attempt.abort();
 				this.net = "incompatible";
 				this.netError = t("이 서버는 더 새로운 앱이 필요합니다. 앱을 업데이트하세요");
 				return;
@@ -504,7 +532,7 @@ export class ServerLink {
 			void this.refreshModelSettings();
 
 			let stable = false;
-			this.unsubscribe = api.subscribe(
+			this.unsubscribe = this.api.subscribe(
 				{
 					onEvent: (e) => {
 						if (token !== this.token) return;
@@ -537,6 +565,7 @@ export class ServerLink {
 			this.hooks.ready(this, false);
 		} catch (e) {
 			if (token !== this.token) return;
+			attempt.abort(); // what is still out (the catalog after a health failure, the rest after a deadline) stops here
 			if (e instanceof ApiError && isClientTooOld(e.status, e.code)) {
 				this.net = "incompatible";
 				this.netError = t("이 서버는 더 새로운 앱이 필요합니다. 앱을 업데이트하세요");
@@ -547,7 +576,6 @@ export class ServerLink {
 				this.netError = t("토큰이 거부되었습니다");
 				return;
 			}
-			attempt.abort(); // what is still out (the catalog after a health failure, the rest after a deadline) stops here
 			this.net = "offline";
 			this.netError = errorText(e);
 			this.scheduleRetry();
@@ -556,8 +584,9 @@ export class ServerLink {
 
 	/** Reread providers, models and the server's defaults. False when the server could not be reached. */
 	async refreshCatalog(): Promise<boolean> {
+		const api = this.boundedApi(10_000);
 		try {
-			const [providers, models, config] = await Promise.all([this.api.providers(), this.api.models(), this.api.configuration().catch(() => null)]);
+			const [providers, models, config] = await Promise.all([api.providers(), api.models(), api.configuration().catch(() => null)]);
 			this.providers = providers;
 			this.models = models;
 			this.serverDefault = config?.effectiveDefaults ?? null;
@@ -573,14 +602,15 @@ export class ServerLink {
 
 	/** Reread which models compaction and the system jobs use. A server without them keeps null (no problem to flag). */
 	async refreshModelSettings(): Promise<void> {
-		const [c, s] = await Promise.all([this.api.compactionSettings().catch(() => null), this.api.systemModelSettings().catch(() => null)]);
+		const api = this.boundedApi(10_000);
+		const [c, s] = await Promise.all([api.compactionSettings().catch(() => null), api.systemModelSettings().catch(() => null)]);
 		this.compaction = c?.settings ?? null;
 		this.systemModel = s?.settings ?? null;
 	}
 
 	async refreshWorkspace(): Promise<void> {
 		try {
-			this.workspace = await this.api.workspace();
+			this.workspace = await this.boundedApi(10_000).workspace();
 		} catch {
 			/* offline: keep what we have */
 		}

@@ -90,7 +90,8 @@ export type RowTarget = { kind: "session"; x: { id: string; title: string } } | 
 export interface RowActions {
 	renameTab(id: string, title: string): void;
 	renameGroup(group: { id: string; name: string }): void;
-	groupWith(tab: { id: string; title: string }): void;
+	/** Only offered for the open server (grouping opens a palette of its sessions) */
+	groupWith?(tab: { id: string; title: string }): void;
 	closeSession(id: string): void;
 	closeTerminal(id: string): void;
 	/** Dissolve a split tab. Only the sidebar passes it, and only the split tab's own row offers it: not its panes, the tab bar, the chips or the pane bars. */
@@ -141,7 +142,7 @@ export function rowMenuEntries(target: RowTarget, act: RowActions, member = fals
 		{ icon: "pencil", label: t("이름 바꾸기"), title: "", run: () => act.renameTab(x.id, x.title) },
 		// a pane of a split tab is pinned with its tab, not alone
 		...(member ? [] : pinEntry(x.id, act)),
-		{ icon: "columns", label: t("다른 대화와 묶기"), title: "", run: () => act.groupWith(x) },
+		...(act.groupWith ? [{ icon: "columns", label: t("다른 대화와 묶기"), title: "", run: () => act.groupWith!(x) } satisfies MenuEntry] : []),
 		...(target.kind === "session" && act.schedule ? [{ icon: "clock", label: t("예약 추가…"), title: t("이 대화에 정해진 때 프롬프트를 보냅니다"), run: () => act.schedule!(x.id) } satisfies MenuEntry] : []),
 		...(target.kind === "session" && act.moveWorkdir ? [{ icon: "fork", label: t("작업 폴더 옮기기…"), title: t("이 대화가 같은 저장소의 다른 worktree에서 작업합니다"), run: () => act.moveWorkdir!(x) } satisfies MenuEntry] : []),
 		...(member && leave ? [{ icon: "unlink", label: t("그룹에서 빼기"), title: "", run: () => leave(x.id) } satisfies MenuEntry] : []),

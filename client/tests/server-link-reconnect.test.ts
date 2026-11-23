@@ -330,4 +330,94 @@ describe("ServerLink stream drop and automatic reconnect", () => {
 		expect((link as any).retryDelay).toBe(4000);
 		link.stop();
 	});
+
+	test("probe detects a silently dead online link and kicks off resync once", async () => {
+		let healthOk = true;
+		let healthCalls = 0;
+		let syncLists = 0;
+		const link = new ServerLink(
+			{ id: "srv7", name: "Dev", baseUrl: "http://127.0.0.1:9999", token: "tok" },
+			{ event: () => {}, ready: () => {} },
+		);
+		const fakeApi: any = {
+			scoped: () => fakeApi,
+			health: async () => {
+				healthCalls++;
+				if (!healthOk) throw new Error("network down");
+				return { ok: true, version: "0.10.4", protocol: 1, minClientProtocol: 1 };
+			},
+			listSessions: async () => {
+				syncLists++;
+				return { sessions: [], nextBefore: null, nextBeforeId: null };
+			},
+			workspace: async () => ({ root: "/w", home: "/h", workdirs: [] }),
+			groups: async () => [],
+			terminals: async () => [],
+			terminalSupport: async () => null,
+			activity: async () => ({ sessions: [], unread: [] }),
+			models: async () => [],
+			providers: async () => [],
+			tools: async () => ({ tools: [], defaults: [] }),
+			latestEventId: async () => 1,
+			configuration: async () => null,
+			compactionSettings: async () => null,
+			systemModelSettings: async () => null,
+			repos: async () => ({ repos: {} }),
+			subscribe: (handlers: { onOpen?: () => void }) => {
+				queueMicrotask(() => handlers.onOpen?.());
+				return () => {};
+			},
+		};
+		(link as any).api = fakeApi;
+
+		await link.sync();
+		expect(link.online).toBe(true);
+		expect(syncLists).toBe(1);
+
+		// Concurrent probes while dead coalesce to one probe health check, flip offline, and kick off one resync.
+		healthOk = false;
+		const before = healthCalls;
+		await Promise.all([link.probe(), link.probe()]);
+		expect(healthCalls).toBe(before + 2); // 1 from probe + 1 from the triggered sync()
+		expect(link.net).toBe("offline");
+
+		// Probing while already offline is a no-op.
+		const afterOffline = healthCalls;
+		await link.probe();
+		expect(healthCalls).toBe(afterOffline);
+		link.stop();
+	});
+
+	test("sync aborts pending snapshot requests when server requires a newer app", async () => {
+		let scopedSignal: AbortSignal | undefined;
+		const link = new ServerLink(
+			{ id: "srv8", name: "Dev", baseUrl: "http://127.0.0.1:9999", token: "tok" },
+			{ event: () => {}, ready: () => {} },
+		);
+		const fakeApi: any = {
+			scoped: (s: AbortSignal) => {
+				scopedSignal = s;
+				return fakeApi;
+			},
+			health: async () => ({ ok: true, version: "9.0.0", protocol: 99, minClientProtocol: 99 }),
+			listSessions: () => new Promise(() => {}),
+			workspace: () => new Promise(() => {}),
+			groups: () => new Promise(() => {}),
+			terminals: () => new Promise(() => {}),
+			terminalSupport: () => new Promise(() => {}),
+			activity: () => new Promise(() => {}),
+			models: () => new Promise(() => {}),
+			providers: () => new Promise(() => {}),
+			tools: () => new Promise(() => {}),
+			latestEventId: () => new Promise(() => {}),
+			configuration: () => new Promise(() => {}),
+			subscribe: () => () => {},
+		};
+		(link as any).api = fakeApi;
+
+		await link.sync();
+		expect(link.net).toBe("incompatible");
+		expect(scopedSignal?.aborted).toBe(true);
+		link.stop();
+	});
 });

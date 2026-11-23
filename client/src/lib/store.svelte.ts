@@ -582,10 +582,29 @@ class AppStore {
 
   /** Closing one conversation that is still at work (running, compacting or asking): the confirmation. */
   private readonly sessionClosing = new SessionCloseGuard(
-    (id) => ((this.awaiting[id] ?? 0) > 0 ? "asking" : this.running[id] || this.chatOf(id)?.compacting ? "working" : null),
-    (id) => sessionTitle(this.session(id)?.title),
+    (id, serverId) => {
+      const link = this.links[serverId];
+      if (!link) return null;
+      return (link.data.awaiting[id] ?? 0) > 0
+        ? "asking"
+        : link.data.running[id] || (serverId === this.serverId && this.chatOf(id)?.compacting)
+          ? "working"
+          : null;
+    },
+    (id, serverId) => sessionTitle(this.links[serverId]?.sessionById.get(id)?.title),
   );
   get sessionCloseConfirm() { return this.sessionClosing.ask; }
+
+  /** The link for `serverId`, defaulting to the open server. */
+  private linkOf(serverId?: string | null): ServerLink | null {
+    const sid = serverId === undefined ? this.serverId : serverId;
+    return (sid && this.links[sid]) || null;
+  }
+
+  /** If a user action hit a network failure while the link still thought it was online, probe and reconnect promptly. */
+  private probeIfNetwork(link: ServerLink, e: unknown): void {
+    if (e instanceof ApiError && e.status === 0 && this.links[link.id] === link) void link.probe();
+  }
 
   get runningHere(): boolean {
     return !!this.chat?.running;
@@ -764,6 +783,7 @@ class AppStore {
   /** Forget a server. The desktop app's own server cannot be removed: the app starts it and lists it itself. */
   removeServer(id: string) {
     if (this.servers.find((s) => s.id === id)?.local) return;
+    this.sessionClosing.cancelServer(id);
     const wasOpen = id === this.serverId;
     this.servers = this.servers.filter((s) => s.id !== id);
     this.saveServers();
@@ -820,12 +840,15 @@ class AppStore {
   }
 
   /** Put a server in view: its conversations open here, and its lists (already live) are shown at once. */
-  openServer(id: string, force = false) {
+  openServer(id: string, force = false, pending?: { terminal?: string | null; chat?: boolean }) {
     const target = this.servers.find((s) => s.id === id);
     if (!target) return;
     if (!force && this.serverId === id && this.net !== "idle") return;
     // leaving a server: what was open there is where "back to the previous conversation" goes
     if (this.serverId && this.serverId !== id) this.rememberPrevious();
+    // Clear any deferred new-chat/terminal requested for a previous server that never finished connecting.
+    this.pendingTerminal = pending?.terminal ?? null;
+    this.pendingChat = Boolean(pending?.chat);
     this.syncLinks();
     this.attachToken++;
     // The extension host reads the open server's list once at launch (init); only a later switch has to swap it.
@@ -890,9 +913,8 @@ class AppStore {
     this.graphOpen = false;
     this.graphPeek = null;
     if (serverId !== this.serverId || this.net === "idle") {
-      // A terminal asked for on another server opens once that server is connected (see sync).
-      this.pendingTerminal = to.terminal ? (to.workdir ?? ".") : null;
-      this.pendingChat = !to.session && !to.terminal;
+      // A terminal or new chat asked for on another server opens once that server is connected (see attach).
+      const pending = { terminal: to.terminal ? (to.workdir ?? ".") : null, chat: !to.session && !to.terminal };
       if (to.workdir !== undefined)
         write(`${K.workdir}.${serverId}`, to.workdir);
       if (to.session) write(`${K.active}.${serverId}`, to.session);
@@ -902,7 +924,7 @@ class AppStore {
         } catch {
           /* ignore */
         }
-      this.openServer(serverId, true);
+      this.openServer(serverId, true, pending);
       return;
     }
     if (to.session) void this.openSession(to.session);
@@ -1300,15 +1322,15 @@ class AppStore {
    * The tabs `from` (as listed in `before`) became `to`: put `to` where the first of them was, in that directory, and
    * remember the directory's order so it stays that way.
    */
-  private replaceTabs(before: DirBlock[], from: string[], to: string[]) {
-    if (!this.serverId) return;
+  private replaceTabs(before: DirBlock[], from: string[], to: string[], serverId: string | null = this.serverId) {
+    if (!serverId) return;
     for (const d of before) {
       const ids = d.tabs.map((x) => x.id);
       const at = ids.findIndex((x) => from.includes(x));
       if (at < 0) continue;
       const list = ids.filter((x) => !from.includes(x) && !to.includes(x));
       list.splice(Math.min(at, list.length), 0, ...to);
-      this.sidebar.placeTabs(this.serverId, list);
+      this.sidebar.placeTabs(serverId, list);
       return;
     }
   }
@@ -1427,21 +1449,30 @@ class AppStore {
   /**
    * Hide a session from the sidebar (stopping any run). Its history stays on the server; /resume reopens it.
    * A session still at work asks first (`sessionCloseConfirm`); `force` skips that, for a close the user did not ask for.
+   * `serverId` defaults to the open server; passing another server's id acts on that server without switching to it.
    */
-  async close(id: string, force = false) {
-    if (!this.api) return;
-    if (!force && !(await this.sessionClosing.request(id))) return;
-    const next = this.neighbourOf(id);
+  async close(id: string, force = false, serverId?: string | null) {
+    const link = this.linkOf(serverId);
+    if (!link) return;
+    const sid = link.id;
+    const api = link.api;
+    if (!force && !(await this.sessionClosing.request(id, sid))) return;
+    if (this.links[sid] !== link) return;
+    const next = this.serverId === sid ? this.neighbourOf(id) : undefined;
     try {
-      await this.api.patchSession(id, { closed: true });
-      this.forgetInGroups(id);
-      this.sessions = this.sessions.filter((x) => x.id !== id);
-      this.running[id] = false;
-      this.awaiting[id] = 0;
-      delete this.unread[id];
-      if (this.activeId === id) this.leave(next);
-      void this.refreshWorkspace();
+      await api.patchSession(id, { closed: true });
+      if (this.links[sid] !== link) return;
+      this.forgetInGroupsOn(link, id);
+      link.data.sessions = link.data.sessions.filter((x) => x.id !== id);
+      link.data.running[id] = false;
+      delete link.data.compacting[id];
+      link.data.awaiting[id] = 0;
+      delete link.data.unread[id];
+      delete link.data.failed[id];
+      if (this.serverId === sid && this.activeId === id) this.leave(next);
+      void link.refreshWorkspace();
     } catch (e) {
+      this.probeIfNetwork(link, e);
       this.fail(e, t("닫지 못했습니다"));
     }
   }
@@ -1462,9 +1493,13 @@ class AppStore {
     });
   }
 
+  private forgetInGroupsOn(link: ServerLink, id: string) {
+    const next = stripSessionFromGroups(link.data.groups, id);
+    if (next) link.data.groups = next;
+  }
+
   private forgetInGroups(id: string) {
-    const next = stripSessionFromGroups(this.groups, id);
-    if (next) this.groups = next;
+    if (this.link) this.forgetInGroupsOn(this.link, id);
   }
 
   private guardGroupLimit(group: Group | undefined, sessionId?: string): boolean {
@@ -1558,21 +1593,24 @@ class AppStore {
    */
   async startChat(): Promise<void> {
     this.resetNewChatDraft();
-    const api = this.api;
+    const link = this.link;
     const d = this.draft;
-    if (!api || !d.model) return this.newChat();
+    if (!link || !d.model) return this.newChat();
+    const sid = link.id;
     const cwd = this.workdir === "." ? undefined : this.workdir;
     try {
-      const s = await api.createSession({
+      const s = await link.api.createSession({
         cwd,
         provider: d.provider,
         model: d.model,
         thinkingLevel: normalizeThinking(d.thinkingLevel),
         serviceTier: d.serviceTier,
       });
-      if (!this.sessions.some((x) => x.id === s.id)) this.sessions.unshift(s);
-      await this.openSession(s.id, true);
+      if (this.links[sid] !== link) return;
+      if (!link.data.sessions.some((x) => x.id === s.id)) link.data.sessions.unshift(s);
+      if (this.serverId === sid) await this.openSession(s.id, true);
     } catch (e) {
+      this.probeIfNetwork(link, e);
       this.fail(e, t("새 대화를 만들지 못했습니다"));
     }
   }
@@ -1583,14 +1621,15 @@ class AppStore {
    * new-chat defaults. Without an open chat this is a plain `startChat`.
    */
   async newChatInPane(): Promise<void> {
-    const api = this.api;
+    const link = this.link;
     const from = this.session(this.activeId);
-    if (!api || !from) return this.startChat();
+    if (!link || !from) return this.startChat();
+    const sid = link.id;
     this.resetNewChatDraft();
     const d = this.draft;
     let made: Session;
     try {
-      made = await api.createSession({
+      made = await link.api.createSession({
         cwd: workDir(from),
         provider: d.provider,
         model: d.model,
@@ -1598,10 +1637,12 @@ class AppStore {
         serviceTier: d.serviceTier,
       });
     } catch (e) {
+      this.probeIfNetwork(link, e);
       return this.fail(e, t("새 대화를 만들지 못했습니다"));
     }
-    if (!this.sessions.some((x) => x.id === made.id)) this.sessions.unshift(made);
-    await this.openSession(made.id, true);
+    if (this.links[sid] !== link) return;
+    if (!link.data.sessions.some((x) => x.id === made.id)) link.data.sessions.unshift(made);
+    if (this.serverId === sid) await this.openSession(made.id, true);
   }
 
   /**
@@ -1611,13 +1652,14 @@ class AppStore {
    * plain `startChat`.
    */
   async clearChatInPane(): Promise<void> {
-    const api = this.api;
+    const link = this.link;
     const from = this.session(this.activeId);
     const g = from && this.groupOf(from.id);
-    if (!api || !from) return this.startChat();
+    if (!link || !from) return this.startChat();
+    const sid = link.id;
     let made: Session;
     try {
-      made = await api.createSession({
+      made = await link.api.createSession({
         cwd: workDir(from),
         provider: from.provider,
         model: from.model,
@@ -1625,24 +1667,30 @@ class AppStore {
         serviceTier: from.serviceTier,
       });
     } catch (e) {
+      this.probeIfNetwork(link, e);
       return this.fail(e, t("새 대화를 만들지 못했습니다"));
     }
-    if (!this.sessions.some((x) => x.id === made.id)) this.sessions.unshift(made);
+    if (this.links[sid] !== link) return;
+    if (!link.data.sessions.some((x) => x.id === made.id)) link.data.sessions.unshift(made);
     // Swap layout and focus in the same tick, and only then close the old session: the screen never passes through a
     // state where the focused session is gone or outside its group (that made the whole app flash).
-    const saving = g ? this.saveLayout(g.id, replaceSession(g.layout, from.id, made.id)) : Promise.resolve();
-    const opening = this.openSession(made.id);
+    const saving = g ? this.saveLayout(g.id, replaceSession(g.layout, from.id, made.id), true, sid) : Promise.resolve();
+    const opening = this.serverId === sid ? this.openSession(made.id) : Promise.resolve();
     await Promise.all([saving, opening]);
-    if (g) void this.refreshGroups(); // the server is the authority on who is in which group
+    if (g) void this.refreshGroups(sid); // the server is the authority on who is in which group
     // The replaced session leaves the active list instead of dropping out of the group as a loose session.
     try {
-      await api.patchSession(from.id, { closed: true });
-      this.sessions = this.sessions.filter((x) => x.id !== from.id);
-      this.running[from.id] = false;
-      this.awaiting[from.id] = 0;
-      delete this.unread[from.id];
+      await link.api.patchSession(from.id, { closed: true });
+      if (this.links[sid] !== link) return;
+      link.data.sessions = link.data.sessions.filter((x) => x.id !== from.id);
+      link.data.running[from.id] = false;
+      delete link.data.compacting[from.id];
+      link.data.awaiting[from.id] = 0;
+      delete link.data.unread[from.id];
+      delete link.data.failed[from.id];
     } catch (e) {
-      this.fail(e, t("닫지 못했습니다"), from.id);
+      this.probeIfNetwork(link, e);
+      this.fail(e, t("닫지 못했습니다"), this.serverId === sid ? from.id : null);
     }
   }
 
@@ -2038,13 +2086,15 @@ class AppStore {
   }
 
   async abort(id: string | null = this.activeId) {
-    if (!this.api || !id) return;
+    const link = this.link;
+    if (!link || !id) return;
     // Messages held back for a compaction being stopped would otherwise go out the moment it ends.
     this.chatOf(id)?.restoreHeld();
     try {
-      await this.api.abort(id);
+      await link.api.abort(id);
     } catch (e) {
-      this.fail(e, undefined, id);
+      this.probeIfNetwork(link, e);
+      this.fail(e, undefined, this.serverId === link.id ? id : null);
     }
   }
 
@@ -2090,12 +2140,14 @@ class AppStore {
   }
 
   async retry(id = this.activeId) {
+    const link = this.link;
     const chat = this.chatOf(id);
-    if (!this.api || !chat || chat.compacting) return;
+    if (!link || !chat || chat.compacting) return;
     try {
-      await this.api.retry(chat.id);
+      await link.api.retry(chat.id);
     } catch (e) {
-      this.fail(e, t("다시 시도하지 못했습니다"), chat.id);
+      this.probeIfNetwork(link, e);
+      this.fail(e, t("다시 시도하지 못했습니다"), this.serverId === link.id ? chat.id : null);
     }
   }
 
@@ -2108,12 +2160,14 @@ class AppStore {
   }
 
   async answerQuestion(toolCallId: string, answer: string | null | (string | null)[], id = this.activeId) {
+    const link = this.link;
     const chat = this.chatOf(id);
-    if (!this.api || !chat) return;
+    if (!link || !chat) return;
     try {
-      await this.api.answer(chat.id, toolCallId, answer);
+      await link.api.answer(chat.id, toolCallId, answer);
     } catch (e) {
-      this.fail(e, t("답변을 보내지 못했습니다"), chat.id);
+      this.probeIfNetwork(link, e);
+      this.fail(e, t("답변을 보내지 못했습니다"), this.serverId === link.id ? chat.id : null);
       void chat.load();
     }
   }
@@ -2122,51 +2176,69 @@ class AppStore {
    * Move a conversation to another working tree of its repository (`dir`; its own folder brings it home): its agent
    * works there from its next message, and the sidebar lists it there. The toast offers to move it back.
    */
-  async moveWorkdir(id: string, dir: string, undo = true): Promise<boolean> {
-    const s = this.session(id);
-    if (!this.api || !s) return false;
+  async moveWorkdir(id: string, dir: string, undo = true, serverId?: string | null): Promise<boolean> {
+    const link = this.linkOf(serverId);
+    const s = link?.sessionById.get(id);
+    if (!link || !s) return false;
+    const sid = link.id;
+    const api = link.api;
     const from = workDir(s);
     if (dir === from) return true;
     try {
-      const updated = await this.api.patchSession(id, { workDir: dir === s.cwd ? null : dir });
-      const i = this.sessions.findIndex((x) => x.id === id);
-      if (i >= 0) this.sessions[i] = updated;
+      const updated = await api.patchSession(id, { workDir: dir === s.cwd ? null : dir });
+      if (this.links[sid] !== link) return false;
+      const i = link.data.sessions.findIndex((x) => x.id === id);
+      if (i >= 0) link.data.sessions[i] = updated;
       const name = dir.split(/[\\/]/).filter(Boolean).pop() ?? dir;
       this.toast(t("'{title}'의 작업 폴더를 {dir}(으)로 옮겼습니다", { title: sessionTitle(s.title), dir: name }), "ok", null,
-        undo ? { label: t("되돌리기"), run: () => void this.moveWorkdir(id, from, false) } : undefined);
+        undo ? { label: t("되돌리기"), run: () => void this.moveWorkdir(id, from, false, sid) } : undefined);
       return true;
     } catch (e) {
-      this.fail(e, t("작업 폴더를 옮기지 못했습니다"), id);
+      this.probeIfNetwork(link, e);
+      this.fail(e, t("작업 폴더를 옮기지 못했습니다"), this.serverId === sid ? id : null);
       return false;
     }
   }
 
-  async rename(id: string, title: string) {
+  async rename(id: string, title: string, serverId?: string | null) {
     title = title.trim();
-    if (!this.api || !title) return;
+    const link = this.linkOf(serverId);
+    if (!link || !title) return;
+    const sid = link.id;
     try {
-      const s = await this.api.patchSession(id, { title });
-      const i = this.sessions.findIndex((x) => x.id === id);
-      if (i >= 0) this.sessions[i] = s;
+      const s = await link.api.patchSession(id, { title });
+      if (this.links[sid] !== link) return;
+      const i = link.data.sessions.findIndex((x) => x.id === id);
+      if (i >= 0) link.data.sessions[i] = s;
     } catch (e) {
-      this.fail(e, t("이름을 바꾸지 못했습니다"), id);
+      this.probeIfNetwork(link, e);
+      this.fail(e, t("이름을 바꾸지 못했습니다"), this.serverId === sid ? id : null);
     }
   }
 
-  async remove(id: string): Promise<boolean> {
-    if (!this.api) return false;
+  async remove(id: string, serverId?: string | null): Promise<boolean> {
+    const link = this.linkOf(serverId);
+    if (!link) return false;
+    const sid = link.id;
     try {
-      const next = this.neighbourOf(id);
-      await this.api.deleteSession(id);
+      const next = this.serverId === sid ? this.neighbourOf(id) : undefined;
+      await link.api.deleteSession(id);
+      if (this.links[sid] !== link) return false;
       forgetDraft(id);
       forgetAttachments(id);
-      this.forgetInGroups(id);
-      this.sessions = this.sessions.filter((x) => x.id !== id);
-      if (this.activeId === id) this.leave(next);
-      void this.refreshWorkspace();
+      this.forgetInGroupsOn(link, id);
+      link.data.sessions = link.data.sessions.filter((x) => x.id !== id);
+      delete link.data.running[id];
+      delete link.data.compacting[id];
+      delete link.data.awaiting[id];
+      delete link.data.unread[id];
+      delete link.data.failed[id];
+      if (this.serverId === sid && this.activeId === id) this.leave(next);
+      void link.refreshWorkspace();
       return true;
     } catch (e) {
-      this.fail(e, t("삭제하지 못했습니다"), id);
+      this.probeIfNetwork(link, e);
+      this.fail(e, t("삭제하지 못했습니다"), this.serverId === sid ? id : null);
       return false;
     }
   }
@@ -2174,25 +2246,33 @@ class AppStore {
   /* ---------- groups ---------- */
 
   /** Show a new layout at once, then save it; the server's answer (or a refetch on failure) is what stays. */
-  async saveLayout(id: string, layout: Layout, persist = true): Promise<void> {
-    const i = this.groups.findIndex((g) => g.id === id);
-    if (i < 0 || !this.api) return;
-    this.groups[i] = { ...this.groups[i]!, layout };
+  async saveLayout(id: string, layout: Layout, persist = true, serverId?: string | null): Promise<void> {
+    const link = this.linkOf(serverId);
+    if (!link) return;
+    const sid = link.id;
+    const i = link.data.groups.findIndex((g) => g.id === id);
+    if (i < 0) return;
+    link.data.groups[i] = { ...link.data.groups[i]!, layout };
     if (!persist) return;
     try {
-      const g = await this.api.patchGroup(id, { layout });
-      const j = this.groups.findIndex((x) => x.id === id);
-      if (j >= 0) this.groups[j] = g;
+      const g = await link.api.patchGroup(id, { layout });
+      if (this.links[sid] !== link) return;
+      const j = link.data.groups.findIndex((x) => x.id === id);
+      if (j >= 0) link.data.groups[j] = g;
     } catch (e) {
+      this.probeIfNetwork(link, e);
       this.fail(e, t("그룹을 저장하지 못했습니다"));
-      void this.refreshGroups();
+      void this.refreshGroups(sid);
     }
   }
 
-  async refreshGroups(): Promise<void> {
-    if (!this.api) return;
+  async refreshGroups(serverId?: string | null): Promise<void> {
+    const link = this.linkOf(serverId);
+    if (!link) return;
+    const sid = link.id;
     try {
-      this.groups = await this.api.groups();
+      const groups = await link.api.groups();
+      if (this.links[sid] === link) link.data.groups = groups;
     } catch {
       /* the next sync retries */
     }
@@ -2370,51 +2450,72 @@ class AppStore {
     }
   }
 
-  async renameTerminal(id: string, title: string): Promise<void> {
+  async renameTerminal(id: string, title: string, serverId?: string | null): Promise<void> {
     title = title.trim();
-    if (!this.api || !title) return;
+    const link = this.linkOf(serverId);
+    if (!link || !title) return;
+    const sid = link.id;
     try {
-      const x = await this.api.renameTerminal(id, title);
-      const i = this.terminals.findIndex((y) => y.id === id);
-      if (i >= 0) this.terminals[i] = x;
+      const x = await link.api.renameTerminal(id, title);
+      if (this.links[sid] !== link) return;
+      const i = link.data.terminals.findIndex((y) => y.id === id);
+      if (i >= 0) link.data.terminals[i] = x;
     } catch (e) {
-      this.fail(e, t("이름을 바꾸지 못했습니다"), id);
+      this.probeIfNetwork(link, e);
+      this.fail(e, t("이름을 바꾸지 못했습니다"), this.serverId === sid ? id : null);
     }
   }
 
   /** End the shell. The terminal leaves its group and the sidebar (the server confirms with terminal_closed). */
-  async closeTerminal(id: string): Promise<void> {
-    if (!this.api) return;
+  async closeTerminal(id: string, serverId?: string | null): Promise<void> {
+    const link = this.linkOf(serverId);
+    if (!link) return;
+    const sid = link.id;
     try {
-      await this.api.closeTerminal(id);
+      await link.api.closeTerminal(id);
     } catch (e) {
-      if (!(e instanceof ApiError && e.status === 404)) return this.fail(e, t("터미널을 닫지 못했습니다"), id);
+      if (!(e instanceof ApiError && e.status === 404)) {
+        this.probeIfNetwork(link, e);
+        return this.fail(e, t("터미널을 닫지 못했습니다"), this.serverId === sid ? id : null);
+      }
     }
-    this.dropTerminal(id);
+    if (this.links[sid] !== link) return;
+    this.dropTerminalOn(link, id);
+  }
+
+  private dropTerminalOn(link: ServerLink, id: string) {
+    if (!link.data.terminals.some((x) => x.id === id)) return;
+    const isOpen = this.serverId === link.id;
+    const next = isOpen ? this.neighbourOf(id) : undefined;
+    this.forgetInGroupsOn(link, id);
+    link.data.terminals = link.data.terminals.filter((x) => x.id !== id);
+    if (isOpen) {
+      if (this.zoomId === id) this.zoomId = null;
+      if (this.activeId === id) this.leave(next);
+    }
   }
 
   /** The shell is gone (closed here, elsewhere, or it exited): forget it and move focus on. */
   dropTerminal(id: string) {
-    if (!this.terminals.some((x) => x.id === id)) return;
-    const next = this.neighbourOf(id);
-    this.forgetInGroups(id);
-    this.terminals = this.terminals.filter((x) => x.id !== id);
-    if (this.zoomId === id) this.zoomId = null;
-    if (this.activeId === id) this.leave(next);
+    if (this.link) this.dropTerminalOn(this.link, id);
   }
 
   async createGroup(layout: Layout, name?: string): Promise<Group | null> {
-    if (!this.api) return null;
+    const link = this.link;
+    if (!link) return null;
+    const sid = link.id;
     try {
       // the new group's tab takes the place of the tab the drop landed on (the pane split; `pair` puts it first or second)
       const before = this.dirs;
-      const g = await this.api.createGroup({ layout, name: name || groupNameFor(panesOf(layout).map((id) => this.memberDir(id)), new Set(this.groups.map((g) => g.name))), ...(name ? {} : { autoName: true }) });
-      if (!this.groups.some((x) => x.id === g.id)) this.groups.push(g);
-      this.replaceTabs(before, panesOf(layout), [g.id]);
+      const g = await link.api.createGroup({ layout, name: name || groupNameFor(panesOf(layout).map((id) => this.memberDir(id)), new Set(link.data.groups.map((g) => g.name))), ...(name ? {} : { autoName: true }) });
+      if (this.links[sid] !== link) return null;
+      if (!link.data.groups.some((x) => x.id === g.id)) link.data.groups.push(g);
+      this.replaceTabs(before, panesOf(layout), [g.id], sid);
       // the server moved these sessions out of any group they were in
-      await this.refreshGroups();
+      await this.refreshGroups(sid);
       return g;
     } catch (e) {
+      this.probeIfNetwork(link, e);
       this.fail(e, t("그룹을 만들지 못했습니다"));
       return null;
     }
@@ -2422,72 +2523,94 @@ class AppStore {
 
   /** Put a session into an existing group, beside everything else in it. */
   async addToGroup(id: string, groupId: string): Promise<void> {
-    if (!this.api) return;
-    const g = this.groups.find((x) => x.id === groupId);
+    const link = this.link;
+    if (!link) return;
+    const sid = link.id;
+    const g = link.data.groups.find((x) => x.id === groupId);
     if (!g || layoutHas(g.layout, id)) return;
     if (!this.guardGroupLimit(g, id)) return;
-    await this.saveLayout(g.id, append(g.layout, id));
-    await this.refreshGroups();
+    await this.saveLayout(g.id, append(g.layout, id), true, sid);
+    await this.refreshGroups(sid);
   }
 
   /** Take a session out of its group; a group left with a single session dissolves. */
-  async leaveGroup(id: string): Promise<void> {
-    const g = this.groupOf(id);
-    if (!g || !this.api) return;
+  async leaveGroup(id: string, serverId?: string | null): Promise<void> {
+    const link = this.linkOf(serverId);
+    if (!link) return;
+    const sid = link.id;
+    const g = link.data.groups.find((x) => layoutHas(x.layout, id));
+    if (!g) return;
     const next = layoutRemove(g.layout, id);
-    if (worthKeeping(next)) await this.saveLayout(g.id, next);
-    else await this.deleteGroup(g.id);
+    if (worthKeeping(next)) await this.saveLayout(g.id, next, true, sid);
+    else await this.deleteGroup(g.id, sid);
   }
 
-  async renameGroup(id: string, name: string): Promise<void> {
+  async renameGroup(id: string, name: string, serverId?: string | null): Promise<void> {
     name = name.trim();
-    const i = this.groups.findIndex((g) => g.id === id);
-    if (!this.api || !name || i < 0 || this.groups[i]!.name === name) return;
-    const before = this.groups[i]!.name;
-    this.groups[i] = { ...this.groups[i]!, name };
+    const link = this.linkOf(serverId);
+    if (!link || !name) return;
+    const sid = link.id;
+    const i = link.data.groups.findIndex((g) => g.id === id);
+    if (i < 0 || link.data.groups[i]!.name === name) return;
+    const before = link.data.groups[i]!.name;
+    link.data.groups[i] = { ...link.data.groups[i]!, name };
     try {
-      const g = await this.api.patchGroup(id, { name });
-      const j = this.groups.findIndex((x) => x.id === id);
-      if (j >= 0) this.groups[j] = g;
+      const g = await link.api.patchGroup(id, { name });
+      if (this.links[sid] !== link) return;
+      const j = link.data.groups.findIndex((x) => x.id === id);
+      if (j >= 0) link.data.groups[j] = g;
     } catch (e) {
-      const j = this.groups.findIndex((x) => x.id === id);
-      if (j >= 0) this.groups[j] = { ...this.groups[j]!, name: before };
+      if (this.links[sid] === link) {
+        const j = link.data.groups.findIndex((x) => x.id === id);
+        if (j >= 0) link.data.groups[j] = { ...link.data.groups[j]!, name: before };
+      }
+      this.probeIfNetwork(link, e);
       this.fail(e, t("그룹 이름을 바꾸지 못했습니다"));
     }
   }
 
   /** Dissolve a group. Its sessions stay, as ordinary sessions. */
-  async deleteGroup(id: string): Promise<void> {
-    if (!this.api) return;
-    const g = this.groups.find((x) => x.id === id);
-    const before = this.dirs;
+  async deleteGroup(id: string, serverId?: string | null): Promise<void> {
+    const link = this.linkOf(serverId);
+    if (!link) return;
+    const sid = link.id;
+    const g = link.data.groups.find((x) => x.id === id);
+    const before = this.dirsByServer[sid] ?? NO_DIRS;
     try {
-      await this.api.deleteGroup(id);
+      await link.api.deleteGroup(id);
+      if (this.links[sid] !== link) return;
       // what was in the group comes back as tabs of its own, where the group's tab was
-      if (g) this.replaceTabs(before, [id], panesOf(g.layout).filter((x) => this.shows(x)));
-      this.groups = this.groups.filter((g) => g.id !== id);
+      const showsOnLink = (x: string) => link.sessionById.has(x) || link.data.terminals.some((t) => t.id === x);
+      if (g) this.replaceTabs(before, [id], panesOf(g.layout).filter(showsOnLink), sid);
+      link.data.groups = link.data.groups.filter((x) => x.id !== id);
       this.dropFull(id);
     } catch (e) {
+      this.probeIfNetwork(link, e);
       this.fail(e, t("그룹을 해제하지 못했습니다"));
     }
   }
 
   /** Branch `id` into a new chat holding the history up to and including `atSeq`. */
   async fork(id: string, atSeq?: number): Promise<boolean> {
-    if (!this.api) return false;
+    const link = this.link;
+    if (!link) return false;
+    const sid = link.id;
     try {
-      const s = await this.api.forkSession(id, atSeq);
-      if (!this.sessions.some((x) => x.id === s.id)) this.sessions.unshift(s);
+      const s = await link.api.forkSession(id, atSeq);
+      if (this.links[sid] !== link) return false;
+      if (!link.data.sessions.some((x) => x.id === s.id)) link.data.sessions.unshift(s);
+      if (this.serverId !== sid) return true;
       // Forked from inside a group: the branch joins that group, right beside its source.
       const g = this.groupOf(id);
       if (g && !layoutHas(g.layout, s.id) && this.guardGroupLimit(g, s.id)) {
         await this.dropSession(s.id, id, "right");
       }
-      await this.openSession(s.id, true);
+      if (this.serverId === sid) await this.openSession(s.id, true);
       this.toast(t("새 대화로 분기했습니다"), "ok", s.id);
       return true;
     } catch (e) {
-      this.fail(e, t("분기하지 못했습니다"), id);
+      this.probeIfNetwork(link, e);
+      this.fail(e, t("분기하지 못했습니다"), this.serverId === sid ? id : null);
       return false;
     }
   }

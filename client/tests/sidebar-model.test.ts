@@ -199,3 +199,22 @@ describe("the desktop app's own server", () => {
 		expect(orderServers([s("a", "online"), s("l", "offline", true), s("b", "checking")]).map((x) => x.id)).toEqual(["l", "a", "b"]);
 	});
 });
+
+describe("background server row menu", () => {
+	test("omits groupWith when not provided while keeping rename, pin, moveWorkdir and close", () => {
+		const calls: string[] = [];
+		const act: RowActions = {
+			renameTab: (id) => calls.push(`rename:${id}`),
+			renameGroup: () => {},
+			closeSession: (id) => calls.push(`close:${id}`),
+			closeTerminal: () => {},
+			togglePin: (id) => calls.push(`pin:${id}`),
+			isPinned: () => false,
+			moveWorkdir: (x) => calls.push(`move:${x.id}`),
+		};
+		const entries = rowMenuEntries({ kind: "session", x: { id: "s1", title: "Hello" } }, act);
+		expect(entries.map((e) => e.icon)).toEqual(["pencil", "pin", "fork", "x"]);
+		entries.forEach((e) => e.run());
+		expect(calls).toEqual(["rename:s1", "pin:s1", "move:s1", "close:s1"]);
+	});
+});

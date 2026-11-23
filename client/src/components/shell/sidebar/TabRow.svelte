@@ -32,11 +32,12 @@
 	const sb = getSidebarCtx();
 	/** A pinned tab sits at the top of its folder; the panes of a split tab are pinned with it, so only a lone tab shows the mark */
 	const pinned = $derived(!member && app.sidebar.isTabPinned(n.server.id, x.id));
+	const interactive = $derived(n.state === "online" && !n.stale);
 </script>
 
 <RowShell
 	id={x.id}
-	current={n.current}
+	{n}
 	renaming={sb.rename.is(x.id)}
 	draft={sb.rename.draft}
 	ondraft={(v) => (sb.rename.draft = v)}
@@ -49,7 +50,7 @@
 	class={["tab", target.kind === "terminal" && "term", member && "member", !app.graphOpen && n.current && x.id === app.activeId && "active"]}
 >
 	{#if member}<span class="branch" aria-hidden="true"></span>{/if}
-	<RowOpen renaming={n.current && sb.rename.is(x.id)} onopen={() => app.openIn(n.server.id, { session: x.id })} onintent={() => app.prefetchChat(n.server.id, x.id)} title={tip}>
+	<RowOpen renaming={interactive && sb.rename.is(x.id)} onopen={() => app.openIn(n.server.id, { session: x.id })} onintent={() => app.prefetchChat(n.server.id, x.id)} title={tip}>
 		{@render body(pinned)}
 	</RowOpen>
 </RowShell>

@@ -65,18 +65,18 @@ export interface SidebarCtx {
 	/** Activity by id (a terminal or an unknown id is idle) */
 	stateOfId(n: SidebarNode, id: string): Activity;
 	/** Row menu ("more" / "+") */
-	hoverMenu(e: PointerEvent, target: MenuTarget, member?: boolean): void;
-	clickMenu(e: MouseEvent, target: MenuTarget, member?: boolean): void;
+	hoverMenu(e: PointerEvent, n: SidebarNode, target: MenuTarget, member?: boolean): void;
+	clickMenu(e: MouseEvent, n: SidebarNode, target: MenuTarget, member?: boolean): void;
 	/** Context menu (right click / long press) of a row, and of a folder (`path`) or server (`path` null) header; each returns how to close it */
-	rowMenuAt(pt: Point, target: MenuTarget, member: boolean): () => void;
+	rowMenuAt(pt: Point, n: SidebarNode, target: MenuTarget, member: boolean): () => void;
 	headMenuAt(pt: Point, n: SidebarNode, path: string | null, key: string): () => void;
 	leaveMenu(e: PointerEvent): void;
 	hoverNew(e: PointerEvent, n: SidebarNode, path: string, key: string): void;
 	clickNew(e: MouseEvent, n: SidebarNode, path: string, key: string): void;
 	/** Renaming */
-	startRename(id: string, title: string): void;
+	startRename(id: string, title: string, serverId?: string): void;
 	commitRename(): void;
-	startGroupRename(g: Group): void;
+	startGroupRename(g: Group, serverId?: string): void;
 	commitGroupRename(): void;
 	/** Dropping */
 	memberTarget(n: SidebarNode, m: { id: string }): DropOpts;

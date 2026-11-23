@@ -36,7 +36,7 @@
 	import { dissolveProject, flattenBlocks, isManualRoot, joinProject, leaveProject, newProjectId, projectKey, type SidebarBlock } from "../../lib/projects";
 	import { dirKey, connectionState, edgeOf, headMenuEntries, newKey, newMenuEntries, orderServers, projectMenuEntries, rowMenuEntries, shortName, targetId, type RowActions } from "../../lib/sidebar-model";
 	import type { Group, Session } from "../../lib/types";
-	import { platformName } from "../../lib/terminal";
+	import { isTerminalId, platformName } from "../../lib/terminal";
 	import { setSidebarCtx, type MenuTarget, type SidebarNode } from "../../lib/sidebar-ctx";
 	import ServerBlock from "./sidebar/ServerBlock.svelte";
 	const hint = $derived(app.prefs.bindings.toggleSidebar ? ` (${formatCombo(app.prefs.bindings.toggleSidebar)})` : "");
@@ -174,7 +174,12 @@
 		};
 	});
 
-	const startRename = (id: string, title: string) => rename.start(id, title);
+	let renameServer = $state<string | null>(null);
+	let groupRenameServer = $state<string | null>(null);
+	const startRename = (id: string, title: string, serverId?: string) => {
+		renameServer = serverId ?? app.serverId;
+		rename.start(id, title);
+	};
 	/**
 	 * The sidebar's rows are where F2 renames the open thing (see `rename-places`): the row of the split tab while all of
 	 * its panes show, otherwise the row of the open conversation or terminal. A folded sidebar has no row to show, so the
@@ -194,19 +199,26 @@
 				return title === undefined ? null : { id, title };
 			},
 			start(id, title) {
-				if (app.groups.some((g) => g.id === id)) groupRename.start(id, title);
-				else rename.start(id, title);
+				if (app.groups.some((g) => g.id === id)) startGroupRename({ id, name: title } as Group, app.serverId ?? undefined);
+				else startRename(id, title, app.serverId ?? undefined);
 			},
 		})
 	);
 	function commitRename() {
 		const done = rename.commit();
-		if (done) void (app.terminal(done.id) ? app.renameTerminal(done.id, done.name) : app.rename(done.id, done.name));
+		const sid = renameServer;
+		renameServer = null;
+		if (done) void (isTerminalId(done.id) ? app.renameTerminal(done.id, done.name, sid) : app.rename(done.id, done.name, sid));
 	}
-	const startGroupRename = (g: Group) => groupRename.start(g.id, g.name);
+	const startGroupRename = (g: Group, serverId?: string) => {
+		groupRenameServer = serverId ?? app.serverId;
+		groupRename.start(g.id, g.name);
+	};
 	function commitGroupRename() {
 		const done = groupRename.commit();
-		if (done) void app.renameGroup(done.id, done.name);
+		const sid = groupRenameServer;
+		groupRenameServer = null;
+		if (done) void app.renameGroup(done.id, done.name, sid);
 	}
 	/** What a dragged session hovering over `key` highlights (and clears again when it leaves). */
 	const hover = (key: string) => (pt: unknown) => marks.hover(key, !!pt);
@@ -297,35 +309,65 @@
 			chat: () => app.openIn(n.server.id, { workdir: path }),
 			terminal: () => app.openIn(n.server.id, { workdir: path, terminal: true }),
 		});
-	const hoverNew = (e: PointerEvent, n: Node, path: string, key: string) => rowMenu?.hover(e, newKey(key), newItems(n, path));
-	const clickNew = (e: MouseEvent, n: Node, path: string, key: string) => rowMenu?.click(e, newKey(key), newItems(n, path));
+	const hoverNew = (e: PointerEvent, n: Node, path: string, key: string) => {
+		trackAnchor(e.currentTarget as Element | null);
+		rowMenu?.hover(e, newKey(key), newItems(n, path));
+	};
+	const clickNew = (e: MouseEvent, n: Node, path: string, key: string) => {
+		trackAnchor(e.currentTarget as Element | null);
+		rowMenu?.click(e, newKey(key), newItems(n, path));
+	};
 	/** The workdir value `openIn` expects: "." for the server default, else the absolute path */
 
-	/** What the entries of a row's "more" menu do (the entries themselves are lib/sidebar-model `rowMenuEntries`). */
-	const rowActions: RowActions = {
-		renameTab: startRename,
-		renameGroup: startGroupRename,
-		groupWith: chooseGroup,
-		closeSession: (id) => void app.close(id),
-		closeTerminal: (id) => void app.closeTerminal(id),
-		dissolveGroup: (id) => void app.deleteGroup(id),
-		leaveGroup: (id) => void app.leaveGroup(id),
-		togglePin: (id) => app.sidebar.toggleTabPinned(app.serverId!, id),
-		isPinned: (id) => app.sidebar.isTabPinned(app.serverId!, id),
-		schedule: (id) => app.openScheduleFor(id),
-		moveWorkdir: (x) => void chooseWorkdir(x),
+	/** What the entries of a row's "more" menu do, scoped to that row's server so background servers work without switching. */
+	const rowActionsFor = (n: Node): RowActions => {
+		const sid = n.server.id;
+		return {
+			renameTab: (id, title) => startRename(id, title, sid),
+			renameGroup: (g) => startGroupRename(g as Group, sid),
+			groupWith: n.current ? chooseGroup : undefined,
+			closeSession: (id) => void app.close(id, false, sid),
+			closeTerminal: (id) => void app.closeTerminal(id, sid),
+			dissolveGroup: (id) => void app.deleteGroup(id, sid),
+			leaveGroup: (id) => void app.leaveGroup(id, sid),
+			togglePin: (id) => app.sidebar.toggleTabPinned(sid, id),
+			isPinned: (id) => app.sidebar.isTabPinned(sid, id),
+			schedule: n.current ? (id) => app.openScheduleFor(id) : undefined,
+			moveWorkdir: (x) => void chooseWorkdir(x, sid),
+		};
 	};
-	const menuItems = (target: MenuTarget, member = false): RowMenuItem[] => rowMenuEntries(target, rowActions, member);
+	const menuItems = (n: Node, target: MenuTarget, member = false): RowMenuItem[] => rowMenuEntries(target, rowActionsFor(n), member);
 	let rowMenu: ReturnType<typeof RowMenu> | undefined = $state();
 	/** Id of the session or group whose menu is open (its button stays highlighted). */
 	let menuId = $state<string | null>(null);
-	const hoverMenu = (e: PointerEvent, target: MenuTarget, member = false) => rowMenu?.hover(e, targetId(target), menuItems(target, member));
+	/** Anchor element & scroll offset when the menu opened: background server fold/reorder scroll events do not close a stationary menu. */
+	let menuAnchor: { el: Element; top: number } | null = null;
+	let menuScrollTop = 0;
+	const trackAnchor = (el: Element | null) => {
+		menuScrollTop = listEl?.scrollTop ?? 0;
+		menuAnchor = el ? { el, top: el.getBoundingClientRect().top } : null;
+	};
+	const onListScroll = () => {
+		if (!menuId) return;
+		if (menuAnchor && menuAnchor.el.isConnected && Math.abs(menuAnchor.el.getBoundingClientRect().top - menuAnchor.top) <= 2) return;
+		if (!menuAnchor && listEl && Math.abs(listEl.scrollTop - menuScrollTop) <= 2) return;
+		menuAnchor = null;
+		rowMenu?.close();
+	};
+	const hoverMenu = (e: PointerEvent, n: Node, target: MenuTarget, member = false) => {
+		trackAnchor(e.currentTarget as Element | null);
+		rowMenu?.hover(e, targetId(target), menuItems(n, target, member));
+	};
 	const leaveMenu = (e: PointerEvent) => rowMenu?.leave(e);
-	const clickMenu = (e: MouseEvent, target: MenuTarget, member = false) => rowMenu?.click(e, targetId(target), menuItems(target, member));
+	const clickMenu = (e: MouseEvent, n: Node, target: MenuTarget, member = false) => {
+		trackAnchor(e.currentTarget as Element | null);
+		rowMenu?.click(e, targetId(target), menuItems(n, target, member));
+	};
 	/** Right click / long press on a row: the same entries as its "more" button, where the pointer is. */
-	function rowMenuAt(pt: Point, target: MenuTarget, member: boolean) {
+	function rowMenuAt(pt: Point, n: Node, target: MenuTarget, member: boolean) {
 		const id = targetId(target);
-		rowMenu?.openAt(pt, id, menuItems(target, member));
+		trackAnchor(null);
+		rowMenu?.openAt(pt, id, menuItems(n, target, member));
 		return () => menuId === id && rowMenu?.close();
 	}
 	/** Right click / long press on a folder or server header: its "+" entries, copying the path, folding. */
@@ -346,6 +388,7 @@
 			joinProject: path !== null && n.current ? () => pickProject(n, path) : undefined,
 			leaveProject: path !== null && projectOf(n, path) ? () => app.sidebar.setOverrides(n.server.id, leaveProject(app.sidebar.overrides(n.server.id), path, !isManualRoot(projectOf(n, path)!.root))) : undefined,
 		});
+		trackAnchor(null);
 		rowMenu?.openAt(pt, id, items);
 		return () => menuId === id && rowMenu?.close();
 	}
@@ -403,6 +446,7 @@
 			foldAll: !isFolded(key) && anyOpen ? () => app.sidebar.setProjectDirsFolded(keys, true) : undefined,
 			copyPath: manual ? undefined : () => void copyText(root).then((ok) => app.toast(ok ? t("경로를 복사했습니다") : t("복사하지 못했습니다"), ok ? "ok" : "error")),
 		});
+		trackAnchor(null);
 		rowMenu?.openAt(pt, id, items);
 		return () => menuId === id && rowMenu?.close();
 	}
@@ -483,7 +527,7 @@
 	</div>
 	<ExtensionMount slot="sidebar.top" />
 
-	<nav class="list" bind:this={listEl} use:treeKeys use:slidingIndicator={{ selector: OPEN_ROW, radius: "var(--radius-sm)" }} onscroll={() => rowMenu?.close()}>
+	<nav class="list" bind:this={listEl} use:treeKeys use:slidingIndicator={{ selector: OPEN_ROW, radius: "var(--radius-sm)" }} onscroll={onListScroll}>
 		{#each nodes as n (n.server.id)}
 			<ServerBlock {n} single={nodes.length < 2} />
 		{/each}
