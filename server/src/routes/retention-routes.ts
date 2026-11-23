@@ -1,8 +1,8 @@
 import type { FastifyInstance } from "fastify";
-import type { EventBus } from "./events.ts";
-import { RetentionInfo, RetentionRunResult, RetentionSettingsSchema, type Retention } from "./retention.ts";
-import { errors } from "./schemas.ts";
-import type { TypeBoxProvider } from "./typebox-provider.ts";
+import type { EventBus } from "../events.ts";
+import { RetentionInfo, RetentionRunResult, RetentionSettingsSchema, type Retention } from "../retention.ts";
+import { errors } from "../schemas.ts";
+import type { TypeBoxProvider } from "../typebox-provider.ts";
 
 /** Deleting sessions not used for a while: the policy, the last clean-up and a "clean up now". */
 export function registerRetentionRoutes(server: FastifyInstance, retention: Retention, bus: EventBus): void {

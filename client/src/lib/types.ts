@@ -1,3 +1,5 @@
+import type { EventType } from "@shared/events";
+import type { GoalStatus } from "@shared/goals";
 import { THINKING_LEVELS, type ThinkingLevel } from "@shared/thinking";
 
 /* ---------- REST API shapes ---------- */
@@ -252,7 +254,7 @@ export interface ScheduleInput {
 export type SchedulePatch = Partial<Pick<Schedule, "title" | "prompt" | "enabled" | "runAt" | "everyMs">>;
 
 /** A persistent per-session goal (server/src/goals.ts). Times are Unix ms; timeUsedSeconds is whole seconds. */
-export type GoalStatus = "active" | "paused" | "blocked" | "usage_limited" | "budget_limited" | "complete";
+export type { GoalStatus };
 export interface Goal {
 	sessionId: string;
 	goalId: string;
@@ -718,10 +720,12 @@ export type AgentMessage = UserMessage | AssistantMessage | ToolResultMessage;
 
 /* ---------- event envelope ---------- */
 
+export type { EventType };
+
 export interface PipayaEvent<T = any> {
 	id: number;
 	sessionId: string | null;
-	type: string;
+	type: EventType;
 	ts: number;
 	data: T;
 }

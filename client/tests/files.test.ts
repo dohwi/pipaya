@@ -5,7 +5,7 @@ import { readFileSync } from "node:fs";
 import { extname } from "node:path";
 
 // The server's extension -> type table, read as text: importing server/src would need the server's dependencies, which the client job does not install.
-const serverSource = readFileSync(new URL("../../server/src/file-routes.ts", import.meta.url), "utf8");
+const serverSource = readFileSync(new URL("../../server/src/routes/file-routes.ts", import.meta.url), "utf8");
 const MIME: Record<string, string> = Object.fromEntries(
 	[...(/const MIME: Record<string, string> = \{([\s\S]*?)\n\};/.exec(serverSource)?.[1] ?? "").matchAll(/([a-z0-9]+): "([^"]+)"/g)].map((m) => [m[1]!, m[2]!]),
 );

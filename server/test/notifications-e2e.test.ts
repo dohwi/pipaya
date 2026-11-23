@@ -26,7 +26,11 @@ const chat = (title: string): string => {
 };
 /** Puts a message into a chat the way the agent loop does, through a second connection to the same database file. */
 const say = (sid: string, seq: number, message: object) => { const db = new Database(join(dir, "db")); try { db.query("INSERT INTO messages (session_id, seq, role, data, created_at) VALUES (?, ?, ?, ?, ?)").run(sid, seq, (message as any).role, JSON.stringify(message), 1); } finally { db.close(); } };
-const finishRun = (sid = "s1") => app.bus.publish(sid, "run_finished", { status: "ok" });
+const ensureSession = (sid: string) => {
+	const db = new Database(join(dir, "db"));
+	try { db.query("INSERT OR IGNORE INTO sessions (id, title, cwd, provider, model, thinking_level, system_prompt, tools, closed, created_at, updated_at) VALUES (?, '', ?, 'p', 'm', 'medium', '', '[]', 0, 1, 1)").run(sid, dir); } finally { db.close(); }
+};
+const finishRun = (sid = "s1") => { ensureSession(sid); return app.bus.publish(sid, "run_finished", { status: "ok" }); };
 
 beforeAll(async () => {
 	dir = mkdtempSync(join(tmpdir(), "pipaya-notify-e2e-"));
@@ -92,6 +96,7 @@ describe("notifications end to end", () => {
 	test("a question is pushed with its text, so it can be read without opening the app", async () => {
 		await reset(0);
 		await device("phone3", "android", false, { provider: "fcm", token: "phone3" });
+		ensureSession("a8");
 		app.bus.publish("a8", "question_requested", { toolCallId: "c", question: "Deploy now?" }); await wait(150);
 		const sent = pushes.find((p) => p.token === "phone3");
 		expect(sent).toBeTruthy();

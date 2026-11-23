@@ -1,9 +1,9 @@
 import type { FastifyInstance } from "fastify";
-import type { EventBus } from "./events.ts";
-import { CompleteBody, CompleteResult, type Llm } from "./llm.ts";
-import { RolesBody, RolesResult, type ModelRoles } from "./model-roles.ts";
-import { errors } from "./schemas.ts";
-import type { TypeBoxProvider } from "./typebox-provider.ts";
+import type { EventBus } from "../events.ts";
+import { CompleteBody, CompleteResult, type Llm } from "../llm.ts";
+import { RolesBody, RolesResult, type ModelRoles } from "../model-roles.ts";
+import { errors } from "../schemas.ts";
+import type { TypeBoxProvider } from "../typebox-provider.ts";
 
 /** Model roles and one-shot completion: generic parts that the server itself and client extensions build on. */
 export function registerLlmRoutes(server: FastifyInstance, roles: ModelRoles, llm: Llm, bus: EventBus): void {

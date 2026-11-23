@@ -4,11 +4,11 @@ import { readdir } from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 import Type from "typebox";
-import { badRequest } from "./errors.ts";
-import { repoOf } from "./git-info.ts";
-import { errors } from "./schemas.ts";
-import { isInside } from "./tools.ts";
-import type { TypeBoxProvider } from "./typebox-provider.ts";
+import { badRequest } from "../errors.ts";
+import { repoOf } from "../git-info.ts";
+import { errors } from "../schemas.ts";
+import { isInside } from "../tools.ts";
+import type { TypeBoxProvider } from "../typebox-provider.ts";
 
 export const DirQuery = Type.Object({
 	path: Type.Optional(Type.String({ description: "Absolute directory to list; defaults to the default working directory" })),

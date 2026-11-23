@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSyn
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { buildApp, type App } from "../src/app.ts";
-import { isPathQuery, splitPathQuery } from "../src/fs-routes.ts";
+import { isPathQuery, splitPathQuery } from "../src/routes/fs-routes.ts";
 
 const TOKEN = "fs-routes-test-token-0123456789abc";
 let dir: string;

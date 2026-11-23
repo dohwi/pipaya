@@ -26,9 +26,10 @@ describe("closed chats permanent deletion", () => {
 
 	test("server store delete cleans up all dependent tables", () => {
 		const srvStoreSrc = readFileSync(resolve(__dirname, "../../server/src/store.ts"), "utf-8");
-		expect(srvStoreSrc).toContain('DELETE FROM messages WHERE session_id = $id');
-		expect(srvStoreSrc).toContain('DELETE FROM session_contexts WHERE session_id = $id');
-		expect(srvStoreSrc).toContain('DELETE FROM events WHERE session_id = $id');
-		expect(srvStoreSrc).toContain('DELETE FROM sessions WHERE id = $id');
+		const srvDbSrc = readFileSync(resolve(__dirname, "../../server/src/db.ts"), "utf-8");
+		expect(srvStoreSrc).toContain("DELETE FROM sessions WHERE id = $id");
+		expect(srvDbSrc).toMatch(/CREATE TABLE IF NOT EXISTS messages[\s\S]*?REFERENCES sessions\(id\) ON DELETE CASCADE/);
+		expect(srvDbSrc).toMatch(/CREATE TABLE IF NOT EXISTS session_contexts[\s\S]*?REFERENCES sessions\(id\) ON DELETE CASCADE/);
+		expect(srvDbSrc).toMatch(/CREATE TABLE IF NOT EXISTS events[\s\S]*?REFERENCES sessions\(id\) ON DELETE CASCADE/);
 	});
 });

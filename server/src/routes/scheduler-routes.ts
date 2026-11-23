@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
-import { IdParams, Ok, errors } from "./schemas.ts";
-import { CreateScheduleBody, PatchScheduleBody, ScheduleList, ScheduleQuery, ScheduleSchema, type Scheduler } from "./scheduler.ts";
-import type { TypeBoxProvider } from "./typebox-provider.ts";
+import { IdParams, Ok, errors } from "../schemas.ts";
+import { CreateScheduleBody, PatchScheduleBody, ScheduleList, ScheduleQuery, ScheduleSchema, type Scheduler } from "../scheduler.ts";
+import type { TypeBoxProvider } from "../typebox-provider.ts";
 
 /** Scheduled tasks: prompts sent to a session once or every so often. Changes reach the clients as `schedules_updated`. */
 export function registerSchedulerRoutes(server: FastifyInstance, scheduler: Scheduler): void {

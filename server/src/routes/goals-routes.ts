@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
-import { IdParams, Ok, errors } from "./schemas.ts";
-import { GoalList, GoalQuery, GoalSchema, PatchGoalBody, PutGoalBody, type GoalManager } from "./goals.ts";
-import type { TypeBoxProvider } from "./typebox-provider.ts";
+import { IdParams, Ok, errors } from "../schemas.ts";
+import { GoalList, GoalQuery, GoalSchema, PatchGoalBody, PutGoalBody, type GoalManager } from "../goals.ts";
+import type { TypeBoxProvider } from "../typebox-provider.ts";
 
 /** Per-session goals: automatic continuation until complete, blocked, paused or budget-limited. Broadcasts `goals_updated`. */
 export function registerGoalRoutes(server: FastifyInstance, goals: GoalManager): void {

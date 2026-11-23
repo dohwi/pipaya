@@ -1,8 +1,8 @@
 import type { FastifyInstance } from "fastify";
-import { CompactionSettingsBody, CompactionSettingsResult, DEFAULT_COMPACTION_SETTINGS, type CompactionSettings } from "./compaction.ts";
-import type { EventBus } from "./events.ts";
-import { errors } from "./schemas.ts";
-import type { TypeBoxProvider } from "./typebox-provider.ts";
+import { CompactionSettingsBody, CompactionSettingsResult, DEFAULT_COMPACTION_SETTINGS, type CompactionSettings } from "../compaction.ts";
+import type { EventBus } from "../events.ts";
+import { errors } from "../schemas.ts";
+import type { TypeBoxProvider } from "../typebox-provider.ts";
 
 /** Which model writes compaction summaries (null = the session's own model) and whether compaction runs by itself. */
 export function registerCompactionRoutes(server: FastifyInstance, settings: CompactionSettings, bus: EventBus): void {
