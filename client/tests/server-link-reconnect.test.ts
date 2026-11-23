@@ -420,4 +420,77 @@ describe("ServerLink stream drop and automatic reconnect", () => {
 		expect(scopedSignal?.aborted).toBe(true);
 		link.stop();
 	});
+
+	test("offline retry gates on /health before firing list or catalog requests", async () => {
+		let healthCalls = 0;
+		let listCalls = 0;
+		let modelCalls = 0;
+		const link = new ServerLink(
+			{ id: "srv9", name: "Dev", baseUrl: "http://127.0.0.1:9999", token: "tok" },
+			{ event: () => {}, ready: () => {} },
+		);
+		const fakeApi: any = {
+			scoped: () => fakeApi,
+			health: async () => {
+				healthCalls++;
+				throw new Error("offline");
+			},
+			listSessions: async () => { listCalls++; return { sessions: [], nextBefore: null, nextBeforeId: null }; },
+			models: async () => { modelCalls++; return []; },
+		};
+		(link as any).api = fakeApi;
+
+		await link.sync(true);
+		expect(healthCalls).toBe(1);
+		expect(listCalls).toBe(0);
+		expect(modelCalls).toBe(0);
+		expect(link.net).toBe("offline");
+		link.stop();
+	});
+
+	test("sync stages catalog after sidebar lists and waits for SSE onOpen before marking online", async () => {
+		const order: string[] = [];
+		let openStream: (() => void) | undefined;
+		let readyCount = 0;
+		const link = new ServerLink(
+			{ id: "srv10", name: "Dev", baseUrl: "http://127.0.0.1:9999", token: "tok" },
+			{ event: () => {}, ready: () => { readyCount++; } },
+		);
+		const fakeApi: any = {
+			scoped: () => fakeApi,
+			health: async () => ({ ok: true, version: "0.10.4", protocol: 1, minClientProtocol: 1 }),
+			listSessions: async () => { order.push("listSessions"); return { sessions: [], nextBefore: null, nextBeforeId: null }; },
+			workspace: async () => ({ root: "/w", home: "/h", workdirs: [] }),
+			groups: async () => [],
+			terminals: async () => [],
+			terminalSupport: async () => null,
+			activity: async () => ({ sessions: [], unread: [] }),
+			latestEventId: async () => 5,
+			models: async () => { order.push("models"); return []; },
+			providers: async () => [],
+			tools: async () => ({ tools: [], defaults: [] }),
+			configuration: async () => null,
+			compactionSettings: async () => null,
+			systemModelSettings: async () => null,
+			repos: async () => ({ repos: {} }),
+			subscribe: (handlers: { onOpen?: () => void }) => {
+				openStream = handlers.onOpen;
+				return () => {};
+			},
+		};
+		(link as any).api = fakeApi;
+
+		await link.sync();
+		expect(order).toEqual(["listSessions", "models"]);
+		expect(link.listed).toBe(true);
+		expect(link.loaded).toBe(true);
+		// Must not claim "online" or fire ready() before EventSource opens.
+		expect(link.online).toBe(false);
+		expect(readyCount).toBe(0);
+
+		openStream?.();
+		expect(link.online).toBe(true);
+		expect(readyCount).toBe(1);
+		link.stop();
+	});
 });

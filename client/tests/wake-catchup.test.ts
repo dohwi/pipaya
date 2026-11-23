@@ -260,4 +260,60 @@ describe("catching up after the window was in the background", () => {
 		});
 		expect(chat.tools.tc1?.images).toEqual([{ type: "image", data: "IMGDATA", mimeType: "image/png" }]);
 	});
+
+	test("catchUp does not clobber newer live deltas or resurrect a run that finished while getSession was in flight", async () => {
+		let resolveSession!: (v: unknown) => void;
+		let initial = true;
+		const api = {
+			tailMessages: async () => [],
+			questions: async () => [],
+			serverExtensionEntries: async () => [],
+			getSession: () => {
+				if (initial) {
+					initial = false;
+					return Promise.resolve({ status: { ...base, running: true, streamingMessage: assistant("hello") }, context: { tokens: 10, contextWindow: 128000 }, usage: {} });
+				}
+				return new Promise((resolve) => { resolveSession = resolve; });
+			},
+		} as unknown as Api;
+		const chat = new ChatState("session", api);
+		await chat.load();
+
+		const pending = chat.catchUp();
+		// Live SSE deltas arrive while getSession() is still slow on the network.
+		chat.apply({ id: 0, sessionId: "session", type: "message_update", ts: 10, data: { event: { type: "text_delta", contentIndex: 0, delta: " live world" } } });
+		// Now the stale getSession() snapshot resolves with older text.
+		resolveSession({ status: { ...base, running: true, streamingMessage: assistant("hello stale") }, context: { tokens: 10, contextWindow: 128000 }, usage: {} });
+		await pending;
+		expect(JSON.stringify(chat.items)).toContain("hello live world");
+		expect(JSON.stringify(chat.items)).not.toContain("stale");
+
+		// Next catchUp starts while running; run_finished arrives before getSession() resolves with running: true.
+		const pending2 = chat.catchUp();
+		chat.apply({ id: 0, sessionId: "session", type: "run_finished", ts: 20, data: { status: "done" } });
+		expect(chat.running).toBe(false);
+		resolveSession({ status: { ...base, running: true, streamingMessage: assistant("stale partial") }, context: { tokens: 10, contextWindow: 128000 }, usage: {} });
+		await pending2;
+		expect(chat.running).toBe(false);
+	});
+
+	test("replayed message_start followed by already-loaded message_end removes the empty ghost bubble", async () => {
+		const api = {
+			tailMessages: async () => [
+				{ seq: 5, role: "assistant", createdAt: 10, message: { role: "assistant", content: [{ type: "text", text: "done" }], stopReason: "stop", timestamp: 10 } },
+			],
+			questions: async () => [],
+			serverExtensionEntries: async () => [],
+			getSession: async () => ({ status: { ...base, running: false }, context: { tokens: 10, contextWindow: 128000 }, usage: {} }),
+		} as unknown as Api;
+		const chat = new ChatState("session", api);
+		await chat.load();
+		expect(chat.items).toHaveLength(1);
+
+		// Replay arrives for seq 5 which was already loaded by tailMessages.
+		chat.apply({ id: 10, sessionId: "session", type: "message_start", ts: 10, data: { message: { role: "assistant", content: [] } } });
+		chat.apply({ id: 11, sessionId: "session", type: "message_end", ts: 10, data: { seq: 5, message: { role: "assistant", content: [{ type: "text", text: "done" }], stopReason: "stop", timestamp: 10 } } });
+		expect(chat.items).toHaveLength(1);
+		expect(chat.streaming).toBe(false);
+	});
 });

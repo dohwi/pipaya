@@ -137,13 +137,20 @@ export const normalizeUrl = (url: string): string => {
 };
 
 export const DEFAULT_REQUEST_TIMEOUT_MS = 15_000;
-export const DEFAULT_STREAM_OPEN_TIMEOUT_MS = 10_000;
+export const DEFAULT_STREAM_OPEN_TIMEOUT_MS = 15_000;
+export const DEFAULT_STREAM_IDLE_TIMEOUT_MS = 45_000;
 
 export interface ApiOptions {
 	/** Default per-request deadline when the caller passes no AbortSignal (0 disables). */
 	timeoutMs?: number;
 	/** How long EventSource may stay in CONNECTING before counting as failed (0 disables). */
 	streamOpenTimeoutMs?: number;
+	/**
+	 * How long an open EventSource may stay completely silent once the server has proven it sends `ping` events
+	 * before counting as a half-open dead socket (0 disables). Older servers that only send SSE comments never emit
+	 * `ping`, so the watchdog stays disarmed for them.
+	 */
+	streamIdleTimeoutMs?: number;
 }
 
 export class Api {
@@ -602,7 +609,7 @@ export class Api {
 	 * A one-time ticket where the server issues them, so the access token itself stays out of URLs (and with them out of
 	 * proxy logs); the token for a server that has no tickets yet. Throws when the server cannot be asked.
 	 */
-	async streamCredential(signal: AbortSignal = AbortSignal.timeout(8000)): Promise<string> {
+	async streamCredential(signal: AbortSignal = AbortSignal.timeout(12_000)): Promise<string> {
 		if (!this.ticketless) {
 			try {
 				const { ticket } = await this.req<{ ticket: string }>("POST", "/stream-tickets", undefined, signal);
@@ -627,32 +634,53 @@ export class Api {
 		let dead = false;
 		let es: EventSource | null = null;
 		let openTimer: ReturnType<typeof setTimeout> | undefined;
+		let idleTimer: ReturnType<typeof setTimeout> | undefined;
+		let watchdogArmed = false;
 		const ctl = new AbortController();
 		const openTimeoutMs = this.opts?.streamOpenTimeoutMs ?? DEFAULT_STREAM_OPEN_TIMEOUT_MS;
+		const idleTimeoutMs = this.opts?.streamIdleTimeoutMs ?? DEFAULT_STREAM_IDLE_TIMEOUT_MS;
 		const clearOpenTimer = () => {
 			if (openTimer !== undefined) {
 				clearTimeout(openTimer);
 				openTimer = undefined;
 			}
 		};
+		const clearIdleTimer = () => {
+			if (idleTimer !== undefined) {
+				clearTimeout(idleTimer);
+				idleTimer = undefined;
+			}
+		};
+		const touchIdle = () => {
+			if (dead || !watchdogArmed || idleTimeoutMs <= 0) return;
+			clearIdleTimer();
+			idleTimer = setTimeout(fail, idleTimeoutMs);
+		};
 		const fail = () => {
 			if (dead) return;
 			dead = true;
 			clearOpenTimer();
+			clearIdleTimer();
 			ctl.abort();
 			es?.close();
 			handlers.onError?.();
 		};
+		const onPing = () => {
+			if (dead) return;
+			watchdogArmed = true;
+			touchIdle();
+		};
 		const onMessage = (m: MessageEvent) => {
+			touchIdle();
 			try {
 				handlers.onEvent(JSON.parse(m.data) as PipayaEvent);
 			} catch {
 				/* ignore malformed frame */
 			}
 		};
-		void this.streamCredential(this.combineSignals(ctl.signal, AbortSignal.timeout(8000))).then((credential) => {
+		void this.streamCredential(this.combineSignals(ctl.signal, AbortSignal.timeout(12_000))).then((credential) => {
 			if (dead) return;
-			es = new EventSource(`${this.conn.baseUrl}/events?after=${after}&${PROTOCOL_QUERY}=${PROTOCOL_VERSION}&${credential}`);
+			es = new EventSource(`${this.conn.baseUrl}/events?after=${after}&ping=1&${PROTOCOL_QUERY}=${PROTOCOL_VERSION}&${credential}`);
 			if (openTimeoutMs > 0) openTimer = setTimeout(fail, openTimeoutMs);
 			es.onopen = () => {
 				if (dead) return;
@@ -660,11 +688,13 @@ export class Api {
 				handlers.onOpen?.();
 			};
 			es.onerror = fail;
+			es.addEventListener("ping", onPing as EventListener);
 			for (const t of EVENT_TYPES) es.addEventListener(t, onMessage as EventListener);
 		}, fail);
 		return () => {
 			dead = true;
 			clearOpenTimer();
+			clearIdleTimer();
 			ctl.abort();
 			es?.close();
 		};

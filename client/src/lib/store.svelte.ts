@@ -459,9 +459,11 @@ class AppStore {
     await this.link?.sync();
   }
 
-  /** Reconnect every saved server now, not only the open one (the banner's "reconnect" button). */
+  /** Reconnect every server that is currently not online (the banner's "reconnect" button). */
   async syncAll(): Promise<void> {
-    await Promise.all(Object.values(this.links).map((l) => l.sync()));
+    const targets = Object.values(this.links).filter((l) => !l.online);
+    if (targets.length) await Promise.all(targets.map((l) => l.sync()));
+    else await this.link?.sync();
   }
 
   /** Connection of the open server (kept as `conn` for components that only need url/token). */
@@ -1005,7 +1007,7 @@ class AppStore {
     if (link.id !== this.serverId) return;
     const token = ++this.attachToken;
     const api = link.api;
-    void this.refreshServerExtensions();
+    void this.refreshServerExtensions(undefined, { skipTools: !warm });
     void this.syncLocales(); // language packs: never blocks connecting, and a server without them just has none
     this.ensureDraftModel();
     // The editor of this server (if settings had it open) sends what it still holds before the host pulls the server's copy.
@@ -1894,7 +1896,8 @@ class AppStore {
     to: string | null = this.activeId,
     files: UploadFile[] = [],
   ): Promise<boolean> {
-    const api = this.api;
+    const link = this.link;
+    const api = link?.api;
     if (!api) return false;
     if (this.sending) return void this.toast(t("이전 메시지를 보내는 중입니다. 잠시 후 다시 시도하세요"), "error", to), false;
     text = text.trim();
@@ -1922,7 +1925,6 @@ class AppStore {
         if (!this.sessions.some((x) => x.id === s.id)) this.sessions.unshift(s);
         // Load the new chat off-screen and put the prompt in it first, so the pane goes from the welcome screen
         // straight to the sent message instead of flashing a skeleton and an empty transcript in between.
-        const link = this.link;
         const fresh = new ChatState(s.id, api, (c, kind) => { if (link) this.syncChatStatus(link, c, kind); });
         await fresh.load();
         if (!fresh.ready) throw new Error(fresh.loadError || t("불러오지 못했습니다"));
@@ -1953,6 +1955,7 @@ class AppStore {
       }
       return true;
     } catch (e) {
+      if (link) this.probeIfNetwork(link, e);
       this.fail(e, t("보내지 못했습니다"), to);
       return false;
     } finally {
@@ -1987,7 +1990,8 @@ class AppStore {
     files: UploadFile[] = [],
   ): Promise<boolean> {
     const chat = this.chatOf(to);
-    const api = this.api;
+    const link = this.link;
+    const api = link?.api;
     text = text.trim();
     if (!api || !chat || (!text && !images.length && !files.length)) return false;
     if (!text) text = files.length && !images.length ? t("(첨부한 파일을 봐 주세요)") : t("(첨부한 이미지를 봐 주세요)");
@@ -2013,6 +2017,7 @@ class AppStore {
         for (let i = 0; i < 40 && this.sending; i++) await new Promise((r) => setTimeout(r, 50));
         return this.send(text, images, to, files);
       }
+      if (link) this.probeIfNetwork(link, e);
       this.fail(e, failMsg, chat.id);
       return false;
     }
@@ -2033,16 +2038,16 @@ class AppStore {
   serverExtensionsTick = $state(0);
   /** Commands and tools that extensions inside the server provide; refreshed when the server (re)loads them. */
   serverCommands = $state<{ name: string; description?: string; args?: string; extension: string }[]>([]);
-  async refreshServerExtensions(serverId?: string) {
+  async refreshServerExtensions(serverId?: string, opts?: { skipTools?: boolean }) {
     // Another server's lists are read by whoever shows them; commands and tools belong to the open one.
     if (serverId && serverId !== this.serverId) { this.serverExtensionsTick++; return; }
     const api = this.api;
     if (!api) return;
     try {
-      const [list, tools] = await Promise.all([api.serverExtensions(), api.tools()]);
+      const [list, tools] = await Promise.all([api.serverExtensions(), opts?.skipTools ? Promise.resolve(null) : api.tools()]);
       if (api !== this.api) return;
       this.serverCommands = list.commands;
-      if (this.link) this.link.tools = tools.tools;
+      if (tools && this.link) this.link.tools = tools.tools;
       this.serverExtensionsTick++;
     } catch { /* unreachable: nothing to show */ }
   }

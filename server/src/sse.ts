@@ -24,12 +24,13 @@ export function streamEvents(
 	req: FastifyRequest,
 	reply: FastifyReply,
 	bus: EventBus,
-	opts: { sessionId?: string; types?: Set<string>; corsPolicy: CorsPolicy; maxBuffered?: number; drainTimeoutMs?: number },
+	opts: { sessionId?: string; types?: Set<string>; corsPolicy: CorsPolicy; maxBuffered?: number; drainTimeoutMs?: number; heartbeatMs?: number },
 ): void {
-	const query = req.query as { after?: string };
+	const query = req.query as { after?: string; ping?: string };
 	const header = req.headers["last-event-id"];
 	const afterRaw = query.after ?? (Array.isArray(header) ? header[0] : header);
 	const after = afterRaw !== undefined && afterRaw !== "" ? Number.parseInt(afterRaw, 10) : undefined;
+	const namedPing = query.ping === "1";
 	const limit = opts.maxBuffered ?? SSE_MAX_BUFFERED;
 	const drainTimeoutMs = opts.drainTimeoutMs ?? REPLAY_DRAIN_TIMEOUT_MS;
 
@@ -44,6 +45,9 @@ export function streamEvents(
 		"X-Accel-Buffering": "no",
 	});
 	res.write("retry: 2000\n\n");
+	// Opt-in named ping events (`?ping=1`) let EventSource clients arm an inactivity watchdog without breaking raw SSE
+	// consumers that parse every `data:` frame or filter with `?types=...`.
+	if (namedPing) res.write(`event: ping\ndata: ${Date.now()}\n\n`);
 
 	let closed = false;
 	let unsubscribe = () => {};
@@ -148,8 +152,10 @@ export function streamEvents(
 	}
 
 	heartbeat = setInterval(() => {
-		if (!closed && res.writableLength === 0) res.write(`: ping ${Date.now()}\n\n`);
-	}, HEARTBEAT_MS);
+		if (!closed && res.writableLength === 0) {
+			res.write(namedPing ? `event: ping\ndata: ${Date.now()}\n\n` : `: ping ${Date.now()}\n\n`);
+		}
+	}, opts.heartbeatMs ?? HEARTBEAT_MS);
 	if (closed) clearInterval(heartbeat);
 	req.raw.on("close", () => close());
 	res.on("error", () => close());

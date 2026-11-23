@@ -467,7 +467,7 @@
 
 <!-- The connection strip: in the column above the stage, or (the graph view covers that) first in the stage's overlay under the graph's header -->
 {#snippet netBanner()}
-	{#if app.net !== "online"}
+	{#if app.net !== "online" && app.net !== "incompatible"}
 		<div class="banner" role="status" aria-live="polite" class:bad={app.net === "offline" || app.net === "unauthorized"} in:fadeIn out:fadeOut>
 			{#if app.net === "connecting"}
 				<Spinner size={12} /> {t("연결하는 중…")}
