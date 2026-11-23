@@ -7,11 +7,12 @@
 	 * text and reply (saved-drafts.ts, localStorage) and the attachments (saved-attachments.ts, IndexedDB) are also saved on
 	 * this device so they survive a restart.
 	 */
-	const drafts = new Map<string, { text: string; attachments: DraftAttachment[]; files: FileDraft[]; reply: { text: string; who?: string } | null }>();
+	const drafts = new Map<string, { text: string; attachments: DraftAttachment[]; files: FileDraft[]; reply: { text: string; who?: string } | null; skills: string[] }>();
 </script>
 
 <script lang="ts">
 	import Button from "../ui/Button.svelte";
+	import Icon from "../ui/Icon.svelte";
 	import { errorText } from "../../lib/api";
 	import ExtensionMount from "../extensions/ExtensionMount.svelte";
 	import ExtensionPart from "../extensions/ExtensionPart.svelte";
@@ -27,7 +28,7 @@
 	import { htmlImages, pastedMessage, shiftImageTokens } from "../../lib/rich-copy";
 	import type { ImageBlock } from "../../lib/types";
 	import { MAX_IMAGES } from "../../lib/files";
-	import { dropImageToken, insertToken, mentionAt, mergeReturned, mirrorHtml, replaceMention, slashAt, type Mention } from "../../lib/composer-text";
+	import { composeSkillMessage, dropImageToken, extractSkillNames, insertToken, mentionAt, mergeReturned, mirrorHtml, removeSkillToken, replaceMention, slashAt, toggleSkillSelection, type Mention } from "../../lib/composer-text";
 	import IconButton from "../ui/IconButton.svelte";
 	import ModelPicker from "../models/ModelPicker.svelte";
 	import RetryNotice from "./RetryNotice.svelte";
@@ -51,6 +52,8 @@
 	import WhereChip from "./WhereChip.svelte";
 	import ReplyBadge from "./ReplyBadge.svelte";
 	import FileStrip from "./FileStrip.svelte";
+	import SkillStrip from "./SkillStrip.svelte";
+	import SkillPicker from "./SkillPicker.svelte";
 	import { isTouch, uid } from "../../lib/format";
 	import { shouldTakeFocus } from "../../lib/focus-guard";
 	import { buildCombo, formatCombo, keyName } from "../../lib/keys";
@@ -88,6 +91,10 @@
 	/** Message being answered: shown as a badge above the input, quoted into the prompt on send (never pasted into the text). */
 	let reply = $state<{ text: string; who?: string } | null>(null);
 	const replyPreview = $derived(reply ? reply.text.replace(/\s+/g, " ").trim() : "");
+	/** Skills chosen from the multi-skill picker: shown as removable tags and merged as `/skill:name` on send. */
+	let selectedSkills = $state<string[]>([]);
+	let skillPickerOpen = $state(false);
+	let boxEl: HTMLDivElement | undefined = $state();
 	let dragging = $state(false);
 	const ime = new Ime();
 
@@ -103,7 +110,7 @@
 	const sendingState = $derived(app.sendingOf(pane.id));
 	const paneSending = $derived(Boolean(sendingState) || submitBusy || duringBusy);
 	const uploadActive = $derived(Boolean(sendingState?.hasAttachments && sendingState.visible));
-	const canSend = $derived((text.trim().length > 0 || attached.any) && (app.net === "online" || parseSlash(text) !== null) && !Boolean(sendingState) && !submitBusy);
+	const canSend = $derived((text.trim().length > 0 || selectedSkills.length > 0 || attached.any) && (app.net === "online" || parseSlash(text) !== null) && !Boolean(sendingState) && !submitBusy);
 
 	export function focus() {
 		ta?.focus();
@@ -132,11 +139,12 @@
 	function saveNow() {
 		clearTimeout(saveTimer);
 		saveTimer = undefined;
-		if (draftKey !== undefined) saveDraft(draftKey ?? "", text, reply);
+		if (draftKey !== undefined) saveDraft(draftKey ?? "", text, reply, selectedSkills);
 	}
 	$effect(() => {
 		void text;
 		void reply;
+		void selectedSkills;
 		untrack(() => {
 			clearTimeout(saveTimer);
 			saveTimer = setTimeout(saveNow, SAVE_DELAY_MS);
@@ -170,7 +178,7 @@
 		saveNow();
 		saveAttachmentsNow();
 		const k = draftKey ?? "";
-		if (text || attached.any || reply) drafts.set(k, { text, attachments: attached.images, files: attached.files, reply });
+		if (text || attached.any || reply || selectedSkills.length) drafts.set(k, { text, attachments: attached.images, files: attached.files, reply, skills: [...selectedSkills] });
 		else drafts.delete(k);
 	}
 	$effect(() => {
@@ -184,6 +192,8 @@
 			caret = text.length;
 			attached.load(kept?.attachments ?? [], kept?.files ?? []);
 			reply = d?.reply ?? null;
+			selectedSkills = [...(kept?.skills ?? d?.skills ?? [])];
+			skillPickerOpen = false;
 			attachSaved = attachmentsSignature(attached.images, attached.files);
 			// Nothing in memory (the app was restarted): the attachments come back from storage, unless some were added meanwhile.
 			attachLoading = !kept;
@@ -320,7 +330,11 @@
 	const slashScope = $derived(slashToken ? slashScopeOf({ atStart: slashToken.atStart, hasTrailing: slashToken.hasTrailing, attachments: attached.images.length }) : null);
 	const commandList = $derived(slashQuery !== null && slashScope?.commands ? matchCommands(slashQuery) : []);
 	// Skills sit in the same menu after the commands, as `/skill:name`, tagged so they are not mistaken for commands.
-	let skillList = $state<{ name: string; description: string }[]>([]);
+	let skillList = $state<{ name: string; description: string; modelInvocable: boolean }[]>([]);
+	let skillsLoading = $state(false);
+	const inlineSkills = $derived(extractSkillNames(text));
+	const activeSkillSet = $derived(new Set([...selectedSkills, ...inlineSkills]));
+	const activeSkillCount = $derived(activeSkillSet.size);
 	const skillMatches = $derived(slashQuery !== null && slashScope?.skills ? matchSkills(skillList, slashQuery) : []);
 	// Built-in prompt templates (`/prompt:name`) follow the skills.
 	let templateList = $state<{ name: string; description: string }[]>([]);
@@ -335,7 +349,7 @@
 		...templateMatches.map((template) => ({ template })),
 		...familyMatches.map((family) => ({ family })),
 	]);
-	const skillsWanted = $derived((slashQuery !== null && !!slashScope?.skills) || text.includes(`/${SKILL_PREFIX}`));
+	const skillsWanted = $derived(skillPickerOpen || selectedSkills.length > 0 || (slashQuery !== null && !!slashScope?.skills) || text.includes(`/${SKILL_PREFIX}`));
 	const templatesWanted = $derived((slashQuery !== null && !!slashScope?.startMacros) || /(^|\s)\/prompt:/.test(text));
 	const familiesWanted = $derived((slashQuery !== null && !!slashScope?.startMacros) || /(^|\s)\/[a-z][a-z0-9-]*:/.test(text));
 	const skillsCwd = $derived((pane.id ? app.session(pane.id)?.cwd : null) || app.workdirAbs);
@@ -364,10 +378,25 @@
 		const api = app.api;
 		const cwd = skillsCwd;
 		app.skillsTick;
-		if (!skillsWanted || !api || app.net !== "online") return;
+		if (!skillsWanted || !api || app.net !== "online") {
+			skillsLoading = false;
+			return;
+		}
+		skillsLoading = true;
 		return abortable((signal) => api.skills(cwd, signal, pane.id), {
-			ok: (r) => (skillList = r.skills.filter((k) => k.enabled).map((k) => ({ name: k.name, description: k.description }))),
-			fail: () => (skillList = []),
+			ok: (r) => {
+				skillsLoading = false;
+				const enabled = r.skills.filter((k) => k.enabled).map((k) => ({ name: k.name, description: k.description, modelInvocable: k.modelInvocable }));
+				skillList = enabled;
+				const enabledNames = new Set(enabled.map((k) => k.name));
+				if (selectedSkills.some((s) => !enabledNames.has(s))) {
+					selectedSkills = selectedSkills.filter((s) => enabledNames.has(s));
+				}
+			},
+			fail: () => {
+				skillsLoading = false;
+				skillList = [];
+			},
 		});
 	});
 
@@ -456,7 +485,7 @@
 					? mentionRows(atMatches)
 					: argSuggestions
 						? optionRows(argSuggestions.options)
-						: slashRows(slashList.map((it) => ("skill" in it || "template" in it || "family" in it ? it : { command: it }))),
+						: slashRows(slashList.map((it) => ("skill" in it || "template" in it || "family" in it ? it : { command: it })), activeSkillSet),
 		(r) => r.id,
 	));
 
@@ -582,11 +611,39 @@
 		return true;
 	}
 
+	function toggleSkillPicker() {
+		if (!skillPickerOpen) slashDismissed = true;
+		skillPickerOpen = !skillPickerOpen;
+	}
+	function onToggleSkill(name: string) {
+		const next = toggleSkillSelection(selectedSkills, text, name);
+		selectedSkills = next.selected;
+		if (next.text !== text) {
+			text = next.text;
+			caret = Math.min(caret, text.length);
+		}
+	}
+	function onRemoveSelectedSkill(name: string) {
+		selectedSkills = selectedSkills.filter((s) => s !== name);
+	}
+	function onClearSkills() {
+		let nextText = text;
+		for (const name of inlineSkills) nextText = removeSkillToken(nextText, name);
+		selectedSkills = [];
+		if (nextText !== text) {
+			text = nextText;
+			caret = Math.min(caret, text.length);
+		}
+	}
+	$effect(() => {
+		if (slashOpen || voiceActive || uploadActive || app.net !== "online") skillPickerOpen = false;
+	});
+
 	/**
 	 * After a successful send, forget the input. Sending from a new chat creates a session and switches this pane to it
 	 * mid-await, which stashes the just-sent text under the new-chat key; drop that or the next new chat shows it again.
 	 */
-	function clearSent(key: string | null, sentText: string) {
+	function clearSent(key: string | null, sentText: string, sentSkills: readonly string[]) {
 		if (pane.id !== key) {
 			// already moved to the new session, whose input was restored empty
 			drafts.delete(key ?? "");
@@ -601,6 +658,10 @@
 			text = "";
 			caret = 0;
 		}
+		if (selectedSkills.length === sentSkills.length && selectedSkills.every((s, i) => s === sentSkills[i])) {
+			selectedSkills = [];
+		}
+		skillPickerOpen = false;
 		forgetAttachments(key ?? "");
 		reply = null;
 		attached.clear();
@@ -617,10 +678,13 @@
 		if (rejectUnknownCommand()) return null;
 		const filtered = await extensions.filterComposer(raw);
 		if ("cancel" in filtered) return void app.toast(filtered.cancel, "error", pane.id), null;
+		const sentSkills = [...selectedSkills];
+		const withSkills = composeSkillMessage(sentSkills, filtered.text);
 		return {
 			key: pane.id,
 			sentText: raw,
-			body: (reply ? makeQuote(reply.text, reply.who) : "") + filtered.text,
+			sentSkills,
+			body: (reply ? makeQuote(reply.text, reply.who) : "") + withSkills,
 			images: attached.images.map((a) => ({ type: "image" as const, data: a.data, mimeType: a.mimeType })),
 			files: [...attached.files],
 		};
@@ -650,14 +714,14 @@
 			const reqId = requestIdFor(out);
 			if (await app.send(out.body, out.images, out.key, out.files, reqId)) {
 				retryKey = null;
-				clearSent(out.key, out.sentText);
+				clearSent(out.key, out.sentText, out.sentSkills);
 			}
 		} finally {
 			submitBusy = false;
 		}
 	}
 
-	const hasInput = $derived(text.trim().length > 0 || attached.any);
+	const hasInput = $derived(text.trim().length > 0 || selectedSkills.length > 0 || attached.any);
 
 	/** While a run is active: deliver the input as `steer` (between tool calls) or `follow_up` (after the run). */
 	async function during(kind: "steer" | "queue") {
@@ -673,7 +737,7 @@
 				: app.queue(out.body, out.images, out.key, out.files, reqId));
 			if (ok) {
 				retryKey = null;
-				clearSent(out.key, out.sentText);
+				clearSent(out.key, out.sentText, out.sentSkills);
 			}
 		} finally {
 			duringBusy = false;
@@ -855,6 +919,9 @@
 
 <svelte:window
 	onkeydown={onWindowKey}
+	onpointerdown={(e) => {
+		if (skillPickerOpen && boxEl && !boxEl.contains(e.target as Node)) skillPickerOpen = false;
+	}}
 	ondragover={(e) => {
 		if (pane.focused && e.dataTransfer?.types.includes("Files")) {
 			e.preventDefault();
@@ -877,9 +944,11 @@
 	{/if}
 	<div class="extension-widgets"><ExtensionPanels placement="composer" /></div>
 	{#if chat?.retrying}<RetryNotice retrying={chat.retrying} />{/if}
-	<div class="box" data-part="composer.box" class:glow-working={running || compacting} class:glow-compacting={compacting} class:disabled={app.net !== "online"} data-level={running && !compacting && app.effectiveModelOf(pane.id)?.reasoning ? app.effectiveOf(pane.id).thinkingLevel : undefined}>
+	<div class="box" bind:this={boxEl} data-part="composer.box" class:glow-working={running || compacting} class:glow-compacting={compacting} class:disabled={app.net !== "online"} data-level={running && !compacting && app.effectiveModelOf(pane.id)?.reasoning ? app.effectiveOf(pane.id).thinkingLevel : undefined}>
 		{#if slashOpen}
 			<SlashMenu items={menuItems} index={slashIndex} label={menuKind === "cd" ? msg("폴더") : menuKind === "file" ? msg("파일") : menuKind === "mention" ? msg("멘션") : argSuggestions ? t("{cmd} 값 선택", { cmd: commandText(argSuggestions.cmd) }) : slashScope && !slashScope.commands && !slashScope.startMacros ? msg("스킬") : msg("명령")} empty={menuKind === "cd" ? msg("일치하는 폴더가 없습니다") : menuKind === "file" ? msg("일치하는 파일이 없습니다") : argSuggestions?.empty} listId={menuListId} optionId={menuOptionId} onpick={pickRecommendation} onhover={(i) => (slashIndex = i)} />
+		{:else if skillPickerOpen}
+			<SkillPicker skills={skillList} selected={activeSkillSet} loading={skillsLoading} ontoggle={onToggleSkill} onclear={onClearSkills} onmanage={() => app.openSkills(pane.id)} onclose={() => (skillPickerOpen = false)} />
 		{/if}
 		{#if chat?.waiting.length || ((scheduled.length || goal) && app.serverId && pane.id)}
 			<!-- keyed by session: a height pulled in one conversation does not carry over when the pane switches to another.
@@ -894,6 +963,9 @@
 		{/if}
 		{#if attached.files.length}
 			<FileStrip files={attached.files} onremove={(id) => attached.removeFile(id)} />
+		{/if}
+		{#if selectedSkills.length}
+			<SkillStrip skills={selectedSkills} onremove={onRemoveSelectedSkill} />
 		{/if}
 
 		<div class="field-wrap" class:calm={voiceActive && !!text && !voice.realtime}>
@@ -935,6 +1007,21 @@
 		<div class="bar" data-part="composer.bar">
 			<IconButton icon="attach" label={t("파일 첨부")} title={vision ? t("파일 첨부") : t("파일 첨부 (이 모델은 이미지를 직접 보지 못해 파일로 전달됩니다)")} onclick={() => fileInput?.click()} />
 			<input bind:this={fileInput} type="file" multiple hidden onchange={(e) => { const picked = [...(e.currentTarget.files ?? [])]; e.currentTarget.value = ""; void attached.add(picked); }} />
+			<button
+				type="button"
+				class="skill-btn"
+				class:active={activeSkillCount > 0 || skillPickerOpen}
+				class:has-count={activeSkillCount > 0}
+				aria-haspopup="dialog"
+				aria-expanded={skillPickerOpen}
+				aria-label={activeSkillCount > 0 ? t("스킬 선택 ({n}개 선택됨)", { n: activeSkillCount }) : t("스킬 선택")}
+				title={activeSkillCount > 0 ? t("스킬 선택 ({n}개 선택됨)", { n: activeSkillCount }) : t("스킬 선택")}
+				disabled={app.net !== "online"}
+				onclick={toggleSkillPicker}
+			>
+				<Icon name="skill" />
+				{#if activeSkillCount > 0}<span class="skill-count mono">{activeSkillCount}</span>{/if}
+			</button>
 
 			<ModelPicker />
 			<ExtensionMount slot="composer.toolbar" />
@@ -1104,6 +1191,53 @@
 		align-items: center;
 		gap: 4px;
 		padding: 4px 8px 8px 7px; /* measured: the 19px glyph in its 38px button lands on the text line (17), not 1.5px after it */
+	}
+	.skill-btn {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		flex: none;
+		min-width: 38px;
+		height: 38px;
+		padding: 0;
+		border-radius: var(--radius-pill);
+		color: var(--text-dim);
+		transition:
+			background var(--motion-fast) var(--ease-std),
+			color var(--motion-fast) var(--ease-std);
+	}
+	.skill-btn.has-count {
+		gap: 4px;
+		padding: 0 12px 0 8px;
+	}
+	.skill-btn :global(svg) {
+		width: 19px; /* matches .iconbtn glyph size in the same composer bar */
+		height: 19px;
+		flex: none;
+		stroke-width: 1.8;
+	}
+	.skill-btn.active {
+		background: var(--accent-soft);
+		color: var(--accent);
+	}
+	.skill-btn:disabled {
+		opacity: 0.45;
+		cursor: default;
+	}
+	.skill-count {
+		font-size: var(--fs-xs);
+		font-weight: 600;
+		line-height: 20px;
+	}
+	@media (hover: hover) {
+		.skill-btn:hover:not(:disabled) {
+			background: var(--bg-hover);
+			color: var(--text);
+		}
+		.skill-btn.active:hover:not(:disabled) {
+			background: color-mix(in srgb, var(--accent) 18%, transparent);
+			color: var(--accent);
+		}
 	}
 	.grow {
 		flex: 1;

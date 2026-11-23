@@ -12,7 +12,7 @@
 		listId,
 		optionId,
 	}: {
-		items: { id: string; text: string; args?: string; desc: string; current?: boolean; accent?: boolean; group?: string; state?: Activity }[];
+		items: { id: string; text: string; args?: string; desc: string; current?: boolean; badge?: string; accent?: boolean; group?: string; state?: Activity }[];
 		index: number;
 		label?: string;
 		empty?: string;
@@ -49,7 +49,7 @@
 		>
 			<span class="n mono {item.state && item.state !== 'idle' ? `act-${ACTIVITY_TONE[item.state]}` : ''}" class:skill={item.accent}>{item.text}{#if item.args}{" "}<span class="a">{item.args}</span>{/if}</span>
 			<span class="d">{t(item.desc)}</span>
-			{#if item.current}<span class="current">{t("현재")}</span>{/if}
+			{#if item.badge}<span class="current">{t(item.badge)}</span>{:else if item.current}<span class="current">{t("현재")}</span>{/if}
 		</button>
 	{:else}
 		<div class="none">{t(empty)}</div>

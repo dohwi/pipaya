@@ -7,6 +7,8 @@ export interface MenuRow {
 	args?: string;
 	desc: string;
 	current?: boolean;
+	/** Optional short status label on the right (e.g. "선택됨" for an already-picked skill). */
+	badge?: string;
 	/** Name drawn in the accent colour (skills and extension commands). */
 	accent?: boolean;
 	group?: string;
@@ -44,9 +46,19 @@ export function optionRows(options: readonly { value: string; desc: string; curr
 	return options.map((o) => ({ id: o.value, text: o.value, desc: o.desc, current: o.current }));
 }
 
-export function slashRows(entries: readonly SlashEntry[]): MenuRow[] {
+export function slashRows(entries: readonly SlashEntry[], selectedSkills?: ReadonlySet<string>): MenuRow[] {
 	return entries.map((it): MenuRow => {
-		if ("skill" in it) return { id: `skill:${it.skill.name}`, text: slash(`${SKILL_PREFIX}${it.skill.name}`), desc: it.skill.description, accent: true, group: msg("스킬") };
+		if ("skill" in it) {
+			const picked = selectedSkills?.has(it.skill.name);
+			return {
+				id: `skill:${it.skill.name}`,
+				text: slash(`${SKILL_PREFIX}${it.skill.name}`),
+				desc: it.skill.description,
+				accent: true,
+				...(picked ? { badge: msg("선택됨") } : {}),
+				group: msg("스킬"),
+			};
+		}
 		if ("template" in it) return { id: `prompt:${it.template.name}`, text: slash(`${PROMPT_PREFIX}${it.template.name}`), desc: it.template.description, accent: true, group: msg("프롬프트 템플릿") };
 		if ("family" in it) {
 			const f = it.family;
