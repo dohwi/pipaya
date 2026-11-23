@@ -24,7 +24,6 @@
 	let pinned = $state(false);
 	let focused = $state(false);
 	let heights = $state<Record<number, number>>({});
-	let widths = $state<Record<number, number>>({});
 
 	const expanded = $derived(ordered.length > 1 && (hovered || pinned || focused));
 	const paused = $derived(ordered.length > 0 && (hovered || pinned || focused));
@@ -32,15 +31,7 @@
 	const slotById = $derived(new Map(layout.items.map((item) => [item.id, item])));
 
 	const frontId = $derived(ordered[0]?.id);
-	const frontW = $derived(frontId !== undefined ? widths[frontId] : undefined);
 	const frontH = $derived(frontId !== undefined ? heights[frontId] : undefined);
-	const stackW = $derived.by(() => {
-		if (!ordered.length) return 0;
-		if (!expanded) return frontW ?? 0;
-		let max = 0;
-		for (const item of ordered) max = Math.max(max, widths[item.id] ?? 0);
-		return max;
-	});
 
 	// Collapse touch-pinned state automatically once fewer than two toasts remain.
 	$effect(() => {
@@ -52,10 +43,7 @@
 		const live = new Set(ids);
 		for (const key of Object.keys(heights)) {
 			const id = Number(key);
-			if (!live.has(id)) {
-				delete heights[id];
-				delete widths[id];
-			}
+			if (!live.has(id)) delete heights[id];
 		}
 	});
 
@@ -83,9 +71,7 @@
 		const update = () => {
 			// .card wraps .inner with a 1px border on each side; include those 2px so stacked clipping and 8px gaps stay exact
 			const h = Math.ceil(node.offsetHeight) + 2;
-			const w = Math.ceil(node.offsetWidth) + 2;
 			if (h > 2 && heights[id] !== h) heights[id] = h;
-			if (w > 2 && widths[id] !== w) widths[id] = w;
 		};
 		update();
 		const ro = new ResizeObserver(update);
@@ -128,7 +114,7 @@
 	onfocusout={onFocusOut}
 >
 	{#if expanded || ordered.length > 1}
-		<div class="hit" style:width={stackW ? `${stackW}px` : null} aria-hidden="true"></div>
+		<div class="hit" aria-hidden="true"></div>
 	{/if}
 	{#each ordered as item (item.id)}
 		{@const slot = slotById.get(item.id)}
@@ -148,7 +134,6 @@
 					class:behind={slot.behind}
 					class:expandable={ordered.length > 1 && !expanded && !slot.behind}
 					role={item.tone === "error" ? "alert" : "status"}
-					style:width={slot.behind && frontW ? `${frontW}px` : null}
 					style:height={slot.behind && frontH ? `${frontH}px` : null}
 					in:surfaceIn={{ y: dyIn }}
 					out:surfaceOut={{ y: dyOut }}
@@ -182,7 +167,8 @@
 	.toast-stack {
 		position: relative;
 		width: 100%;
-		max-width: 440px;
+		/* aligns left/right edges with the chat composer (--content-w) */
+		max-width: var(--content-w);
 		margin-inline: auto;
 		pointer-events: none;
 		transition: height var(--motion-normal) var(--ease);
@@ -190,11 +176,7 @@
 	/* Bridges the 8px gaps between cards while expanded/stacked so moving the pointer down the list never drops hover. */
 	.hit {
 		position: absolute;
-		top: 0;
-		bottom: 0;
-		inset-inline: 0;
-		margin-inline: auto;
-		max-width: 100%;
+		inset: 0;
 		z-index: 0;
 		pointer-events: auto;
 	}
@@ -222,18 +204,16 @@
 	.card {
 		--tone: var(--text-faint);
 		pointer-events: auto;
-		width: fit-content;
-		max-width: 100%;
+		width: 100%;
 		border-radius: var(--radius-panel);
-		/* elevated rounded pill/card tinted subtly with its tone */
+		/* elevated rounded card tinted subtly with its tone */
 		background: color-mix(in srgb, var(--tone) 12%, var(--bg-lift));
 		border: 1px solid color-mix(in srgb, var(--tone) 28%, var(--border-strong));
-		box-shadow: var(--shadow);
+		box-shadow: var(--shadow-soft);
 		color: var(--text);
 		font-size: var(--fs-sm);
 		line-height: 20px;
 		transition:
-			width var(--motion-normal) var(--ease),
 			height var(--motion-normal) var(--ease),
 			border-color var(--motion-fast) var(--ease);
 	}
@@ -276,7 +256,7 @@
 		background: var(--tone);
 	}
 	.msg {
-		flex: 0 1 auto;
+		flex: 1;
 		min-width: 0;
 		overflow-wrap: anywhere;
 		word-break: keep-all;
