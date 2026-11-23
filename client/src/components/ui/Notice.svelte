@@ -89,7 +89,7 @@
 		background: var(--ok-soft);
 		color: var(--text);
 	}
-	.ok :global(svg) {
+	.ok > :global(svg) {
 		color: var(--ok);
 	}
 	.sm {
@@ -121,7 +121,7 @@
 	.raised.danger {
 		--notice-tint: var(--danger);
 	}
-	.notice :global(svg) {
+	.notice > :global(svg) {
 		width: 17px;
 		height: 17px;
 		/* 17px icon centred on the 20px first line: (20 - 17) / 2 = 1.5px */
@@ -129,9 +129,21 @@
 		flex: none;
 		stroke-width: 1.8;
 	}
-	.sm :global(svg) {
+	.sm > :global(svg) {
 		width: 16px;
 		height: 16px;
+		margin-top: 0;
+	}
+	/* A Notice carrying a full Button (.btn, 34px tall, --radius-control 10px): centre the icon, text and button on one axis
+	   instead of pinning single-line text to the top, keep 8px even padding around the button, and step the outer corner up to
+	   --radius (12px) so a sm Notice never wraps a 10px button in an 8px corner. `:where(:has(...))` keeps specificity equal to
+	   `.notice` so caller overrides (e.g. RetryNotice mobile wrap padding) win; placed after `.sm > svg` so `margin-top: 0` wins. */
+	.notice:where(:has(> .action :global(.btn))) {
+		align-items: center;
+		padding: 8px 8px 8px 12px;
+		border-radius: var(--radius);
+	}
+	.notice:where(:has(> .action :global(.btn))) > :global(svg) {
 		margin-top: 0;
 	}
 	.text {
@@ -140,8 +152,14 @@
 	}
 	.action {
 		flex: none;
+		display: inline-flex;
+		align-items: center;
 		white-space: nowrap;
 		font-weight: 600;
+	}
+	/* callers sometimes wrap an action button in {#if ...} inside the snippet: hide the empty span so it adds no trailing gap */
+	.action:not(:has(*)) {
+		display: none;
 	}
 	.action :global(button:not(.btn)) {
 		color: inherit;
@@ -152,5 +170,10 @@
 		padding: 0;
 		font: inherit;
 		cursor: pointer;
+	}
+	.action :global(button:not(.btn):disabled) {
+		opacity: 0.5;
+		cursor: default;
+		text-decoration: none;
 	}
 </style>

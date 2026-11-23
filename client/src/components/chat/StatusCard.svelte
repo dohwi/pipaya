@@ -45,5 +45,6 @@
 	.mark :global(svg:not(.logo)) { width: 28px; height: 28px; stroke-width: 2; }
 	h2 { margin: 4px 0 0; font-size: var(--fs-xl); }
 	.card :global(.note) { margin: 4px 0 8px; font-size: var(--fs-sm); line-height: 1.55; color: var(--text-faint); word-break: keep-all; }
+	.card :global(.notice) { width: 100%; text-align: left; }
 	.card :global(.actions) { display: flex; gap: 8px; justify-content: center; }
 </style>

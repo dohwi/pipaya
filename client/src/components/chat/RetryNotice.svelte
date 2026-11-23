@@ -57,7 +57,7 @@
 	.reason { line-height: 16px; font-size: var(--fs-xs); opacity: 0.85; word-break: break-all; }
 	.acts { display: inline-flex; gap: 8px; }
 	@media (max-width: 600px) {
-		.retry :global(.notice) { flex-wrap: wrap; }
+		.retry :global(.notice) { flex-wrap: wrap; padding: 8px 12px; }
 		.retry :global(.text) { flex: 1 1 0; } /* keeps the icon on the text line; only the buttons wrap */
 		.retry :global(.action) { flex-basis: 100%; }
 		.acts { width: 100%; }

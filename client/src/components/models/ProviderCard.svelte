@@ -141,8 +141,8 @@
 		justify-content: space-between;
 		gap: 8px;
 		flex-wrap: wrap;
-		font-size: 0.85em;
-		color: var(--muted, inherit);
+		font-size: var(--fs-xs);
+		color: var(--text-dim);
 	}
 	.url {
 		font-size: var(--fs-xs);
@@ -185,7 +185,7 @@
 		gap: 4px;
 	}
 	.prov.off .phead,
-	.prov.off .nomodels {
+	.prov.off .nomodels > span {
 		opacity: 0.55;
 	}
 	.mlogo {
@@ -199,9 +199,9 @@
 		align-items: center;
 		flex-wrap: wrap;
 		gap: 4px 8px;
-		padding: 4px 8px 4px 8px;
+		padding: 4px 8px 4px 12px;
 		border: 1px solid var(--border);
-		border-radius: var(--radius-sm);
+		border-radius: var(--radius);
 		background: var(--bg);
 		font-size: var(--fs-sm);
 	}
@@ -259,6 +259,7 @@
 	}
 	.keyform {
 		display: flex;
+		align-items: center;
 		gap: 8px;
 	}
 	.res.ok {

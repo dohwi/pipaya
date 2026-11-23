@@ -59,7 +59,7 @@
 	{#if release === "older" && !isNew && !busy}
 		<p class="hint note" in:collapseIn out:collapseOut>{t("서버가 앱보다 오래된 버전입니다. 서버에서 업데이트를 실행하세요 (install.sh update)")}</p>
 	{/if}
-	{#if serverUpdater.error}<Notice tone="danger" size="sm" animated>{serverUpdater.error}</Notice>{/if}
+	{#if serverUpdater.error}<div class="err-gap" in:collapseIn out:collapseOut><Notice tone="danger" size="sm">{serverUpdater.error}</Notice></div>{/if}
 {/if}
 
 <style>
@@ -72,4 +72,5 @@
 	.actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-left: auto; }
 	.actions :global(.btn) { flex: none; white-space: nowrap; }
 	.note { line-height: 1.6; margin: 8px 0 0; }
+	.err-gap { padding-top: 8px; }
 </style>

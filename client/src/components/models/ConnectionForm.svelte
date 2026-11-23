@@ -6,13 +6,12 @@
 	import IconButton from "../ui/IconButton.svelte";
 	import Button from "../ui/Button.svelte";
 	import DialogFooter from "../ui/DialogFooter.svelte";
+	import Notice from "../ui/Notice.svelte";
 	import { t } from "../../lib/i18n";
-	import { collapseIn, collapseOut } from "../../lib/motion";
 	import { recentreOn } from "../../lib/dialog";
 	import { sheetPull } from "../../lib/sheet";
 	import { errorText, type Api } from "../../lib/api";
 	import { indexCatalog } from "../../lib/catalog-match";
-	import Icon from "../ui/Icon.svelte";
 	import ConnectionFields from "./ConnectionFields.svelte";
 	import ModelList from "./ModelList.svelte";
 	import Modal from "../ui/Modal.svelte";
@@ -363,7 +362,7 @@
 
 		<DialogFooter rule safe wrap>
 			{#snippet above()}
-				{#if formError}<div class="ferr" role="alert" in:collapseIn out:collapseOut><Icon name="alert" /><span>{formError}</span></div>{/if}
+				{#if formError}<Notice tone="danger" animated>{formError}</Notice>{/if}
 			{/snippet}
 			{#if editing !== null}
 				<Button variant="primary" onclick={closeModel}>{t("완료")}</Button>
@@ -431,25 +430,6 @@
 	}
 	:global(.iconbtn.back) {
 		margin-left: -9.5px; /* the 38px button holds a 19px glyph 9.5px in: the glyph's left edge lands on the gutter, like the close glyph on the right (was -8: 1.5px in) */
-	}
-	.ferr {
-		display: flex;
-		gap: 8px;
-		align-items: flex-start;
-		padding: 8px 12px;
-		border-radius: var(--radius);
-		background: var(--danger-soft);
-		color: var(--danger);
-		font-size: var(--fs-sm);
-		font-weight: 500;
-		overflow-wrap: anywhere;
-	}
-	.ferr :global(svg) {
-		flex: none;
-		width: 17px;
-		height: 17px;
-		margin-top: 0;
-		stroke-width: 1.8;
 	}
 
 </style>
