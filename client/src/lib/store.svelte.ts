@@ -1964,8 +1964,8 @@ class AppStore {
   }
 
   /** `sid`: the session the message is about, so it appears inside that session's pane (see SessionToasts). */
-  toast(text: string, tone: Toast["tone"] = "info", sid?: string | null, action?: Toast["action"]) {
-    this.feedback.toast(text, tone, sid, action);
+  toast(text: string, tone: Toast["tone"] = "info", sid?: string | null, action?: Toast["action"], icon?: Toast["icon"]) {
+    this.feedback.toast(text, tone, sid, action, icon);
   }
 
   private fail(e: unknown, prefix?: string, sid?: string | null) {
