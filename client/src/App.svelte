@@ -912,7 +912,6 @@
 		}
 		.side.open {
 			translate: 0 0;
-			box-shadow: var(--shadow);
 		}
 		.scrim {
 			display: block;
@@ -927,9 +926,6 @@
 		.side.dragging,
 		.scrim.dragging {
 			transition: none; /* follow the finger exactly */
-		}
-		.side.dragging {
-			box-shadow: var(--shadow);
 		}
 		.scrim.show {
 			opacity: 1;

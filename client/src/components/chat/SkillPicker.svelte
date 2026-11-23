@@ -155,7 +155,7 @@
 		background: var(--bg-elev);
 		border: 1px solid var(--border-strong);
 		border-radius: var(--radius);
-		box-shadow: var(--shadow);
+		box-shadow: var(--shadow-overlay);
 		z-index: var(--z-popover);
 		display: flex;
 		flex-direction: column;

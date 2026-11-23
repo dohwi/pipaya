@@ -71,7 +71,9 @@
 		transition: opacity var(--motion-fast) var(--ease-std);
 	}
 	.ladder.off {
-		opacity: 0.4;
+		background: var(--disabled-bg);
+		border-color: var(--disabled-border);
+		color: var(--disabled-fg);
 	}
 	/* from the first node's centre to the last one's: half a column in from each side of the 4px padding */
 	.rail {

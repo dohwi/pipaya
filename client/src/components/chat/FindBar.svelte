@@ -187,7 +187,7 @@
 		background: var(--bg-elev);
 		border: 1px solid var(--border-strong);
 		border-radius: var(--radius);
-		box-shadow: var(--shadow);
+		box-shadow: var(--shadow-overlay);
 	}
 	.find :global(svg) {
 		width: 15px;
@@ -239,6 +239,6 @@
 		}
 	}
 	.b:disabled {
-		opacity: 0.4;
+		color: var(--disabled-fg);
 	}
 </style>

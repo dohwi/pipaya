@@ -54,7 +54,7 @@
 		border-radius: 50%;
 		background: var(--text-dim);
 		transition:
-			transform var(--motion-normal) var(--ease-spring),
+			transform var(--motion-normal) var(--ease),
 			background-color var(--motion-fast) var(--ease-std);
 	}
 	.sw[aria-checked="true"] {
@@ -65,12 +65,13 @@
 		transform: translateX(16px);
 		background: var(--bg);
 	}
-	.sw:active:not(:disabled) .knob {
-		scale: 1.12;
-	}
 	.sw:disabled {
-		opacity: 0.45;
+		background: var(--disabled-bg);
+		border-color: var(--disabled-border);
 		cursor: default;
+	}
+	.sw:disabled .knob {
+		background: var(--disabled-fg);
 	}
 	.sw:focus-visible {
 		outline: 2px solid var(--accent);

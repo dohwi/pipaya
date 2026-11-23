@@ -438,7 +438,6 @@
 		background: var(--bg-elev);
 		color: var(--text-dim);
 		font-size: var(--fs-xs);
-		box-shadow: var(--shadow);
 	}
 	.note.quiet {
 		opacity: 0.7;

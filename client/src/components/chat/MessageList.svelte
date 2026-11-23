@@ -572,7 +572,6 @@
 		border-radius: 50%;
 		background: var(--bg);
 		border: 1px solid var(--border-strong);
-		box-shadow: var(--shadow-soft);
 		color: var(--text-dim);
 		z-index: 5;
 		transition:

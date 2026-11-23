@@ -1097,13 +1097,11 @@
 		border: 1px solid var(--border-strong);
 		border-radius: var(--radius);
 		background: var(--bg);
-		box-shadow: var(--shadow-soft);
 		cursor: pointer;
 		overflow: hidden;
 		transition:
 			opacity var(--motion-normal) var(--ease-std),
-			border-color var(--motion-normal) var(--ease-std),
-			box-shadow var(--motion-normal) var(--ease-std);
+			border-color var(--motion-normal) var(--ease-std);
 	}
 	@media (hover: hover) {
 		.card:hover {
@@ -1114,7 +1112,6 @@
 		z-index: 1;
 		cursor: grabbing;
 		border-color: var(--text-faint);
-		box-shadow: var(--shadow);
 	}
 	/*
 	 * A card at work: a light runs round its border (a conic gradient behind a transparent border, turning on the
@@ -1153,9 +1150,8 @@
 	}
 	.card.sel {
 		border-color: var(--text);
-		box-shadow:
-			0 0 0 3px var(--accent-soft),
-			var(--shadow-soft);
+		outline: 2px solid var(--accent);
+		outline-offset: -1px;
 	}
 	.card.dim {
 		opacity: 0.45; /* still readable: the related cards stand out, the rest stays legible */
@@ -1392,7 +1388,6 @@
 		border: 1px solid var(--border);
 		border-radius: var(--radius-control);
 		background: var(--bg-elev);
-		box-shadow: var(--shadow-soft);
 		cursor: default;
 	}
 	.bar .sep {
@@ -1429,7 +1424,7 @@
 		}
 	}
 	.tbtn:disabled {
-		opacity: 0.45;
+		color: var(--disabled-fg);
 		cursor: default;
 	}
 	.pct {

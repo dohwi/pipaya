@@ -309,7 +309,6 @@
 		text-align: left;
 		transition:
 			border-color var(--motion-fast) var(--ease-std),
-			box-shadow var(--motion-fast) var(--ease-std),
 			background-color var(--motion-fast) var(--ease-std);
 	}
 	.sm .trigger {
@@ -329,15 +328,17 @@
 	.trigger:focus-visible,
 	.trigger:focus-within,
 	.open .trigger {
-		outline: none;
+		outline: 2px solid var(--accent);
+		outline-offset: -1px; /* inside the border: never clipped by a dialog body */
 		border-color: var(--accent);
-		box-shadow: 0 0 0 3px var(--accent-soft);
 	}
 	.invalid .trigger {
 		border-color: var(--danger);
 	}
 	.disabled .trigger {
-		opacity: 0.55;
+		background: var(--disabled-bg);
+		border-color: var(--disabled-border);
+		color: var(--disabled-fg);
 		cursor: not-allowed;
 	}
 	.text {
@@ -374,7 +375,7 @@
 	}
 	.open .chev {
 		transform: rotate(180deg);
-		transition: transform var(--motion-normal) var(--ease-spring);
+		transition: transform var(--motion-normal) var(--ease);
 	}
 	.chev :global(svg) {
 		width: 16px;
@@ -393,7 +394,7 @@
 		border: 1px solid var(--border-strong);
 		border-radius: var(--radius);
 		background: var(--bg-elev);
-		box-shadow: var(--shadow);
+		box-shadow: var(--shadow-overlay);
 	}
 	.list.mono {
 		font-family: var(--mono);
@@ -418,7 +419,7 @@
 		font-weight: 600;
 	}
 	.opt[aria-disabled="true"] {
-		opacity: 0.45;
+		color: var(--disabled-fg);
 		cursor: not-allowed;
 	}
 	.ol {

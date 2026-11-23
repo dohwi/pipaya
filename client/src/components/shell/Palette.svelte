@@ -171,7 +171,6 @@
 		background: var(--bg-elev);
 		border: 1px solid var(--border-strong);
 		border-radius: var(--radius-panel);
-		box-shadow: var(--shadow);
 		overflow: hidden;
 	}
 	.head {

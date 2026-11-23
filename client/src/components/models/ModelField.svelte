@@ -79,8 +79,8 @@
 >
 	{#if value}<span class="mlogo"><ModelLogo {conn} icon={current?.icon} provider={value.provider} model={value.model} size={variant === "inline" ? 16 : 18} colored={variant === "inline" || Boolean(current?.icon)} /></span>{/if}
 	<span class="mname">{shown}</span>
-	{#if current?.reasoning && level}<span class="chip think" data-level={level}>{level}</span>{/if}
-	{#if takesTier(current) && tier}<span class="chip speed">{tierLabel(tier)}</span>{/if}
+	{#if current?.reasoning && level}<span class="tag think" data-level={level}>{level}</span>{/if}
+	{#if takesTier(current) && tier}<span class="tag speed">{tierLabel(tier)}</span>{/if}
 	{#if invalid}<span class="warnmark"><Icon name="alert" /></span>{/if}
 	<span class="chev" class:up={open}><Icon name="chevron-down" /></span>
 </button>
@@ -150,7 +150,24 @@
 		}
 	}
 	.trigger:disabled {
-		opacity: 0.5;
+		color: var(--disabled-fg);
+	}
+	.tag {
+		display: inline-flex;
+		align-items: center;
+		flex: none;
+		height: 22px;
+		padding: 0 8px 1px; /* 1px lift, like Badge: this font sits ~0.5px low when centred */
+		border-radius: var(--radius-xs);
+		background: var(--bg-active);
+		color: var(--text-dim);
+		font-size: var(--fs-2xs);
+		font-weight: 600;
+		white-space: nowrap;
+	}
+	.tag.think {
+		background: var(--lv-soft);
+		color: var(--lv);
 	}
 	.mlogo {
 		flex: none;
@@ -166,7 +183,7 @@
 		white-space: nowrap;
 	}
 	/* Match the speed selector without changing chip dimensions or tinting it like reasoning. */
-	.speed {
+	.tag.speed {
 		box-shadow: inset 0 0 0 1px var(--text-faint);
 	}
 	.field .mname {
@@ -187,12 +204,12 @@
 		.inline .mname {
 			max-width: none;
 		}
-		.inline .chip {
+		.inline .tag {
 			flex: none;
 		}
 	}
 	@container (max-width: 340px) {
-		.inline .chip,
+		.inline .tag,
 		.inline .chev {
 			display: none;
 		}

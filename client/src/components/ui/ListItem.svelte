@@ -38,10 +38,10 @@
 		gap: 12px;
 		align-items: flex-start;
 		padding: 12px;
-		/* the page colour and the strong border: a card must stand out on the dialog surface and on the grey settings group alike */
-		background: var(--bg);
-		border: 1px solid var(--border-strong);
-		border-radius: var(--radius);
+		/* a borderless tinted surface (no box-in-box): the group tint on a dialog, the page colour inside a tinted .set-group */
+		background: var(--item-bg, var(--bg-side));
+		border: 1px solid transparent;
+		border-radius: var(--radius-sm);
 	}
 	.info {
 		min-width: 0;

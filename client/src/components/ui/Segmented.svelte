@@ -126,7 +126,7 @@
 		border-bottom-color: transparent;
 	}
 	.utabs > button:disabled {
-		opacity: 0.4;
+		color: var(--disabled-fg);
 	}
 	.cards {
 		position: relative;
@@ -156,7 +156,6 @@
 	.cards > button.on {
 		border-color: var(--text);
 		background: var(--card-on-bg, var(--bg-active));
-		box-shadow: var(--card-on-shadow, none);
 		font-weight: 600;
 	}
 	/* a risky choice (tone) turns its card red/amber when selected, so the danger is visible at a glance */

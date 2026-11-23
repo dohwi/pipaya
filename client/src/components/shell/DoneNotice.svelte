@@ -47,7 +47,6 @@
 		flex-direction: column;
 		border-bottom: 1px solid var(--border-strong);
 		background: var(--bg-elev);
-		box-shadow: var(--shadow);
 	}
 	.row {
 		--tone: var(--ok);

@@ -343,9 +343,7 @@
 		cursor: pointer;
 		user-select: none;
 		-webkit-user-select: none;
-		transition:
-			border-color var(--motion-fast) var(--ease-std),
-			box-shadow var(--motion-fast) var(--ease-std);
+		transition: border-color var(--motion-fast) var(--ease-std);
 	}
 	/* the card in the air: its place stays, faded, until it is let go */
 	.card.carried {
