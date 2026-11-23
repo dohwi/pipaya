@@ -41,8 +41,7 @@
 	/** (while the tab bar lists its whole project, the project's row is the open one instead) */
 	const cur = $derived(!app.graphOpen && n.current && d.path === (app.activeTab?.dir.path ?? app.workdirAbs) && !(inProject && app.stripDirs.length > 1));
 	const mark = $derived(sb.marks.blockMark(`dir:${d.path}`));
-	/** The pin only marks a folder apart from unpinned ones: when every folder of the server is pinned it says nothing and is left out */
-	const pinned = $derived(app.sidebar.isPinned(n.server.id, d.path) && n.dirs.some((x) => !app.sidebar.isPinned(n.server.id, x.path)));
+	const pinned = $derived(app.sidebar.isPinned(n.server.id, d.path));
 	const label = $derived(sb.shortLabel(n, d.path));
 	const parent = $derived(sb.pretty(n, d.path));
 	/** What shows dim after the name: the path above it, without the part the name already says */
