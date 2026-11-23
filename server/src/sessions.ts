@@ -32,7 +32,7 @@ import type { ExtensionHost } from "./extensions/host.ts";
 import type { MessageNote } from "./extensions/types.ts";
 import { IMAGE_TOOL, imageTool, type ImageModelSettings } from "./image-generation.ts";
 import { fitImagesInContext } from "./image-guard.ts";
-import { stripToolMessageImages, stripToolResultImages } from "./tool-images.ts";
+import { stripOversizedToolResultImages, stripToolMessageImages, stripToolResultImages } from "./tool-images.ts";
 import { describeTools, enabledTools, planTools } from "./tool-plan.ts";
 import { afterTurn, FORCE_STOP_ERROR, isEmptyFailedReply, RESTART_RUN_ERROR, RESTART_TOOL_ERROR, runawayReason, SHUTDOWN_RUN_ERROR, SHUTDOWN_TOOL_ERROR, type RunStopCause } from "./run-guard.ts";
 import { chooseModel, DelegateLimits, finalText, freeRole, repeatedReadSignature, runDelegateWithinDeadline, subagentReport, subagentReportReserveMs, subagentUsage, loadSubagents, SUBAGENT_NAME, SUBAGENT_TIMEOUT_MS, SUBAGENT_WRAP_UP, subagentSystem, type SubagentDef, type SubagentLimit } from "./subagents.ts";
@@ -1730,7 +1730,11 @@ export class SessionManager {
 				pub("message_start", { message: stripToolMessageImages(event.message) });
 				return;
 			case "tool_execution_end":
-				pub("tool_execution_end", event, { persistData: { ...event, result: stripToolResultImages(event.result) } });
+				pub(
+					"tool_execution_end",
+					{ ...event, result: stripOversizedToolResultImages(event.result) },
+					{ persistData: { ...event, result: stripToolResultImages(event.result) } },
+				);
 				return;
 			case "message_end": {
 				if (live.pendingPrompt && event.message.role === "user") {

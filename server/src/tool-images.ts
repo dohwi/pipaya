@@ -6,10 +6,23 @@
  * The database `messages` table and LLM projection keep the original blocks intact so the model still sees them.
  */
 
-function withoutImageBlocks(content: unknown): unknown[] | null {
+/**
+ * Max base64 character length (~512 KB raw binary) for an inline toolResult image sent live over SSE/WS.
+ * Larger images (high-res screenshots, generated PNGs) are omitted from the live broadcast so they cannot saturate
+ * slow clients' socket buffers; they are still saved on disk and loaded lazily via `/sessions/:id/files?max=...`.
+ */
+export const LIVE_TOOL_IMAGE_MAX_CHARS = 700_000;
+
+function withoutImageBlocks(content: unknown, minDataLength = 0): unknown[] | null {
 	if (!Array.isArray(content)) return null;
-	if (!content.some((c) => c && typeof c === "object" && (c as { type?: unknown }).type === "image")) return null;
-	return content.filter((c) => !c || typeof c !== "object" || (c as { type?: unknown }).type !== "image");
+	const drop = (c: unknown) => {
+		if (!c || typeof c !== "object") return false;
+		const block = c as { type?: unknown; data?: unknown };
+		if (block.type !== "image") return false;
+		return minDataLength <= 0 || (typeof block.data === "string" && block.data.length > minDataLength);
+	};
+	if (!content.some(drop)) return null;
+	return content.filter((c) => !drop(c));
 }
 
 export function stripToolMessageImages<T>(message: T): T {
@@ -25,6 +38,14 @@ export function stripToolResultImages<T>(result: T): T {
 	if (!result || typeof result !== "object") return result;
 	const r = result as { content?: unknown };
 	const next = withoutImageBlocks(r.content);
+	if (!next) return result;
+	return { ...result, content: next };
+}
+
+export function stripOversizedToolResultImages<T>(result: T, maxChars = LIVE_TOOL_IMAGE_MAX_CHARS): T {
+	if (!result || typeof result !== "object") return result;
+	const r = result as { content?: unknown };
+	const next = withoutImageBlocks(r.content, maxChars);
 	if (!next) return result;
 	return { ...result, content: next };
 }

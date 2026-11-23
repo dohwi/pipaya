@@ -13,13 +13,10 @@
 		<link rel="alternate icon" href="/favicon.ico?v=pipaya2" sizes="any" />
 		<link rel="apple-touch-icon" href="/apple-icon.png?v=pipaya" />
 		<link rel="preload" href="/fonts/manrope-variable.woff2" as="font" type="font/woff2" crossorigin />
-		<!-- Every SUIT weight the UI uses: a face is fetched the first time something renders at its weight, so a 500 in a
-		     dialog that opens later (or on the first frame after coming back to the window) arrived 35-70ms late and its
-		     text re-shaped from the fallback under the reader's eyes. -->
+		<!-- Preload only the two primary SUIT weights (400/500) so semibold/bold (~336 KB) do not contend with the main
+		     JS/CSS bundle on slow links; heavier weights load on demand via @font-face font-display: swap. -->
 		<link rel="preload" href="/fonts/suit-regular.woff2" as="font" type="font/woff2" crossorigin />
 		<link rel="preload" href="/fonts/suit-medium.woff2" as="font" type="font/woff2" crossorigin />
-		<link rel="preload" href="/fonts/suit-semibold.woff2" as="font" type="font/woff2" crossorigin />
-		<link rel="preload" href="/fonts/suit-bold.woff2" as="font" type="font/woff2" crossorigin />
 		<title>pipaya</title>
 		<script>
 			// Apply the saved theme before first paint to avoid a flash.

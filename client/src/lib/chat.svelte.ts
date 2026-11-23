@@ -484,6 +484,10 @@ export class ChatState {
 			}
 		}
 		this.serverCompacting = st.compacting ?? false;
+		this.usage = detail.usage;
+		this.context = detail.context;
+		this.compaction = detail.compaction ?? null;
+		this.loadedAt = Date.now();
 		this.queued = (st.queuedMessages ?? []).map((q) => ({ mode: q.mode, text: q.text, ...(q.deferred ? { deferred: true } : {}) }));
 		const partial = st.streamingMessage as AssistantMessage | null;
 		// Only overwrite the streaming bubble if no live message_start/message_update/message_end arrived during getSession().

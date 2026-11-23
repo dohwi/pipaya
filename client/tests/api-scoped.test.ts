@@ -50,4 +50,10 @@ describe("Api.scoped", () => {
 		expect(err).toMatchObject({ status: 0, code: "network" });
 		expect(await until(() => open === 0)).toBe(true);
 	});
+	test("fetchFile respects its timeoutMs deadline instead of hanging forever", async () => {
+		const api = new Api({ baseUrl: `http://127.0.0.1:${server.port}`, token: "t" });
+		const err = await api.fetchFile("s1", "a.bin", undefined, { timeoutMs: 60 }).catch((e) => e);
+		expect(err).toMatchObject({ status: 0, code: "network" });
+		expect(await until(() => open === 0)).toBe(true);
+	});
 });

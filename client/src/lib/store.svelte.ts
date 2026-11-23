@@ -1829,10 +1829,15 @@ class AppStore {
     const kept = new Set([...keep, ...spare]);
     for (const id of this.chatUsed.keys()) if (!kept.has(id)) this.chatUsed.delete(id);
     const stale = Object.keys(this.chats).filter((id) => !kept.has(id));
-    // A cached transcript coming back on screen shows at once, then refreshes in place in the background.
+    // A cached transcript coming back on screen shows at once; while the event stream stayed online it only needs a
+    // lightweight catchUp() (status/context/usage) instead of reloading up to 5000 messages on every tab switch.
     for (const id of ids) {
       // One read moments ago (a prefetch on hover) is current: events have kept it so since.
-      if (this.chats[id]?.ready && !this.lastVisible.has(id) && !this.chats[id]!.fresh) void this.chats[id]!.load();
+      const chat = this.chats[id];
+      if (chat?.ready && !this.lastVisible.has(id) && !chat.fresh) {
+        if (this.link?.online) void chat.catchUp();
+        else void chat.load();
+      }
     }
     this.lastVisible = keep;
     if (stale.length) {
