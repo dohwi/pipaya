@@ -119,8 +119,11 @@ export function contextTokens(messages: AgentMessage[], systemChars: number, sin
 export function pickCut(messages: AgentMessage[], keepRecent = KEEP_RECENT_TOKENS, midRun = false): number | null {
 	const candidates: number[] = [];
 	// Mid-run (one long prompt with many tool turns) there may be no later user message; a turn's assistant message is
-	// also a safe cut, because its tool results follow it and stay with it.
-	messages.forEach((m, i) => { if (i > 0 && (m.role === "user" || (midRun && m.role === "assistant"))) candidates.push(i); });
+	// also a safe cut, because its tool results follow it and stay with it. Never cut at a failed/aborted tail reply.
+	messages.forEach((m, i) => {
+		const okAssistant = midRun && m.role === "assistant" && m.stopReason !== "error" && m.stopReason !== "aborted";
+		if (i > 0 && (m.role === "user" || okAssistant)) candidates.push(i);
+	});
 	if (!candidates.length) return null;
 	const suffix = new Array<number>(messages.length + 1).fill(0);
 	for (let i = messages.length - 1; i >= 0; i--) suffix[i] = suffix[i + 1]! + estimateTokens(messages[i]!);

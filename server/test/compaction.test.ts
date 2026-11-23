@@ -3,6 +3,7 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { createAssistantMessageEventStream } from "@earendil-works/pi-ai";
 import { buildApp, type App } from "../src/app.ts";
 import type { Config } from "../src/config.ts";
 import { CompactionSettings, contextTokens, estimateTokens, pickCut, thresholdFor } from "../src/compaction.ts";
@@ -202,6 +203,71 @@ describe("POST /sessions/:id/compact", () => {
 		expect((await api("POST", `/sessions/${id}/compact`, {})).status).toBe(200);
 	});
 
+	test("a transient zero-output 502 during summary generation is retried and succeeds", async () => {
+		await api("PUT", "/compaction", { auto: false, model: null });
+		const id = await newSession();
+		for (const t of ["a", "b", "c"]) await say(id, t);
+		const real = app.sessions as any;
+		const original = real.registry.models.completeSimple;
+		let attempts = 0;
+		real.registry.models.completeSimple = async (...args: unknown[]) => {
+			if (++attempts === 1) {
+				return {
+					stopReason: "error",
+					errorMessage: '502: {"message":"upstream stream closed with zero output","type":"server_error","code":"internal_server_error"}',
+					content: [],
+					usage: {},
+				};
+			}
+			return original.apply(real.registry.models, args);
+		};
+		try {
+			const r = await api("POST", `/sessions/${id}/compact`, {});
+			expect(r.status).toBe(200);
+			expect(attempts).toBe(2);
+		} finally {
+			real.registry.models.completeSimple = original;
+		}
+	});
+
+	test("persistent zero-output error on a large context triggers one compaction and continues", async () => {
+		await api("PUT", "/compaction", { auto: true, model: null, thresholdPercent: 95 });
+		const id = await newSession();
+		await say(id, "first");
+		await say(id, "!bash head -c 12000 /dev/zero | tr '\\0' x");
+
+		const zeroErr = '502: {"message":"upstream stream closed with zero output","type":"server_error","code":"internal_server_error"}';
+		const origStream = (app.sessions as any).registry.models.streamSimple;
+		(app.sessions as any).registry.models.streamSimple = (m: any, ctx: any, opts: any) => {
+			const raw = JSON.stringify(ctx.messages ?? []);
+			if (raw.includes("continue after bloat") && !raw.includes("was compacted")) {
+				// Simulate a stream whose pre-commit retries were exhausted on a bloated context without sleeping 90s in tests.
+				const s = createAssistantMessageEventStream();
+				const partial = { role: "assistant", content: [], stopReason: "pending", timestamp: Date.now() } as any;
+				const err = { role: "assistant", content: [], stopReason: "error", errorMessage: zeroErr, timestamp: Date.now(), usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { total: 0 } } } as any;
+				queueMicrotask(() => {
+					s.push({ type: "start", partial });
+					s.push({ type: "text_start", contentIndex: 0, partial });
+					s.push({ type: "error", reason: "error", error: err });
+					s.end(err);
+				});
+				return s;
+			}
+			return origStream.call((app.sessions as any).registry.models, m, ctx, opts);
+		};
+		try {
+			await say(id, "continue after bloat");
+		} finally {
+			(app.sessions as any).registry.models.streamSimple = origStream;
+		}
+		const events = app.bus.history({ sessionId: id, after: 0, limit: 500 });
+		expect(events.map((e) => e.type)).toContain("compaction_finished");
+		expect((events.filter((e) => e.type === "run_finished").at(-1)!.data as any).status).toBe("ok");
+		const msgs = (await api("GET", `/sessions/${id}/messages`)).json;
+		expect(JSON.stringify(msgs)).not.toContain("upstream stream closed with zero output");
+		await api("PUT", "/compaction", { auto: false, model: null });
+	});
+
 	test("a provider context-overflow error triggers one compaction and the run continues", async () => {
 		await api("PUT", "/compaction", { auto: true, model: null, thresholdPercent: 95 });
 		const id = await newSession();
@@ -294,6 +360,15 @@ describe("cut selection", () => {
 		expect(pickCut(msgs, 5000)).toBeNull();
 		const cut = pickCut(msgs, 5000, true)!;
 		expect(msgs[cut]!.role).toBe("assistant");
+	});
+
+	test("mid-run never cuts at an errored or aborted assistant message", () => {
+		const failed = { role: "assistant", stopReason: "error", content: [{ type: "text", text: "b".repeat(40_000) }] } as any;
+		const aborted = { role: "assistant", stopReason: "aborted", content: [{ type: "text", text: "c".repeat(40_000) }] } as any;
+		expect(pickCut([user("1"), failed], 1_000_000, true)).toBeNull();
+		expect(pickCut([user("1"), aborted], 1_000_000, true)).toBeNull();
+		const msgs = [user("1"), asst("a".repeat(40_000)), result("r"), failed];
+		expect(pickCut(msgs, 1_000_000, true)).toBe(1);
 	});
 
 	test("token estimate and automatic threshold", () => {

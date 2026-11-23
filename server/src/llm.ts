@@ -2,6 +2,7 @@ import Type, { type Static } from "typebox";
 import { badRequest, HttpError } from "./errors.ts";
 import type { ModelRegistry } from "./models.ts";
 import { ModelRoles, ROLE_NAME } from "./model-roles.ts";
+import { COMPLETION_RETRY, completeWithUpstreamRetry } from "./upstream-retry.ts";
 
 export const MAX_INPUT_CHARS = 200_000;
 export const MAX_SYSTEM_CHARS = 20_000;
@@ -63,10 +64,11 @@ export class Llm {
 		if (!model) throw badRequest(`unknown model ${target.provider}/${target.model}`);
 		if (!(await this.registry.models.checkAuth(target.provider))) throw badRequest(`provider ${target.provider} is not configured; set its API key first`);
 
-		const reply = await this.registry.models.completeSimple(
-			model,
+		const reply = await completeWithUpstreamRetry(
+			(ctx) => this.registry.models.completeSimple(model, ctx, { maxTokens: input.maxTokens ?? DEFAULT_MAX_TOKENS, signal }),
 			{ systemPrompt: input.system, messages: [{ role: "user", content: input.input, timestamp: Date.now() }] },
-			{ maxTokens: input.maxTokens ?? DEFAULT_MAX_TOKENS, signal },
+			COMPLETION_RETRY,
+			signal,
 		);
 		if (reply.stopReason === "error" || reply.stopReason === "aborted") {
 			throw new HttpError(502, "upstream_error", reply.errorMessage || `model call ${reply.stopReason}`);

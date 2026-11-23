@@ -15,7 +15,7 @@ import type { EventBus } from "./events.ts";
 import { checkServiceTier, modelDefaultTier, modelDefaultLevel, reasoningOption, type ModelRegistry } from "./models.ts";
 import { streamAtTier } from "./served-tier.ts";
 import type { ServiceTier } from "./openrouter-catalog.ts";
-import { contextTokens, pickCut, SUMMARY_MAX_TOKENS, SUMMARY_SYSTEM, summaryMessage, summaryRequest, thresholdFor, type CompactionSettings } from "./compaction.ts";
+import { contextTokens, estimateTokens, pickCut, SUMMARY_MAX_TOKENS, SUMMARY_SYSTEM, summaryMessage, summaryRequest, thresholdFor, type CompactionSettings } from "./compaction.ts";
 import { type DelegateCall, type SessionPatch, type SessionRecord, type SessionStore, type ThinkingLevel } from "./store.ts";
 import type { McpManager } from "./mcp.ts";
 import { ALWAYS_TOOLS, buildTools, DEFAULT_TOOLS, DELEGATE_TOOL, isInside, PEER_TOOLS, TOOL_DEFS, WORKDIR_TOOL, type ToolContext, type ToolDef } from "./tools.ts";
@@ -33,7 +33,7 @@ import { fitImagesInContext } from "./image-guard.ts";
 import { describeTools, enabledTools, planTools } from "./tool-plan.ts";
 import { afterTurn, FORCE_STOP_ERROR, isEmptyFailedReply, RESTART_RUN_ERROR, RESTART_TOOL_ERROR, runawayReason, SHUTDOWN_RUN_ERROR, SHUTDOWN_TOOL_ERROR, type RunStopCause } from "./run-guard.ts";
 import { chooseModel, DelegateLimits, finalText, freeRole, repeatedReadSignature, runDelegateWithinDeadline, subagentReport, subagentReportReserveMs, subagentUsage, loadSubagents, SUBAGENT_NAME, SUBAGENT_TIMEOUT_MS, SUBAGENT_WRAP_UP, subagentSystem, type SubagentDef, type SubagentLimit } from "./subagents.ts";
-import { classifyUpstreamError, DEFAULT_UPSTREAM_RETRY, logUnknownUpstreamError, retryReason, sleepAbortable, STREAM_RETRY, withUpstreamRetry } from "./upstream-retry.ts";
+import { classifyUpstreamError, COMPLETION_RETRY, completeWithUpstreamRetry, DEFAULT_UPSTREAM_RETRY, isZeroOutputError, logUnknownUpstreamError, retryReason, sleepAbortable, STREAM_RETRY, withUpstreamRetry } from "./upstream-retry.ts";
 import { autoTitle, DESCRIBE_MAX_TOKENS, DESCRIBE_SYSTEM, describeRequest, parseDescription, type SystemModelSettings } from "./system-model.ts";
 import type { GuardSettings } from "./guard.ts";
 import { runPromptTemplate } from "./templates.ts";
@@ -47,6 +47,8 @@ export type { CompactionOutcome, CreateSessionInput, PromptMode, SessionStatus }
 
 /** A failed title/role call is not retried for this long, so a broken system model is not hit on every message. */
 const DESCRIBE_RETRY_MS = 10 * 60_000;
+/** Minimum context size before repeated zero-output failures trigger an automatic compaction pass. */
+const ZERO_OUTPUT_COMPACT_MIN_TOKENS = 32_000;
 
 
 /** Why a chat cannot use an image model (also shown to the user as the error). */
@@ -393,10 +395,13 @@ export class SessionManager {
 		live.compactSettled = new Promise<void>((r) => { settle = r; });
 		this.bus.publish(id, "compaction_started", { reason });
 		try {
-			const reply = custom !== undefined ? ({ stopReason: "stop", content: [{ type: "text", text: custom }], usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { total: 0 } } } as unknown as Awaited<ReturnType<typeof this.registry.models.completeSimple>>) : await this.registry.models.completeSimple(
-				model,
-				{ systemPrompt: SUMMARY_SYSTEM, messages: [{ role: "user", content: summaryRequest(stored.summary, toSummarize.map((m) => m.message), instructions), timestamp: Date.now() }] },
-				{ maxTokens: SUMMARY_MAX_TOKENS, signal: controller.signal, ...reasoningOption(target.thinkingLevel, model) },
+			const summaryOptions = { maxTokens: SUMMARY_MAX_TOKENS, signal: controller.signal, ...reasoningOption(target.thinkingLevel, model) };
+			const summaryContext = { systemPrompt: SUMMARY_SYSTEM, messages: [{ role: "user" as const, content: summaryRequest(stored.summary, toSummarize.map((m) => m.message), instructions), timestamp: Date.now() }] };
+			const reply = custom !== undefined ? ({ stopReason: "stop", content: [{ type: "text", text: custom }], usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { total: 0 } } } as unknown as Awaited<ReturnType<typeof this.registry.models.completeSimple>>) : await completeWithUpstreamRetry(
+				(ctx) => this.registry.models.completeSimple(model, ctx, summaryOptions),
+				summaryContext,
+				COMPLETION_RETRY,
+				controller.signal,
 			);
 			if (reply.stopReason === "aborted") throw Object.assign(new Error("compaction cancelled"), { aborted: true });
 			if (reply.stopReason === "error") throw new Error(reply.errorMessage || "the summary model failed");
@@ -703,10 +708,13 @@ export class SessionManager {
 			try {
 				const model = this.registry.models.getModel(target.provider, target.model);
 				if (!model || !(await this.registry.models.checkAuth(target.provider))) throw new Error("system model unavailable");
-				const reply = await this.registry.models.completeSimple(
-					model,
-					{ systemPrompt: DESCRIBE_SYSTEM, messages: [{ role: "user", content: describeRequest(record.cwd, firstText, first === undefined ? latest : undefined), timestamp: Date.now() }] },
-					{ maxTokens: DESCRIBE_MAX_TOKENS, signal: controller.signal, ...reasoningOption(target.thinkingLevel, model) },
+				const describeOpts = { maxTokens: DESCRIBE_MAX_TOKENS, signal: controller.signal, ...reasoningOption(target.thinkingLevel, model) };
+				const describeCtx = { systemPrompt: DESCRIBE_SYSTEM, messages: [{ role: "user" as const, content: describeRequest(record.cwd, firstText, first === undefined ? latest : undefined), timestamp: Date.now() }] };
+				const reply = await completeWithUpstreamRetry(
+					(ctx) => this.registry.models.completeSimple(model, ctx, describeOpts),
+					describeCtx,
+					COMPLETION_RETRY,
+					controller.signal,
 				);
 				if (controller.signal.aborted) return;
 				if (reply.stopReason === "error" || reply.stopReason === "aborted") throw new Error(reply.errorMessage || reply.stopReason);
@@ -1081,6 +1089,15 @@ export class SessionManager {
 						error = e instanceof Error ? e.message : String(e);
 					}
 				}
+				// Repeated zero-output failures on a large transcript (e.g. 300k+ tokens where Gemini/CLIProxyAPI stalls
+				// deterministically even after pre-commit / mid-stream retries): compact once and continue.
+				if (!error && !interrupted && !live.forceStopped && !live.stopCause && (await this.recoverFromZeroOutput(id, live))) {
+					try {
+						await live.agent.continue();
+					} catch (e) {
+						error = e instanceof Error ? e.message : String(e);
+					}
+				}
 				if (live.forceStopped) return; // run_finished was already published when it was cut loose
 				live.running = false;
 				live.lastActive = Date.now();
@@ -1252,6 +1269,29 @@ export class SessionManager {
 		if (last?.role !== "assistant" || last.stopReason !== "error") return false;
 		const window = live.agent.state.model?.contextWindow;
 		if (!isContextOverflow(last, window)) return false;
+		return this.compactAndDropFailedReply(id, live);
+	}
+
+	/**
+	 * After a run that exhausted upstream retries on a zero-output gateway error while carrying a large context
+	 * (>= 32k tokens, or >= 25% of smaller model windows): compact once, drop the failed reply and let the run continue.
+	 */
+	private async recoverFromZeroOutput(id: string, live: Live): Promise<boolean> {
+		if (!this.compaction?.get().auto) return false;
+		const messages = live.agent.state.messages;
+		const last = messages[messages.length - 1];
+		if (last?.role !== "assistant" || last.stopReason !== "error" || !isZeroOutputError(last.errorMessage)) return false;
+		const window = live.agent.state.model?.contextWindow;
+		const minTokens = window && window > 0 ? Math.min(ZERO_OUTPUT_COMPACT_MIN_TOKENS, Math.floor(window * 0.25)) : ZERO_OUTPUT_COMPACT_MIN_TOKENS;
+		const summaryAt = this.store.latestCompaction(id)?.createdAt;
+		const sysLen = live.agent.state.systemPrompt.length;
+		const estimated = messages.reduce((sum, m) => sum + estimateTokens(m), Math.ceil(sysLen / 4));
+		const tokens = Math.max(contextTokens(messages, sysLen, summaryAt) ?? 0, estimated);
+		if (tokens < minTokens) return false;
+		return this.compactAndDropFailedReply(id, live);
+	}
+
+	private async compactAndDropFailedReply(id: string, live: Live): Promise<boolean> {
 		try {
 			await this.compact(id, undefined, "threshold");
 		} catch { return false; } // compact() already published why
@@ -1530,13 +1570,35 @@ export class SessionManager {
 		});
 		if (signal?.aborted) throw new Error("delegate aborted");
 		const release = this.delegates.acquire(sessionId, { calls: pol.maxCalls, running: pol.maxConcurrent });
+		const retryStop = new AbortController();
+		const retrySignal = signal ? AbortSignal.any([signal, retryStop.signal]) : retryStop.signal;
 		startedAt = performance.now();
 		const outcome = await runDelegateWithinDeadline(
 			async () => {
 				// A detached tool still occupies a slot until it settles; retries must not pile up stuck work.
-				try { await agent.prompt(input.task); } finally { release(); }
+				try {
+					await agent.prompt(input.task);
+					// A stream cut off after thinking/partial text (e.g. post-thought MALFORMED_FUNCTION_CALL or reset)
+					// bypasses withUpstreamRetry; drop the half-written reply and continue just like SessionManager.run.
+					for (let attempt = 1, unknownUsed = false; !stopping && !retrySignal.aborted && attempt <= STREAM_RETRY.maxRetries; attempt++) {
+						const last = agent.state.messages[agent.state.messages.length - 1];
+						if (last?.role !== "assistant" || last.stopReason !== "error" || !last.content.length) break;
+						const kind = classifyUpstreamError(last);
+						if (kind === "permanent" || (kind === "unknown" && unknownUsed)) break;
+						if (kind === "unknown") {
+							unknownUsed = true;
+							logUnknownUpstreamError(last.errorMessage ?? "");
+						}
+						const delayMs = kind === "unknown" ? STREAM_RETRY.baseDelayMs : retryDelayMs({ baseDelayMs: STREAM_RETRY.baseDelayMs, maxAgentDelayMs: STREAM_RETRY.maxDelayMs }, attempt);
+						await sleepAbortable(delayMs, retrySignal);
+						if (stopping || retrySignal.aborted) break;
+						agent.state.messages = agent.state.messages.slice(0, -1);
+						turns = Math.max(0, turns - 1);
+						await agent.continue();
+					}
+				} finally { release(); }
 			},
-			() => { stopping = true; agent.abort(); }, signal, this.delegateTimeoutMs,
+			() => { stopping = true; retryStop.abort(); agent.abort(); }, signal, this.delegateTimeoutMs,
 		);
 		if (outcome === "cancelled" || signal?.aborted) throw new Error("delegate aborted");
 		const timedOut = outcome === "deadline";

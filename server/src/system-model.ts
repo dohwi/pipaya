@@ -4,6 +4,7 @@ import Value from "typebox/value";
 import { badRequest } from "./errors.ts";
 import { reasoningOption, type ModelRegistry } from "./models.ts";
 import { ModelChoice, type ModelChoiceValue } from "./model-choice.ts";
+import { COMPLETION_RETRY, completeWithUpstreamRetry } from "./upstream-retry.ts";
 
 /**
  * The "system model": a light model the server uses for its own small jobs, apart from any conversation. Today it
@@ -52,10 +53,11 @@ export class SystemModelSettings {
 		try {
 			const model = this.registry.models.getModel(target.provider, target.model);
 			if (!model || !(await this.registry.models.checkAuth(target.provider))) return null;
-			const reply = await this.registry.models.completeSimple(
-				model,
+			const reply = await completeWithUpstreamRetry(
+				(ctx) => this.registry.models.completeSimple(model, ctx, { maxTokens, signal, ...reasoningOption(target.thinkingLevel, model) }),
 				{ systemPrompt: system, messages: [{ role: "user", content: user, timestamp: Date.now() }] },
-				{ maxTokens, signal, ...reasoningOption(target.thinkingLevel, model) },
+				COMPLETION_RETRY,
+				signal,
 			);
 			if (reply.stopReason === "error" || reply.stopReason === "aborted") return null;
 			return reply.content.flatMap((c) => (c.type === "text" ? [c.text] : [])).join("");
