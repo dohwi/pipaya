@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { applyLinkEvent, applyLiveEvent, emptyLinkData } from "../src/lib/server-link-model";
+import { applyLinkEvent, applyLiveEvent, emptyLinkData, settleCompactionRunning } from "../src/lib/server-link-model";
 
 const session = (id: string, over: Record<string, unknown> = {}) => ({ id, title: id, closed: false, provider: "p", model: "m", ...over });
 const ev = (type: string, data: unknown = {}, sessionId: string | null = null) => ({ type, data, sessionId, ts: 1 }) as never;
@@ -31,6 +31,39 @@ describe("a background server's live state", () => {
 		expect(d.failed.a).toBe(true);
 		applyLinkEvent(d, ev("session_unread", { sessionId: "a", kind: null }));
 		expect(d.failed.a).toBeUndefined();
+	});
+	test("threshold compaction preserves an active run, manual compaction clears it, and unknown compaction asks for refresh", () => {
+		const d = emptyLinkData();
+		const unknownCalls: string[] = [];
+		// Mid-run / auto compaction: outer run is still busy after compaction_finished
+		applyLinkEvent(d, ev("run_started", {}, "a"));
+		applyLinkEvent(d, ev("compaction_started", { reason: "threshold" }, "a"));
+		applyLinkEvent(d, ev("compaction_finished", {}, "a"), (sid) => unknownCalls.push(sid));
+		expect(d.running.a).toBe(true);
+		expect(unknownCalls).toEqual([]);
+		applyLinkEvent(d, ev("run_finished", { status: "ok" }, "a"));
+		expect(d.running.a).toBe(false);
+
+		// Standalone manual compaction: clears running on both finish and failure
+		applyLinkEvent(d, ev("compaction_started", { reason: "manual" }, "b"));
+		expect(d.running.b).toBe(true);
+		applyLinkEvent(d, ev("compaction_finished", {}, "b"), (sid) => unknownCalls.push(sid));
+		expect(d.running.b).toBe(false);
+		applyLinkEvent(d, ev("compaction_started", { reason: "manual" }, "b"));
+		applyLinkEvent(d, ev("compaction_failed", {}, "b"), (sid) => unknownCalls.push(sid));
+		expect(d.running.b).toBe(false);
+
+		// Compaction finished without having seen compaction_started: keep running until /activity verifies
+		d.running.c = true;
+		applyLinkEvent(d, ev("compaction_finished", {}, "c"), (sid) => unknownCalls.push(sid));
+		expect(d.running.c).toBe(true);
+		expect(unknownCalls).toEqual(["c"]);
+
+		// When the open chat already knows a run is active, an unseen-start compaction keeps it without a refresh
+		const running = { d: true };
+		const compacting = {};
+		expect(settleCompactionRunning(running, compacting, "d", true)).toBe("keep");
+		expect(running.d).toBe(true);
 	});
 	test("groups and terminals are kept by id", () => {
 		const d = emptyLinkData();

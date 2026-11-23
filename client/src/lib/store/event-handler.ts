@@ -6,6 +6,7 @@ import type { NotificationSpec } from "../notification-contract";
 import { notifications } from "../notifications";
 import { K, read } from "../persist";
 import type { ServerLink } from "../server-link.svelte";
+import { settleCompactionRunning, type CompactionReason } from "../server-link-model";
 import type { TerminalInfo } from "../terminal";
 import type { Group, PipayaEvent, Session, ToolsInfo, WorkdirInfo } from "../types";
 
@@ -40,6 +41,7 @@ export interface OpenEventContext {
   groups: Group[];
   terminals: TerminalInfo[];
   running: Record<string, boolean>;
+  compacting: Record<string, CompactionReason>;
   awaiting: Record<string, number>;
   unread: Record<string, boolean>;
   failed: Record<string, boolean>;
@@ -63,6 +65,7 @@ export interface OpenEventContext {
   refreshWorkspace(): void;
   refreshProviders(): void;
   refreshServerExtensions(): void;
+  refreshActivity(): void;
   syncLocales(): void;
   onClientSettings(data: { key?: unknown; updatedAt?: unknown; origin?: unknown }): void;
   refreshUsage(chat: ChatState): void;
@@ -116,6 +119,7 @@ export function handleOpenServerEvent(ctx: OpenEventContext, e: PipayaEvent): vo
       if (i >= 0) ctx.sessions.splice(i, 1);
       if (s.closed) {
         ctx.running[s.id] = false;
+        delete ctx.compacting[s.id];
         ctx.awaiting[s.id] = 0;
         delete ctx.unread[s.id];
         delete ctx.failed[s.id];
@@ -156,6 +160,7 @@ export function handleOpenServerEvent(ctx: OpenEventContext, e: PipayaEvent): vo
       ctx.forgetInGroups(id);
       ctx.setSessions(ctx.sessions.filter((x) => x.id !== id));
       delete ctx.running[id];
+      delete ctx.compacting[id];
       delete ctx.awaiting[id];
       delete ctx.unread[id];
       delete ctx.failed[id];
@@ -163,15 +168,22 @@ export function handleOpenServerEvent(ctx: OpenEventContext, e: PipayaEvent): vo
       break;
     }
     case "compaction_started":
-      if (sid) ctx.running[sid] = true;
+      if (sid) {
+        const reason = (e.data as { reason?: unknown } | null)?.reason;
+        ctx.compacting[sid] = reason === "manual" ? "manual" : "threshold";
+        ctx.running[sid] = true;
+      }
       break;
     case "compaction_finished":
     case "compaction_failed":
-      if (sid && !ctx.chats[sid]?.running) ctx.running[sid] = false;
+      if (sid && settleCompactionRunning(ctx.running, ctx.compacting, sid, ctx.chats[sid]?.running) === "unknown") {
+        ctx.refreshActivity();
+      }
       break;
     case "run_started":
       if (sid) {
         ctx.running[sid] = true;
+        delete ctx.compacting[sid];
         delete ctx.failed[sid];
         const i = ctx.sessions.findIndex((x) => x.id === sid);
         if (i > 0) {
@@ -183,6 +195,7 @@ export function handleOpenServerEvent(ctx: OpenEventContext, e: PipayaEvent): vo
     case "run_finished":
       if (sid) {
         ctx.running[sid] = false;
+        delete ctx.compacting[sid];
         ctx.awaiting[sid] = 0;
         const bad = e.data.status === "error";
         const quiet = e.data.origin === "peer" && ctx.quietPeers;

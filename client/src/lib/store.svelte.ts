@@ -953,7 +953,7 @@ class AppStore {
       void notifications.receive(data.deviceId, data.notification, link.api).catch(() => {});
     } else if (e.type === "device_revoked") notifications.revoked((e.data as { deviceId: string }).deviceId, link.api);
     this.cueBackground(link, e);
-    applyLinkEvent(link.data, e);
+    applyLinkEvent(link.data, e, () => { void link.refreshActivity(); });
     if (e.type === "provider_updated" || e.type === "configuration_updated") {
       void link.refreshCatalog();
       if (e.type === "configuration_updated") void link.refreshWorkspace();
@@ -1033,6 +1033,8 @@ class AppStore {
   /* ---------- events ---------- */
 
   private handle(e: PipayaEvent) {
+    const link = this.link;
+    if (!link) return;
     handleOpenServerEvent(
       {
         activeId: this.activeId,
@@ -1040,10 +1042,11 @@ class AppStore {
         sessions: this.sessions,
         groups: this.groups,
         terminals: this.terminals,
-        running: this.running,
-        awaiting: this.awaiting,
-        unread: this.unread,
-        failed: this.failed,
+        running: link.data.running,
+        compacting: link.data.compacting,
+        awaiting: link.data.awaiting,
+        unread: link.data.unread,
+        failed: link.data.failed,
         chats: this.chats,
         setSessions: (next) => { this.sessions = next; },
         setGroups: (next) => { this.groups = next; },
@@ -1064,6 +1067,7 @@ class AppStore {
         refreshWorkspace: () => { void this.refreshWorkspace(); },
         refreshProviders: () => { void this.refreshProviders(); },
         refreshServerExtensions: () => { void this.refreshServerExtensions(); },
+        refreshActivity: () => { void link.refreshActivity(); },
         syncLocales: () => { void this.syncLocales(); },
         onClientSettings: (data) => { void this.settingsSync?.onEvent(data); },
         refreshUsage: (chat) => { void this.refreshUsage(chat); },
@@ -1701,10 +1705,24 @@ class AppStore {
     void this.ensureChat(id);
   }
 
+  /** Keep the server's sidebar/tab activity aligned with what a session load or catch-up just read. */
+  private syncChatStatus(link: ServerLink, chat: ChatState, kind: "load" | "catchUp") {
+    if (this.links[link.id] !== link) return;
+    if (this.chats[chat.id] && this.chats[chat.id] !== chat) return;
+    const active = Boolean(chat.running || chat.compacting);
+    if (Boolean(link.data.running[chat.id]) !== active) link.data.running[chat.id] = active;
+    if (!active) delete link.data.compacting[chat.id];
+    if (kind === "load") {
+      const awaiting = Object.values(chat.tools).filter((t) => t.state === "awaiting_input").length;
+      if ((link.data.awaiting[chat.id] ?? 0) !== awaiting) link.data.awaiting[chat.id] = awaiting;
+    }
+  }
+
   /** Make sure a session's transcript is loaded. `fresh` reloads it from the server. */
   async ensureChat(id: string, fresh = false): Promise<void> {
     const api = this.api;
-    if (!api) return;
+    const link = this.link;
+    if (!api || !link) return;
     if (this.chats[id] && !fresh) return;
     // Coming back to a conversation already on screen: reload it in place so the old transcript stays visible
     // (no skeleton) until the new one replaces it.
@@ -1716,12 +1734,10 @@ class AppStore {
         const { [id]: _gone, ...rest } = this.chats;
         this.chats = rest;
         if (this.activeId === id) this.newChat();
-        return;
       }
-      this.awaiting[id] = Object.values(shown.tools).filter((t) => t.state === "awaiting_input").length;
       return;
     }
-    const chat = new ChatState(id, api);
+    const chat = new ChatState(id, api, (c, kind) => this.syncChatStatus(link, c, kind));
     this.chats = { ...this.chats, [id]: chat };
     await chat.load();
     if (this.chats[id] !== chat) return;
@@ -1729,11 +1745,7 @@ class AppStore {
       const { [id]: _gone, ...rest } = this.chats;
       this.chats = rest;
       if (this.activeId === id) this.newChat();
-      return;
     }
-    this.awaiting[id] = Object.values(chat.tools).filter(
-      (t) => t.state === "awaiting_input",
-    ).length;
   }
 
   /**
@@ -1847,7 +1859,8 @@ class AppStore {
         if (!this.sessions.some((x) => x.id === s.id)) this.sessions.unshift(s);
         // Load the new chat off-screen and put the prompt in it first, so the pane goes from the welcome screen
         // straight to the sent message instead of flashing a skeleton and an empty transcript in between.
-        const fresh = new ChatState(s.id, api);
+        const link = this.link;
+        const fresh = new ChatState(s.id, api, (c, kind) => { if (link) this.syncChatStatus(link, c, kind); });
         await fresh.load();
         if (!fresh.ready) throw new Error(fresh.loadError || t("불러오지 못했습니다"));
         fresh.addOptimisticUser(text, images, files.map((f) => ({ path: "", name: f.name, size: f.size, mimeType: f.mimeType })));
