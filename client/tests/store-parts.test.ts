@@ -202,6 +202,23 @@ describe("feedback", () => {
 		for (const x of [...f.toasts]) f.dismissToast(x.id);
 		expect(f.toasts).toEqual([]);
 	});
+	test("pauseToast and resumeToast are idempotent and safe on unknown or dismissed ids", () => {
+		const f = new Feedback();
+		f.toast("one", "info");
+		const id = f.toasts[0]!.id;
+		f.pauseToast(999999);
+		f.resumeToast(999999);
+		f.pauseToast(id);
+		f.pauseToast(id);
+		expect(f.toasts.length).toBe(1);
+		f.resumeToast(id);
+		f.resumeToast(id);
+		expect(f.toasts.length).toBe(1);
+		f.pauseToast(id);
+		f.dismissToast(id);
+		f.resumeToast(id);
+		expect(f.toasts).toEqual([]);
+	});
 	test("one notice per session, newest first, at most NOTICE_MAX", () => {
 		const f = new Feedback();
 		f.announce("a", "done");

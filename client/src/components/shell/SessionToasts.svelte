@@ -22,9 +22,9 @@
 		top: 0;
 		left: 0;
 		right: 0;
+		padding: 8px 12px 0;
 		display: flex;
 		flex-direction: column;
 		pointer-events: none;
-		box-shadow: var(--shadow-soft);
 	}
 </style>
