@@ -56,12 +56,27 @@ share one left and one right line. Never write a raw side padding in a dialog; u
 - **One of a few is `Segmented`** (`fill` for a mode, `cards` for a setting). A list of many is a picker (`PickerOption`).
 - **A state or category you only read is a `Badge`** (`tone`: neutral, ok, warn, danger, accent, info; `--radius-xs` 4px rounded corners, not a round pill). No hand-made
   `.chip` / `.pill` / `.tag` spans with their own colours, no leading dot inside the badge (the tone already says it). Pass `title` directly on `<Badge>` instead of wrapping it in a bare `<span>`, which breaks flex centring.
-- Chips that stay pressed are only for filters and multi-pick from a long list (`FilterChip`: settings servers,
-  quick folders, a role's tools). Toolbar toggles (mic, source view, a terminal modifier, favourite star) are icon
+- Chips that stay pressed are only for filters and multi-pick from a long list (`FilterChip`: quick folders, a role's tools).
+  The settings server switcher is a `Segmented` plus an `IconButton` ("서버 추가"); there is no global `.chip` class any more. Toolbar toggles (mic, source view, a terminal modifier, favourite star) are icon
   buttons with `aria-pressed`, not chips.
-- No decorative glow, halo or blurred coloured `box-shadow`. A focus ring (a hard 2-3px spread) and the grey elevation
-  shadows are the only shadows. "Working" is told by the border alone: `.glow-working` breathes the border colour, a
-  graph card's ring turns; neither spreads a halo outside its box.
+- **Hybrid zero-shadow.** No `box-shadow` elevation on content, cards, rows, dim-backed modals (`Modal`, `Palette`, `NoServer`), toasts
+  and notices, nor anywhere in dark mode: `--shadow`, `--shadow-soft`, `--shadow-sm`, `--shadow-up`, `--shadow-overlay` are all `none` there, and
+  layers split by luminance steps (`--bg` #101012 → `--bg-side` #161619 → `--bg-elev` #1c1c21 → `--bg-active` #222227) plus crisp 1px borders
+  (`--border` #2b2b30, `--border-strong` #3f3f46). The one exception is `--shadow-overlay` (a light-mode whisper) on a **non-modal** floating
+  layer over content: `Select`, `RowMenu`, `SlashMenu`, `SendControls`, `FindBar`, `ExtensionFloating`, `SkillPicker`. A hairline `inset 0 0 0 1px` ring is not elevation.
+  `ui-lint` flags `shadow` and `halo`.
+- **Focus is an outline, never a halo.** `:focus-visible { outline: 2px solid var(--accent) }`; `outline-offset: 2px` on buttons and switches,
+  `-1px` on a bordered input, select, textarea or row (the ring sits on the border: no double border, never clipped by a scrolling parent).
+  `input/textarea/select` no longer reset `outline`. No `0 0 0 3px var(--accent-soft)`.
+- **Disabled is explicit.** `--disabled-bg` / `--disabled-border` / `--disabled-fg` (dark #161619 / #26262d / #63636d, light #f5f5f7 / #e4e4e7 / #8f8f99).
+  No blanket `opacity` on a `:disabled` / `.disabled` rule (`ui-lint` `disabled`): on dark it made controls vanish.
+- **Borderless tinted groups, no box-in-box.** `.set-group` and a list `ListItem` are borderless tinted surfaces (`--radius-sm` 8px); inside a `.set-group`
+  `--item-bg` makes the item the page colour. Never a bordered card inside a bordered dialog or group. A selected row is a Hairline Inset Fill
+  (`--bg-active` + 1px `--border-strong`, `--radius-xs`/6px); inactive siblings carry `1px solid transparent` so selecting never moves the layout.
+- **Status is a Badge or a quieter name**, never a decorative leading dot (the settings nav's live state is a `Badge`, off is `--text-faint`).
+- **Motion is restrained.** `--motion-fast/normal/slow` = 120 / 160 / 220ms, `--ease` calm ease-out; no `--ease-spring`, no idle shake, no expanding
+  ping ring, no `box-shadow` in a `transition`. "Working" is a steady tinted border (`.glow-working`, no loop) and the logo / pin opacity breath.
+  `ui-lint` flags `motion`.
 
 ### Shared dialog parts (use these, do not re-write the CSS)
 

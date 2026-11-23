@@ -258,10 +258,9 @@
 		max-height: min(var(--modal-max-h), calc(var(--dvh) - 24px));
 		display: flex;
 		flex-direction: column;
-		background: var(--bg-side);
+		background: var(--bg-elev); /* flat: white / #1c1c21 with a crisp 1px border, no shadow */
 		border: 1px solid var(--border-strong);
 		border-radius: var(--radius-panel);
-		box-shadow: var(--shadow);
 		color: var(--text);
 		overflow: hidden;
 	}

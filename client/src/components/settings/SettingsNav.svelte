@@ -12,6 +12,7 @@
 	import type { Server } from "../../lib/store.svelte";
 	import Icon from "../ui/Icon.svelte";
 	import Pin from "../ui/Pin.svelte";
+	import Badge from "../ui/Badge.svelte";
 	import { extensionUpdates } from "../../lib/extension-updates.svelte";
 	import { serverUpdater } from "../../lib/server-update.svelte";
 
@@ -186,8 +187,8 @@
 						{@const link = e.link}
 						<div class="item" class:end={e.end}>
 							<button role="tab" class="sub" class:linked={e.paired && !!link} aria-selected={extId === e.id} tabindex={extId === e.id ? 0 : -1} class:on={extId === e.id} onclick={() => (e.builtin ? go(x.id) : openExt(x.id, e.id))}>
-								<span class="dot" class:live={e.live && !e.half} class:half={e.half} role="img" aria-label={e.half ? e.halfLabel : e.live ? t("실행 중") : t("꺼짐")}></span>
-								<span class="nl">{e.name}</span>
+								<span class="nl" class:idle={!e.live && !e.half}>{e.name}{#if !e.live && !e.half}<span class="sr-only"> {t("꺼짐")}</span>{/if}</span>
+								{#if e.live && !e.half}<Badge tone="ok" size="sm">{t("실행 중")}</Badge>{/if}
 								{#if e.paired && !link}<span class="clip" class:half={e.half} role="img" aria-label={clipTip(e)} title={clipTip(e)}><Icon name="clip" /></span>{/if}
 								{#if e.update}<span class="upmark" role="img" aria-label={t("업데이트 있음")} title={t("업데이트 있음")}><Icon name="arrow-up" /></span>{/if}
 							</button>
@@ -393,18 +394,12 @@
 		text-overflow: ellipsis;
 		white-space: nowrap;
 	}
-	.nav .dot {
-		flex: none;
-		width: 7px;
-		height: 7px;
-		border-radius: 50%;
-		background: var(--border-strong);
+	/* off: a quieter name (no decorative dot); live: a soft Badge */
+	.nav button.sub :global(.badge) {
+		margin-left: auto;
 	}
-	.nav .dot.live {
-		background: var(--ok);
-	}
-	.nav .dot.half {
-		background: var(--warn);
+	.nav button.sub .nl.idle {
+		color: var(--text-faint);
 	}
 	.nav {
 		position: relative;
@@ -430,7 +425,7 @@
 		color: var(--text-dim);
 	}
 	.nav button:disabled {
-		opacity: 0.4;
+		color: var(--disabled-fg);
 		cursor: default;
 	}
 	@media (hover: hover) {

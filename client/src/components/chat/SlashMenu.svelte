@@ -67,7 +67,7 @@
 		background: var(--bg-elev);
 		border: 1px solid var(--border-strong);
 		border-radius: var(--radius);
-		box-shadow: var(--shadow);
+		box-shadow: var(--shadow-overlay);
 		padding: 4px 0;
 		z-index: var(--z-popover);
 	}

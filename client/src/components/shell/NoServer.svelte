@@ -129,7 +129,6 @@
 		border: 1px solid var(--border);
 		border-radius: var(--radius-panel);
 		background: var(--bg-side);
-		box-shadow: var(--shadow);
 		animation: rise var(--motion-slow) var(--ease) both;
 	}
 	@keyframes rise {

@@ -107,7 +107,7 @@
 	   border, so the text keeps the flat notice's 12px inset and the box its height. */
 	.raised {
 		background: color-mix(in srgb, var(--notice-tint) 14%, var(--bg-lift));
-		box-shadow: 0 0 0 1px color-mix(in srgb, var(--notice-tint) 34%, transparent), var(--shadow-soft);
+		box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--notice-tint) 34%, transparent); /* a hairline, zero elevation */
 	}
 	.raised.info {
 		--notice-tint: var(--info);
@@ -172,7 +172,7 @@
 		cursor: pointer;
 	}
 	.action :global(button:not(.btn):disabled) {
-		opacity: 0.5;
+		color: var(--disabled-fg);
 		cursor: default;
 		text-decoration: none;
 	}

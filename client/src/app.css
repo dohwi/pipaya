@@ -143,10 +143,8 @@
 	--lb-dot: rgba(255, 255, 255, 0.35);
 	--lb-note-bg: rgba(20, 20, 20, 0.88);
 	--lb-note-err: rgba(150, 30, 30, 0.92);
-	--lb-shadow: 0 20px 80px rgba(0, 0, 0, 0.55);
-	--lb-note-shadow: 0 8px 30px rgba(0, 0, 0, 0.5);
-	--shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.08);
-	--shadow-up: 0 -6px 20px rgba(0, 0, 0, 0.35);
+	--lb-shadow: none;
+	--lb-note-shadow: none;
 	/* Stacking scale. A dialog is a scrim + a panel pair; a dialog opened from another sits one layer higher.
 	   layer 1: dialogs opened from the main screen (settings, palette, work details, model picker)
 	   layer 2: opened from a layer-1 dialog (server form)  layer 3: from layer 2 (folder picker, extension dialogs)
@@ -173,13 +171,12 @@
 	--z-lightbox: 120;
 	--z-tooltip: 130; /* hover cards lifted to <body>: above everything, they never take input focus */
 	/* Motion (Material profile). lib/motion.ts reads --motion-* so JS and CSS stay in sync. */
-	--motion-fast: 180ms; /* exits, hover, small state changes */
-	--motion-normal: 360ms; /* entrances */
-	--motion-slow: 460ms; /* progress, large movements */
+	--motion-fast: 120ms; /* exits, hover, small state changes */
+	--motion-normal: 160ms; /* entrances */
+	--motion-slow: 220ms; /* progress, large movements */
 	--ease: cubic-bezier(0.22, 1, 0.36, 1); /* entrance: emphasized-decelerate */
 	--ease-exit: cubic-bezier(0.3, 0, 0.8, 0.15); /* exit: emphasized-accelerate */
 	--ease-std: cubic-bezier(0.2, 0, 0, 1);
-	--ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
 	/* "Working / needs attention" beat, shared by agent logos (AgentBadge), pins and status dots. One duration, one easing, one dim
 	   depth, so every indicator breathes at the same speed whatever its shape; the elements are also pinned to the document timeline
 	   (lib/syncAnim), so they stay in phase. Logo, pin and dot all pulse opacity (no rotation), so the same duration feels the same.
@@ -216,16 +213,16 @@
 
 :root[data-theme="dark"] {
 	color-scheme: dark;
-	--bg: #161616;
-	--bg-side: #191919;
-	--bg-group: #202022; /* nav while a group is open: a touch lighter than --bg */
+	--bg: #101012;
+	--bg-side: #161619;
+	--bg-group: #1a1a1f; /* nav while a group is open: a touch lighter than --bg */
 	--bg-tabbar: color-mix(in srgb, var(--bg) 55%, #000); /* the tab strip, a step below the page (#0c0c0c on #161616): the front tab is the page's colour */
-	--bg-elev: #1c1c1c;
-	--bg-lift: #242424; /* something carried off a list: clearly off the sidebar (#191919) */
-	--bg-set: #222224; /* a group of settings on the dialog surface */
-	--bg-hover: #242424;
-	--bg-active: #2b2b2b;
-	--bg-code: #121212;
+	--bg-elev: #1c1c21;
+	--bg-lift: #232329; /* something carried off a list: clearly off the sidebar (#191919) */
+	--bg-set: #161619; /* a group of settings on the dialog surface */
+	--bg-hover: #1c1c21;
+	--bg-active: #222227;
+	--bg-code: #0c0c0e;
 	/* code syntax colours (GitHub dark): every one 6:1 or better on --bg-code */
 	--syn-keyword: #ff7b72;
 	--syn-title: #d2a8ff;
@@ -235,13 +232,13 @@
 	--syn-comment: #8b949e;
 	--syn-name: #7ee787;
 	--syn-bullet: #f2cc60;
-	--border: #2e2e2e;
-	--border-strong: #3f3f3f;
+	--border: #2b2b30;
+	--border-strong: #3f3f46;
 	--tree-line: #5a5a5a; /* sidebar tree rule: between --border-strong and --text-dim so it reads on the dark rows */
 	--text: #ededed;
 	--text-dim: #a0a0a0;
 	--text-faint: #9494a0; /* 4.8:1 or better on every dark surface incl. --bg-active (was #8b8b93: 4.25 on #2a2a2a) */
-	--user-bg: #242424;
+	--user-bg: #1c1c21;
 	--accent: #e4e4e7;
 	--accent-hover: #ffffff;
 	--accent-fg: #18181b;
@@ -273,23 +270,29 @@
 	--ok-soft: rgba(62, 207, 142, 0.14);
 	--warn-soft: rgba(245, 165, 36, 0.14);
 	--danger-soft: rgba(244, 97, 108, 0.14);
-	--shadow: 0 10px 40px rgba(0, 0, 0, 0.55);
-	--shadow-soft: 0 2px 10px rgba(0, 0, 0, 0.28);
+	--shadow: none;
+	--shadow-soft: none;
+	--shadow-overlay: none; /* hybrid zero-shadow: dark layers are split by luminance + 1px borders */
+	--shadow-sm: none;
+	--shadow-up: none;
+	--disabled-bg: #161619;
+	--disabled-border: #26262d;
+	--disabled-fg: #63636d;
 	--scrim: rgba(0, 0, 0, 0.6);
 }
 
 :root[data-theme="light"] {
 	color-scheme: light;
 	--bg: #ffffff;
-	--bg-side: #fafafa;
-	--bg-group: #f1f1f3; /* nav while a group is open: a touch darker than --bg */
+	--bg-side: #f5f5f7;
+	--bg-group: #f5f5f7; /* nav while a group is open: a touch darker than --bg */
 	--bg-tabbar: color-mix(in srgb, var(--bg) 94%, #000); /* the tab strip, a step below the page (#f0f0f0 on #fff): the front tab is the page's colour */
-	--bg-elev: #fafafa;
+	--bg-elev: #ffffff;
 	--bg-lift: #ffffff; /* something carried off a list: clearly off the sidebar (#fafafa) */
-	--bg-set: #f1f1f3;
-	--bg-hover: #f4f4f5;
-	--bg-active: #ececee;
-	--bg-code: #f4f4f5;
+	--bg-set: #f5f5f7;
+	--bg-hover: #ededf0;
+	--bg-active: #ebebee;
+	--bg-code: #f5f5f7;
 	/* code syntax colours (GitHub light): every one 4.5:1 or better on --bg-code */
 	--syn-keyword: #cf222e;
 	--syn-title: #8250df;
@@ -299,15 +302,15 @@
 	--syn-comment: #57606a;
 	--syn-name: #116329;
 	--syn-bullet: #953800;
-	--border: #ededed;
+	--border: #e4e4e7;
 	--border-strong: #d4d4d8;
 	--tree-line: #a1a1aa; /* sidebar tree rule */
-	--text: #0a0a0b;
+	--text: #09090b;
 	--text-dim: #4b4b54; /* sidebar 11px text on the grey rows measured 4.32; now 6.8 or better on every light surface */
 	--text-faint: #63636c; /* 4.7:1 or better on --bg-active #ececee and --bg-set (was #71717a: 3.95 / 4.28) */
-	--user-bg: #f4f4f5;
-	--accent: #18181b;
-	--accent-hover: #000000;
+	--user-bg: #f5f5f7;
+	--accent: #000000;
+	--accent-hover: #27272a;
 	--accent-fg: #ffffff;
 	--accent-soft: rgba(24, 24, 27, 0.07);
 	--grid-line: rgba(0, 0, 0, 0.055);
@@ -339,8 +342,14 @@
 	--ok-soft: rgba(18, 163, 106, 0.1);
 	--warn-soft: rgba(184, 110, 0, 0.1);
 	--danger-soft: rgba(214, 48, 61, 0.09);
-	--shadow: 0 10px 40px rgba(20, 25, 40, 0.14);
-	--shadow-soft: 0 2px 10px rgba(20, 25, 40, 0.08);
+	--shadow: none;
+	--shadow-soft: none;
+	--shadow-overlay: 0 8px 20px -8px rgb(0 0 0 / 0.14), 0 2px 6px -2px rgb(0 0 0 / 0.06); /* the one whisper: light non-modal overlays only */
+	--shadow-sm: none;
+	--shadow-up: none;
+	--disabled-bg: #f5f5f7;
+	--disabled-border: #e4e4e7;
+	--disabled-fg: #8f8f99;
 	--scrim: rgba(10, 12, 18, 0.4);
 }
 
@@ -454,10 +463,12 @@ dialog:focus-visible,
 [role="dialog"]:focus-visible {
 	outline: none;
 }
+/* bordered fields: the ring sits on the border, not outside it (no double border, never clipped by a parent) */
 input:focus-visible,
 textarea:focus-visible,
 select:focus-visible {
-	outline: none;
+	outline: 2px solid var(--accent);
+	outline-offset: -1px;
 }
 /* a slider has no border to light up like a text field does, so it keeps the ring */
 input[type="range"]:focus-visible {
@@ -513,7 +524,9 @@ input[type="range"]:focus-visible {
 	transform: scale(0.94);
 }
 .btn:disabled {
-	opacity: 0.5;
+	background: var(--disabled-bg);
+	border-color: var(--disabled-border);
+	color: var(--disabled-fg);
 }
 /* the one compact size; `small` was an alias and is gone */
 .btn.sm {
@@ -657,13 +670,13 @@ input[type="range"]:focus-visible {
 	border: 1px solid var(--border-strong);
 	border-radius: var(--radius-control);
 	transition:
-		border-color var(--motion-fast) var(--ease-std),
-		box-shadow var(--motion-fast) var(--ease-std);
+		border-color var(--motion-fast) var(--ease-std);
 	font-size: var(--fs-lg); /* >=16px stops iOS zooming on focus */
 }
-.field:focus {
+.field:focus-visible {
 	border-color: var(--accent);
-	box-shadow: 0 0 0 3px var(--accent-soft);
+	outline: 2px solid var(--accent);
+	outline-offset: -1px;
 }
 
 /* select: same field chrome, custom chevron (native arrow and popup-button look differ per OS) */
@@ -678,7 +691,9 @@ select.field {
 }
 select.field:disabled {
 	cursor: default;
-	opacity: 0.55;
+	background-color: var(--disabled-bg);
+	border-color: var(--disabled-border);
+	color: var(--disabled-fg);
 }
 :root[data-theme="dark"] {
 	--chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23a1a1aa' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
@@ -715,7 +730,6 @@ input[type="checkbox"] {
 	transition:
 		background-color var(--motion-fast) var(--ease-std),
 		border-color var(--motion-fast) var(--ease-std),
-		box-shadow var(--motion-fast) var(--ease-std),
 		transform var(--motion-fast) var(--ease);
 }
 @media (hover: hover) {
@@ -737,24 +751,10 @@ input[type="checkbox"]:focus-visible {
 }
 input[type="checkbox"]:disabled {
 	cursor: default;
-	opacity: 0.55;
+	background-color: var(--disabled-bg);
+	border-color: var(--disabled-border);
 }
 
-.chip {
-	display: inline-flex;
-	align-items: center;
-	gap: 4px;
-	height: 22px;
-	padding: 0 8px 1px; /* 1px lift, the same as Badge: this font sits ~0.5px low when centred (measured at 8x on Hangul, Latin, digits) */
-	border-radius: var(--radius-xs);
-	font-size: var(--fs-2xs);
-	font-weight: 600;
-	letter-spacing: 0.01em;
-	background: var(--bg-active); /* --bg-elev disappears on a card */
-	color: var(--text-dim);
-	white-space: nowrap;
-	flex: none;
-}
 /* A key cap in running text ("Esc 취소"): bordered key shape on --radius-xs. */
 kbd {
 	display: inline-block;
@@ -835,10 +835,6 @@ kbd {
 [data-level] {
 	--lv-soft: color-mix(in srgb, var(--lv) 14%, transparent);
 }
-.chip.think {
-	background: var(--lv-soft);
-	color: var(--lv);
-}
 
 /* Read by a screen reader, never drawn (a "(필수)" after a required field's star, a live status line). */
 .sr-only {
@@ -863,12 +859,12 @@ kbd {
 	background: var(--bg-set);
 	--fa-bg: var(--bg-set); /* a sticky form footer inside (.form-actions) covers the card's own colour, edge to edge */
 	--fa-px: var(--dlg-gap);
-	border-radius: var(--radius);
+	border-radius: var(--radius-sm); /* a borderless tinted surface, 8px */
 	/* choice cards inside: unselected sit flat on the group, the selected one lifts onto the page colour with a dark ring */
+	--item-bg: var(--bg); /* a ListItem on this tint reads as the page colour, borderless */
 	--card-bg: transparent;
 	--card-border: var(--border-strong);
 	--card-on-bg: var(--bg);
-	--card-on-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
 }
 .set-group > .section-label,
 .set-group > .head .section-label {
@@ -1083,7 +1079,7 @@ button:is(.wide, [aria-expanded], [role="option"], [role="tab"]):active:not(:dis
 	background: transparent;
 }
 .seg > button:disabled {
-	opacity: 0.4;
+	color: var(--disabled-fg);
 }
 
 /* lib/edge-fade: a sideways scroller fades only the edge that hides content (16px, like the queued list's ramps) */
@@ -1146,8 +1142,7 @@ button:is(.wide, [aria-expanded], [role="option"], [role="tab"]):active:not(:dis
 		transform var(--motion-normal) var(--ease),
 		width var(--motion-normal) var(--ease),
 		height var(--motion-normal) var(--ease),
-		background-color var(--motion-normal) var(--ease),
-		box-shadow var(--motion-normal) var(--ease);
+		background-color var(--motion-normal) var(--ease);
 }
 
 /* Material ripple (lib/ripple.ts appends the span on pointerdown). Hover colour stays below it via isolation. */
@@ -1400,24 +1395,14 @@ dialog[data-closing]::backdrop {
 .glow-working {
 	--glow: var(--lv, var(--text-dim));
 	--glow-base: var(--border);
-	animation: glow-breathe 2.4s ease-in-out infinite;
 }
-/* extra specificity so it wins over the scoped `.bubble` / `.box` border rules (also the resting look when motion is reduced) */
-/* compacting context: same breathing outline, but in the warning (yellow) colour */
-.glow-working.glow-compacting {
-	--glow: var(--warn);
-}
+/* extra specificity so it wins over the scoped `.bubble` / `.box` border rules; a steady tinted border, no looping animation */
 html .glow-working.glow-working {
 	border-color: color-mix(in srgb, var(--glow) 55%, var(--glow-base));
 }
-@keyframes glow-breathe {
-	0%,
-	100% {
-		border-color: color-mix(in srgb, var(--glow) 30%, var(--glow-base));
-	}
-	50% {
-		border-color: color-mix(in srgb, var(--glow) 70%, var(--glow-base));
-	}
+/* compacting context: the same steady outline, in the warning colour */
+.glow-working.glow-compacting {
+	--glow: var(--warn);
 }
 
 /* Three dots that rise in turn: the quiet "working" mark for the work box (the round spinner stays for buttons and forms). */
@@ -1474,9 +1459,6 @@ html.page-hidden *::after {
 		animation: none;
 		color: var(--sh-base);
 		background-image: none;
-	}
-	.glow-working {
-		animation: none;
 	}
 	*,
 	*::before,

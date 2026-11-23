@@ -317,7 +317,7 @@
 	}
 	/* disabled: solid pre-mixed colours instead of opacity */
 	.stack .mode:disabled {
-		opacity: 1;
+		color: var(--disabled-fg);
 		background: var(--bg-active);
 		color: var(--text-faint);
 	}
@@ -363,7 +363,7 @@
 		transform: scale(0.92);
 	}
 	.mode:disabled {
-		opacity: 0.4;
+		color: var(--disabled-fg);
 	}
 	.mode.primary {
 		background: var(--accent);
@@ -395,7 +395,7 @@
 		background: var(--bg-elev);
 		border: 1px solid var(--border-strong);
 		border-radius: var(--radius);
-		box-shadow: var(--shadow);
+		box-shadow: var(--shadow-overlay);
 		padding: 4px 0;
 		z-index: var(--z-popover);
 	}

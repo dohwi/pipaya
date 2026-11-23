@@ -38,7 +38,7 @@
 			color var(--motion-fast) var(--ease-std);
 	}
 	.where:disabled {
-		opacity: 0.6; /* same as the composer box while offline */
+		color: var(--disabled-fg);
 	}
 	@media (hover: hover) {
 		.where:hover:not(:disabled) {

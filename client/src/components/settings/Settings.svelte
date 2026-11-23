@@ -16,11 +16,10 @@
 	import Extensions from "../extensions/Extensions.svelte";
 	import Backup from "../server/Backup.svelte";
 	import ServerForm from "../server/ServerForm.svelte";
-	import FilterChip from "../ui/FilterChip.svelte";
+	import Segmented from "../ui/Segmented.svelte";
+	import IconButton from "../ui/IconButton.svelte";
 	import Pin from "../ui/Pin.svelte";
 	import { connectionState, orderServers, unreachable } from "../../lib/sidebar-model";
-	import Icon from "../ui/Icon.svelte";
-	import { slidingIndicator } from "../../lib/sliding-indicator";
 	import { app } from "../../lib/store.svelte";
 	import { serverUpdater } from "../../lib/server-update.svelte";
 	import { SETTINGS_TABS, needsOnlineServer, queryWords, searchSettings, type Hit, type SettingsTabId } from "../../lib/settings-search";
@@ -156,15 +155,27 @@
 <Modal closeShortcut="settings" onclose={close} label={t("설정")} width="2xl" height="700px" maxHeight="700px" gutter="48px" safeArea>
 	<ModalHeader title={detailPhone ? t(current.label) : t("설정")} onclose={close} onback={detailPhone ? back : undefined} />
 	{#if !detailPhone}
-	<div class="srvbar" role="group" aria-label={t("설정 범위")} use:slidingIndicator={{ selector: ".fchip.on", radius: "999px" }}>
-		{#each chips as { s, state } (s.id)}
-			<span class="chipwrap" class:off={unreachable(state)}>
-				<FilterChip on={s.id === server?.id} title={app.serverLabel(s)} onclick={() => showServer(s.id)}><span class="srvname">{app.serverLabel(s)}</span></FilterChip>
-				{#if app.problemsOf(s.id).length}<Pin tone="danger" label={t("설정 문제 {n}", { n: app.problemsOf(s.id).length })} />
-				{:else if needsUpdate(s.id)}<Pin tone={app.compat === "ok" ? "ok" : "warn"} label={app.compat === "ok" ? t("서버 업데이트 있음") : t("업데이트 필요")} />{/if}
-			</span>
-		{/each}
-		<FilterChip title={t("서버 추가")} onclick={() => (app.serverForm = "new")}><Icon name="plus" /></FilterChip>
+	<div class="srvbar">
+		<div class="srvseg">
+			<Segmented
+				label={t("설정 범위")}
+				size="sm"
+				full={false}
+				value={server?.id ?? ""}
+				options={chips.map(({ s }) => ({ id: s.id, label: app.serverLabel(s), title: app.serverLabel(s) }))}
+				onchange={showServer}
+			>
+				{#snippet option({ id, label })}
+					{@const c = chips.find((x) => x.s.id === id)}
+					<span class="srvopt" class:off={c ? unreachable(c.state) : false}>
+						<span class="srvname">{label}</span>
+						{#if c && app.problemsOf(id).length}<Pin tone="danger" label={t("설정 문제 {n}", { n: app.problemsOf(id).length })} />
+						{:else if c && needsUpdate(id)}<Pin tone={app.compat === "ok" ? "ok" : "warn"} label={app.compat === "ok" ? t("서버 업데이트 있음") : t("업데이트 필요")} />{/if}
+					</span>
+				{/snippet}
+			</Segmented>
+		</div>
+		<IconButton icon="plus" size="sm" label={t("서버 추가")} tip onclick={() => (app.serverForm = "new")} />
 	</div>
 
 	<div class="searchbar">
@@ -226,39 +237,32 @@
 		position: relative;
 		padding: 0 var(--dlg-px) var(--dlg-foot-t);
 	}
-	/* The chips' focus ring (4px) needs room inside the scroller, which clips on both axes */
-	.srvbar {
+		.srvbar {
 		position: relative;
 		flex: none;
 		display: flex;
+		align-items: center;
 		gap: var(--dlg-gap-sm);
-		margin-top: -4px; /* pulls the strip up under the title: the 4px focus-ring room below is part of its 8px top padding */
 		padding: var(--dlg-gap-sm) var(--dlg-px) var(--dlg-foot-t);
+	}
+	.srvseg {
+		min-width: 0;
 		overflow-x: auto;
 		scrollbar-width: none;
 	}
-	.srvbar::-webkit-scrollbar {
+	.srvseg::-webkit-scrollbar {
 		display: none;
 	}
-	.chipwrap {
+	.srvopt {
 		position: relative;
-		flex: none;
 		display: inline-flex;
-		--pin-ring: var(--bg-elev);
-		/* the chip is a pill, so its corner is empty: pull the dot in onto the curve */
-		--pin-inset: 2px;
+		align-items: center;
+		gap: 4px;
+		--pin-ring: var(--bg-active);
 	}
-	/* unreachable: the chip falls back to a dashed outline and a quieter name (still pressable: its "정보" tab fixes the
-	   address or token). No opacity: at 0.5 the name sank to 2.4:1 and the chip looked disabled rather than offline. */
-	.chipwrap.off :global(.fchip) {
-		border-style: dashed;
+	/* unreachable: a quieter name (still pressable: its "정보" tab fixes the address or token) */
+	.srvopt.off {
 		color: var(--text-faint);
-	}
-	.chipwrap.off :global(.fchip:not(.on)) {
-		border-color: var(--border-strong);
-	}
-	.chipwrap.off :global(.fchip.on) {
-		color: var(--text-dim);
 	}
 	.srvname {
 		min-width: 0;

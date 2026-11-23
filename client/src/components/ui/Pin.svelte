@@ -98,13 +98,14 @@
 		animation: pin-pulse var(--anim-working-duration) var(--anim-working-ease) infinite;
 	}
 	.ping {
-		animation: pin-ping var(--anim-working-duration) var(--anim-working-ease) infinite;
+		animation: pin-pulse var(--anim-working-duration) var(--anim-working-ease) infinite; /* the same calm breath: no expanding ring */
 	}
 	/* a pin breathes with its fill only: fading the whole pin made its ring see-through too, so the host's icon or tile
 	   edge showed through the cut-out and the digits washed out; at the low point it read as neither there nor gone.
 	   The ring and the digits stay solid. A dot sinks half way (the logos' --anim-working-dim); a count only to 75%,
 	   which keeps its digits at 4.5:1 (dark) / 3.5:1 (light) on the fill. */
-	.pulse {
+	.pulse,
+	.ping {
 		--pin-dim: 50%;
 	}
 	.num.pulse {
@@ -113,15 +114,6 @@
 	@keyframes pin-pulse {
 		50% {
 			background-color: color-mix(in srgb, var(--pin-bg) var(--pin-dim), var(--pin-ring, var(--bg-side)));
-		}
-	}
-	@keyframes pin-ping {
-		0% {
-			box-shadow: 0 0 0 2px var(--pin-ring, var(--bg-side)), 0 0 0 2px var(--pin-bg);
-		}
-		70%,
-		100% {
-			box-shadow: 0 0 0 2px var(--pin-ring, var(--bg-side)), 0 0 0 7px transparent;
 		}
 	}
 	@media (prefers-reduced-motion: reduce) {

@@ -193,7 +193,7 @@
 	@media (hover: hover) {
 		.launcher:hover:not(:disabled) { background: var(--bg-hover); border-color: var(--border-strong); color: var(--text); }
 	}
-	.launcher:disabled { opacity: 0.55; cursor: not-allowed; }
+	.launcher:disabled { color: var(--disabled-fg); cursor: not-allowed; }
 	.launcher :global(svg) { flex: none; width: 15px; height: 15px; stroke-width: 1.8; }
 	.launcher.danger { color: var(--danger); border-color: var(--danger); }
 	.toolbar-hint { font-size: var(--fs-2xs); color: var(--text-faint); }

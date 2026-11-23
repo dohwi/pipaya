@@ -187,7 +187,7 @@
 				<span class="stats" title={statsTitle || undefined} use:tapTitle>
 					{#if tail.ts}<time class="when" use:tapTitle datetime={new Date(tail.ts).toISOString()} title={fullTime(tail.ts)}>{liveMessageTime(tail.ts)}</time>{/if}
 					{#if tail.ts && (tail.model || statsMore)}<span class="sep" aria-hidden="true">·</span>{/if}
-					{#if tail.model}<span class="slogo"><ModelLogo icon={tailModel?.icon} provider={tail.provider} model={tail.model} size={13} colored /></span>{/if}
+					{#if tail.model}<span class="slogo"><ModelLogo icon={tailModel?.icon} provider={tail.provider} model={tail.model} size={14} colored /></span>{/if}
 					<!-- at rest only who wrote it; the level, tokens and duration come with the buttons (hover, focus, or a tap on touch) -->
 					{#if modelName || statsMore || fell}<span class="stext">{modelName}{#if fell}<!-- a fallback stays on the quiet line at rest: the reply was billed at a speed other than the one chosen -->{modelName ? " · " : ""}<span class="fell">{tierLabel(fell.requestedTier!)} → {tierLabel(fell.servedTier!)}</span>{/if}{#if statsMore}<span class="more">{modelName || fell ? " · " : ""}{statsMore}</span>{/if}</span>{/if}
 				</span>

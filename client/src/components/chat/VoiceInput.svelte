@@ -103,7 +103,7 @@
 		background: color-mix(in srgb, var(--danger) 14%, transparent);
 	}
 	.mic:disabled {
-		opacity: 0.4;
+		color: var(--disabled-fg);
 	}
 	/* Configured but not usable: dimmed like a disabled control, yet still a target (its tap opens Settings). A dashed
 	   ring says "not working" without the button reading as a different control. */

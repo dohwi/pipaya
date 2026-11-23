@@ -93,7 +93,7 @@
 {/each}
 
 <style>
-	.float { position: fixed; display: flex; flex-direction: column; min-width: 0; background: var(--bg); border: 1px solid var(--border-strong); border-radius: var(--radius-panel); box-shadow: var(--shadow); overflow: hidden; }
+	.float { position: fixed; display: flex; flex-direction: column; min-width: 0; background: var(--bg); border: 1px solid var(--border-strong); border-radius: var(--radius-panel); box-shadow: var(--shadow-overlay); overflow: hidden; }
 	.bar { flex: none; display: flex; align-items: center; gap: 8px; padding: 4px 4px 4px 12px; background: var(--bg-side); border-bottom: 1px solid var(--border); cursor: grab; touch-action: none; }
 	.bar:active { cursor: grabbing; }
 	.bar:focus-visible, .corner:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }

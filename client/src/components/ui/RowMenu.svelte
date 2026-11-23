@@ -142,7 +142,7 @@
 		border: 1px solid var(--border-strong);
 		border-radius: var(--radius);
 		background: var(--bg-elev);
-		box-shadow: var(--shadow);
+		box-shadow: var(--shadow-overlay);
 	}
 	.mi {
 		display: flex;

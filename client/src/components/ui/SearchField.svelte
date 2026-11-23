@@ -67,17 +67,15 @@
 		color: var(--text);
 		font: inherit;
 		font-size: var(--fs-md);
-		outline: none;
-		transition:
-			border-color var(--motion-fast) var(--ease-std),
-			box-shadow var(--motion-fast) var(--ease-std);
+		transition: border-color var(--motion-fast) var(--ease-std);
 	}
 	input::placeholder {
 		color: var(--text-faint);
 	}
-	input:focus {
+	input:focus-visible {
 		border-color: var(--accent);
-		box-shadow: 0 0 0 3px var(--accent-soft);
+		outline: 2px solid var(--accent);
+		outline-offset: -1px;
 	}
 	/* the native clear "x" differs per engine; Escape clears instead */
 	input::-webkit-search-cancel-button {

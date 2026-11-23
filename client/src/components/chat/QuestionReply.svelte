@@ -287,7 +287,7 @@
 		height: 16px;
 	}
 	.nav:disabled {
-		opacity: 0.3;
+		color: var(--disabled-fg);
 	}
 	.where {
 		min-width: 48px;

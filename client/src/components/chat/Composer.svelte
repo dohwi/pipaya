@@ -995,16 +995,17 @@
 		background: color-mix(in srgb, var(--bg-elev) 92%, transparent);
 		transition:
 			border-color var(--motion-fast) var(--ease-std),
-			box-shadow var(--motion-fast) var(--ease-std),
 			opacity var(--motion-fast) var(--ease-std);
-		box-shadow: var(--shadow-sm);
 	}
 	.box:focus-within {
-		border-color: var(--text-faint);
-		box-shadow: 0 0 0 3px var(--accent-soft);
+		border-color: var(--accent);
+		outline: 2px solid var(--accent);
+		outline-offset: -1px;
 	}
 	.box.disabled {
-		opacity: 0.6;
+		background: var(--disabled-bg);
+		border-color: var(--disabled-border);
+		color: var(--disabled-fg);
 	}
 	textarea {
 		display: block;

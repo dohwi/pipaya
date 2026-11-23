@@ -246,7 +246,8 @@
 	.mlist li.disabled .mlogo,
 	.mlist li.unavail .minfo,
 	.mlist li.unavail .mlogo {
-		opacity: 0.45;
+		color: var(--disabled-fg);
+		filter: grayscale(1); /* a muted logo, still legible in dark */
 	}
 	.spinwrap {
 		display: inline-flex;

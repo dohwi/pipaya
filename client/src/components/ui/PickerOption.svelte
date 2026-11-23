@@ -78,7 +78,7 @@
 		outline-offset: -2px;
 	}
 	.pk-opt.dim {
-		opacity: 0.5;
+		color: var(--disabled-fg);
 		cursor: default;
 	}
 	.lead {

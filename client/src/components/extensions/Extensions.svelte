@@ -619,7 +619,7 @@
 	.adds > :global(.btn) { flex: 1 1 0; min-width: 0; }
 	/* a <label> styled as the button: the file input fills it, invisible, so a click anywhere opens the picker; the ring follows the input */
 	.file { position: relative; cursor: pointer; }
-	.file.disabled { opacity: 0.5; cursor: default; }
+	.file.disabled { color: var(--disabled-fg); cursor: default; }
 	.file input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: inherit; }
 	.file:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
 	.trouble { display: flex; flex-direction: column; gap: 8px; }
