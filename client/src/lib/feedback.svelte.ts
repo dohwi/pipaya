@@ -41,10 +41,17 @@ export const NOTICE_MAX = 3;
 
 let seq = 1;
 
+interface ToastTimer {
+  timer?: ReturnType<typeof setTimeout>;
+  startedAt: number;
+  remaining: number;
+  paused: boolean;
+}
+
 export class Feedback {
   toasts = $state<Toast[]>([]);
   notices = $state<Notice[]>([]);
-  private toastTimers = new Map<number, ReturnType<typeof setTimeout>>();
+  private toastTimers = new Map<number, ToastTimer>();
   private noticeTimers = new Map<number, ReturnType<typeof setTimeout>>();
 
   /** `sid`: the session the message is about, so it appears inside that session's pane (see SessionToasts). */
@@ -52,11 +59,40 @@ export class Feedback {
     const id = seq++;
     const ms = tone === "error" || tone === "warn" ? 6000 : 4000; // a warning is a whole sentence: as long to read as an error
     this.toasts.push({ id, text, tone, ms, ...(sid ? { sid } : {}), ...(action ? { action } : {}) });
-    this.toastTimers.set(id, setTimeout(() => this.dismissToast(id), ms));
+    const entry: ToastTimer = {
+      startedAt: Date.now(),
+      remaining: ms,
+      paused: false,
+      timer: setTimeout(() => this.dismissToast(id), ms),
+    };
+    this.toastTimers.set(id, entry);
+  }
+
+  /** Pause a toast's auto-dismiss timer while the user hovers or expands the stack to read it. */
+  pauseToast(id: number) {
+    const entry = this.toastTimers.get(id);
+    if (!entry || entry.paused) return;
+    clearTimeout(entry.timer);
+    entry.timer = undefined;
+    entry.remaining = Math.max(0, entry.remaining - (Date.now() - entry.startedAt));
+    entry.paused = true;
+  }
+
+  /** Resume a paused toast with whatever time was left when it was paused. */
+  resumeToast(id: number) {
+    const entry = this.toastTimers.get(id);
+    if (!entry || !entry.paused) return;
+    entry.paused = false;
+    if (entry.remaining <= 0) {
+      this.dismissToast(id);
+      return;
+    }
+    entry.startedAt = Date.now();
+    entry.timer = setTimeout(() => this.dismissToast(id), entry.remaining);
   }
 
   dismissToast(id: number) {
-    clearTimeout(this.toastTimers.get(id));
+    clearTimeout(this.toastTimers.get(id)?.timer);
     this.toastTimers.delete(id);
     this.toasts = this.toasts.filter((t) => t.id !== id);
   }

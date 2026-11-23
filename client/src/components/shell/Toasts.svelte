@@ -59,7 +59,9 @@
 	aria-live="polite"
 >
 	<VersionNotice />
-	<ToastStrip toasts={app.globalToasts} from={overSheet ? "bottom" : "top"} />
+	<div class="tray" class:bottom={overSheet}>
+		<ToastStrip toasts={app.globalToasts} from={overSheet ? "bottom" : "top"} />
+	</div>
 </div>
 
 <style>
@@ -72,7 +74,6 @@
 		display: flex;
 		flex-direction: column;
 		pointer-events: none;
-		box-shadow: var(--shadow-soft);
 	}
 	.toasts.anchored {
 		right: auto;
@@ -83,8 +84,11 @@
 		padding-bottom: var(--sab);
 		flex-direction: column-reverse;
 	}
-	.toasts.bottom :global(.strip) {
-		border-bottom: 0;
-		border-top: 1px solid color-mix(in srgb, var(--tone) 25%, var(--border-strong));
+	.tray {
+		padding: 12px 16px 0;
+		pointer-events: none;
+	}
+	.tray.bottom {
+		padding: 0 16px 12px;
 	}
 </style>

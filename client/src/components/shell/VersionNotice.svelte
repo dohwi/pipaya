@@ -74,6 +74,7 @@
 		padding: 4px 8px 4px 16px;
 		background: color-mix(in srgb, var(--tone) 16%, var(--bg-elev));
 		border-bottom: 1px solid color-mix(in srgb, var(--tone) 25%, var(--border-strong));
+		box-shadow: var(--shadow-soft);
 		color: var(--text);
 		font-size: var(--fs-sm);
 		line-height: 18px;

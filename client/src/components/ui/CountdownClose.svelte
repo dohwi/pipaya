@@ -3,13 +3,13 @@
 	import Icon from "./Icon.svelte";
 
 	/** The close button on a strip: an X inside a ring that drains over `ms`, the time left before the strip goes away. */
-	let { ms, onclick, label = t("알림 닫기") }: { ms: number; onclick: () => void; label?: string } = $props();
+	let { ms, onclick, label = t("알림 닫기"), paused = false }: { ms: number; onclick: () => void; label?: string; paused?: boolean } = $props();
 </script>
 
 <button class="close" {onclick} aria-label={label}>
 	<svg class="ring" viewBox="0 0 28 28" aria-hidden="true">
 		<circle class="track" cx="14" cy="14" r="12" />
-		<circle class="left" cx="14" cy="14" r="12" pathLength="100" style="animation-duration:{ms}ms" />
+		<circle class="left" class:paused cx="14" cy="14" r="12" pathLength="100" style="animation-duration:{ms}ms" />
 	</svg>
 	<Icon name="x" />
 </button>
