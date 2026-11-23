@@ -9,8 +9,13 @@ import { join } from "node:path";
 const disposals: (() => Promise<void>)[] = [];
 afterEach(async () => { for (const dispose of disposals.splice(0)) await dispose(); });
 const pause = () => new Promise(resolve => setTimeout(resolve, 30));
+const seedSessions = (db: ReturnType<typeof openDb>, ids: string[]) => {
+  const ins = db.query("INSERT OR IGNORE INTO sessions (id, title, cwd, provider, model, thinking_level, system_prompt, tools, closed, created_at, updated_at) VALUES (?, 't', '/', 'p', 'm', 'medium', '', '[]', 0, 1, 1)");
+  for (const id of ids) ins.run(id);
+};
 function setup(transports: PushTransports = {}, escalateMs = 0) {
-  const db = openDb(":memory:"); const bus = new EventBus(db); let now = 1000; const policy = { escalateMs };
+  const db = openDb(":memory:"); seedSessions(db, ["s", "s1", ...Array.from({ length: 12 }, (_, i) => `s${i}`)]);
+  const bus = new EventBus(db); let now = 1000; const policy = { escalateMs };
   const service = new NotificationService(db, bus, transports, () => now, 5, () => policy.escalateMs);
   const events: PipayaEvent[] = []; bus.subscribe(e => { if (e.type === "notification") events.push(e); });
   disposals.push(async () => { await service.close(); db.close(); });
@@ -49,7 +54,7 @@ describe("notification policy", () => {
     expect((events[1]!.data as any).notification.body).toBe("Which file?");
   });
   test("quietPeers: a peer-started run ends silently, a user run notifies; questions always notify", () => {
-    const db = openDb(":memory:"); const bus = new EventBus(db); let quiet = true;
+    const db = openDb(":memory:"); seedSessions(db, ["s1"]); const bus = new EventBus(db); let quiet = true;
     const service = new NotificationService(db, bus, {}, () => 1000, 5, () => 0, { title: () => "t", lastAnswer: () => undefined, quietPeers: () => quiet });
     const events: PipayaEvent[] = []; bus.subscribe(e => { if (e.type === "notification") events.push(e); });
     disposals.push(async () => { await service.close(); db.close(); });

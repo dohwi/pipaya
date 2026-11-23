@@ -15,6 +15,9 @@ function stalledResponse() {
 	return res;
 }
 
+const seedSession = (db: ReturnType<typeof openDb>, id: string) =>
+	db.query("INSERT OR IGNORE INTO sessions (id, title, cwd, provider, model, thinking_level, system_prompt, tools, closed, created_at, updated_at) VALUES (?, 't', '/', 'p', 'm', 'medium', '', '[]', 0, 1, 1)").run(id);
+
 describe("SSE slow client", () => {
 	test("is cut off once its queue passes the limit, and stops receiving events", () => {
 		const bus = new EventBus(openDb(":memory:"));
@@ -33,7 +36,9 @@ describe("SSE slow client", () => {
 	});
 
 	test("paces large replay bursts across socket drains instead of cutting the reconnecting client off", async () => {
-		const bus = new EventBus(openDb(":memory:"));
+		const db = openDb(":memory:");
+		seedSession(db, "s1");
+		const bus = new EventBus(db);
 		// 4 large persisted events whose combined size exceeds maxBuffered (2000 B), like multi-MB image turn events.
 		for (let i = 0; i < 4; i++) bus.publish("s1", "message_end", { idx: i, pad: "x".repeat(700) });
 
@@ -72,7 +77,9 @@ describe("SSE slow client", () => {
 	});
 
 	test("drops a replay client whose socket never drains within drainTimeoutMs", async () => {
-		const bus = new EventBus(openDb(":memory:"));
+		const db = openDb(":memory:");
+		seedSession(db, "s1");
+		const bus = new EventBus(db);
 		for (let i = 0; i < 4; i++) bus.publish("s1", "message_end", { pad: "x".repeat(700) });
 
 		const res = stalledResponse();
