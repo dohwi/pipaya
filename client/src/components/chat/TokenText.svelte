@@ -13,9 +13,10 @@
 	 *  @name    a session or group, amber like the agent-to-agent header; a session chip opens that session
 	 *  #imageN  an attached image, a quiet grey chip with an image icon; opens it in the viewer
 	 *  #path    a file, the same grey chip with a file icon; opens the preview when the message belongs to a session
+	 *  /skill:x a skill the server confirmed it injected, in the composer's accent hue with a skill icon
 	 * Amber is the only accent, so a message full of tags does not turn into a rainbow.
 	 */
-	let { text, images = [], sessionId = null }: { text: string; images?: ImageBlock[]; sessionId?: string | null } = $props();
+	let { text, images = [], skills = [], sessionId = null }: { text: string; images?: ImageBlock[]; skills?: readonly string[]; sessionId?: string | null } = $props();
 
 	// Every way a name may be written (stored Korean and the romanized display form) → the session it names.
 	const sessions = $derived.by(() => {
@@ -28,13 +29,13 @@
 		return map;
 	});
 	const groups = $derived(app.groups.map((g) => groupHandle(g.name)).filter(Boolean));
-	const parts = $derived(splitTokens(text, { names: [...sessions.keys(), ...groups], images: images.length }));
+	const parts = $derived(splitTokens(text, { names: [...sessions.keys(), ...groups], images: images.length, skills }));
 	const sessionOf = (name: string) => sessions.get(name.toLowerCase());
 	const openImage = (n: number) => app.openImage(images.map((m) => ({ src: `data:${m.mimeType};base64,${m.data}`, mimeType: m.mimeType })), n - 1);
 	const openFile = (path: string) => sessionId && app.openFile(sessionId, { path, name: path.split("/").filter(Boolean).pop() ?? path });
 </script>
 
-{#each parts as p, i (i)}{#if p.kind === "mention" && sessionOf(p.name!)}{@const id = sessionOf(p.name!)!}<button type="button" class="tok mention" title={t("{name} 대화 열기", { name: p.text })} onclick={() => void app.openAny(id)}>{p.text}</button>{:else if p.kind === "mention"}<span class="tok mention">{p.text}</span>{:else if p.kind === "image"}<button type="button" class="tok image" title={t("이미지 크게 보기")} onclick={() => openImage(Number(p.name))}><Icon name="image" />{p.text.slice(1)}</button>{:else if p.kind === "file" && sessionId}<button type="button" class="tok file" title={t("{name} 미리 보기", { name: p.name! })} onclick={() => openFile(p.name!)}><Icon name="file" />{p.text.slice(1)}</button>{:else if p.kind === "file"}<span class="tok file"><Icon name="file" />{p.text.slice(1)}</span>{:else}{p.text}{/if}{/each}
+{#each parts as p, i (i)}{#if p.kind === "mention" && sessionOf(p.name!)}{@const id = sessionOf(p.name!)!}<button type="button" class="tok mention" title={t("{name} 대화 열기", { name: p.text })} onclick={() => void app.openAny(id)}>{p.text}</button>{:else if p.kind === "mention"}<span class="tok mention">{p.text}</span>{:else if p.kind === "image"}<button type="button" class="tok image" title={t("이미지 크게 보기")} onclick={() => openImage(Number(p.name))}><Icon name="image" />{p.text.slice(1)}</button>{:else if p.kind === "file" && sessionId}<button type="button" class="tok file" title={t("{name} 미리 보기", { name: p.name! })} onclick={() => openFile(p.name!)}><Icon name="file" />{p.text.slice(1)}</button>{:else if p.kind === "file"}<span class="tok file"><Icon name="file" />{p.text.slice(1)}</span>{:else if p.kind === "skill"}<span class="tok skill" title={t("스킬 {name} 불러옴", { name: p.name! })}><Icon name="skill" />{p.text}</span>{:else}{p.text}{/if}{/each}
 
 <style>
 	/* Shaped like inline code in a reply (Markdown.svelte): 8px corners, em padding so the chip grows with its text, a hairline
@@ -61,6 +62,10 @@
 	}
 	.image {
 		--hue: var(--mark-img);
+	}
+	.skill {
+		--hue: var(--accent);
+		font-weight: 600;
 	}
 	/* The # sigil gives way to a small icon in the text's own colour, dimmed. */
 	.tok :global(svg) {

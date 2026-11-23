@@ -57,8 +57,8 @@ export function knownMention(token: string, names: readonly string[]): string | 
 	return best;
 }
 
-/** A run of message text: plain, or a token the chat draws as a chip (`@name` of a known session or group, `#imageN`, `#path`). */
-export type TextPart = { text: string; kind?: "mention" | "image" | "file"; name?: string };
+/** A run of message text: plain, or a token the chat draws as a chip (`@name` of a known session or group, `#imageN`, `#path`, `/skill:name`). */
+export type TextPart = { text: string; kind?: "mention" | "image" | "file" | "skill"; name?: string };
 
 /** A `#` token that reads as a file path: has a `/` or ends in an extension (`#src/a.ts`, `#README.md`), not `#96` or `#main`. */
 const FILE_TOKEN = /^(?=[^\s#]*[A-Za-z])[^\s#]*(?:\/[^\s#]*|\.[A-Za-z0-9]{1,8})$/;
@@ -66,10 +66,12 @@ const FILE_TOKEN = /^(?=[^\s#]*[A-Za-z])[^\s#]*(?:\/[^\s#]*|\.[A-Za-z0-9]{1,8})$
 /**
  * A sent message cut into plain runs and the tokens the composer marks, by the same rules: a token starts the text or
  * follows whitespace; `@name` only for a known name (`@미나랑` is `@미나` plus "랑"; `a@b.c` is no mention), `#imageN` only
- * for an attached image (1..images), `#path` only when it reads as a path. Trailing punctuation stays text (`#a.ts,`).
+ * for an attached image (1..images), `#path` only when it reads as a path, and `/skill:name` only for a skill the
+ * server confirmed it injected (`<pipaya-hint>`). Trailing particles/punctuation stay text.
  */
-export function splitTokens(text: string, known: { names: readonly string[]; images?: number }): TextPart[] {
-	if (!/[@#]/.test(text)) return [{ text }];
+export function splitTokens(text: string, known: { names: readonly string[]; images?: number; skills?: readonly string[] }): TextPart[] {
+	const hasSkills = !!known.skills?.length && text.includes("/skill:");
+	if (!/[@#]/.test(text) && !hasSkills) return [{ text }];
 	const out: TextPart[] = [];
 	let plain = "";
 	let last = 0;
@@ -80,8 +82,12 @@ export function splitTokens(text: string, known: { names: readonly string[]; ima
 		out.push(part);
 		last = at + part.text.length;
 	};
-	for (const m of text.matchAll(/(^|\s)([@#])([^\s@#]+)/g)) {
+	for (const m of text.matchAll(/(^|\s)(?:([@#])([^\s@#]+)|\/skill:([a-z0-9]+(?:-[a-z0-9]+)*)(?![A-Za-z0-9_/-]))/g)) {
 		const at = m.index! + m[1]!.length;
+		if (m[4]) {
+			if (known.skills?.includes(m[4])) push(at, { text: `/skill:${m[4]}`, kind: "skill", name: m[4] });
+			continue;
+		}
 		const body = m[3]!;
 		if (m[2] === "@") {
 			const hit = knownMention(body, known.names);
@@ -120,9 +126,12 @@ export interface Known {
  */
 export function mirrorHtml(text: string, known: Known): string {
 	return (
-		esc(text).replace(/(^|\s)(#image(\d+)(?=\s|$)|#[^\s#]+|@[^\s@]+|\/skill:[a-z0-9-]+|\/[a-z][a-z0-9-]*:[A-Za-z0-9_.-]+)(?=\s|$)/g, (m, lead: string, tok: string, n?: string) => {
+		esc(text).replace(/(^|\s)(#image(\d+)(?=\s|$)|#[^\s#]+|@[^\s@]+|\/skill:[^\s]+|\/[a-z][a-z0-9-]*:[A-Za-z0-9_.-]+)(?=\s|$)/g, (m, lead: string, tok: string, n?: string) => {
 			if (tok.startsWith("/") && !tok.startsWith("/skill:")) return known.commands.includes(tok.slice(1)) ? `${lead}<mark class="skill">${tok}</mark>` : m;
-			if (tok.startsWith("/skill:")) return known.skills.some((k) => k.name === tok.slice(7)) ? `${lead}<mark class="skill">${tok}</mark>` : m;
+			if (tok.startsWith("/skill:")) {
+				const sm = /^\/skill:([a-z0-9]+(?:-[a-z0-9]+)*)(?![A-Za-z0-9_/-])(.*)$/.exec(tok);
+				return sm && known.skills.some((k) => k.name === sm[1]) ? `${lead}<mark class="skill">/skill:${sm[1]}</mark>${sm[2]}` : m;
+			}
 			if (tok.startsWith("@")) {
 				const rest = tok.slice(1);
 				const hit = knownMention(rest, known.mentions.map(esc));

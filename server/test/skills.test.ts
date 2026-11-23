@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { buildApp, type App } from "../src/app.ts";
 import type { Config } from "../src/config.ts";
-import { BUILTIN_SKILLS_DIR, discoverSkills, parseFrontmatter, skillsPrompt } from "../src/skills.ts";
+import { BUILTIN_SKILLS_DIR, discoverSkills, mentionedSkills, parseFrontmatter, skillsPrompt } from "../src/skills.ts";
 import { safeReadPath } from "../src/tools.ts";
 import { ECHO_MODEL, echoProviderBody, startEchoUpstream } from "./support/openai-upstream.ts";
 
@@ -558,5 +558,29 @@ describe("built-in skills", () => {
 			upstream.stop();
 			f.cleanup();
 		}
+	});
+});
+
+describe("mentionedSkills", () => {
+	const names = ["review", "my-skill", "a1-b2"];
+
+	test("matches /skill:name at start or after whitespace, including before Korean particles and punctuation", () => {
+		expect(mentionedSkills("/skill:review", names)).toEqual(["review"]);
+		expect(mentionedSkills("/skill:review로 해줘", names)).toEqual(["review"]);
+		expect(mentionedSkills("먼저 /skill:my-skill을 쓰고, /skill:a1-b2.", names)).toEqual(["my-skill", "a1-b2"]);
+		expect(mentionedSkills("줄바꿈 뒤\n/skill:review) /skill:my-skill!", names)).toEqual(["review", "my-skill"]);
+		expect(mentionedSkills("/skill:review, /skill:my-skill;", names)).toEqual(["review", "my-skill"]);
+	});
+
+	test("preserves order and deduplicates repeats", () => {
+		expect(mentionedSkills("/skill:a1-b2 /skill:review로 /skill:a1-b2", names)).toEqual(["a1-b2", "review"]);
+	});
+
+	test("ignores unknown names, prefix collisions, invalid trailing characters, and mid-path occurrences", () => {
+		expect(mentionedSkills("", names)).toEqual([]);
+		expect(mentionedSkills("/skill:unknown", names)).toEqual([]);
+		expect(mentionedSkills("/skill:review-extra", names)).toEqual([]);
+		expect(mentionedSkills("/skill:review_x /skill:review/x /skill:review- /skill:reviewA", names)).toEqual([]);
+		expect(mentionedSkills("foo/skill:review", names)).toEqual([]);
 	});
 });
