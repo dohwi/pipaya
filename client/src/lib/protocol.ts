@@ -1,10 +1,10 @@
-import { PROTOCOL_HEADER, PROTOCOL_QUERY, PROTOCOL_VERSION } from "@shared/protocol";
+import { MIN_CLIENT_PROTOCOL, PROTOCOL_HEADER, PROTOCOL_QUERY, PROTOCOL_VERSION } from "@shared/protocol";
 
 /**
  * Wire compatibility with the server. Plain TypeScript (no runes), so it is unit-tested directly.
  * Constants come straight from `server/src/shared/protocol.ts` (`@shared/protocol`).
  */
-export { PROTOCOL_HEADER, PROTOCOL_QUERY, PROTOCOL_VERSION };
+export { MIN_CLIENT_PROTOCOL, PROTOCOL_HEADER, PROTOCOL_QUERY, PROTOCOL_VERSION };
 
 /** What `GET /health` says about the server. A server from before the handshake leaves all three out. */
 export interface ServerVersions {
