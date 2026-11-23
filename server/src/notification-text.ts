@@ -6,6 +6,8 @@
  * Layout: the title says WHAT happened and in WHICH chat; the body is a preview of the result, so the notification
  * can be judged without opening the app.
  */
+import { FORCE_STOP_ERROR, RESTART_RUN_ERROR, SHUTDOWN_RUN_ERROR } from "./run-guard.ts";
+
 export type Lang = "ko" | "en";
 
 export const lang = (tag: string | undefined | null): Lang => (tag ?? "").toLowerCase().startsWith("ko") ? "ko" : "en";
@@ -14,12 +16,18 @@ const WORDS = {
   ko: {
     done: "작업 완료", failed: "작업 실패", question: "답변 필요",
     noAnswer: "작업이 끝났습니다", noReason: "원인을 알 수 없는 오류로 멈췄습니다",
+    shutdown: "서버가 종료되어 작업이 중단되었습니다",
+    restart: "서버가 예기치 않게 멈춰 작업이 중단되었습니다",
+    forced: "작업이 제때 끝나지 않아 강제로 중단되었습니다",
     asks: "답을 기다리고 있습니다",
     took: (s: string) => `${s} 걸림`, test: "시험 알림", testBody: "이 알림이 보이면 알림이 정상입니다",
   },
   en: {
     done: "Done", failed: "Failed", question: "Answer needed",
     noAnswer: "The task has finished", noReason: "Stopped by an unknown error",
+    shutdown: SHUTDOWN_RUN_ERROR,
+    restart: RESTART_RUN_ERROR,
+    forced: FORCE_STOP_ERROR,
     asks: "Waiting for your answer",
     took: (s: string) => `took ${s}`, test: "Test notification", testBody: "If you can read this, notifications work",
   },
@@ -58,7 +66,8 @@ const head = (icon: string, label: string, chat: string) => `${icon} ${isDefault
 export function runText(f: RunFacts, l: Lang): Text {
   const w = WORDS[l];
   if (f.status === "error") {
-    return { title: head("⚠️", w.failed, f.title), body: preview(f.error || w.noReason, 140) };
+    const err = f.error === SHUTDOWN_RUN_ERROR ? w.shutdown : f.error === RESTART_RUN_ERROR ? w.restart : f.error === FORCE_STOP_ERROR ? w.forced : (f.error || w.noReason);
+    return { title: head("⚠️", w.failed, f.title), body: preview(err, 140) };
   }
   const lead = f.answer ? preview(f.answer) : w.noAnswer;
   const took = f.durationMs && f.durationMs >= 20_000 ? ` · ${w.took(duration(f.durationMs, l))}` : "";

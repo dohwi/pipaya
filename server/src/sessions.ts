@@ -31,7 +31,7 @@ import type { MessageNote } from "./extensions/types.ts";
 import { IMAGE_TOOL, imageTool, type ImageModelSettings } from "./image-generation.ts";
 import { fitImagesInContext } from "./image-guard.ts";
 import { describeTools, enabledTools, planTools } from "./tool-plan.ts";
-import { afterTurn, isEmptyFailedReply, runawayReason, type RunStopCause } from "./run-guard.ts";
+import { afterTurn, FORCE_STOP_ERROR, isEmptyFailedReply, RESTART_RUN_ERROR, RESTART_TOOL_ERROR, runawayReason, SHUTDOWN_RUN_ERROR, SHUTDOWN_TOOL_ERROR, type RunStopCause } from "./run-guard.ts";
 import { chooseModel, DelegateLimits, finalText, freeRole, repeatedReadSignature, runDelegateWithinDeadline, subagentReport, subagentReportReserveMs, subagentUsage, loadSubagents, SUBAGENT_NAME, SUBAGENT_TIMEOUT_MS, SUBAGENT_WRAP_UP, subagentSystem, type SubagentDef, type SubagentLimit } from "./subagents.ts";
 import { classifyUpstreamError, DEFAULT_UPSTREAM_RETRY, logUnknownUpstreamError, retryReason, sleepAbortable, STREAM_RETRY, withUpstreamRetry } from "./upstream-retry.ts";
 import { autoTitle, DESCRIBE_MAX_TOKENS, DESCRIBE_SYSTEM, describeRequest, parseDescription, type SystemModelSettings } from "./system-model.ts";
@@ -39,8 +39,8 @@ import type { GuardSettings } from "./guard.ts";
 import { runPromptTemplate } from "./templates.ts";
 
 import { DEFAULT_DELEGATE_POLICY, type DelegatePolicyValue } from "./configuration.ts";
-import { DEFAULT_SYSTEM_PROMPT, FORCE_STOP_MS, IDLE_EVICT_MS, MAX_REPEATED_CALLS, MAX_RUN_TURNS, promptKey, type CompactionOutcome, type CreateSessionInput, type Deferred, type Live, type PromptMode, type RunOrigin, type SessionStatus } from "./session-types.ts";
-import { agentQueue, noteBlock, queuedIn, queuedText, SCHEDULE_NOTE, sentText, slimAssistantEvent, withoutNotes, type Waiting } from "./session-helpers.ts";
+import { DEFAULT_SYSTEM_PROMPT, FORCE_STOP_MS, IDLE_EVICT_MS, MAX_REPEATED_CALLS, MAX_RUN_TURNS, promptKey, SHUTDOWN_STOP_MS, type CompactionOutcome, type CreateSessionInput, type Deferred, type Live, type PromptMode, type RunOrigin, type SessionStatus } from "./session-types.ts";
+import { agentQueue, interruptedAssistantMessage, interruptedToolResult, noteBlock, queuedIn, queuedText, rewriteShutdownToolText, SCHEDULE_NOTE, sentText, slimAssistantEvent, unresolvedToolCalls, withoutNotes, type Waiting } from "./session-helpers.ts";
 export { DEFAULT_SYSTEM_PROMPT } from "./session-types.ts";
 export { NOTE_OPEN, noteBlock, SCHEDULE_OPEN } from "./session-helpers.ts";
 export type { CompactionOutcome, CreateSessionInput, PromptMode, SessionStatus } from "./session-types.ts";
@@ -113,6 +113,8 @@ export class SessionManager {
 		private delegateTimeoutMs = SUBAGENT_TIMEOUT_MS,
 		/** Built-in bash command guard. */
 		private guard?: GuardSettings,
+		/** Deadline for runs to settle during `shutdown()` before being forcibly finalized as errors. */
+		private shutdownStopMs = SHUTDOWN_STOP_MS,
 	) {
 		this.sweeper = setInterval(() => this.evictIdle(), 5 * 60_000);
 		this.sweeper.unref?.();
@@ -496,7 +498,7 @@ export class SessionManager {
 		if (!updated) throw notFound("session");
 
 		const live = this.live.get(id);
-		if (patch.closed && live?.running) { live.stopCause ??= "close"; live.agent.abort(); } // closing stops the work
+		if (patch.closed && live?.running) this.abortRun(id, live, "close"); // closing stops the work
 		if (live) {
 			if (clean.provider || clean.model) {
 				const m = this.registry.models.getModel(updated.provider, updated.model);
@@ -550,7 +552,17 @@ export class SessionManager {
 	delete(id: string): void {
 		this.get(id);
 		const live = this.live.get(id);
-		if (live?.running) { live.stopCause ??= "close"; live.agent.abort(); }
+		if (live) {
+			live.compacting?.abort();
+			live.retryWait?.abort();
+			if (live.running) {
+				live.stopCause ??= "close";
+				live.forceStopped = true;
+				live.running = false;
+				live.agent.abort();
+				live.cutLoose?.();
+			}
+		}
 		this.describing.get(id)?.abort();
 		this.dispose(id);
 		this.stopped.delete(id);
@@ -667,7 +679,7 @@ export class SessionManager {
 				});
 			}
 			await live.agent.prompt(message);
-		});
+		}, message);
 		return { accepted: "prompt" };
 	}
 
@@ -853,7 +865,7 @@ export class SessionManager {
 	 * ignores the signal), drop the stuck agent, publish run_finished ourselves and let the next message start fresh
 	 * from the stored transcript. Without this, Esc could leave a session "running" forever.
 	 */
-	private abortRun(id: string, live: Live, cause: RunStopCause): void {
+	private abortRun(id: string, live: Live, cause: RunStopCause, timeoutMs = FORCE_STOP_MS): void {
 		const settled = live.settled;
 		live.stopCause ??= cause;
 		this.stopped.add(id);
@@ -863,20 +875,38 @@ export class SessionManager {
 		live.retryWait?.abort();
 		const timer = setTimeout(() => {
 			if (!live.running || live.settled !== settled || this.live.get(id) !== live) return;
+			const effectiveCause = live.stopCause ?? cause;
 			live.forceStopped = true;
 			live.running = false;
 			live.lastActive = Date.now();
 			this.dropQueued(id, live);
 			this.dispose(id);
+			live.cutLoose?.();
+			if (effectiveCause === "shutdown") {
+				const rec = this.store.get(id);
+				if (rec) this.finalizeErrorTurn(id, rec, live, SHUTDOWN_RUN_ERROR, SHUTDOWN_TOOL_ERROR);
+				this.store.clearActiveRun(id);
+				const origin = this.peers.settleRun(id, live.origin, "error");
+				this.bus.publish(id, "run_finished", {
+					status: "error",
+					error: SHUTDOWN_RUN_ERROR,
+					durationMs: Date.now() - live.runStartedAt,
+					origin,
+					usage: this.store.usage(id),
+					cause: "shutdown",
+				});
+				return;
+			}
+			this.store.clearActiveRun(id);
 			this.bus.publish(id, "run_finished", {
 				status: "aborted",
-				error: "The run did not stop in time and was forced to stop.",
+				error: FORCE_STOP_ERROR,
 				durationMs: Date.now() - live.runStartedAt,
 				origin: live.origin,
 				usage: this.store.usage(id),
 				cause: "force",
 			});
-		}, FORCE_STOP_MS);
+		}, timeoutMs);
 		timer.unref?.();
 		void settled?.finally(() => clearTimeout(timer));
 	}
@@ -886,10 +916,46 @@ export class SessionManager {
 		this.closing = true;
 		for (const c of this.describing.values()) c.abort();
 		for (const id of this.live.keys()) this.ext?.notify("session_shutdown", { sessionId: id }, id);
-		for (const [id, live] of this.live) {
-			if (live.running) { live.stopCause ??= "shutdown"; live.agent.abort(); }
-			this.dispose(id);
+		for (const [id, live] of [...this.live]) {
+			live.compacting?.abort();
+			if (live.running) this.abortRun(id, live, "shutdown", this.shutdownStopMs);
+			else this.dispose(id);
 		}
+	}
+
+	/**
+	 * On server start, finalizes any runs that were left active by a crash, SIGKILL or sudden reboot: restores an
+	 * unpersisted prompt, closes orphaned tool calls with error toolResults, appends an error assistant message and
+	 * publishes `run_finished(status: "error", cause: "restart")` so sessions never silently become idle.
+	 */
+	recoverInterruptedRuns(): number {
+		const active = this.store.activeRuns();
+		if (!active.length) return 0;
+		const finished: { sessionId: string; origin: RunOrigin; durationMs: number }[] = [];
+		// First close every interrupted transcript and clear active_runs, before publishing `run_finished` (which may notify
+		// watcher sessions that were themselves interrupted in the same crash).
+		for (const run of active) {
+			const rec = this.store.get(run.sessionId);
+			if (!rec) {
+				this.store.clearActiveRun(run.sessionId);
+				continue;
+			}
+			this.finalizeErrorTurn(run.sessionId, rec, undefined, RESTART_RUN_ERROR, RESTART_TOOL_ERROR, run.pendingPrompt ?? undefined);
+			this.store.clearActiveRun(run.sessionId);
+			finished.push({ sessionId: run.sessionId, origin: run.origin, durationMs: Math.max(0, Date.now() - run.startedAt) });
+		}
+		for (const item of finished) {
+			const origin = this.peers.settleRun(item.sessionId, item.origin, "error");
+			this.bus.publish(item.sessionId, "run_finished", {
+				status: "error",
+				error: RESTART_RUN_ERROR,
+				durationMs: item.durationMs,
+				origin,
+				usage: this.store.usage(item.sessionId),
+				cause: "restart",
+			});
+		}
+		return finished.length;
 	}
 
 	/**
@@ -935,9 +1001,10 @@ export class SessionManager {
 
 	/** Wait until every active run has settled (used on shutdown and in tests). */
 	async idle(): Promise<void> {
+		while (this.pendingRuns.size > 0 || this.pendingDescribes.size > 0) {
+			await Promise.all([...this.pendingRuns, ...this.pendingDescribes]);
+		}
 		await Promise.all([...this.live.values()].map((l) => l.agent.waitForIdle()));
-		await Promise.all([...this.pendingRuns]);
-		await Promise.all([...this.pendingDescribes]);
 	}
 
 	// ── Internals ───────────────────────────────────────────────────────────
@@ -947,7 +1014,7 @@ export class SessionManager {
 	 * watcher) started it, "user" otherwise. It is stamped on run_started and run_finished so notifications can be decided
 	 * from the event alone.
 	 */
-	private run(id: string, live: Live, mode: string, origin: RunOrigin, start: () => Promise<void>): void {
+	private run(id: string, live: Live, mode: string, origin: RunOrigin, start: () => Promise<void>, pendingPrompt?: AgentMessage): void {
 		this.peers.resetRun(id);
 		this.delegates.resetRun(id);
 		live.running = true;
@@ -959,86 +1026,187 @@ export class SessionManager {
 		live.recentCalls = [];
 		live.stopCause = undefined;
 		live.limitReason = undefined;
+		live.forceStopped = false;
+		live.pendingPrompt = pendingPrompt;
+		let releaseCutLoose = () => {};
+		const cutLoosePromise = new Promise<void>((r) => { releaseCutLoose = r; });
+		live.cutLoose = releaseCutLoose;
+		this.store.markRunActive(id, { origin, startedAt: live.runStartedAt, ...(pendingPrompt ? { pendingPrompt } : {}) });
 		this.bus.publish(id, "run_started", { mode, origin });
 
 		const settled = (async () => {
 			let error: string | null = null;
 			let interrupted = false;
 			try {
-				await start();
-			} catch (e) {
-				error = e instanceof Error ? e.message : String(e);
-			}
-			// The provider rejected the request because the context is too big: compact once and carry on.
-			if (!error && !live.forceStopped && (await this.recoverFromOverflow(id, live))) {
 				try {
-					await live.agent.continue();
+					await start();
 				} catch (e) {
 					error = e instanceof Error ? e.message : String(e);
 				}
-			}
-			// The gateway closed the socket after part of the reply had streamed: a half-written answer cannot be resumed,
-			// so drop it and ask again with backoff instead of ending the run on a transport hiccup.
-			// An unclassified error gets a single restart (and a log line), a transient one the full STREAM_RETRY budget.
-			for (let attempt = 1, unknownUsed = false; !error && !live.forceStopped && attempt <= STREAM_RETRY.maxRetries; attempt++) {
-				const kind = this.droppedMidStream(live);
-				if (!kind || (kind === "unknown" && unknownUsed)) break;
-				let maxRetries = STREAM_RETRY.maxRetries;
-				if (kind === "unknown") {
-					unknownUsed = true;
-					maxRetries = attempt;
-					logUnknownUpstreamError(this.lastErrorMessage(live));
+				// The provider rejected the request because the context is too big: compact once and carry on.
+				if (!error && !live.forceStopped && !live.stopCause && (await this.recoverFromOverflow(id, live))) {
+					try {
+						await live.agent.continue();
+					} catch (e) {
+						error = e instanceof Error ? e.message : String(e);
+					}
 				}
-				const delayMs = kind === "unknown" ? STREAM_RETRY.baseDelayMs : retryDelayMs({ baseDelayMs: STREAM_RETRY.baseDelayMs, maxAgentDelayMs: STREAM_RETRY.maxDelayMs }, attempt);
-				this.bus.publish(id, "run_retrying", { attempt, maxRetries, delayMs, restart: true, ...this.retryReasonField(live) }, { ephemeral: true });
-				const wait = new AbortController();
-				live.retryWait = wait;
-				await sleepAbortable(delayMs, wait.signal);
-				live.retryWait = undefined;
+				// The gateway closed the socket after part of the reply had streamed: a half-written answer cannot be resumed,
+				// so drop it and ask again with backoff instead of ending the run on a transport hiccup.
+				// An unclassified error gets a single restart (and a log line), a transient one the full STREAM_RETRY budget.
+				for (let attempt = 1, unknownUsed = false; !error && !live.forceStopped && live.stopCause !== "shutdown" && attempt <= STREAM_RETRY.maxRetries; attempt++) {
+					const kind = this.droppedMidStream(live);
+					if (!kind || (kind === "unknown" && unknownUsed)) break;
+					let maxRetries = STREAM_RETRY.maxRetries;
+					if (kind === "unknown") {
+						unknownUsed = true;
+						maxRetries = attempt;
+						logUnknownUpstreamError(this.lastErrorMessage(live));
+					}
+					const delayMs = kind === "unknown" ? STREAM_RETRY.baseDelayMs : retryDelayMs({ baseDelayMs: STREAM_RETRY.baseDelayMs, maxAgentDelayMs: STREAM_RETRY.maxDelayMs }, attempt);
+					this.bus.publish(id, "run_retrying", { attempt, maxRetries, delayMs, restart: true, ...this.retryReasonField(live) }, { ephemeral: true });
+					const wait = new AbortController();
+					live.retryWait = wait;
+					await sleepAbortable(delayMs, wait.signal);
+					live.retryWait = undefined;
+					if (live.forceStopped) return; // run_finished was already published when it was cut loose
+					if (wait.signal.aborted) {
+						if ((live.stopCause as RunStopCause | undefined) !== "shutdown") interrupted = true; // the user stopped the run while it waited: keep the partial reply, report an abort
+						break;
+					}
+					this.dropLastReply(id, live);
+					try {
+						await live.agent.continue();
+					} catch (e) {
+						error = e instanceof Error ? e.message : String(e);
+					}
+				}
 				if (live.forceStopped) return; // run_finished was already published when it was cut loose
-				if (wait.signal.aborted) {
-					interrupted = true; // the user stopped the run while it waited: keep the partial reply, report an abort
-					break;
+				live.running = false;
+				live.lastActive = Date.now();
+				const record = this.store.get(id);
+				if (!record) return;
+				// Stopped by the run limit: the model call that was already under way was cut off and left an empty error reply.
+				// That is our doing, not a failure: remove it so it neither reaches the model nor shows as "aborted".
+				const shutdownStop = live.stopCause === "shutdown";
+				const limited = live.stopCause === "limit";
+				if (limited && isEmptyFailedReply(live.agent.state.messages[live.agent.state.messages.length - 1])) this.dropLastReply(id, live);
+
+				let intentionalAbort = false;
+				if (shutdownStop) {
+					error = SHUTDOWN_RUN_ERROR;
+					this.finalizeErrorTurn(id, record, live, SHUTDOWN_RUN_ERROR, SHUTDOWN_TOOL_ERROR);
+				} else {
+					const lastBefore = live.agent.state.messages[live.agent.state.messages.length - 1];
+					const failedBefore = lastBefore?.role === "assistant" && (lastBefore.stopReason === "error" || lastBefore.stopReason === "aborted");
+					error ??= failedBefore ? (lastBefore.errorMessage ?? null) : null;
+					if (limited) error = live.limitReason ?? error;
+					intentionalAbort = limited || interrupted || live.stopCause === "user" || live.stopCause === "close" || (!error && lastBefore?.role === "assistant" && lastBefore.stopReason === "aborted");
+					if (!intentionalAbort && (error || (lastBefore?.role === "assistant" && lastBefore.stopReason === "error"))) {
+						const reason = error || "The run stopped with an unknown error.";
+						error = reason;
+						this.finalizeErrorTurn(id, record, live, reason, reason);
+					}
 				}
-				this.dropLastReply(id, live);
-				try {
-					await live.agent.continue();
-				} catch (e) {
-					error = e instanceof Error ? e.message : String(e);
+
+				const last = live.agent.state.messages[live.agent.state.messages.length - 1];
+				const failed = last?.role === "assistant" && (last.stopReason === "error" || last.stopReason === "aborted");
+				const status: "ok" | "error" | "aborted" = shutdownStop ? "error" : intentionalAbort ? "aborted" : !failed && !error ? "ok" : "error";
+				// Sent while the stop took effect (the run still counted as busy, so they were queued): dropped like the rest.
+				if (status === "aborted" || shutdownStop) this.dropQueued(id, live);
+				this.store.clearActiveRun(id);
+				// The last hop of an agent-to-agent chain the person started (A → B → A, A answers) ends as "user": it notifies.
+				const settledOrigin = this.peers.settleRun(id, live.origin, status);
+				this.bus.publish(id, "run_finished", {
+					status,
+					error,
+					durationMs: Date.now() - live.runStartedAt,
+					origin: settledOrigin,
+					usage: this.store.usage(id),
+					...(live.stopCause ? { cause: live.stopCause } : {}),
+				});
+				if (this.closing) {
+					this.dispose(id);
+					return;
 				}
+				// Commands and messages queued behind them go on now (not after a stop: dropQueued emptied them above).
+				const next = this.drainDeferred(id, live, status);
+				this.pendingRuns.add(next);
+				void next.finally(() => this.pendingRuns.delete(next));
+			} catch (unexpected) {
+				if (live.forceStopped) return;
+				live.running = false;
+				live.lastActive = Date.now();
+				const reason = (unexpected instanceof Error ? unexpected.message : String(unexpected)) || "The run stopped unexpectedly.";
+				const rec = this.store.get(id);
+				if (rec) {
+					try { this.finalizeErrorTurn(id, rec, live, reason, reason); } catch { /* still clear active_runs and publish run_finished */ }
+					try { this.store.clearActiveRun(id); } catch { /* ignore */ }
+					this.bus.publish(id, "run_finished", {
+						status: "error",
+						error: reason,
+						durationMs: Date.now() - live.runStartedAt,
+						origin: live.origin,
+						usage: this.store.usage(id),
+						...(live.stopCause ? { cause: live.stopCause } : {}),
+					});
+				}
+				if (this.closing) this.dispose(id);
+			} finally {
+				releaseCutLoose();
 			}
-			if (live.forceStopped) return; // run_finished was already published when it was cut loose
-			live.running = false;
-			live.lastActive = Date.now();
-			// Stopped by the run limit: the model call that was already under way was cut off and left an empty error reply.
-			// That is our doing, not a failure: remove it so it neither reaches the model nor shows as "aborted".
-			const limited = live.stopCause === "limit";
-			if (limited && isEmptyFailedReply(live.agent.state.messages[live.agent.state.messages.length - 1])) this.dropLastReply(id, live);
-			const last = live.agent.state.messages[live.agent.state.messages.length - 1];
-			const failed = last?.role === "assistant" && (last.stopReason === "error" || last.stopReason === "aborted");
-			error ??= failed ? (last.errorMessage ?? null) : null;
-			if (limited) error = live.limitReason ?? error;
-			const status = limited || interrupted ? "aborted" : !failed && !error ? "ok" : last?.role === "assistant" && last.stopReason === "aborted" ? "aborted" : "error";
-			// Sent while the stop took effect (the run still counted as busy, so they were queued): dropped like the rest.
-			if (status === "aborted") this.dropQueued(id, live);
-			// The last hop of an agent-to-agent chain the person started (A → B → A, A answers) ends as "user": it notifies.
-			const origin = this.peers.settleRun(id, live.origin, status);
-			this.bus.publish(id, "run_finished", {
-				status,
-				error,
-				durationMs: Date.now() - live.runStartedAt,
-				origin,
-				usage: this.store.usage(id),
-				...(live.stopCause ? { cause: live.stopCause } : {}),
-			});
-			// Commands and messages queued behind them go on now (not after a stop: dropQueued emptied them above).
-			const next = this.drainDeferred(id, live, status);
-			this.pendingRuns.add(next);
-			void next.finally(() => this.pendingRuns.delete(next));
 		})();
 		live.settled = settled;
-		this.pendingRuns.add(settled);
-		void settled.finally(() => this.pendingRuns.delete(settled));
+		const tracked = Promise.race([settled, cutLoosePromise]);
+		this.pendingRuns.add(tracked);
+		void tracked.finally(() => this.pendingRuns.delete(tracked));
+	}
+
+	/**
+	 * Ensures the stored transcript of an interrupted/failed run ends in a clean, retryable error state:
+	 * 1) persists an initial user prompt if the run died before `agent.prompt()` emitted `message_end`,
+	 * 2) closes any unresolved `toolCall` blocks with error `toolResult` messages, and
+	 * 3) appends or upgrades the trailing assistant message to `stopReason: "error"` with `reason`.
+	 */
+	private finalizeErrorTurn(id: string, record: SessionRecord, live: Live | undefined, reason: string, toolReason: string, pendingPrompt?: AgentMessage): void {
+		let nextSeq = live ? live.nextSeq : this.store.nextSeq(id);
+		const modelObj = live?.agent.state.model ?? this.registry.models.getModel(record.provider, record.model);
+		const meta = { provider: record.provider, model: record.model, api: modelObj?.api };
+		const append = (msg: AgentMessage) => {
+			const seq = nextSeq++;
+			this.store.appendMessage(id, seq, msg);
+			if (live) live.agent.state.messages = [...live.agent.state.messages, msg];
+			this.bus.publish(id, "message_end", { seq, message: msg });
+			this.ext?.notify("message_end", { sessionId: id, message: msg, seq }, id);
+		};
+
+		const prompt = pendingPrompt ?? live?.pendingPrompt;
+		if (prompt) {
+			if (live) live.pendingPrompt = undefined;
+			this.store.clearPendingPrompt(id);
+			append(prompt);
+		}
+
+		const projected = this.store.projection(id).messages;
+		for (const call of unresolvedToolCalls(projected.map((m) => m.message))) {
+			append(interruptedToolResult(call, toolReason));
+		}
+
+		const lastStored = this.store.lastMessages(id, 1)[0];
+		if (lastStored?.message.role === "assistant") {
+			const m = lastStored.message;
+			if (m.stopReason === "aborted" || (m.stopReason === "error" && !m.errorMessage?.trim())) {
+				const fixed = { ...m, stopReason: "error" as const, errorMessage: reason } as AgentMessage;
+				this.store.replaceMessage(id, lastStored.seq, fixed);
+				if (live && live.agent.state.messages.length > 0) {
+					live.agent.state.messages = [...live.agent.state.messages.slice(0, -1), fixed];
+				}
+			}
+		} else {
+			append(interruptedAssistantMessage(meta, reason));
+		}
+
+		if (live) live.nextSeq = nextSeq;
 	}
 
 	/**
@@ -1067,7 +1235,7 @@ export class SessionManager {
 				for (const r of rest) live.agent.followUp(r.message);
 				await this.autoCompact(id);
 				await live.agent.prompt(first.message);
-			});
+			}, first.message);
 			return;
 		}
 	}
@@ -1466,6 +1634,21 @@ export class SessionManager {
 				pub("tool_execution_update", { toolCallId: event.toolCallId, toolName: event.toolName, partialResult: event.partialResult }, true);
 				return;
 			case "message_end": {
+				if (live.pendingPrompt && event.message.role === "user") {
+					live.pendingPrompt = undefined;
+					this.store.clearPendingPrompt(sessionId);
+				}
+				if (live.stopCause === "shutdown") {
+					if (event.message.role === "assistant" && event.message.stopReason === "aborted") {
+						event.message.stopReason = "error";
+						event.message.errorMessage = SHUTDOWN_RUN_ERROR;
+					} else if (event.message.role === "toolResult" && event.message.isError) {
+						const first = Array.isArray(event.message.content) ? event.message.content[0] : undefined;
+						if (first?.type === "text") {
+							first.text = rewriteShutdownToolText(first.text, SHUTDOWN_TOOL_ERROR);
+						}
+					}
+				}
 				const seq = live.nextSeq++;
 				// Remember the reasoning strength this reply was written with (the session's setting can change later).
 				const st = live.agent.state;

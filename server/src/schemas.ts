@@ -515,7 +515,7 @@ export const EVENTS: EventDef[] = [
 			durationMs: Type.Integer(),
 			origin: Type.Optional(Type.Union([Type.Literal("user"), Type.Literal("peer"), Type.Literal("schedule")], { description: "Who the run was for; peer = agent-to-agent traffic, which the quietPeers notification policy keeps silent; schedule = a scheduled task (notifies like user). The last hop of an agent-to-agent chain a user run started (A → B → A, A passes nothing more on) ends as user, so it notifies" })),
 			usage: Usage,
-			cause: Type.Optional(Type.Union([Type.Literal("user"), Type.Literal("limit"), Type.Literal("close"), Type.Literal("shutdown"), Type.Literal("force")], { description: "Who stopped the run from outside; absent when it ended by itself (or in an older record)" })),
+			cause: Type.Optional(Type.Union([Type.Literal("user"), Type.Literal("limit"), Type.Literal("close"), Type.Literal("shutdown"), Type.Literal("restart"), Type.Literal("force")], { description: "Who stopped the run from outside; absent when it ended by itself (or in an older record)" })),
 		}),
 	},
 	{ type: "agent_start", persisted: true, description: "pi-agent-core lifecycle", data: Type.Object({}) },

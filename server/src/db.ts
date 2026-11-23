@@ -281,6 +281,13 @@ export const MIGRATIONS: (string | ((db: Database) => void))[] = [
 			set.run({ id, name });
 		}
 	},
+	// Tracks runs currently in progress so a server crash / SIGKILL / sudden reboot can finalize them as errors on the next start.
+	`CREATE TABLE IF NOT EXISTS active_runs (
+		session_id     TEXT PRIMARY KEY REFERENCES sessions(id) ON DELETE CASCADE,
+		origin         TEXT NOT NULL,
+		started_at     INTEGER NOT NULL,
+		pending_prompt TEXT
+	);`,
 ];
 
 export function openDb(path: string): Database {

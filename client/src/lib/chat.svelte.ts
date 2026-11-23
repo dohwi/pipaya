@@ -2,7 +2,7 @@ import { parseRetrying, type RetryState } from "./retry-state";
 import { errorText, ApiError, type Api, type StoredMessage } from "./api";
 import { uid } from "./format";
 import { applyQueueEvent, deliveredIndex } from "./queue";
-import { LocalizedError, t } from "./i18n";
+import { LocalizedError, msg, t } from "./i18n";
 import type {
 	AgentMessage,
 	AssistantBlock,
@@ -55,6 +55,19 @@ function blocksOf(m: AssistantMessage): AssistantBlock[] {
 		}
 	}
 	return out;
+}
+
+const RUN_ERROR_MESSAGES: Record<string, string> = {
+	"The run was interrupted because the server shut down.": msg("서버가 종료되어 작업이 중단되었습니다."),
+	"The run was interrupted because the server stopped unexpectedly.": msg("서버가 예기치 않게 멈춰 작업이 중단되었습니다."),
+	"The run did not stop in time and was forced to stop.": msg("작업이 제때 끝나지 않아 강제로 중단되었습니다."),
+};
+
+/** Translates known server-side interruption messages into the active UI language, leaving provider/tool errors intact. */
+export function formatRunError(error: string | undefined | null): string {
+	if (!error) return "";
+	const known = RUN_ERROR_MESSAGES[error];
+	return known ? t(known) : error;
 }
 
 function assistantFields(m: AssistantMessage) {
@@ -441,6 +454,7 @@ export class ChatState {
 		}
 		if (token !== this.token || !this.ready) return;
 		const st = detail.status;
+		const wasRunning = this.running;
 		if (st.running !== this.running) {
 			this.running = st.running;
 			if (st.running) this.runStartedAt = this.runStartedAt ?? Date.now();
@@ -448,12 +462,24 @@ export class ChatState {
 				this.runStartedAt = null;
 				const s = this.streamItem();
 				if (s) s.streaming = false;
+				for (const run of Object.values(this.tools)) {
+					if (run.state === "running" || run.state === "awaiting_input" || run.state === "pending") run.state = "skipped";
+				}
 			}
 		}
 		this.serverCompacting = st.compacting ?? false;
 		this.queued = (st.queuedMessages ?? []).map((q) => ({ mode: q.mode, text: q.text, ...(q.deferred ? { deferred: true } : {}) }));
 		const partial = st.streamingMessage as AssistantMessage | null;
 		if (st.running && partial && partial.role === "assistant") this.catchUpStream(partial);
+		if (wasRunning && !st.running && typeof this.api.messagesAfter === "function") {
+			try {
+				const missed = await this.api.messagesAfter(this.id, this.lastSeq, 100);
+				if (token !== this.token || !this.ready) return;
+				for (const row of missed) {
+					this.reduce({ id: 0, sessionId: this.id, type: "message_end", ts: row.createdAt, data: { seq: row.seq, message: row.message } });
+				}
+			} catch { /* SSE replay or the next catchUp will fill it */ }
+		}
 	}
 
 	/** Put the server's partial reply in place of the one on screen, keeping the item (and its place) when there is one. */
@@ -645,7 +671,7 @@ export class ChatState {
 				if (d.status === "error" && d.error) {
 					const last = this.lastAssistant;
 					if (!last || last.stopReason !== "error") {
-						this.items.push({ kind: "notice", key: `n${uid()}`, text: d.error, ts: e.ts });
+						this.items.push({ kind: "notice", key: `n${uid()}`, text: formatRunError(String(d.error)), ts: e.ts });
 					}
 				}
 				break;
@@ -705,7 +731,8 @@ export class ChatState {
 						this.items.push({ kind: "user", key: `m${seq}`, seq, ts: m.timestamp ?? e.ts, fresh: true, ...userFields(m) });
 					}
 				} else if (m.role === "assistant") {
-					const s = this.streamItem();
+					const tail = this.items[this.items.length - 1];
+					const s = this.streamItem() ?? (tail?.kind === "assistant" && tail.seq === null ? tail : null);
 					if (s) {
 						Object.assign(s, assistantFields(m), { seq, streaming: false });
 					} else {

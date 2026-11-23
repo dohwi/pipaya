@@ -43,7 +43,13 @@ export function runawayReason(state: RunGuardState, limits: RunGuardLimits): str
 }
 
 /** Why a run was stopped from outside; recorded as `cause` on run_finished. A run that ends by itself has no cause. */
-export type RunStopCause = "user" | "limit" | "close" | "shutdown" | "force";
+export type RunStopCause = "user" | "limit" | "close" | "shutdown" | "restart" | "force";
+
+export const SHUTDOWN_RUN_ERROR = "The run was interrupted because the server shut down.";
+export const SHUTDOWN_TOOL_ERROR = "Tool execution was interrupted because the server shut down.";
+export const RESTART_RUN_ERROR = "The run was interrupted because the server stopped unexpectedly.";
+export const RESTART_TOOL_ERROR = "Tool execution was interrupted because the server stopped unexpectedly.";
+export const FORCE_STOP_ERROR = "The run did not stop in time and was forced to stop.";
 
 /** True for the leftover of an aborted model call: an error/aborted assistant message with no text, thinking or tool call. */
 export function isEmptyFailedReply(message: unknown): boolean {

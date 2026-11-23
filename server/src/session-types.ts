@@ -92,6 +92,10 @@ export interface Live {
 	recentCalls: string[];
 	/** Set when abort did not take effect in time and the run was cut loose; its late wrap-up must stay silent. */
 	forceStopped?: boolean;
+	/** Releases `idle()` from waiting on a stuck run once `abortRun` has forcibly finalized it. */
+	cutLoose?: () => void;
+	/** Initial prompt message not yet persisted to `messages` (while `autoCompact` / `before_agent_start` runs). */
+	pendingPrompt?: AgentMessage;
 	/** Who stopped the current run from outside (first one wins); undefined when it ends by itself. */
 	stopCause?: RunStopCause;
 	/** The run-limit message, set together with stopCause "limit". */
@@ -106,6 +110,8 @@ export interface Live {
 
 /** How long a cooperative abort may take before the run is forcibly cut loose. */
 export const FORCE_STOP_MS = 8000;
+/** Shorter deadline on server shutdown so runs are finalized before the supervisor's SIGKILL / exit timer. */
+export const SHUTDOWN_STOP_MS = 5000;
 
 /** A single run is stopped after this many model calls (a user can simply send another message to continue). */
 export const MAX_RUN_TURNS = Number(process.env.PIPAYA_MAX_RUN_TURNS) > 0 ? Number(process.env.PIPAYA_MAX_RUN_TURNS) : 200;

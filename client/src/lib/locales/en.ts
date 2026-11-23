@@ -2089,4 +2089,8 @@ export const en: Record<string, string> = {
 	"사용할 수 있는 프롬프트 템플릿 {n}개": "{n} {n#prompt template|prompt templates} available",
 	"이 폴더에서 쓸 수 있는 프롬프트 템플릿이 없습니다.": "No prompt templates in this folder.",
 	"프롬프트 템플릿 {n}개": "{n} {n#prompt template|prompt templates}",
+	"서버가 종료되어 작업이 중단되었습니다.": "The run was interrupted because the server shut down.",
+	"서버가 예기치 않게 멈춰 작업이 중단되었습니다.": "The run was interrupted because the server stopped unexpectedly.",
+	"작업이 제때 끝나지 않아 강제로 중단되었습니다.": "The run did not stop in time and was forced to stop.",
+	"오류로 작업이 중단되었습니다.": "The run stopped due to an error.",
 };

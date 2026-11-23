@@ -263,12 +263,17 @@ export class ServerLink {
 		const token = this.token;
 		const api = this.api;
 		try {
-			const [activity, terminals, support] = await Promise.all([
+			const [activity, terminals, support, latestId] = await Promise.all([
 				api.activity().catch(() => null),
 				api.terminals().catch(() => null),
 				api.terminalSupport().catch(() => null),
+				api.latestEventId().catch(() => null),
 			]);
 			if (token !== this.token) return;
+			if (latestId !== null && latestId < this.cursor) {
+				void this.sync();
+				return;
+			}
 			if (activity) {
 				const running: Record<string, boolean> = {};
 				const awaiting: Record<string, number> = {};
@@ -294,11 +299,11 @@ export class ServerLink {
 	}
 
 	/**
-	 * Reopen the event stream from the last id seen, keeping everything already loaded. `wake` = the window came back, so
-	 * the app re-attaches (settings, extensions, notifications) and reads the state a replay cannot carry, as well; a
-	 * plain retry after a dropped stream leaves all that alone.
+	 * Reopen the event stream from the last id seen, keeping everything already loaded. On open, both a foreground wake
+	 * and a retry after a dropped stream catch up live-only state (activity, failed/unread marks, terminals, open chats)
+	 * without rebuilding the lists or transcripts when nothing changed.
 	 */
-	private reopen(wake: boolean): void {
+	private reopen(_wake: boolean): void {
 		if (this.stopped || !this.loaded) {
 			void this.sync();
 			return;
@@ -317,12 +322,8 @@ export class ServerLink {
 					this.net = "online";
 					this.netError = "";
 					this.retryDelay = 1000;
-					// Only a wake re-attaches: the app is in front again, so settings, extensions and notifications follow.
-					// A plain retry after a dropped stream changes nothing on screen and must not re-render it.
-					if (wake) {
-						void this.catchUp();
-						this.hooks.ready(this, true);
-					}
+					void this.catchUp();
+					this.hooks.ready(this, true);
 				},
 				onError: () => {
 					if (token !== this.token) return;
