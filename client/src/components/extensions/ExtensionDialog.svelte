@@ -75,9 +75,12 @@
   .message { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; line-height: 24px; color: var(--text-dim); font-size: var(--fs-sm); }
   .area { height: auto; padding: 8px 12px; resize: vertical; line-height: 24px; }
   .options { display: flex; flex-direction: column; gap: 4px; max-height: min(50dvh, 360px); overflow-y: auto; }
-  .options label { display: grid; grid-template-columns: 16px 1fr; gap: 0 8px; padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); cursor: pointer; }
-  .options label.on { border-color: var(--accent); background: var(--accent-soft); }
-  .options input { grid-row: span 2; align-self: start; margin: 4px 0 0; width: 16px; height: 16px; } /* centred on the label's first 24px line */
+  /* Hairline Inset Fill rows: the native radio stays (arrow keys, group semantics) but is drawn as the row itself; inactive rows keep a transparent 1px border so selecting never shifts the layout */
+  .options label { position: relative; display: grid; grid-template-columns: 1fr; gap: 0; padding: 8px 12px; border: 1px solid transparent; border-radius: var(--radius-xs); background: var(--bg-set); cursor: pointer; }
+  @media (hover: hover) { .options label:not(.on):hover { background: var(--bg-hover); } }
+  .options label.on { border-color: var(--border-strong); background: var(--bg-active); }
+  .options label:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: -1px; }
+  .options input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
   .options .label { line-height: 24px; }
-  .desc { grid-column: 2; color: var(--text-dim); font-size: var(--fs-xs); line-height: 16px; }
+  .desc { color: var(--text-dim); font-size: var(--fs-xs); line-height: 16px; }
 </style>

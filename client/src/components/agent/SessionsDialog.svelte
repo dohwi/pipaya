@@ -2,6 +2,7 @@
 	import { t } from "../../lib/i18n";
 	import { app } from "../../lib/store.svelte";
 	import IconButton from "../ui/IconButton.svelte";
+	import DialogBody from "../ui/DialogBody.svelte";
 	import Modal from "../ui/Modal.svelte";
 	import SessionsPanel from "./SessionsPanel.svelte";
 
@@ -21,18 +22,13 @@
 </script>
 
 <Modal onclose={close} label={title} {title} {sub} width="l" maxHeight="720px" {titleExtra} {headerActions}>
-	<div class="body"><SessionsPanel {serverId} cwd={filter?.cwd} bind:count bind:reload bind:busy /></div>
+	<DialogBody busy={busy}><SessionsPanel {serverId} cwd={filter?.cwd} bind:count bind:reload bind:busy /></DialogBody>
 </Modal>
 
 {#snippet titleExtra()}{#if count !== null}<span class="n">{count}</span>{/if}{/snippet}
 {#snippet headerActions()}<IconButton icon="retry" label={t("새로고침")} tip onclick={() => reload?.()} disabled={busy} />{/snippet}
 
 <style>
-	.body {
-		padding: 4px var(--dlg-px) var(--dlg-body-b);
-		overflow-y: auto;
-		min-height: 0;
-	}
 	.n {
 		margin-left: 8px;
 		font-size: var(--fs-xs);

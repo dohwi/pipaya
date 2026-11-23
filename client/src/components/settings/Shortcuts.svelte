@@ -376,7 +376,7 @@
 		color: var(--ok);
 	}
 	.step:disabled {
-		opacity: 0.3;
+		color: var(--disabled-fg);
 	}
 	.step :global(svg) {
 		width: 16px;
@@ -404,7 +404,7 @@
 		}
 	}
 	.reset:disabled {
-		opacity: 0.25;
+		color: var(--disabled-fg);
 	}
 	.foot {
 		display: flex;

@@ -109,6 +109,6 @@
 		}
 	}
 	.mv:disabled {
-		opacity: 0.3;
+		color: var(--disabled-fg);
 	}
 </style>

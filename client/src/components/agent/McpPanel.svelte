@@ -206,7 +206,6 @@
 	.tools { display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 	.err { color: var(--danger); }
 	.form { display: flex; flex-direction: column; gap: var(--dlg-gap); }
-	.area:focus { box-shadow: inset 0 0 0 3px var(--accent-soft); } /* keep the field halo visible against the scrollport edge */
 	.area { height: auto; padding: 8px 12px; resize: vertical; font-size: var(--fs-sm); line-height: 1.5; }
 	.actions { display: flex; justify-content: flex-end; gap: 8px; }
 </style>

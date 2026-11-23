@@ -17,5 +17,5 @@
 	{#snippet headerActions()}
 		<IconButton icon="retry" label={t("새로고침")} tip onclick={() => refresh++} disabled={loading} />
 	{/snippet}
-	<DialogBody busy={loading}><McpPanel {api} bind:data bind:loading {refresh} /></DialogBody>
+	<DialogBody gap busy={loading}><McpPanel {api} bind:data bind:loading {refresh} /></DialogBody>
 </Modal>
