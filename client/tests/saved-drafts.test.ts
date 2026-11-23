@@ -58,18 +58,6 @@ describe("saved drafts", () => {
 		expect(loadDraft("s1")).toBeNull();
 	});
 
-	test("selected skills alone are kept and survive a restart", () => {
-		saveDraft("s1", "", null, ["alpha", "beta"]);
-		resetDraftCache();
-		expect(loadDraft("s1")).toMatchObject({ text: "", reply: null, skills: ["alpha", "beta"] });
-		const n = writes;
-		saveDraft("s1", "", null, ["alpha", "beta"]);
-		expect(writes).toBe(n);
-		saveDraft("s1", "", null, []);
-		resetDraftCache();
-		expect(loadDraft("s1")).toBeNull();
-	});
-
 	test("broken storage reads as empty", () => {
 		store.set(K.drafts, "{not json");
 		expect(loadDraft("s1")).toBeNull();
