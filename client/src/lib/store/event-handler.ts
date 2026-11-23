@@ -60,6 +60,8 @@ export interface OpenEventContext {
   bumpSkills(): void;
   bumpMcp(): void;
   bumpSchedules(): void;
+  bumpGoals(): void;
+  isGoalActive?(sessionId: string): boolean;
   bumpConfig(): void;
   bumpVoice(): void;
   refreshWorkspace(): void;
@@ -198,7 +200,7 @@ export function handleOpenServerEvent(ctx: OpenEventContext, e: PipayaEvent): vo
         delete ctx.compacting[sid];
         ctx.awaiting[sid] = 0;
         const bad = e.data.status === "error";
-        const quiet = e.data.origin === "peer" && ctx.quietPeers;
+        const quiet = (e.data.origin === "peer" && ctx.quietPeers) || (e.data.status === "ok" && !!ctx.isGoalActive?.(sid));
         if (e.data.status !== "aborted" && !quiet) ctx.cue(bad ? "failed" : "done");
         if (announces(sid, ctx.activeId, e.data.status, quiet)) ctx.announce(sid, bad ? "failed" : "done");
       }
@@ -224,6 +226,9 @@ export function handleOpenServerEvent(ctx: OpenEventContext, e: PipayaEvent): vo
       break;
     case "schedules_updated":
       ctx.bumpSchedules();
+      break;
+    case "goals_updated":
+      ctx.bumpGoals();
       break;
     case "locales_updated":
       ctx.syncLocales();

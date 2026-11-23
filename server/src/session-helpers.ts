@@ -10,6 +10,13 @@ export const SCHEDULE_OPEN = "<pipaya-schedule>";
 export const SCHEDULE_NOTE = `${SCHEDULE_OPEN}This message was sent automatically by a scheduled task, not typed by the user right now.</pipaya-schedule>`;
 
 /**
+ * Stored after the text of an automatic goal continuation turn. The client hides the block and renders the turn as a
+ * quiet divider line rather than a user bubble, and skips it in ↑ prompt recall.
+ */
+export const GOAL_OPEN = "<pipaya-goal>";
+export const GOAL_NOTE = `${GOAL_OPEN}This turn was started automatically to continue the active session goal, not typed by the user.</pipaya-goal>`;
+
+/**
  * The text a queued message was sent with (what `message_queued` announced), before the server added its hint, file
  * and schedule notes. Lets the queue be listed, cancelled and dropped under the same text a client saw queued.
  */

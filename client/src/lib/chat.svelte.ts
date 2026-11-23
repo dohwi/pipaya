@@ -87,11 +87,12 @@ function assistantFields(m: AssistantMessage) {
 	};
 }
 
-function userFields(m: Extract<AgentMessage, { role: "user" }>): { text: string; images: ImageBlock[]; files: FileRef[]; note?: MessageNote; scheduled?: true } {
+function userFields(m: Extract<AgentMessage, { role: "user" }>): { text: string; images: ImageBlock[]; files: FileRef[]; note?: MessageNote; scheduled?: true; goal?: true } {
 	const images = Array.isArray(m.content) ? (m.content.filter((c) => c.type === "image") as ImageBlock[]) : [];
 	const files: FileRef[] = [];
 	let note: MessageNote | undefined;
 	let scheduled = false;
+	let goal = false;
 	// Blocks the server or an extension adds (`<pipaya-…>`: attached files, hints for the model, notes) are not message text.
 	const shown = Array.isArray(m.content)
 		? m.content.filter((c) => {
@@ -102,6 +103,10 @@ function userFields(m: Extract<AgentMessage, { role: "user" }>): { text: string;
 						const json = s.slice("<pipaya-files>".length, s.indexOf("</pipaya-files>"));
 						for (const f of JSON.parse(json) as FileRef[]) if (f && typeof f.path === "string") files.push({ path: f.path, name: String(f.name ?? f.path), size: f.size, mimeType: f.mimeType });
 					} catch { /* a note we cannot read is simply not shown */ }
+					return false;
+				}
+				if (s.startsWith("<pipaya-goal>")) {
+					goal = true; // a turn the goal started by itself: labelled "목표" on the message
 					return false;
 				}
 				if (s.startsWith("<pipaya-schedule>")) {
@@ -118,7 +123,7 @@ function userFields(m: Extract<AgentMessage, { role: "user" }>): { text: string;
 				return !s.startsWith("<pipaya-");
 			})
 		: m.content;
-	return { text: textOf(shown), images, files, ...(note ? { note } : {}), ...(scheduled ? { scheduled: true as const } : {}) };
+	return { text: textOf(shown), images, files, ...(note ? { note } : {}), ...(scheduled ? { scheduled: true as const } : {}), ...(goal ? { goal: true as const } : {}) };
 }
 
 function toolRunFrom(m: Extract<AgentMessage, { role: "toolResult" }>): ToolRun {

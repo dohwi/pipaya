@@ -33,12 +33,12 @@ export function enterPlan(s: { running: boolean; combo: string; queueCombo: stri
 	return s.running ? "steer" : "send";
 }
 
-type Item = { kind: string; text?: string };
+type Item = { kind: string; text?: string; goal?: boolean };
 
 /** The prompts already sent in a conversation, oldest first, consecutive repeats and blanks dropped (what Up walks back through). */
 export function sentPrompts(items: readonly Item[] | undefined): string[] {
 	const out: string[] = [];
-	for (const it of items ?? []) if (it.kind === "user" && it.text?.trim() && out[out.length - 1] !== it.text) out.push(it.text);
+	for (const it of items ?? []) if (it.kind === "user" && !it.goal && it.text?.trim() && out[out.length - 1] !== it.text) out.push(it.text);
 	return out;
 }
 
@@ -47,7 +47,8 @@ export function lastPromptOf(items: readonly Item[] | undefined): string {
 	if (!items) return "";
 	for (let i = items.length - 1; i >= 0; i--) {
 		const it = items[i]!;
-		if (it.kind === "user") return (it.text ?? "").replace(/\s+/g, " ").trim();
+		// a turn the goal sent by itself is not something the person typed: skip it
+		if (it.kind === "user" && !it.goal) return (it.text ?? "").replace(/\s+/g, " ").trim();
 	}
 	return "";
 }

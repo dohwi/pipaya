@@ -3,6 +3,8 @@
 	import QueueBadge from "./QueueBadge.svelte";
 	import QueueText from "./QueueText.svelte";
 	import ScheduleRow from "./ScheduleRow.svelte";
+	import GoalRow from "./GoalRow.svelte";
+	import type { Goal } from "../../lib/types";
 	import type { Schedule } from "../../lib/types";
 	import Icon from "../ui/Icon.svelte";
 	import { orderQueued, queuedLabel, queuedShown, queuedTone } from "../../lib/queue";
@@ -22,16 +24,20 @@
 		onopen,
 		schedules = [],
 		scheduleOf = null,
+		goal = null,
 	}: {
 		queued: Queued[];
 		oncancel: (q: Queued) => void;
 		onopen: (q: Queued) => void;
 		schedules?: Schedule[];
 		scheduleOf?: { serverId: string; sessionId: string } | null;
+		/** The conversation's goal: the first row, since the next turn works on it by itself (needs `scheduleOf` for the session). */
+		goal?: Goal | null;
 	} = $props();
 	const tasks = $derived(scheduleOf ? schedules : []);
 
-	const total = $derived(queued.length + tasks.length);
+	const goalRow = $derived(scheduleOf ? goal : null);
+	const total = $derived((goalRow ? 1 : 0) + queued.length + tasks.length);
 
 	// The list has a fixed max height and scrolls inside it, so a long queue never pushes the input down.
 	// Touch scrolls by swipe; a mouse can drag the list itself (a small move first, so the cancel buttons still click).
@@ -167,6 +173,7 @@
 {/if}
 {#if thumb || canGrow}
 	<p class="count" role="status" aria-label={t("{n}개 대기 중", { n: total })}>
+		{#if goalRow}<span class="c" title={t("목표")}><Icon name="target" />1</span>{/if}
 		{#if steerN}<span class="c {queuedTone("steer")}" title={queuedLabel({ mode: "steer", text: "", n: steerN })}><Icon name="bolt" />{steerN}</span>{/if}
 		{#if followN}<span class="c {queuedTone("follow_up")}" title={queuedLabel({ mode: "follow_up", text: "", n: followN })}><Icon name="list" />{followN}</span>{/if}
 		{#if tasks.length}<span class="c" title={t("예약 {n}개", { n: tasks.length })}><Icon name="clock" />{tasks.length}</span>{/if}
@@ -175,6 +182,9 @@
 <div class="scroll">
 {#if thumb}<span class="thumb" aria-hidden="true" style:top="{thumb.top}px" style:height="{thumb.height}px"></span>{/if}
 <ul class="queued" style:max-height="{listH}px" class:fade-top={fadeTop} class:fade-bottom={fadeBottom} onscroll={syncFade} bind:this={ul} onpointerdown={onDown} onpointermove={onMove} onpointerup={onUp} onpointercancel={onUp} aria-label={tasks.length ? t("대기 중인 메시지와 예약 작업") : t("전달 대기 중인 메시지")}>
+	{#if goalRow && scheduleOf}
+		<li in:rowIn out:rowOut><GoalRow g={goalRow} serverId={scheduleOf.serverId} sessionId={scheduleOf.sessionId} blocked={() => dragged} /></li>
+	{/if}
 	{#each orderQueued(queued) as q (q.mode + q.n)}
 		<li animate:reflow in:rowIn out:rowOut>
 			<!-- The row shows one cut line; a click opens the whole message (and its copy / remove) in the queue dialog. -->

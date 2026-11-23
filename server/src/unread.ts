@@ -10,7 +10,13 @@ export type UnreadKind = "done" | "failed";
 export class UnreadTracker {
 	private unsubscribe: () => void;
 	/** `watching(id)`: a focused device is showing this session right now. */
-	constructor(private db: Database, private bus: EventBus, private watching: (sessionId: string) => boolean, private quietPeers: () => boolean = () => false) {
+	constructor(
+		private db: Database,
+		private bus: EventBus,
+		private watching: (sessionId: string) => boolean,
+		private quietPeers: () => boolean = () => false,
+		private isGoalActive: (sessionId: string) => boolean = () => false,
+	) {
 		this.unsubscribe = bus.subscribe((e) => this.onEvent(e));
 	}
 
@@ -41,6 +47,7 @@ export class UnreadTracker {
 			const status = (e.data as { status?: string }).status;
 			if ((e.data as { origin?: string }).origin === "peer" && this.quietPeers()) return; // agent-to-agent run: no unread mark
 			if (status === "aborted") return; // a stopped run is the user's own doing
+			if (status === "ok" && this.isGoalActive(id)) return; // intermediate turn of an active goal: not finished yet
 			if (!this.watching(id)) this.set(id, status === "error" ? "failed" : "done");
 		} else if (e.type === "session_updated" && (e.data as { closed?: boolean }).closed) {
 			this.db.query("DELETE FROM session_unread WHERE session_id = ?").run(id);

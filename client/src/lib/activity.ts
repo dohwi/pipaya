@@ -36,10 +36,17 @@ export interface ActivityView {
 	failed: Record<string, boolean>;
 }
 
+/** What the conversation's goal adds (lib/goal): working while it is active, asking once it stopped short. Set by lib/goal. */
+let goalOf: (id: string) => Activity | null = () => null;
+export const setGoalActivity = (fn: (id: string) => Activity | null) => void (goalOf = fn);
+
 export function activityOf(v: ActivityView, id: string): Activity {
 	if ((v.awaiting[id] ?? 0) > 0) return "asking";
 	if (v.running[id]) return "working";
 	if (v.failed[id]) return "failed";
+	// a goal outranks "done": a turn that ended is not the end of the work while the goal goes on (or waits for the person)
+	const goal = goalOf(id);
+	if (goal) return goal;
 	if (v.unread[id]) return "done";
 	return "idle";
 }

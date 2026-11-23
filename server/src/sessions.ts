@@ -21,6 +21,8 @@ import type { McpManager } from "./mcp.ts";
 import { ALWAYS_TOOLS, buildTools, DEFAULT_TOOLS, DELEGATE_TOOL, isInside, PEER_TOOLS, TOOL_DEFS, WORKDIR_TOOL, type ToolContext, type ToolDef } from "./tools.ts";
 import { isGone, movedNote, placeText, resolveMove, stayHint, touchedDir, workDirOf, workTargets } from "./work-tree.ts";
 import { repoOf } from "./git-info.ts";
+import { GOAL_TOOL } from "./goal-tool.ts";
+import type { GoalManager } from "./goals.ts";
 import { SCHEDULE_TOOL } from "./schedule-tool.ts";
 import type { Scheduler } from "./scheduler.ts";
 import { sameName } from "./member-names.ts";
@@ -41,9 +43,9 @@ import { runPromptTemplate } from "./templates.ts";
 
 import { DEFAULT_DELEGATE_POLICY, type DelegatePolicyValue } from "./configuration.ts";
 import { DEFAULT_SYSTEM_PROMPT, FORCE_STOP_MS, IDLE_EVICT_MS, MAX_REPEATED_CALLS, MAX_RUN_TURNS, promptKey, SHUTDOWN_STOP_MS, type CompactionOutcome, type CreateSessionInput, type Deferred, type Live, type PromptMode, type RunOrigin, type SessionStatus } from "./session-types.ts";
-import { agentQueue, interruptedAssistantMessage, interruptedToolResult, noteBlock, queuedIn, queuedText, rewriteShutdownToolText, SCHEDULE_NOTE, sentText, slimAssistantEvent, unresolvedToolCalls, withoutNotes, type Waiting } from "./session-helpers.ts";
+import { agentQueue, GOAL_NOTE, interruptedAssistantMessage, interruptedToolResult, noteBlock, queuedIn, queuedText, rewriteShutdownToolText, SCHEDULE_NOTE, sentText, slimAssistantEvent, unresolvedToolCalls, withoutNotes, type Waiting } from "./session-helpers.ts";
 export { DEFAULT_SYSTEM_PROMPT } from "./session-types.ts";
-export { NOTE_OPEN, noteBlock, SCHEDULE_OPEN } from "./session-helpers.ts";
+export { GOAL_OPEN, NOTE_OPEN, noteBlock, SCHEDULE_OPEN } from "./session-helpers.ts";
 export type { CompactionOutcome, CreateSessionInput, PromptMode, SessionStatus } from "./session-types.ts";
 
 /** A failed title/role call is not retried for this long, so a broken system model is not hit on every message. */
@@ -168,9 +170,24 @@ export class SessionManager {
 
 	/** Scheduled tasks for the `schedule` tool, wired by the app once the scheduler exists. */
 	private scheduler?: Scheduler;
+	private goals?: GoalManager;
 
 	setScheduler(s: Scheduler): void {
 		this.scheduler = s;
+	}
+
+	setGoals(g: GoalManager): void {
+		this.goals = g;
+	}
+
+	private goalOps(selfId: string): ToolContext["goals"] {
+		const g = this.goals;
+		if (!g) return undefined;
+		return {
+			get: () => g.get(selfId),
+			create: (objective, tokenBudget) => g.agentCreate(selfId, objective, tokenBudget),
+			update: (status) => g.agentUpdate(selfId, status),
+		};
 	}
 
 	/** What `schedule` may do, on behalf of session `selfId`. */
@@ -504,7 +521,10 @@ export class SessionManager {
 		if (!updated) throw notFound("session");
 
 		const live = this.live.get(id);
-		if (patch.closed && live?.running) this.abortRun(id, live, "close"); // closing stops the work
+		if (patch.closed) {
+			if (live?.running) this.abortRun(id, live, "close"); // closing stops the work
+			this.goals?.onSessionClosed(id);
+		}
 		if (live) {
 			if (clean.provider || clean.model) {
 				const m = this.registry.models.getModel(updated.provider, updated.model);
@@ -641,6 +661,8 @@ export class SessionManager {
 		if (moved) content.push({ type: "text", text: `${HINT_OPEN}${moved}</pipaya-hint>` });
 		for (const hint of this.peers.hints(id, input.text)) content.push({ type: "text", text: hint });
 		if (input.origin === "schedule") content.push({ type: "text", text: SCHEDULE_NOTE });
+		if (input.origin === "goal") content.push({ type: "text", text: GOAL_NOTE });
+		else this.goals?.cancelPending(id);
 		if (this.skills) {
 			const callable = this.skills.callable(record.cwd, id);
 			for (const name of mentionedSkills(input.text, callable.map((s) => s.name))) {
@@ -672,8 +694,8 @@ export class SessionManager {
 		if (live.running) throw conflict('session is busy; send with mode "steer" or "follow_up"');
 		const first = this.store.nextSeq(id) === 0;
 		const shortTitle = autoTitle(inputTitle ?? input.text);
-		if (record.title === "New session" && first) this.update(id, { title: shortTitle });
-		this.describe(id, first ? input.text : undefined, input.text, shortTitle);
+		if (record.title === "New session" && first && origin !== "goal") this.update(id, { title: shortTitle });
+		if (origin !== "goal") this.describe(id, first ? input.text : undefined, input.text, shortTitle);
 		this.run(id, live, "prompt", origin, async () => {
 			await this.autoCompact(id);
 			live.runSystem = undefined;
@@ -907,6 +929,7 @@ export class SessionManager {
 				return;
 			}
 			this.store.clearActiveRun(id);
+			this.goals?.onRunFinished(id, { status: "aborted", error: FORCE_STOP_ERROR, cause: "force", origin: live.origin });
 			this.bus.publish(id, "run_finished", {
 				status: "aborted",
 				error: FORCE_STOP_ERROR,
@@ -1042,6 +1065,7 @@ export class SessionManager {
 		live.cutLoose = releaseCutLoose;
 		this.store.markRunActive(id, { origin, startedAt: live.runStartedAt, ...(pendingPrompt ? { pendingPrompt } : {}) });
 		this.bus.publish(id, "run_started", { mode, origin });
+		this.goals?.onRunStarted(id);
 
 		const settled = (async () => {
 			let error: string | null = null;
@@ -1135,6 +1159,8 @@ export class SessionManager {
 				this.store.clearActiveRun(id);
 				// The last hop of an agent-to-agent chain the person started (A → B → A, A answers) ends as "user": it notifies.
 				const settledOrigin = this.peers.settleRun(id, live.origin, status);
+				// Update goal state before publishing run_finished so notifications and unread marks see the final status.
+				this.goals?.onRunFinished(id, { status, error, cause: live.stopCause, origin: settledOrigin });
 				this.bus.publish(id, "run_finished", {
 					status,
 					error,
@@ -1160,6 +1186,7 @@ export class SessionManager {
 				if (rec) {
 					try { this.finalizeErrorTurn(id, rec, live, reason, reason); } catch { /* still clear active_runs and publish run_finished */ }
 					try { this.store.clearActiveRun(id); } catch { /* ignore */ }
+					this.goals?.onRunFinished(id, { status: "error", error: reason, cause: live.stopCause, origin: live.origin });
 					this.bus.publish(id, "run_finished", {
 						status: "error",
 						error: reason,
@@ -1441,7 +1468,7 @@ export class SessionManager {
 	}
 
 	private toolPlan(names: string[]) {
-		return planTools({ chosen: names, always: [...PEER_TOOLS, DELEGATE_TOOL, ...ALWAYS_TOOLS, ...(this.scheduler ? [SCHEDULE_TOOL] : []), ...(this.ext?.alwaysTools() ?? []), ...(this.mcp?.toolNames() ?? [])], disabled: this.disabledTools(), image: this.imageModel?.resolve() ? IMAGE_TOOL : undefined });
+		return planTools({ chosen: names, always: [...PEER_TOOLS, DELEGATE_TOOL, ...ALWAYS_TOOLS, ...(this.scheduler ? [SCHEDULE_TOOL] : []), ...(this.goals ? [GOAL_TOOL] : []), ...(this.ext?.alwaysTools() ?? []), ...(this.mcp?.toolNames() ?? [])], disabled: this.disabledTools(), image: this.imageModel?.resolve() ? IMAGE_TOOL : undefined });
 	}
 
 	/** The text the system adds beyond the session prompt, tools and AGENTS.md, for the context view. */
@@ -1467,7 +1494,7 @@ export class SessionManager {
 			create: (input) => this.peers.create(sessionId, input),
 			manage: (name, action, a) => this.peers.manage(sessionId, name, action, a),
 			group: (action, a) => this.peers.group(sessionId, action, a),
-		}, schedules: this.scheduleOps(sessionId), workdir: {
+		}, schedules: this.scheduleOps(sessionId), goals: this.goalOps(sessionId), workdir: {
 			show: () => this.workdirShow(sessionId),
 			move: (path) => this.moveWorkdir(sessionId, path, "agent").note,
 		} };
@@ -1668,10 +1695,12 @@ export class SessionManager {
 		const live = this.live.get(sessionId);
 		let out = messages;
 		const sys = live?.runSystem;
-		if (sys && out[0]?.role === "system") {
+		const goalNote = this.goals?.systemNote(sessionId);
+		if ((sys || goalNote) && out[0]?.role === "system") {
 			const head = out[0] as { content?: unknown };
 			const base = typeof head.content === "string" ? head.content : "";
-			out = [{ ...out[0], content: `${sys.replace ?? base}${sys.append ?? ""}` } as AgentMessage, ...out.slice(1)];
+			const body = `${sys?.replace ?? base}${sys?.append ?? ""}${goalNote ? `\n\n${goalNote}` : ""}`;
+			out = [{ ...out[0], content: body } as AgentMessage, ...out.slice(1)];
 		}
 		out = withoutNotes(out);
 		const rec = this.store.get(sessionId);
@@ -1726,6 +1755,17 @@ export class SessionManager {
 					(event.message as { thinkingLevel?: string }).thinkingLevel = st.thinkingLevel;
 				}
 				this.store.appendMessage(sessionId, seq, event.message);
+				if (this.goals) {
+					const m = event.message;
+					if (m.role === "assistant") {
+						const blocks = Array.isArray(m.content) ? m.content : [];
+						const hasToolCalls = blocks.some((b) => b?.type === "toolCall");
+						const textLength = blocks.reduce((sum, b) => sum + (b?.type === "text" ? String(b.text ?? "").trim().length : 0), 0);
+						this.goals.onMessageEnd(sessionId, { role: "assistant", hasToolCalls, textLength });
+					} else if (m.role === "toolResult") {
+						this.goals.onMessageEnd(sessionId, { role: "toolResult" });
+					}
+				}
 				pub("message_end", { seq, message: stripToolMessageImages(event.message) });
 				this.ext?.notify("message_end", { sessionId, message: event.message, seq }, sessionId);
 				return;

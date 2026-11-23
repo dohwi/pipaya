@@ -17,7 +17,7 @@
 	import { InlineRename } from "../../lib/inline-rename.svelte";
 	import { registerRenamePlace } from "../../lib/rename-places";
 	import { chooseGroup } from "../../lib/group-picker";
-	import { activityOf, ACTIVITY_LABEL, URGENCY, type Activity } from "../../lib/activity";
+	import { activityOf, ACTIVITY_LABEL, ACTIVITY_TONE, URGENCY, type Activity } from "../../lib/activity";
 	import { drag, dragSource, dropTarget, type Point } from "../../lib/dnd.svelte";
 	import { dragScroll } from "../../lib/drag-scroll";
 	import { edgeFade } from "../../lib/edge-fade";
@@ -273,7 +273,7 @@
 				{:else if x.kind === "terminal"}
 					<span class="ico"><Icon name="terminal" />{#if pinned}<PinMark />{/if}</span>
 				{:else}
-					<span class="ico"><AgentBadge id={x.id} state={st} size={16} />{#if pinned}<PinMark />{/if}</span>
+					<span class="ico"><AgentBadge id={x.id} state={st} size={16} />{#if pinned && !app.goals.of(app.serverId, x.id)}<PinMark tone={ACTIVITY_TONE[st]} />{/if}</span>
 				{/if}
 				{#if rename.is(x.id)}
 					<InlineRenameField

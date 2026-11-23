@@ -41,6 +41,7 @@ export const EVENT_TYPES = [
 	"skills_updated",
 	"mcp_updated",
 	"schedules_updated",
+	"goals_updated",
 	"locales_updated",
 	"client_settings_updated",
 	"extension_settings_updated",
