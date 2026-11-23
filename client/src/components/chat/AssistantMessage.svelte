@@ -13,6 +13,7 @@
 	import { onDestroy } from "svelte";
 	import { compact, duration, fullTime } from "../../lib/format";
 	import { liveMessageTime } from "../../lib/minute-clock.svelte";
+	import { formatRunError } from "../../lib/chat.svelte";
 	import { plainTextOf, replyActions, segmentsOf, type Segment } from "../../lib/reply-blocks";
 	import { modelDisplayName } from "../../lib/model-name";
 	import { tierLabel } from "../../lib/service-tier";
@@ -152,13 +153,15 @@
 		{/each}
 
 		{#if tail && !live}
-			{#if tail.error}
+			{#if tail.stopReason === "aborted"}
+				<div class="error"><Icon name="alert" /><span>{t("중지됨")}</span></div>
+			{:else if tail.error}
 				<div class="error">
 					<Icon name="alert" />
-					<span>{tail.stopReason === "aborted" ? t("중지됨") : tail.error}</span>
+					<span>{formatRunError(tail.error)}</span>
 				</div>
-			{:else if tail.stopReason === "aborted"}
-				<div class="error"><Icon name="alert" /><span>{t("중지됨")}</span></div>
+			{:else if tail.stopReason === "error"}
+				<div class="error"><Icon name="alert" /><span>{t("오류로 작업이 중단되었습니다.")}</span></div>
 			{/if}
 		{/if}
 

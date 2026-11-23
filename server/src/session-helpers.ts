@@ -62,3 +62,76 @@ export function slimAssistantEvent(e: Extract<AgentEvent, { type: "message_updat
 	const { partial: _partial, ...rest } = e as typeof e & { partial?: unknown };
 	return rest;
 }
+
+export interface UnresolvedToolCall {
+	id: string;
+	name: string;
+}
+
+/**
+ * Tool calls in the latest non-failed assistant message that do not yet have a matching `toolResult` after it.
+ * Used when finalizing a run interrupted mid-tool by a server shutdown or crash, so UI tool cards close cleanly
+ * and `retry` can continue from a valid `toolResult` tail.
+ */
+export function unresolvedToolCalls(messages: readonly AgentMessage[]): UnresolvedToolCall[] {
+	let assistantIdx = -1;
+	for (let i = messages.length - 1; i >= 0; i--) {
+		const r = messages[i]!.role;
+		if (r === "assistant") { assistantIdx = i; break; }
+		if (r === "user") return [];
+	}
+	if (assistantIdx < 0) return [];
+	const assistant = messages[assistantIdx] as { stopReason?: string; content?: unknown };
+	if (assistant.stopReason === "error" || assistant.stopReason === "aborted" || !Array.isArray(assistant.content)) return [];
+	const calls = assistant.content.filter((b): b is { type: "toolCall"; id: string; name: string } => b?.type === "toolCall" && typeof b.id === "string" && typeof b.name === "string");
+	if (!calls.length) return [];
+	const resolved = new Set<string>();
+	for (let i = assistantIdx + 1; i < messages.length; i++) {
+		const m = messages[i] as { role?: string; toolCallId?: string };
+		if (m.role === "toolResult" && typeof m.toolCallId === "string") resolved.add(m.toolCallId);
+	}
+	return calls.filter((c) => !resolved.has(c.id)).map((c) => ({ id: c.id, name: c.name }));
+}
+
+export function interruptedToolResult(call: UnresolvedToolCall, reason: string, now = Date.now()): AgentMessage {
+	return {
+		role: "toolResult",
+		toolCallId: call.id,
+		toolName: call.name,
+		content: [{ type: "text", text: reason }],
+		isError: true,
+		timestamp: now,
+	} as AgentMessage;
+}
+
+const GENERIC_TOOL_ABORTS = new Set([
+	"Operation aborted",
+	"Run aborted while waiting for the user",
+	"delegate aborted",
+	"aborted",
+]);
+
+/** Replaces generic abort wording in a tool error result with the server-shutdown reason while keeping any partial command output. */
+export function rewriteShutdownToolText(text: string, reason: string): string {
+	const trimmed = text.trim();
+	if (!trimmed || GENERIC_TOOL_ABORTS.has(trimmed) || trimmed === "Command aborted") return reason;
+	if (text.startsWith("Command aborted\n")) {
+		const rest = text.slice("Command aborted\n".length);
+		return rest.trim() ? `${reason}\n${rest}` : reason;
+	}
+	return text;
+}
+
+export function interruptedAssistantMessage(meta: { provider: string; model: string; api?: string }, reason: string, now = Date.now()): AgentMessage {
+	return {
+		role: "assistant",
+		content: [],
+		api: meta.api ?? "openai-completions",
+		provider: meta.provider,
+		model: meta.model,
+		usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } },
+		stopReason: "error",
+		errorMessage: reason,
+		timestamp: now,
+	} as unknown as AgentMessage;
+}

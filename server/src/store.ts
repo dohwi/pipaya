@@ -3,6 +3,7 @@ import { parseJson } from "./json-column.ts";
 import type { Database } from "bun:sqlite";
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import type { ContextSnapshot } from "./context.ts";
+import type { RunOrigin } from "./session-types.ts";
 import { THINKING_LEVELS, type ThinkingLevel } from "./shared/thinking.ts";
 
 export { SqliteCredentialStore } from "./credential-store.ts";
@@ -290,12 +291,51 @@ export class SessionStore {
 		return this.context(id)!;
 	}
 
+	// ── active runs (crash / reboot recovery) ───────────────────────────────
+
+	markRunActive(sessionId: string, run: { origin: RunOrigin; startedAt: number; pendingPrompt?: AgentMessage }): void {
+		this.db
+			.query(
+				`INSERT INTO active_runs (session_id, origin, started_at, pending_prompt)
+				 VALUES ($sid, $origin, $at, $prompt)
+				 ON CONFLICT(session_id) DO UPDATE SET origin = excluded.origin, started_at = excluded.started_at, pending_prompt = excluded.pending_prompt`,
+			)
+			.run({ sid: sessionId, origin: run.origin, at: run.startedAt, prompt: run.pendingPrompt ? JSON.stringify(run.pendingPrompt) : null });
+	}
+
+	clearPendingPrompt(sessionId: string): void {
+		this.db.query("UPDATE active_runs SET pending_prompt = NULL WHERE session_id = $sid AND pending_prompt IS NOT NULL").run({ sid: sessionId });
+	}
+
+	clearActiveRun(sessionId: string): void {
+		this.db.query("DELETE FROM active_runs WHERE session_id = $sid").run({ sid: sessionId });
+	}
+
+	activeRuns(): ActiveRunRecord[] {
+		const rows = this.db
+			.query("SELECT session_id, origin, started_at, pending_prompt FROM active_runs ORDER BY started_at, session_id")
+			.all() as { session_id: string; origin: string; started_at: number; pending_prompt: string | null }[];
+		return rows.map((r) => ({
+			sessionId: r.session_id,
+			origin: r.origin === "peer" || r.origin === "schedule" ? r.origin : "user",
+			startedAt: r.started_at,
+			pendingPrompt: r.pending_prompt ? parseJson<AgentMessage | null>(r.pending_prompt, null) : null,
+		}));
+	}
+
 	// ── messages ────────────────────────────────────────────────────────────
 
 	appendMessage(sessionId: string, seq: number, message: AgentMessage): void {
 		this.db
 			.query("INSERT INTO messages (session_id, seq, role, data, created_at) VALUES ($sid, $seq, $role, $data, $t)")
 			.run({ sid: sessionId, seq, role: message.role, data: JSON.stringify(message), t: Date.now() });
+		this.touch(sessionId);
+	}
+
+	replaceMessage(sessionId: string, seq: number, message: AgentMessage): void {
+		this.db
+			.query("UPDATE messages SET role = $role, data = $data WHERE session_id = $sid AND seq = $seq")
+			.run({ sid: sessionId, seq, role: message.role, data: JSON.stringify(message) });
 		this.touch(sessionId);
 	}
 
@@ -465,3 +505,10 @@ export interface DelegateCall {
 }
 
 export interface CompactionRecord { uptoSeq: number; summary: string; tokensBefore: number; createdAt: number }
+
+export interface ActiveRunRecord {
+	sessionId: string;
+	origin: RunOrigin;
+	startedAt: number;
+	pendingPrompt: AgentMessage | null;
+}

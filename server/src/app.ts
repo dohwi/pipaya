@@ -109,6 +109,8 @@ export interface BuildOptions {
 	extensionPaths?: string[];
 	/** Shorten the deadline for one-off subagents in tests. */
 	delegateTimeoutMs?: number;
+	/** Shorten the deadline for active runs during `close()` in tests. */
+	shutdownStopMs?: number;
 	/** Self-update wiring (tests replace git, the installer and the restart); defaults to this checkout and a SIGTERM restart. */
 	selfUpdate?: Partial<SelfUpdateOptions>;
 }
@@ -167,7 +169,7 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 	const mcp = new McpManager(db, () => bus.publish(null, "mcp_updated", {}));
 	// Seed once from an older copy's saved settings when the built-in setting is not yet in SQLite.
 	const guard = new GuardSettings(db, join(cfg.dataDir, "extensions", "guard", "settings.json"));
-	const sessions = new SessionManager(cfg, store, bus, registry, () => configuration.defaultWorkdir(), skills, questions, compactionSettings, extensions, () => configuration.disabledTools(), systemModel, imageModel, mcp, opts.home, () => configuration.delegatePolicy(), () => configuration.disabledSubagents(), opts.delegateTimeoutMs, guard);
+	const sessions = new SessionManager(cfg, store, bus, registry, () => configuration.defaultWorkdir(), skills, questions, compactionSettings, extensions, () => configuration.disabledTools(), systemModel, imageModel, mcp, opts.home, () => configuration.delegatePolicy(), () => configuration.disabledSubagents(), opts.delegateTimeoutMs, guard, opts.shutdownStopMs);
 	const busy = (id: string) => sessions.isRunning(id) || questions.list(id).length > 0;
 	const info = (r: NonNullable<ReturnType<typeof store.get>>) => ({
 		id: r.id, name: r.name, title: r.title, purpose: r.purpose, cwd: r.cwd, provider: r.provider, model: r.model, thinkingLevel: r.thinkingLevel,
@@ -451,6 +453,8 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 	pruneEvents();
 	const prune = setInterval(pruneEvents, 6 * 3600_000);
 	prune.unref?.();
+	// Finalize any runs left active by a previous crash / SIGKILL / sudden reboot before scheduled tasks or clients act on them.
+	sessions.recoverInterruptedRuns();
 	idleSockets.start();
 	retention.start();
 	scheduler.start();
@@ -464,14 +468,14 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 		retention.stop();
 		scheduler.stop();
 		configuration.close();
-		await mcp.close();
 		agentsWatch.stop();
-		unread.dispose();
-		await notifications.close();
-		await push.close();
 		terminals.shutdown();
 		sessions.shutdown();
 		await sessions.idle();
+		await mcp.close();
+		unread.dispose();
+		await notifications.close();
+		await push.close();
 		await extensions.shutdown();
 		await server.close();
 		db.close();

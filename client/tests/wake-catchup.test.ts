@@ -6,8 +6,10 @@ import { compileModule } from "svelte/compiler";
 import ts from "typescript";
 import type { Api } from "../src/lib/api";
 import type { ChatState as ChatStateType } from "../src/lib/chat.svelte";
+import { setLang } from "../src/lib/i18n";
 
 let ChatState: typeof ChatStateType;
+let formatRunError: (error: string | undefined | null) => string;
 let dir: string;
 beforeAll(async () => {
 	// The real rune module, compiled with Svelte (same approach as stream-retry.test.ts).
@@ -15,19 +17,24 @@ beforeAll(async () => {
 	const build = await Bun.build({
 		entrypoints: [resolve("src/lib/chat.svelte.ts")], target: "bun",
 		plugins: [{ name: "runes", setup(builder) {
-			builder.onResolve({ filter: /\/src\/lib\/api\.ts$/ }, ({ path }) => ({ path, external: true }));
+			builder.onResolve({ filter: /\/src\/lib\/(api|i18n)\.ts$/ }, ({ path }) => ({ path, external: true }));
 			builder.onLoad({ filter: /chat\.svelte\.ts$/ }, async ({ path }) => {
 				const source = ts.transpileModule(await Bun.file(path).text(), {
 					compilerOptions: { target: ts.ScriptTarget.ESNext, module: ts.ModuleKind.ESNext },
 				}).outputText;
-				return { contents: compileModule(source.replace('from "./api"', `from ${JSON.stringify(resolve("src/lib/api.ts"))}`), { filename: path, generate: "client" }).js.code, loader: "js" };
+				const linked = source
+					.replace('from "./api"', `from ${JSON.stringify(resolve("src/lib/api.ts"))}`)
+					.replace('from "./i18n"', `from ${JSON.stringify(resolve("src/lib/i18n.ts"))}`);
+				return { contents: compileModule(linked, { filename: path, generate: "client" }).js.code, loader: "js" };
 			});
 		} }],
 	});
 	if (!build.success) throw new Error(build.logs.join("\n"));
 	const file = join(dir, "chat.mjs");
 	await writeFile(file, await build.outputs[0]!.text());
-	ChatState = (await import(file)).ChatState;
+	const mod = await import(file);
+	ChatState = mod.ChatState;
+	formatRunError = mod.formatRunError;
 });
 afterAll(async () => { if (dir) await rm(dir, { recursive: true, force: true }); });
 
@@ -109,5 +116,82 @@ describe("catching up after the window was in the background", () => {
 		await chat.catchUp();
 		expect(chat.items).toBe(items); // the array itself: no re-render of the transcript
 		expect(JSON.stringify(chat.items)).toBe(blocks);
+	});
+
+	test("a run interrupted by a server restart pulls the persisted error reply on catchUp without duplicating on replay", async () => {
+		let running = true;
+		const storedAfter = [
+			{ seq: 1, role: "toolResult", createdAt: 10, message: { role: "toolResult", toolCallId: "tc1", toolName: "bash", content: [{ type: "text", text: "Tool execution was interrupted because the server stopped unexpectedly." }], isError: true, timestamp: 10 } },
+			{ seq: 2, role: "assistant", createdAt: 11, message: { role: "assistant", content: [], stopReason: "error", errorMessage: "The run was interrupted because the server stopped unexpectedly.", timestamp: 11 } },
+		];
+		const api = {
+			tailMessages: async () => [
+				{ seq: 0, role: "assistant", createdAt: 5, message: { role: "assistant", content: [{ type: "toolCall", id: "tc1", name: "bash", arguments: { command: "sleep 10" } }], stopReason: "toolUse", timestamp: 5 } },
+			],
+			questions: async () => [],
+			serverExtensionEntries: async () => [],
+			getSession: async () => ({ status: { ...base, running, pendingToolCalls: running ? ["tc1"] : [] }, context: { tokens: 10, contextWindow: 128000 }, usage: {} }),
+			messagesAfter: async (_id: string, after: number) => storedAfter.filter((m) => m.seq > after),
+		} as unknown as Api;
+		const chat = new ChatState("session", api);
+		await chat.load();
+		expect(chat.running).toBe(true);
+		expect(chat.tools.tc1?.state).toBe("running");
+
+		// Server rebooted and finalized the interrupted run.
+		running = false;
+		await chat.catchUp();
+		expect(chat.running).toBe(false);
+		expect(chat.tools.tc1?.state).toBe("error");
+		const assistants = chat.items.filter((i) => i.kind === "assistant");
+		expect(assistants).toHaveLength(2);
+		expect(assistants[1]).toMatchObject({
+			seq: 2,
+			stopReason: "error",
+			error: "The run was interrupted because the server stopped unexpectedly.",
+		});
+
+		// Late SSE replay of the same message_end must not create a duplicate item.
+		chat.apply({ id: 5, sessionId: "session", type: "message_end", ts: 11, data: { seq: 2, message: storedAfter[1]!.message } });
+		expect(chat.items.filter((i) => i.kind === "assistant")).toHaveLength(2);
+	});
+
+	test("an unsettled streaming bubble settled by catchUp is replaced (not duplicated) when message_end arrives", async () => {
+		let running = true;
+		const chat = setup(() => ({ ...base, running, streamingMessage: running ? assistant("partial") : null }));
+		await chat.load();
+		expect(chat.items.filter((i) => i.kind === "assistant")).toHaveLength(1);
+
+		// catchUp runs just before the SSE replay of message_end arrives.
+		running = false;
+		await chat.catchUp();
+		chat.apply({
+			id: 9,
+			sessionId: "session",
+			type: "message_end",
+			ts: Date.now(),
+			data: {
+				seq: 1,
+				message: { role: "assistant", content: [{ type: "text", text: "partial" }], stopReason: "error", errorMessage: "The run was interrupted because the server shut down.", timestamp: Date.now() },
+			},
+		});
+		const assistants = chat.items.filter((i) => i.kind === "assistant");
+		expect(assistants).toHaveLength(1);
+		expect(assistants[0]).toMatchObject({
+			seq: 1,
+			streaming: false,
+			stopReason: "error",
+			error: "The run was interrupted because the server shut down.",
+		});
+	});
+
+	test("formatRunError localizes server shutdown / crash messages and preserves provider errors", () => {
+		setLang("ko");
+		expect(formatRunError("The run was interrupted because the server shut down.")).toBe("서버가 종료되어 작업이 중단되었습니다.");
+		expect(formatRunError("The run was interrupted because the server stopped unexpectedly.")).toBe("서버가 예기치 않게 멈춰 작업이 중단되었습니다.");
+		expect(formatRunError("429 Too Many Requests")).toBe("429 Too Many Requests");
+		setLang("en");
+		expect(formatRunError("The run was interrupted because the server shut down.")).toBe("The run was interrupted because the server shut down.");
+		setLang("ko");
 	});
 });

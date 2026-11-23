@@ -54,7 +54,7 @@ describe("migrations", () => {
 		add.run({ id: "c2", name: "Mina", closed: 1, at: 4 });
 		add.run({ id: "solo", name: "가온", closed: 1, at: 5 }); // nobody else has it: untouched
 		add.run({ id: "none", name: "", closed: 1, at: 6 }); // never had one: stays without
-		const step = MIGRATIONS.at(-1)!;
+		const step = MIGRATIONS[38]!;
 		if (typeof step !== "string") step(db);
 		const names = () => Object.fromEntries((db.query("SELECT id, name FROM sessions").all() as { id: string; name: string }[]).map((r) => [r.id, r.name]));
 		const after = names();
@@ -68,6 +68,16 @@ describe("migrations", () => {
 		if (typeof step !== "string") step(db);
 		expect(names()).toEqual(after);
 		expect(db.query("SELECT COUNT(*) AS n FROM sessions").get()).toEqual({ n: 6 });
+	});
+
+	test("active_runs: the table is created and survives re-running the migration", () => {
+		const db = openDb(":memory:");
+		db.query("INSERT INTO sessions (id, title, cwd, provider, model, thinking_level, system_prompt, tools, parent_id, created_at, updated_at, closed, purpose) VALUES ('s', 't', '/', 'p', 'm', 'off', '', '[]', NULL, 1, 1, 0, '')").run();
+		db.query("INSERT INTO active_runs (session_id, origin, started_at, pending_prompt) VALUES ('s', 'user', 10, NULL)").run();
+		const step = MIGRATIONS[39]!;
+		expect(typeof step).toBe("string");
+		db.exec(step as string);
+		expect(db.query("SELECT session_id, origin, started_at FROM active_runs").all()).toEqual([{ session_id: "s", origin: "user", started_at: 10 }]);
 	});
 
 	test("scheduled tasks: the table is created by v32, which can run again and keeps the rows", () => {
