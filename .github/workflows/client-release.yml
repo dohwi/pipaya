@@ -27,23 +27,85 @@ jobs:
     timeout-minutes: 15
     outputs:
       version: ${{ steps.version.outputs.version }}
+      should_release: ${{ steps.gate.outputs.should_release }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Check whether this commit bumps the version
+        id: gate
+        env:
+          EVENT: ${{ github.event_name }}
+          BEFORE: ${{ github.event.before }}
+        run: |
+          python3 - <<'PY'
+          import json, os, re, subprocess
+          from pathlib import Path
+
+          out = Path(os.environ["GITHUB_OUTPUT"])
+          def emit(val: bool) -> None:
+              with out.open("a") as f:
+                  f.write(f"should_release={'true' if val else 'false'}\n")
+
+          if os.environ.get("EVENT", "") != "push":
+              emit(True)
+              raise SystemExit(0)
+
+          cur = str(json.loads(Path("client/src-tauri/tauri.conf.json").read_text()).get("version", "")).strip()
+          before = os.environ.get("BEFORE", "").strip()
+          if not before or set(before) == {"0"}:
+              emit(True)
+              raise SystemExit(0)
+
+          if not re.fullmatch(r"[0-9a-f]{40}", before):
+              raise SystemExit(f"Unexpected before SHA: {before!r}")
+
+          if subprocess.run(["git", "cat-file", "-e", f"{before}^{{commit}}"]).returncode != 0:
+              subprocess.run(["git", "fetch", "--no-tags", "--depth=1", "origin", before], check=True)
+
+          if subprocess.run(["git", "cat-file", "-e", f"{before}:client/src-tauri/tauri.conf.json"]).returncode != 0:
+              emit(True)
+              raise SystemExit(0)
+
+          raw = subprocess.check_output(["git", "show", f"{before}:client/src-tauri/tauri.conf.json"], text=True)
+          prev = str(json.loads(raw).get("version", "")).strip()
+
+          def parse(v: str):
+              m = re.fullmatch(r"(\d+)\.(\d+)\.(\d+)", v)
+              return tuple(int(x) for x in m.groups()) if m else None
+
+          if cur == prev:
+              print(f"::notice::tauri.conf.json changed without a version bump ({cur}); skipping release.")
+              emit(False)
+              raise SystemExit(0)
+
+          cur_t, prev_t = parse(cur), parse(prev)
+          if cur_t is not None and prev_t is not None and cur_t <= prev_t:
+              print(f"::notice::Version did not increase ({prev} -> {cur}); skipping release.")
+              emit(False)
+              raise SystemExit(0)
+
+          emit(True)
+          PY
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        if: steps.gate.outputs.should_release == 'true'
         with:
           bun-version: ${{ env.BUN_VERSION }}
-      - run: bun install --frozen-lockfile
+      - if: steps.gate.outputs.should_release == 'true'
+        run: bun install --frozen-lockfile
         working-directory: client
-      - run: bun run check && bun run test && bun run build
+      - if: steps.gate.outputs.should_release == 'true'
+        run: bun run check && bun run test && bun run build
         working-directory: client
       - name: App and server carry the same version
+        if: steps.gate.outputs.should_release == 'true'
         run: bun scripts/check-versions.ts
       - name: Read the app version
         id: version
+        if: steps.gate.outputs.should_release == 'true'
         run: echo "version=$(jq -r .version client/src-tauri/tauri.conf.json)" >> "$GITHUB_OUTPUT"
 
   windows:
     needs: validate
+    if: needs.validate.outputs.should_release == 'true'
     runs-on: windows-latest
     timeout-minutes: 60
     defaults:
@@ -93,6 +155,7 @@ jobs:
 
   macos:
     needs: validate
+    if: needs.validate.outputs.should_release == 'true'
     runs-on: macos-15
     timeout-minutes: 60
     defaults:
@@ -161,6 +224,7 @@ jobs:
 
   android:
     needs: validate
+    if: needs.validate.outputs.should_release == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     defaults:
@@ -263,7 +327,7 @@ jobs:
 
   publish:
     needs: [validate, windows, macos, android]
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' && needs.validate.outputs.should_release == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:

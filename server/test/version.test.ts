@@ -4,13 +4,14 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { buildApp, type App } from "../src/app.ts";
 import type { Config } from "../src/config.ts";
-import { SelfUpdater, type Run } from "../src/self-update.ts";
+import { compareVersions, SelfUpdater, type Run } from "../src/self-update.ts";
 import { MIN_CLIENT_PROTOCOL, PROTOCOL_VERSION, SERVER_VERSION } from "../src/version.ts";
 
 const TOKEN = "version-test-token-0123456789";
 const auth = { authorization: `Bearer ${TOKEN}` };
 const OLD = "a".repeat(40);
 const NEW = "b".repeat(40);
+const NEXT_VERSION = "99.0.0";
 /** Tip of the release branch in the fake remote, ahead of the release commit. */
 const TIP = "c".repeat(40);
 
@@ -35,6 +36,7 @@ describe("version handshake", () => {
 		if (key === "ls-remote origin refs/heads/main") return { code: 0, out: `${fetched}\trefs/heads/main` };
 		if (key.startsWith("ls-remote")) return { code: 0, out: `${fetched}\trefs/tags/latest` };
 		if (key.startsWith("fetch")) return { code: 0, out: "" };
+		if (key === `show ${fetched}:server/package.json`) return { code: 0, out: JSON.stringify({ version: NEXT_VERSION }) };
 		if (key.startsWith("diff")) return { code: 0, out: "server/bun.lock" };
 		if (key.startsWith("reset")) {
 			head = a[a.length - 1]!;
@@ -154,7 +156,7 @@ describe("version handshake", () => {
 		test("moves to the new commit, reinstalls and restarts", async () => {
 			const r = await call("POST", "/server/update", auth, {});
 			expect(r.status).toBe(200);
-			expect(r.json).toMatchObject({ ok: true, from: OLD, to: NEW, restarting: true, fromVersion: SERVER_VERSION }); // the new version is named too (null when the release's package.json cannot be read)
+			expect(r.json).toMatchObject({ ok: true, from: OLD, to: NEW, restarting: true, fromVersion: SERVER_VERSION, toVersion: NEXT_VERSION });
 			expect(head).toBe(NEW);
 			expect(installs).toBe(1);
 			expect(restarts).toBe(1);
@@ -184,6 +186,7 @@ describe("SelfUpdater", () => {
 		if (k === "ls-remote --symref origin HEAD") return { code: 0, out: `ref: refs/heads/main\tHEAD\n${TIP}\tHEAD` };
 		if (k === "ls-remote origin refs/heads/main") return { code: 0, out: `${TIP}\trefs/heads/main` };
 		if (k.startsWith("ls-remote")) return { code: 0, out: `${NEW}\trefs/tags/latest` };
+		if (k === `show ${NEW}:server/package.json`) return { code: 0, out: JSON.stringify({ version: NEXT_VERSION }) };
 		if (k.startsWith("diff")) return { code: 0, out: "server/bun.lock" };
 		return { code: 0, out: "" };
 	};
@@ -226,9 +229,35 @@ describe("SelfUpdater", () => {
 		rmSync(dir, { recursive: true, force: true });
 	});
 
-	test("when the version cannot be read the update is still offered, by commit", async () => {
+	test("compareVersions compares semver triples numerically and rejects invalid input", () => {
+		expect(compareVersions("0.10.6", "0.10.5")).toBe(1);
+		expect(compareVersions("0.10.0", "0.9.9")).toBe(1);
+		expect(compareVersions("1.0.0", "0.10.9")).toBe(1);
+		expect(compareVersions("0.10.5", "0.10.5")).toBe(0);
+		expect(compareVersions("0.10.4", "0.10.5")).toBe(-1);
+		expect(compareVersions("0.9.9", "0.10.0")).toBe(-1);
+		for (const bad of [null, undefined, "", "0.10", "v0.10.5", "0.10.5-beta", "latest"]) {
+			expect(compareVersions(bad, "0.10.5")).toBeNull();
+			expect(compareVersions("0.10.5", bad)).toBeNull();
+		}
+	});
+
+	test("same or older version on a different commit is not offered as an update", async () => {
+		for (const latestVer of ["0.10.5", "0.10.4", "0.9.9"]) {
+			const run: Run = async (cmd, cwd, t) => {
+				const k = cmd.slice(1).join(" ");
+				if (k === `show ${NEW}:server/package.json`) return { code: 0, out: JSON.stringify({ version: latestVer }) };
+				return fine(cmd, cwd, t);
+			};
+			const { dir, u } = make({ env: { PIPAYA_SELF_UPDATE: "1" }, run, version: "0.10.5", install: async () => true, restart: () => {} });
+			expect(await u.status()).toMatchObject({ managed: true, available: false, currentVersion: "0.10.5", latestVersion: latestVer, current: OLD, latest: NEW });
+			await expect(u.apply()).rejects.toMatchObject({ status: 409, code: "up_to_date" });
+			rmSync(dir, { recursive: true, force: true });
+		}
+	});
+
+	test("a commit whose version is missing or invalid is not offered as an update", async () => {
 		const broken: ((k: string) => { code: number; out: string } | null)[] = [
-			(k) => (k.startsWith("fetch") ? { code: 128, out: "unable to access" } : null),
 			(k) => (k.startsWith("show") ? { code: 128, out: "bad object" } : null),
 			(k) => (k.startsWith("show") ? { code: 0, out: "{not json" } : null),
 			(k) => (k.startsWith("show") ? { code: 0, out: JSON.stringify({ version: "latest" }) } : null), // not x.y.z
@@ -237,9 +266,24 @@ describe("SelfUpdater", () => {
 		for (const b of broken) {
 			const run: Run = async (cmd, cwd, t) => b(cmd.slice(1).join(" ")) ?? fine(cmd, cwd, t);
 			const { dir, u } = make({ env: { PIPAYA_SELF_UPDATE: "1" }, run, version: "0.4.9" });
-			expect(await u.status()).toMatchObject({ managed: true, available: true, currentVersion: "0.4.9", latestVersion: null });
+			expect(await u.status()).toMatchObject({ managed: true, available: false, currentVersion: "0.4.9", latestVersion: null });
 			rmSync(dir, { recursive: true, force: true });
 		}
+	});
+
+	test("a fetch failure while reading the release version reports fetch_failed and retries next time", async () => {
+		let failFetch = true;
+		const run: Run = async (cmd, cwd, t) => {
+			const k = cmd.slice(1).join(" ");
+			if (k.startsWith("fetch") && failFetch) return { code: 128, out: "unable to access" };
+			if (k === `show ${NEW}:server/package.json`) return { code: 0, out: JSON.stringify({ version: "0.10.0" }) };
+			return fine(cmd, cwd, t);
+		};
+		const { dir, u } = make({ env: { PIPAYA_SELF_UPDATE: "1" }, run, version: "0.9.9" });
+		expect(await u.status()).toMatchObject({ managed: false, reason: "fetch_failed", available: false, current: OLD, latest: NEW, latestVersion: null });
+		failFetch = false;
+		expect(await u.status(true)).toMatchObject({ managed: true, available: true, currentVersion: "0.9.9", latestVersion: "0.10.0" });
+		rmSync(dir, { recursive: true, force: true });
 	});
 
 	test("nothing is downloaded to name a version when the server is already current", async () => {
