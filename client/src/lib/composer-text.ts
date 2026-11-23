@@ -10,6 +10,13 @@ export interface Mention {
 	start: number;
 }
 
+export interface SlashToken extends Mention {
+	/** Only whitespace (or nothing) precedes the `/`, so whole-message commands like `/prompt:` or `/compact` apply. */
+	atStart: boolean;
+	/** Non-whitespace text follows the caret, so picking must splice rather than clear or run an argument-less command. */
+	hasTrailing: boolean;
+}
+
 const PATTERNS = {
 	file: /(?:^|\s)#([^\s#]*)$/,
 	at: /(?:^|\s)@([^\s@]*)$/,
@@ -17,10 +24,35 @@ const PATTERNS = {
 } as const;
 export type MentionKind = keyof typeof PATTERNS;
 
+const SLASH_PATTERN = /(?:^|\s)\/([a-z][a-z0-9-]*(?::[A-Za-z0-9_.-]*)?|)$/i;
+
 /** The mention of `kind` that ends at the caret, e.g. "look at #src/comp|" → { query: "src/comp", start: 8 }. */
 export function mentionAt(kind: MentionKind, text: string, caret: number): Mention | null {
 	const m = PATTERNS[kind].exec(text.slice(0, caret));
 	return m ? { query: m[1]!, start: caret - m[1]!.length - 1 } : null;
+}
+
+/**
+ * The `/command` or `/skill:` token that ends at the caret, whether at the start of the draft or after whitespace
+ * (e.g. "fix this /orch|" or "/s|fix this"). Paths (`/a/b`, `/README.md`) and mid-word slashes (`a/b`, `http://`) do not match.
+ */
+export function slashAt(text: string, caret: number): SlashToken | null {
+	const pos = Math.max(0, Math.min(caret, text.length));
+	const head = text.slice(0, pos);
+	const m = SLASH_PATTERN.exec(head);
+	if (!m) return null;
+	const query = m[1]!;
+	const tail = text.slice(pos);
+	// Don't split an ASCII command/skill word in half (e.g. clicking inside `/mo|del gpt` or `/skill:or|chestrate`),
+	// while still allowing `/` right before existing text (`/|fix this`) or before non-ASCII text (`/orch|추가적으로`).
+	if (query.length > 0 && /^[A-Za-z0-9_:-]/.test(tail)) return null;
+	const start = pos - query.length - 1;
+	return {
+		query,
+		start,
+		atStart: head.slice(0, start).trim().length === 0,
+		hasTrailing: tail.trim().length > 0,
+	};
 }
 
 /**

@@ -23,11 +23,11 @@
 	import { caretOnFirstVisualLine, caretOnLastVisualLine } from "../../lib/caret-line";
 	import { enterPlan, historyKey, lastPromptOf, menuAria, sentPrompts as sentPromptsOf } from "../../lib/composer/input-keys";
 	import { Ime } from "../../lib/composer/ime";
-	import { fileRows, folderRows, mentionRows, menuKey, menuKindOf, menuOpen, optionRows, PROMPT_PREFIX, slashRows } from "../../lib/slash-menu";
+	import { fileRows, folderRows, mentionRows, menuKey, menuKindOf, menuOpen, optionRows, PROMPT_PREFIX, slashRows, slashScopeOf } from "../../lib/slash-menu";
 	import { htmlImages, pastedMessage, shiftImageTokens } from "../../lib/rich-copy";
 	import type { ImageBlock } from "../../lib/types";
 	import { MAX_IMAGES } from "../../lib/files";
-	import { dropImageToken, insertToken, mentionAt, mergeReturned, mirrorHtml, replaceMention, type Mention } from "../../lib/composer-text";
+	import { dropImageToken, insertToken, mentionAt, mergeReturned, mirrorHtml, replaceMention, slashAt, type Mention } from "../../lib/composer-text";
 	import IconButton from "../ui/IconButton.svelte";
 	import ModelPicker from "../models/ModelPicker.svelte";
 	import RetryNotice from "./RetryNotice.svelte";
@@ -40,7 +40,7 @@
 	import ExtensionPanels from "../extensions/ExtensionPanels.svelte";
 	import SlashMenu from "./SlashMenu.svelte";
 	import { cdArgOf, cdCompletion, cdHint, cdRowsOf, cdTab } from "../../lib/workdir-path";
-	import { allCommands, argumentSuggestions, commandQuery, commandText, isCommandInput, matchCommands, matchFamilyEntries, matchSkills, matchTemplates, parseSlash, SKILL_PREFIX, type SlashCommand } from "../../lib/commands";
+	import { allCommands, argumentSuggestions, commandText, isCommandInput, matchCommands, matchFamilyEntries, matchSkills, matchTemplates, parseSlash, SKILL_PREFIX, type SlashCommand } from "../../lib/commands";
 	import { app } from "../../lib/store.svelte";
 	import { getPane } from "../../lib/pane";
 	import { extensions } from "../../lib/extensions/host.svelte";
@@ -74,6 +74,7 @@
 
 	// Unsent input survives switching to another session and back (kept per session; "" = new chat), and a restart.
 	let text = $state("");
+	let caret = $state(0);
 	let ta: HTMLTextAreaElement | undefined = $state();
 	let mirror: HTMLDivElement | undefined = $state();
 	let fileInput: HTMLInputElement | undefined = $state();
@@ -103,7 +104,9 @@
 	}
 	export function setText(t: string) {
 		text = t;
-				ta?.focus();
+		caret = t.length;
+		ta?.focus();
+		queueMicrotask(() => ta?.setSelectionRange(t.length, t.length));
 	}
 
 	// The textarea's height is not measured in JS: the mirror layer shares its grid cell and sizes it (see .field-wrap).
@@ -172,6 +175,7 @@
 			const kept = drafts.get(id ?? "");
 			const d = kept ?? loadDraft(id ?? "");
 			text = d?.text ?? "";
+			caret = text.length;
 			attached.load(kept?.attachments ?? [], kept?.files ?? []);
 			reply = d?.reply ?? null;
 			attachSaved = attachmentsSignature(attached.images, attached.files);
@@ -216,7 +220,10 @@
 				if (own.trim()) back = back ? `${back.replace(/\s+$/, "")}\n${own}` : own;
 				pictures += m.images.length;
 			}
-			if (back) text = mergeReturned(text, attached.images.length, { text: back, images: pictures });
+			if (back) {
+				text = mergeReturned(text, attached.images.length, { text: back, images: pictures });
+				caret = text.length;
+			}
 			attached.load(
 				[...attached.images, ...list.flatMap((m) => m.images).map((b) => ({ id: uid(), name: "image", preview: `data:${b.mimeType};base64,${b.data}`, data: b.data, mimeType: b.mimeType }))],
 				[...attached.files, ...list.flatMap((m) => m.files).map((f) => ({ ...f, id: uid() }))],
@@ -295,29 +302,40 @@
 		ta?.focus();
 	});
 
-	// ── commands and finite arguments share the recommendation menu above the input ──
+	// ── commands, skills, /cd paths and finite arguments share the recommendation menu above the input ──
 	let slashIndex = $state(0);
 	let slashDismissed = $state(false);
-	const slashQuery = $derived(commandQuery(text));
-	const commandList = $derived(slashQuery !== null ? matchCommands(slashQuery) : []);
+	// `/cd <path>` owns the menu while the caret is in its path argument (so `/cd /home` stays a folder lookup, not a slash token).
+	const cdArg = $derived(/^\/cd[ \t]/i.test(text.slice(0, caret)) ? cdArgOf(text) : null);
+	// Finite-choice command arguments (`/model <name>`, `/goal <action>`) own the menu while the caret is past the command name.
+	const argSuggestions = $derived(cdArg === null && /^\/[a-z][a-z0-9-]*[ \t]/i.test(text.slice(0, caret)) ? argumentSuggestions(text) : null);
+	const slashToken = $derived(cdArg === null && !argSuggestions ? slashAt(text, caret) : null);
+	const slashQuery = $derived(slashToken?.query ?? null);
+	const slashScope = $derived(slashToken ? slashScopeOf({ atStart: slashToken.atStart, hasTrailing: slashToken.hasTrailing, attachments: attached.images.length }) : null);
+	const commandList = $derived(
+		slashQuery !== null && slashScope && slashScope.commands !== "none"
+			? matchCommands(slashQuery).filter((c) => slashScope.commands === "all" || !!(c.args || c.argumentOptions))
+			: [],
+	);
 	// Skills sit in the same menu after the commands, as `/skill:name`, tagged so they are not mistaken for commands.
 	let skillList = $state<{ name: string; description: string }[]>([]);
-	const skillMatches = $derived(slashQuery !== null ? matchSkills(skillList, slashQuery) : []);
+	const skillMatches = $derived(slashQuery !== null && slashScope?.skills ? matchSkills(skillList, slashQuery) : []);
 	// Built-in prompt templates (`/prompt:name`) follow the skills.
 	let templateList = $state<{ name: string; description: string }[]>([]);
-	const templateMatches = $derived(slashQuery !== null ? matchTemplates(templateList, slashQuery) : []);
+	const templateMatches = $derived(slashQuery !== null && slashScope?.startMacros ? matchTemplates(templateList, slashQuery) : []);
 	// Commands server extensions find at run time (`/prefix:name`) follow the templates.
 	type FamilyEntry = { prefix: string; label: string; name: string; description: string; args?: string };
 	let familyList = $state<FamilyEntry[]>([]);
-	const familyMatches = $derived(slashQuery !== null ? matchFamilyEntries(familyList, slashQuery) : []);
+	const familyMatches = $derived(slashQuery !== null && slashScope?.startMacros ? matchFamilyEntries(familyList, slashQuery) : []);
 	const slashList = $derived<(SlashCommand | { skill: { name: string; description: string } } | { template: { name: string; description: string } } | { family: FamilyEntry })[]>([
 		...commandList,
 		...skillMatches.map((skill) => ({ skill })),
 		...templateMatches.map((template) => ({ template })),
 		...familyMatches.map((family) => ({ family })),
 	]);
-	const skillsWanted = $derived(slashQuery !== null || text.includes(`/${SKILL_PREFIX}`));
-	const templatesWanted = $derived(slashQuery !== null || /(^|\s)\/prompt:/.test(text));
+	const skillsWanted = $derived((slashQuery !== null && !!slashScope?.skills) || text.includes(`/${SKILL_PREFIX}`));
+	const templatesWanted = $derived((slashQuery !== null && !!slashScope?.startMacros) || /(^|\s)\/prompt:/.test(text));
+	const familiesWanted = $derived((slashQuery !== null && !!slashScope?.startMacros) || /(^|\s)\/[a-z][a-z0-9-]*:/.test(text));
 	const skillsCwd = $derived((pane.id ? app.session(pane.id)?.cwd : null) || app.workdirAbs);
 	$effect(() => {
 		const api = app.api;
@@ -334,7 +352,7 @@
 		const cwd = skillsCwd;
 		app.skillsTick;
 		app.serverExtensionsTick;
-		if (!(slashQuery !== null || /(^|\s)\/[a-z][a-z0-9-]*:/.test(text)) || !api || app.net !== "online") return;
+		if (!familiesWanted || !api || app.net !== "online") return;
 		return abortable((signal) => api.commandFamilies(cwd, signal), {
 			ok: (r) => (familyList = r.families.flatMap((f) => f.entries.map((e) => ({ prefix: f.prefix, label: f.label ?? f.prefix, name: e.name, description: e.description ?? "", ...(e.args ? { args: e.args } : {}) })))),
 			fail: () => (familyList = []),
@@ -350,16 +368,13 @@
 			fail: () => (skillList = []),
 		});
 	});
-	const argSuggestions = $derived(argumentSuggestions(text));
 
 	// ── #file mentions (and #imageN): the token right before the caret, e.g. "look at #src/comp" ──
-	let caret = $state(0);
 	/** Files under the folder for the `#` token being typed, listed after a short pause */
 	const fileList = new DebouncedList<{ cwd: string; q: string }, { path: string; dir: boolean }>();
 	const mentionFiles = $derived(fileList.rows);
 	const mentionLoaded = $derived(fileList.loaded);
 	// ── /cd <path>: folders of the typed path are suggested above the input (`~`, absolute and workspace-relative) ──
-	const cdArg = $derived(slashQuery === null ? cdArgOf(text) : null);
 	const cdTarget = $derived(cdArg === null ? null : cdHint(cdArg, { root: app.workspace?.root, home: app.workspace?.home }));
 	/** Folders of the typed `/cd` path, listed after a short pause; `for` is the folder they belong to. */
 	const cdList = new DebouncedList<{ dir: string; hidden: boolean }, { name: string; path: string }>();
@@ -386,7 +401,7 @@
 
 	// ── @mentions: the other sessions and groups, then whatever extensions add (`sdk.mentions.set`) ──
 	const mentionItems = $derived([...peerMentions(app.sessions, app.groups, pane.id), ...extensions.mentions().filter((m) => !m.except || m.except !== pane.id)]);
-	const atMention = $derived(slashQuery !== null || argSuggestions || mention ? null : mentionAt("at", text, caret));
+	const atMention = $derived(cdArg !== null || slashQuery !== null || argSuggestions || mention ? null : mentionAt("at", text, caret));
 	const atMatches = $derived.by(() => {
 		if (!atMention) return [];
 		const q = atMention.query.toLowerCase();
@@ -412,7 +427,19 @@
 
 	/** Which of the four kinds of typing owns the menu, and whether it shows (see lib/slash-menu). */
 	const menuKind = $derived(menuKindOf({ slashQuery, hasArgSuggestions: argSuggestions !== null, cdArg, fileMention: mention !== null, atMention: atMention !== null }));
-	const slashOpen = $derived(menuOpen(menuKind, { dismissed: slashDismissed, cdRows: cdRows.length, fileLoaded: mentionLoaded, files: mentionFiles.length, images: imageMatches.length, mentions: atMatches.length, attachments: attached.images.length }));
+	const slashOpen = $derived(
+		menuOpen(menuKind, {
+			dismissed: slashDismissed,
+			cdRows: cdRows.length,
+			fileLoaded: mentionLoaded,
+			files: mentionFiles.length,
+			images: imageMatches.length,
+			mentions: atMatches.length,
+			attachments: attached.images.length,
+			slashRows: argSuggestions ? argSuggestions.options.length : slashList.length,
+			slashRequireMatch: !argSuggestions && !!slashScope?.onlyWhenMatched,
+		}),
+	);
 
 	/**
 	 * Menu rows carry a `group` so the menu can draw a divider and a heading wherever it changes. Rows are keyed by id: two
@@ -467,6 +494,15 @@
 		cdNav = false;
 		slashDismissed = false;
 	});
+	// Moving the caret to a different `/token` (or leaving and returning) clears a prior Esc dismissal.
+	$effect(() => {
+		slashToken?.start;
+		slashDismissed = false;
+	});
+	// Moving the caret between tokens without changing text can shrink the menu: keep the highlight in bounds.
+	$effect(() => {
+		if (slashIndex >= menuItems.length) slashIndex = 0;
+	});
 
 	async function runSlash(cmd: SlashCommand, arg: string) {
 		if (cmd.argumentOptions && !arg.trim()) {
@@ -474,6 +510,7 @@
 			return;
 		}
 		text = "";
+		caret = 0;
 		slashDismissed = false;
 		try {
 			await cmd.run(arg);
@@ -527,11 +564,12 @@
 			return;
 		}
 		const cmd = slashList[index];
-		if (!cmd) return;
-		if ("skill" in cmd) return void setText(`/${SKILL_PREFIX}${cmd.skill.name} `);
-		if ("template" in cmd) return void setText(`/${PROMPT_PREFIX}${cmd.template.name} `);
-		if ("family" in cmd) return void setText(`/${cmd.family.prefix}:${cmd.family.name} `);
-		if (completeOnly) setText(`${commandText(cmd)}${cmd.args ? " " : ""}`);
+		if (!cmd || !slashToken) return;
+		if ("skill" in cmd) return void applyMention(slashToken, `/${SKILL_PREFIX}${cmd.skill.name} `);
+		if ("template" in cmd) return void applyMention(slashToken, `/${PROMPT_PREFIX}${cmd.template.name} `);
+		if ("family" in cmd) return void applyMention(slashToken, `/${cmd.family.prefix}:${cmd.family.name} `);
+		if (slashToken.hasTrailing) return void applyMention(slashToken, `${commandText(cmd)} `);
+		if (completeOnly) applyMention(slashToken, `${commandText(cmd)}${cmd.args || cmd.argumentOptions ? " " : ""}`);
 		else pickSlash(cmd);
 	}
 
@@ -552,6 +590,7 @@
 		forgetAttachments(key ?? "");
 		if (pane.id !== key) return; // already moved to the new session, whose input was restored empty
 		text = "";
+		caret = 0;
 		reply = null;
 		attached.clear();
 	}
@@ -703,7 +742,10 @@
 
 	function removeAttachment(id: string) {
 		const gone = attached.removeImage(id);
-		if (gone !== null) text = dropImageToken(text, gone);
+		if (gone !== null) {
+			text = dropImageToken(text, gone);
+			caret = Math.min(caret, text.length);
+		}
 	}
 
 	function onPaste(e: ClipboardEvent) {
@@ -793,7 +835,7 @@
 	{#if chat?.retrying}<RetryNotice retrying={chat.retrying} />{/if}
 	<div class="box" data-part="composer.box" class:glow-working={running || compacting} class:glow-compacting={compacting} class:disabled={app.net !== "online"} data-level={running && !compacting && app.effectiveModelOf(pane.id)?.reasoning ? app.effectiveOf(pane.id).thinkingLevel : undefined}>
 		{#if slashOpen}
-			<SlashMenu items={menuItems} index={slashIndex} label={menuKind === "cd" ? msg("폴더") : menuKind === "file" ? msg("파일") : menuKind === "mention" ? msg("멘션") : argSuggestions ? t("{cmd} 값 선택", { cmd: commandText(argSuggestions.cmd) }) : msg("명령")} empty={menuKind === "cd" ? msg("일치하는 폴더가 없습니다") : menuKind === "file" ? msg("일치하는 파일이 없습니다") : argSuggestions?.empty} listId={menuListId} optionId={menuOptionId} onpick={pickRecommendation} onhover={(i) => (slashIndex = i)} />
+			<SlashMenu items={menuItems} index={slashIndex} label={menuKind === "cd" ? msg("폴더") : menuKind === "file" ? msg("파일") : menuKind === "mention" ? msg("멘션") : argSuggestions ? t("{cmd} 값 선택", { cmd: commandText(argSuggestions.cmd) }) : slashScope && slashScope.commands === "none" && !slashScope.startMacros ? msg("스킬") : msg("명령")} empty={menuKind === "cd" ? msg("일치하는 폴더가 없습니다") : menuKind === "file" ? msg("일치하는 파일이 없습니다") : argSuggestions?.empty} listId={menuListId} optionId={menuOptionId} onpick={pickRecommendation} onhover={(i) => (slashIndex = i)} />
 		{/if}
 		{#if chat?.waiting.length || ((scheduled.length || goal) && app.serverId && pane.id)}
 			<!-- keyed by session: a height pulled in one conversation does not carry over when the pane switches to another.
