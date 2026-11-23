@@ -1,8 +1,8 @@
 import type { FastifyInstance } from "fastify";
-import type { EventBus } from "./events.ts";
-import { errors } from "./schemas.ts";
-import { DEFAULT_SYSTEM_MODEL, SystemModelResult, SystemModelSchema, type SystemModelSettings } from "./system-model.ts";
-import type { TypeBoxProvider } from "./typebox-provider.ts";
+import type { EventBus } from "../events.ts";
+import { errors } from "../schemas.ts";
+import { DEFAULT_SYSTEM_MODEL, SystemModelResult, SystemModelSchema, type SystemModelSettings } from "../system-model.ts";
+import type { TypeBoxProvider } from "../typebox-provider.ts";
 
 /** The light model that writes session titles and roles (null = off). */
 export function registerSystemModelRoutes(server: FastifyInstance, settings: SystemModelSettings, bus: EventBus, onChange: () => void = () => {}): void {

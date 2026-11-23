@@ -1,8 +1,8 @@
 import type { FastifyInstance } from "fastify";
-import type { EventBus } from "./events.ts";
-import { DEFAULT_GUARD_SETTINGS, GuardInfoSchema, GuardUpdateSchema, type GuardSettings } from "./guard.ts";
-import { errors } from "./schemas.ts";
-import type { TypeBoxProvider } from "./typebox-provider.ts";
+import type { EventBus } from "../events.ts";
+import { DEFAULT_GUARD_SETTINGS, GuardInfoSchema, GuardUpdateSchema, type GuardSettings } from "../guard.ts";
+import { errors } from "../schemas.ts";
+import type { TypeBoxProvider } from "../typebox-provider.ts";
 
 /** Built-in bash command guard settings (`GET/PUT /guard`). */
 export function registerGuardRoutes(server: FastifyInstance, guard: GuardSettings, bus: EventBus): void {

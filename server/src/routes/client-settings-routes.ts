@@ -1,10 +1,10 @@
 import type { FastifyInstance } from "fastify";
 import Type from "typebox";
-import { MAX_SETTING_BODY, type ClientSettings } from "./client-settings.ts";
-import { notFound } from "./errors.ts";
-import type { EventBus } from "./events.ts";
-import { errors } from "./schemas.ts";
-import type { TypeBoxProvider } from "./typebox-provider.ts";
+import { MAX_SETTING_BODY, type ClientSettings } from "../client-settings.ts";
+import { notFound } from "../errors.ts";
+import type { EventBus } from "../events.ts";
+import { errors } from "../schemas.ts";
+import type { TypeBoxProvider } from "../typebox-provider.ts";
 
 const Key = Type.Object({ key: Type.String({ minLength: 1, maxLength: 40 }) });
 const Setting = Type.Object({ value: Type.Unknown(), updatedAt: Type.Integer() });

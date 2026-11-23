@@ -1,9 +1,9 @@
 import type { FastifyInstance } from "fastify";
 import Type from "typebox";
-import type { EventBus } from "./events.ts";
-import { errors, IdParams } from "./schemas.ts";
-import type { SkillService } from "./skills.ts";
-import type { TypeBoxProvider } from "./typebox-provider.ts";
+import type { EventBus } from "../events.ts";
+import { errors, IdParams } from "../schemas.ts";
+import type { SkillService } from "../skills.ts";
+import type { TypeBoxProvider } from "../typebox-provider.ts";
 
 export const SkillListResult = Type.Object({
 	cwd: Type.String(),

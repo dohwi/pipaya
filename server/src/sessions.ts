@@ -10,7 +10,7 @@ import { advertisedSkills, aggregateReadFiles, buildSystemPrompt, discoverInstru
 import { systemPromptEntries } from "./system-prompts.ts";
 import { mentionedSkills, readSkillText, skillCallHint, skillsPrompt, type SkillRef, type SkillService } from "./skills.ts";
 import { badRequest, conflict, HttpError, notFound } from "./errors.ts";
-import { filesNote, saveUploads } from "./file-routes.ts";
+import { filesNote, saveUploads } from "./routes/file-routes.ts";
 import type { EventBus } from "./events.ts";
 import { checkServiceTier, modelDefaultTier, modelDefaultLevel, reasoningOption, type ModelRegistry } from "./models.ts";
 import { streamAtTier } from "./served-tier.ts";

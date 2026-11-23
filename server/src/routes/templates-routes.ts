@@ -1,10 +1,10 @@
 import type { FastifyInstance } from "fastify";
 import { homedir } from "node:os";
 import Type from "typebox";
-import type { EventBus } from "./events.ts";
-import { errors } from "./schemas.ts";
-import { listTemplates, MAX_TEMPLATE_BYTES, MAX_TEMPLATE_DESCRIPTION, MAX_TEMPLATE_NAME, removeTemplate, resolveTemplateCwd, saveTemplate } from "./templates.ts";
-import type { TypeBoxProvider } from "./typebox-provider.ts";
+import type { EventBus } from "../events.ts";
+import { errors } from "../schemas.ts";
+import { listTemplates, MAX_TEMPLATE_BYTES, MAX_TEMPLATE_DESCRIPTION, MAX_TEMPLATE_NAME, removeTemplate, resolveTemplateCwd, saveTemplate } from "../templates.ts";
+import type { TypeBoxProvider } from "../typebox-provider.ts";
 
 const Scope = Type.Union([Type.Literal("global"), Type.Literal("project")], {
 	description: "global: ~/.agents/templates; project: .agents/templates of the working folder",

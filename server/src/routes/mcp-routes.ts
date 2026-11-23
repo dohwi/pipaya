@@ -1,8 +1,8 @@
 import type { FastifyInstance } from "fastify";
 import Type from "typebox";
-import { McpBody, McpInfo, type McpManager } from "./mcp.ts";
-import { errors } from "./schemas.ts";
-import type { TypeBoxProvider } from "./typebox-provider.ts";
+import { McpBody, McpInfo, type McpManager } from "../mcp.ts";
+import { errors } from "../schemas.ts";
+import type { TypeBoxProvider } from "../typebox-provider.ts";
 
 /** MCP servers: the list with each one's connection state, saving the list, and reconnecting. */
 export function registerMcpRoutes(server: FastifyInstance, mcp: McpManager): void {

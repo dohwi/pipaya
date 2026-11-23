@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { buildApp, type App } from "../src/app.ts";
 import type { Config } from "../src/config.ts";
-import { SILENCE_WAV, upstreamDetail } from "../src/voice-routes.ts";
+import { SILENCE_WAV, upstreamDetail } from "../src/routes/voice-routes.ts";
 import { MAX_AUDIO_BYTES, endpointOf, parseBase, parsePath, usesLanguagesList } from "../src/voice-input.ts";
 
 /** A stand-in transcription server: records what it got and answers what the test asks for. */

@@ -1,14 +1,14 @@
 import type { FastifyInstance } from "fastify";
 import Type from "typebox";
-import type { EventBus } from "./events.ts";
-import { badRequest, HttpError } from "./errors.ts";
-import { errors } from "./schemas.ts";
-import type { SqliteCredentialStore } from "./store.ts";
-import type { TypeBoxProvider } from "./typebox-provider.ts";
+import type { EventBus } from "../events.ts";
+import { badRequest, HttpError } from "../errors.ts";
+import { errors } from "../schemas.ts";
+import type { SqliteCredentialStore } from "../store.ts";
+import type { TypeBoxProvider } from "../typebox-provider.ts";
 import {
 	DEFAULT_PATH, DEFAULT_VOICE_SETTINGS, MAX_AUDIO_BYTES, TIMEOUT_MS, VOICE_CREDENTIAL_ID, VoiceSettingsBody, VoiceSettingsResult,
 	VOICE_REALTIME_CREDENTIAL_ID, type VoiceSettings, type VoiceSettingsValue, endpointOf, realtimeSocketOf, usesLanguagesList,
-} from "./voice-input.ts";
+} from "../voice-input.ts";
 
 /** What the transcription endpoint answered, once it is known to be a usable answer. */
 export const TranscribeResult = Type.Object({ text: Type.String() });

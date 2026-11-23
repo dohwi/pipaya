@@ -1,11 +1,11 @@
 import type { FastifyInstance } from "fastify";
 import Type from "typebox";
-import { isAdminOnlyRoute, PUBLIC_PAIRING_PATH } from "./auth-policy.ts";
-import type { DeviceTokens } from "./device-tokens.ts";
-import { HttpError } from "./errors.ts";
-import type { Pairing } from "./pairing.ts";
-import { Ok, errors } from "./schemas.ts";
-import type { TypeBoxProvider } from "./typebox-provider.ts";
+import { isAdminOnlyRoute, PUBLIC_PAIRING_PATH } from "../auth-policy.ts";
+import type { DeviceTokens } from "../device-tokens.ts";
+import { HttpError } from "../errors.ts";
+import type { Pairing } from "../pairing.ts";
+import { Ok, errors } from "../schemas.ts";
+import type { TypeBoxProvider } from "../typebox-provider.ts";
 
 export { isAdminOnlyRoute, PUBLIC_PAIRING_PATH };
 
