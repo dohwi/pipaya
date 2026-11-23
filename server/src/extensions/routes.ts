@@ -5,6 +5,7 @@ import { errors, IdParams } from "../schemas.ts";
 import type { TypeBoxProvider } from "../typebox-provider.ts";
 import { ROUTE_PREFIX, type ExtensionHost } from "./host.ts";
 import { installFromGit, removeInstalled } from "./install.ts";
+import { parseExtensionRouteRequest } from "./route-path.ts";
 
 const Info = Type.Object({
 	name: Type.String(),
@@ -53,9 +54,11 @@ export async function registerExtensionHttpRoutes(server: FastifyInstance, host:
 			url: `${ROUTE_PREFIX}*`,
 			bodyLimit: EXTENSION_ROUTE_BODY_LIMIT,
 			handler: async (req, reply) => {
-				const url = new URL(req.url, `http://${req.host || "localhost"}`);
+				const parsed = parseExtensionRouteRequest(req.url, req.host);
+				if (!parsed) throw badRequest("invalid extension route path");
+				const { url, pathname } = parsed;
 				const method = req.method === "HEAD" ? "GET" : req.method;
-				const found = host.findRoute(method, url.pathname);
+				const found = host.findRoute(method, pathname);
 				if (!found) throw notFound("extension route");
 				const headers = new Headers();
 				for (const [k, v] of Object.entries(req.headers)) {
