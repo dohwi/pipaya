@@ -29,7 +29,20 @@ import type { WorkspaceAdapter } from "./workspace";
 import { SETTINGS_TABS, WORKSPACE_DIALOGS } from "./workspace-spec";
 import type { Edge } from "../layout";
 import { clone, identify, localId, object, plain, string, within, withoutKeybindings } from "./host-values";
-import { read as readStore, write as writeStore } from "../persist";
+import { write as writeStore } from "../persist";
+import {
+  EXT_STORAGE_KEYS,
+  MAX_KEPT_ENTRIES,
+  dropLegacyLocalSwitches,
+  pruneKeptSettings,
+  readBootingIds,
+  readExtensionShortcuts,
+  readKeptSettingsMap,
+  readSafeModeFlag,
+  writeBootingIds,
+  writeKeptSettingsMap,
+  writeSafeModeFlag,
+} from "./storage";
 export type { ExtensionContext } from "./sdk";
 export interface HostAdapter {
   prefill(text: string): void;
@@ -141,24 +154,17 @@ export interface ExtensionPanel extends Omit<UIPanelSpec, "view"> {
 /** A component of a `ui-components` package mounted in an app slot. `data` is what the extension code last passed to `components.setData`. */
 export interface MountedComponent { owner: string; slot: UISlot; order: number; key: string; component: Component<any> }
 export interface ExtensionLog { owner: string; text: string; at: number }
-const KEY = "pipaya.extensions.v1";
-const SAFE = "pipaya.extensions.safe";
-/** JSON array of the extension ids whose enable() is currently in flight. */
-const BOOT = "pipaya.extensions.booting";
-const KEPT = "pipaya.extensions.kept";
-const CORRUPT = "pipaya.extensions.v1.corrupt";
+const KEY = EXT_STORAGE_KEYS.list;
+const CORRUPT = EXT_STORAGE_KEYS.corrupt;
 /** Where the old device-only list lived (`pipaya.extensions.device.v1`); read once at start to fold it into the server's list. */
-const LEGACY_DEVICE_KEY = "pipaya.extensions.device.v1";
-const MAX_ENTRIES = 50;
+const LEGACY_DEVICE_KEY = EXT_STORAGE_KEYS.legacyDevice;
+const MAX_ENTRIES = MAX_KEPT_ENTRIES;
 /** Shortcut overrides the user made in Settings > Shortcuts: { "<extension id>:<shortcut id>": combo | "" } ("" = unbound). */
-const SHORTCUT_KEYS = "pipaya.extensions.shortcut-keys";
+const SHORTCUT_KEYS = EXT_STORAGE_KEYS.shortcutKeys;
 const NONE: MountedComponent[] = [];
-const STORE = "pipaya.extension.storage.";
-/** Old per-device switches that kept settings off the server (per server `<id>` appended, and one global). Dropped on start. */
-const LOCAL_IDS = "pipaya.extensions.local-ids";
-const LEGACY_SOURCE = "pipaya.extensions.settings-source";
+const STORE = EXT_STORAGE_KEYS.storePrefix;
 /** Unconfirmed writes, per server: { <id>: { at, dirty } }. */
-const PENDING = "pipaya.extensions.pending";
+const PENDING = EXT_STORAGE_KEYS.pending;
 const SYNC_FETCH_MS = 3000;
 const SYNC_PUT_MS = 10000;
 export const SYNC_SAVE_FAILED = msg("서버에 저장하지 못해 이 브라우저에만 저장됨");
@@ -168,15 +174,7 @@ export const NEEDS_APPROVAL = msg("이 기기에서 아직 승인하지 않은 �
 export const APPROVAL_HINT = msg("다른 기기에서 켠 확장입니다. 이 기기에서 실행하려면 권한을 확인한 뒤 직접 켜 주세요.");
 export const SYNC_LOAD_FAILED = msg("서버에서 설정을 불러오지 못해 이 브라우저에 저장된 설정을 사용합니다");
 
-/** The user's extension shortcut overrides, read once at start: { "<extension id>:<shortcut id>": combo | "" }. */
-function readShortcuts(): Record<string, string> {
-  const raw = readStore<Record<string, unknown> | null>(SHORTCUT_KEYS, null);
-  const out: Record<string, string> = {};
-  // The key is "<extension id>:<shortcut id>"; both are lower-case ids, so this keeps hostile keys out.
-  if (raw && typeof raw === "object" && !Array.isArray(raw))
-    for (const [key, combo] of Object.entries(raw)) if (/^[a-z][a-z0-9.-]*:[a-z][a-z0-9-]*$/.test(key) && typeof combo === "string") out[key] = combo.slice(0, 40);
-  return out;
-}
+const readShortcuts = readExtensionShortcuts;
 
 /** Per-extension caps (sdk.md and ui.md quote them). */
 export const MAX_PANELS = 10;
@@ -260,11 +258,7 @@ export class ExtensionHost {
    * are dropped, and the server's value (or, when it has none, what this device holds) is used from the next sync on.
    */
   private dropLocalSwitches() {
-    try {
-      const id = this.adapter?.serverId?.() ?? null;
-      localStorage.removeItem(id ? `${LOCAL_IDS}.${id}` : LOCAL_IDS);
-      localStorage.removeItem(LEGACY_SOURCE);
-    } catch { /* no storage */ }
+    dropLegacyLocalSwitches(this.adapter?.serverId?.() ?? null);
   }
   /** Where this device's unconfirmed writes are kept (per server, like the settings themselves). */
   private pendingKey(): string {
@@ -320,7 +314,7 @@ export class ExtensionHost {
   private loadList() {
     let booting: string[] = [];
     try {
-      this.safeMode = localStorage.getItem(SAFE) === "1" || new URLSearchParams(location.search).get("extensions") === "off";
+      this.safeMode = readSafeModeFlag();
       booting = this.bootingIds();
     } catch { /* treat as normal mode */ }
     this.lastShared = null;
@@ -378,13 +372,10 @@ export class ExtensionHost {
   }
 
   private bootingIds(): string[] {
-    try {
-      const value: unknown = JSON.parse(localStorage.getItem(BOOT) ?? "[]");
-      return Array.isArray(value) ? value.filter((v): v is string => typeof v === "string") : [];
-    } catch { return []; }
+    return readBootingIds();
   }
   private writeBooting(ids: string[]) {
-    try { if (ids.length) localStorage.setItem(BOOT, JSON.stringify(ids)); else localStorage.removeItem(BOOT); } catch { /* ignore */ }
+    writeBootingIds(ids);
   }
   private markBooting(id: string) {
     const count = this.booting.get(id) ?? 0;
@@ -659,20 +650,15 @@ export class ExtensionHost {
   }
 
   private keptMap(): Map<string, Record<string, unknown>> {
-    const out = new Map<string, Record<string, unknown>>();
-    try {
-      const stored = plain(JSON.parse(localStorage.getItem(KEPT) ?? "{}"));
-      for (const [id, value] of Object.entries(stored ?? {})) { const v = plain(value); if (v) out.set(id, v); }
-    } catch { /* treat as empty */ }
-    return out;
+    return readKeptSettingsMap();
   }
   private writeKept(map: Map<string, Record<string, unknown>>) {
-    try { if (map.size) localStorage.setItem(KEPT, JSON.stringify(Object.fromEntries(map))); else localStorage.removeItem(KEPT); } catch { /* best effort */ }
+    writeKeptSettingsMap(map);
   }
   private keepLocal(id: string, settings: Record<string, unknown>) {
     const map = this.keptMap();
     map.delete(id); map.set(id, clone(settings));
-    for (const key of [...map.keys()]) { if (map.size <= MAX_ENTRIES) break; map.delete(key); }
+    pruneKeptSettings(map, MAX_ENTRIES);
     this.writeKept(map);
   }
   private dropKept(id: string) {
@@ -956,7 +942,7 @@ export class ExtensionHost {
   }
   setSafeMode(on: boolean) {
     // Persist the recovery switch before doing anything else.
-    localStorage.setItem(SAFE, on ? "1" : "0"); this.safeMode = on;
+    writeSafeModeFlag(on); this.safeMode = on;
     for (const e of this.installed) {
       this.revokeNotifications(e.package.manifest.id);
       this.cleanup(e.package.manifest.id); e.state = "disabled"; e.enabled = false;
