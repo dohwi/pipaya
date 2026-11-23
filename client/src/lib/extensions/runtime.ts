@@ -9,7 +9,15 @@ const pending = new Map(), handlers = new Map(), listeners = new Set(), serverLi
 let seq = 0;
 const panelTokens = new Map();
 // Calls that wait on the network or on the user get longer than the 5 s default; the host bounds each of them itself.
-const SLOW = { 'net.fetch': 65000, 'serverApi.request': 35000, 'dialog.confirm': 600000, 'dialog.select': 600000, 'dialog.input': 600000 };
+const SLOW = {
+  'net.fetch': 65000, 'serverApi.request': 35000, 'http.getJson': 35000, 'http.requestJson': 35000,
+  'server.call': 25000, 'server.entries': 25000, 'server.list': 25000,
+  'session.send': 35000, 'session.abort': 20000,
+  'panes.send': 35000, 'panes.compact': 310000, 'panes.create': 25000, 'panes.close': 25000,
+  'panes.createGroup': 25000, 'panes.setLayout': 25000, 'panes.split': 25000, 'panes.fork': 25000, 'panes.abort': 20000,
+  'configuration.read': 25000, 'configuration.apply': 35000, 'configuration.applyBackground': 35000, 'configuration.export': 25000, 'configuration.restore': 35000,
+  'dialog.confirm': 600000, 'dialog.select': 600000, 'dialog.input': 600000
+};
 function rpc(method, ...args) {
   const id = ++seq;
   if (pending.size >= 100) return Promise.reject(new Error('Too many pending requests'));

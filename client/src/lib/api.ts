@@ -140,6 +140,22 @@ export const DEFAULT_REQUEST_TIMEOUT_MS = 15_000;
 export const DEFAULT_STREAM_OPEN_TIMEOUT_MS = 15_000;
 export const DEFAULT_STREAM_IDLE_TIMEOUT_MS = 45_000;
 
+/**
+ * Compute the request timeout for `POST /sessions/:id/messages`. Plain text gets 30 s; large base64 images/files
+ * scale linearly assuming a slow (~150 KB/s) uplink up to 10 minutes so slow connections do not abort mid-upload.
+ */
+export function sendTimeoutMs(
+	images?: readonly { data: string }[],
+	files?: readonly { data: string }[],
+): number {
+	let encodedChars = 0;
+	if (images) for (const img of images) encodedChars += img.data.length;
+	if (files) for (const f of files) encodedChars += f.data.length;
+	if (encodedChars <= 0) return 30_000;
+	const uploadMs = Math.ceil(encodedChars / (150 * 1024)) * 1000;
+	return Math.min(10 * 60_000, Math.max(30_000, 30_000 + uploadMs));
+}
+
 export interface ApiOptions {
 	/** Default per-request deadline when the caller passes no AbortSignal (0 disables). */
 	timeoutMs?: number;
@@ -545,7 +561,7 @@ export class Api {
 			mode,
 			...(images?.length ? { images } : {}),
 			...(files?.length ? { files: files.map((f) => ({ name: f.name, data: f.data })) } : {}),
-		}, undefined, 30_000);
+		}, undefined, sendTimeoutMs(images, files));
 	/** Upload an image (base64) to use as a model icon; returns the value for a model's `icon`. */
 	uploadIcon = (data: string) => this.req<{ icon: string }>("POST", "/configuration/icons", { data });
 	/** Icon values of the images already uploaded to this server, newest first. */
