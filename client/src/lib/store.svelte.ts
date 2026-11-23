@@ -182,11 +182,11 @@ class AppStore {
   dirPicker = $state(false);
   /** Images open in the full-screen viewer (null = closed) */
   viewer = $state<{
-    images: { src: string; mimeType: string }[];
+    images: { src: string; mimeType: string; loadFull?: (signal?: AbortSignal) => Promise<string> }[];
     index: number;
   } | null>(null);
 
-  openImage(images: { src: string; mimeType: string }[], index = 0) {
+  openImage(images: { src: string; mimeType: string; loadFull?: (signal?: AbortSignal) => Promise<string> }[], index = 0) {
     if (images.length) this.viewer = { images, index };
   }
   /** Stars and the notification delay of the open server (server scope: shared with every client of that server). */

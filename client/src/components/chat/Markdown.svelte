@@ -66,7 +66,7 @@
 		});
 		return () => ctl.abort();
 	});
-	function mediaKey(owner: NonNullable<typeof media>, kind: "image" | "audio" | "video", path: string): string {
+	function mediaKey(owner: NonNullable<typeof media>, kind: "image" | "image-full" | "audio" | "video", path: string): string {
 		return `${owner.base}\0${owner.id}\0${kind === "image" ? INLINE_IMAGE_MAX : kind}\0${path}`;
 	}
 	function loadSlotBlob(owner: NonNullable<typeof media>, kind: "image" | "audio" | "video", path: string): (signal: AbortSignal) => Promise<Blob> {
@@ -76,6 +76,13 @@
 			if (kind === "image") throw new Error("Not an image");
 			// Some servers return application/octet-stream; players need a media type to pick a decoder.
 			return new Blob([blob], { type: kind === "video" ? "video/mp4" : "audio/mpeg" });
+		};
+	}
+	function loadFullImageBlob(owner: NonNullable<typeof media>, path: string): (signal: AbortSignal) => Promise<Blob> {
+		return async (signal) => {
+			const blob = await owner.api.fetchFile(owner.id, path, signal);
+			if (blob.type.startsWith("image/")) return blob;
+			throw new Error("Not an image");
 		};
 	}
 	/** Prefetch completed image links into `sharedMedia` while the rest of the reply still streams, without touching the DOM. */
@@ -103,6 +110,7 @@
 			img.decoding = "async";
 			img.src = src;
 			img.className = "wd-pic";
+			if (slot.dataset.wdSrc) img.dataset.wdSrc = slot.dataset.wdSrc;
 			slot.replaceWith(img);
 		}
 	}
@@ -174,9 +182,24 @@
 		}
 		const pic = el.closest<HTMLImageElement>("img.wd-pic");
 		if (pic && root) {
-			// every picture of this message in one viewer, opened at the one pressed
+			// every picture of this message in one viewer, opened at the one pressed; fetch full resolution on demand
 			const all = [...root.querySelectorAll<HTMLImageElement>("img.wd-pic")];
-			app.openImage(all.map((p) => ({ src: p.src, mimeType: "image/*" })), Math.max(0, all.indexOf(pic)));
+			const owner = media;
+			app.openImage(
+				all.map((p) => {
+					const path = p.dataset.wdSrc;
+					if (!owner || !path) return { src: p.src, mimeType: "image/*" };
+					const fullKey = mediaKey(owner, "image-full", path);
+					const cachedFull = sharedMedia.peek(fullKey);
+					if (cachedFull) return { src: cachedFull, mimeType: "image/*" };
+					return {
+						src: p.src,
+						mimeType: "image/*",
+						loadFull: (signal?: AbortSignal) => sharedMedia.get(fullKey, loadFullImageBlob(owner, path), signal),
+					};
+				}),
+				Math.max(0, all.indexOf(pic)),
+			);
 			return;
 		}
 		const retry = el.closest<HTMLElement>(".wd-img.missing[data-wd-src], .wd-media.missing[data-wd-src]");

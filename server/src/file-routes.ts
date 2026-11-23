@@ -166,8 +166,13 @@ function etagMatches(header: string | string[] | undefined, etag: string): boole
  * Read a file back for previews. Paths resolve against the session's working directory but are not confined to it
  * (see `safePath`): whoever holds a token can read any file the server user can, as the `read` tool already lets them.
  */
-/** `dirsOf`: the folders a session's relative paths may be written against, first match wins (where it works now, then where it was made). */
-export function registerFileRoutes(server: FastifyInstance, dirsOf: (sessionId: string) => string[] | undefined): void {
+/** `dirsOf`: the folders a session's relative paths may be written against, first match wins (where it works now, then where it was made).
+ *  `fallbackOf`: optional archived snapshot lookup used only when the original file is no longer on disk. */
+export function registerFileRoutes(
+	server: FastifyInstance,
+	dirsOf: (sessionId: string) => string[] | undefined,
+	fallbackOf?: (sessionId: string, path: string) => Promise<string | null>,
+): void {
 	const app = server.withTypeProvider<TypeBoxProvider>();
 
 	app.get("/sessions/:id/files", {
@@ -182,6 +187,20 @@ export function registerFileRoutes(server: FastifyInstance, dirsOf: (sessionId: 
 				try { info = await stat(abs); } catch { continue; }
 				if (info.isFile()) break;
 				info = undefined;
+			}
+			if (!info && fallbackOf) {
+				const archived = await fallbackOf(req.params.id, req.query.path);
+				if (archived) {
+					try {
+						const st = await stat(archived);
+						if (st.isFile()) {
+							abs = archived;
+							info = st;
+						}
+					} catch {
+						/* snapshot vanished concurrently */
+					}
+				}
 			}
 			if (!info) throw notFound("file");
 			if (info.size > MAX_FILE_BYTES) throw new HttpError(413, "too_large", "file is too large to preview");

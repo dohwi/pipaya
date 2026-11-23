@@ -35,6 +35,7 @@ import { Pairing } from "./pairing.ts";
 import { registerPairingRoutes } from "./pairing-routes.ts";
 import { registerFsRoutes } from "./fs-routes.ts";
 import { registerFileRoutes } from "./file-routes.ts";
+import { assistantMessageText, SessionMedia } from "./session-media.ts";
 import { workDirOf } from "./work-tree.ts";
 import { GroupManager, panesOf, peerGroupOps, type GroupRecord } from "./groups.ts";
 import { registerGroupRoutes } from "./groups-routes.ts";
@@ -439,7 +440,22 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 		await probeRealtime(target, current.realtime, current.language, opts.realtimeConnect);
 	});
 	registerFsRoutes(server, () => configuration.defaultWorkdir(), cfg.restrictWorkspace ? cfg.workspaceRoot : undefined);
-	registerFileRoutes(server, (id) => { const r = store.get(id); return r ? [...new Set([workDirOf(r), r.cwd])] : undefined; });
+	const sessionDirs = (id: string) => { const r = store.get(id); return r ? [...new Set([workDirOf(r), r.cwd])] : undefined; };
+	const sessionMedia = new SessionMedia(join(cfg.dataDir, "session-media"), (id) => store.get(id) !== undefined);
+	bus.subscribe((e) => {
+		if (e.type === "message_end" && e.sessionId) {
+			const text = assistantMessageText((e.data as { message?: unknown })?.message);
+			const dirs = text ? sessionDirs(e.sessionId) : undefined;
+			if (text && dirs?.length) void sessionMedia.captureFromText(e.sessionId, dirs, text);
+		} else if (e.type === "session_forked" && e.sessionId) {
+			const from = (e.data as { from?: unknown })?.from;
+			if (typeof from === "string" && from) void sessionMedia.fork(from, e.sessionId);
+		} else if (e.type === "session_deleted") {
+			const id = (e.data as { id?: unknown })?.id;
+			if (typeof id === "string" && id) void sessionMedia.delete(id);
+		}
+	});
+	registerFileRoutes(server, sessionDirs, (id, path) => sessionMedia.resolve(id, path));
 	// A group the client named by default gets a better name from the system model, unless someone renamed it meanwhile.
 	registerGroupRoutes(server, groups, (rec) => {
 		if (!systemModel.resolve()) return;

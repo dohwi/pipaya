@@ -19,6 +19,21 @@
 	const set = $derived(app.viewer);
 	const img = $derived(set ? set.images[set.index] : null);
 	const many = $derived((set?.images.length ?? 0) > 1);
+	/** Full-resolution blob URL loaded on demand while the inline preview is already on screen. */
+	let fullSrc = $state<string | null>(null);
+	const displaySrc = $derived(fullSrc ?? img?.src ?? "");
+	$effect(() => {
+		const cur = img;
+		fullSrc = null;
+		if (!cur?.loadFull) return;
+		const ctl = new AbortController();
+		void cur.loadFull(ctl.signal).then((url) => {
+			if (!ctl.signal.aborted && url) fullSrc = url;
+		}).catch(() => {
+			/* keep the already-loaded preview */
+		});
+		return () => ctl.abort();
+	});
 
 	const MIN = 1;
 	const MAX = 8;
@@ -181,9 +196,9 @@
 	}
 
 	async function save() {
-		if (!img) return;
+		if (!img || !displaySrc) return;
 		try {
-			const blob = await sourceBlob(img.src);
+			const blob = await sourceBlob(displaySrc);
 			// the message's mime type can be a wildcard (images in Markdown): the real one is on the bytes
 			const type = blob.type.startsWith("image/") ? blob.type : img.mimeType;
 			const ext = type.split("/")[1]?.replace("jpeg", "jpg").replace(/[^a-z0-9].*$/i, "") || "png";
@@ -212,8 +227,8 @@
 	});
 
 	async function copy() {
-		if (!img) return;
-		if (await copyImage(img.src)) notify(t("이미지를 복사했습니다"), true);
+		if (!img || !displaySrc) return;
+		if (await copyImage(displaySrc)) notify(t("이미지를 복사했습니다"), true);
 		else notify(t("복사하지 못했습니다"), false);
 	}
 
@@ -265,7 +280,7 @@
 			{#key set.index}
 				<img
 					bind:this={pic}
-					src={img.src}
+					src={displaySrc}
 					alt={t("첨부 이미지 {n}", { n: set.index + 1 })}
 					draggable="false"
 					style="transform: translate({x}px, {y}px) scale({scale})"
