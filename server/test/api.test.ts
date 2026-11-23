@@ -780,3 +780,51 @@ describe("files", () => {
 		expect((await api("POST", `/sessions/${made.json.id}/messages`, { text: "x", files: [{ name: "big.bin", data: big }] })).status).toBe(413);
 	});
 });
+
+describe("send idempotency (clientRequestId)", () => {
+	test("deduplicates concurrent and repeated retries on the same session without re-running", async () => {
+		const s1 = (await api("POST", "/sessions", {})).json.id as string;
+		const s2 = (await api("POST", "/sessions", {})).json.id as string;
+		const key = "req-dup-1";
+
+		// Concurrent duplicates coalesce to one run (neither fails with 409).
+		const [r1, r2] = await Promise.all([
+			api("POST", `/sessions/${s1}/messages`, { text: "hello once", clientRequestId: key }),
+			api("POST", `/sessions/${s1}/messages`, { text: "hello once", clientRequestId: key }),
+		]);
+		expect(r1.status).toBe(202);
+		expect(r2.status).toBe(202);
+		expect(r1.json).toEqual({ accepted: "prompt" });
+		expect(r2.json).toEqual({ accepted: "prompt" });
+		await untilIdle(s1);
+
+		// Late retry after the run finished returns the original 202 without sending a second prompt.
+		const r3 = await api("POST", `/sessions/${s1}/messages`, { text: "hello once", clientRequestId: key });
+		expect(r3.status).toBe(202);
+		expect(r3.json).toEqual({ accepted: "prompt" });
+		await untilIdle(s1);
+		const msgs = (await api("GET", `/sessions/${s1}/messages`)).json.messages as { role: string }[];
+		expect(msgs.filter((m) => m.role === "user")).toHaveLength(1);
+
+		// Same clientRequestId on another session is scoped per session and runs normally.
+		const other = await api("POST", `/sessions/${s2}/messages`, { text: "other session", clientRequestId: key });
+		expect(other.status).toBe(202);
+		await untilIdle(s2);
+		const msgs2 = (await api("GET", `/sessions/${s2}/messages`)).json.messages as { role: string }[];
+		expect(msgs2.filter((m) => m.role === "user")).toHaveLength(1);
+
+		// Deleting the session returns 404 even for a previously accepted key.
+		await api("DELETE", `/sessions/${s1}`);
+		expect((await api("POST", `/sessions/${s1}/messages`, { text: "hello once", clientRequestId: key })).status).toBe(404);
+	});
+
+	test("a failed send is not cached, so retrying with the same clientRequestId after fixing succeeds", async () => {
+		const id = (await api("POST", "/sessions", {})).json.id as string;
+		const key = "req-fail-then-ok";
+		// Sending steer while idle returns 409 and must not poison the idempotency cache.
+		expect((await api("POST", `/sessions/${id}/messages`, { text: "first", mode: "steer", clientRequestId: key })).status).toBe(409);
+		const ok = await api("POST", `/sessions/${id}/messages`, { text: "first", mode: "prompt", clientRequestId: key });
+		expect(ok.status).toBe(202);
+		await untilIdle(id);
+	});
+});

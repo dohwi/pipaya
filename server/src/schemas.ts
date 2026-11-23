@@ -263,6 +263,13 @@ export const SendBody = Type.Object({
 			{ maxItems: 8, description: "Saved under .pipaya/uploads/ in the session's working directory; the agent is told where" },
 		),
 	),
+	clientRequestId: Type.Optional(
+		Type.String({
+			minLength: 1,
+			maxLength: 128,
+			description: "Client-generated idempotency key; duplicate retries within 5 minutes return the original 202 result without re-running",
+		}),
+	),
 });
 export const SendResult = Type.Object({ accepted: PromptMode });
 

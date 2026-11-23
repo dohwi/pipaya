@@ -156,6 +156,15 @@ export function sendTimeoutMs(
 	return Math.min(10 * 60_000, Math.max(30_000, 30_000 + uploadMs));
 }
 
+export interface SendOptions {
+	/** Client-generated idempotency key so retries after a lost ACK do not duplicate prompts. */
+	clientRequestId?: string;
+	/** Cancels the in-flight send/upload (rejects with `AbortError`). */
+	signal?: AbortSignal;
+	/** Called with bytes sent and total payload bytes while uploading attachments. */
+	onProgress?: (loaded: number, total: number) => void;
+}
+
 export interface ApiOptions {
 	/** Default per-request deadline when the caller passes no AbortSignal (0 disables). */
 	timeoutMs?: number;
@@ -254,6 +263,99 @@ export class Api {
 		}
 		if (!res.ok) throw this.toApiError(res, json);
 		return json as T;
+	}
+
+	private reqWithUploadProgress<T>(
+		method: string,
+		path: string,
+		body: unknown,
+		signal: AbortSignal | undefined,
+		timeoutMs: number | undefined,
+		onProgress: (loaded: number, total: number) => void,
+	): Promise<T> {
+		const raw = JSON.stringify(body);
+		const fallbackTotal = typeof TextEncoder !== "undefined" ? new TextEncoder().encode(raw).byteLength : raw.length;
+		const cancelSignal = this.signalFor(signal);
+		if (cancelSignal?.aborted) {
+			return Promise.reject(
+				signal?.aborted ? new DOMException("Aborted", "AbortError") : new ApiError(0, "network", t("서버에 연결할 수 없습니다")),
+			);
+		}
+		return new Promise<T>((resolve, reject) => {
+			const xhr = new XMLHttpRequest();
+			let settled = false;
+			let timedOut = false;
+			let lastTotal = fallbackTotal;
+			const ms = timeoutMs ?? this.opts?.timeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
+			const cleanup = () => {
+				if (timer !== undefined) {
+					clearTimeout(timer);
+					timer = undefined;
+				}
+				cancelSignal?.removeEventListener("abort", onCancel);
+			};
+			const finish = (fn: () => void) => {
+				if (settled) return;
+				settled = true;
+				cleanup();
+				fn();
+			};
+			const onCancel = () => xhr.abort();
+			let timer: ReturnType<typeof setTimeout> | undefined =
+				ms > 0
+					? setTimeout(() => {
+							timedOut = true;
+							xhr.abort();
+						}, ms)
+					: undefined;
+			cancelSignal?.addEventListener("abort", onCancel, { once: true });
+
+			xhr.open(method, this.conn.baseUrl + path);
+			for (const [k, v] of Object.entries(this.authHeaders({ "Content-Type": "application/json" }))) {
+				xhr.setRequestHeader(k, v);
+			}
+			if (xhr.upload) {
+				xhr.upload.onprogress = (e) => {
+					if (settled) return;
+					if (e.lengthComputable && e.total > 0) {
+						lastTotal = e.total;
+						onProgress(e.loaded, e.total);
+					}
+				};
+				xhr.upload.onload = () => {
+					if (!settled) onProgress(lastTotal, lastTotal);
+				};
+			}
+			xhr.onload = () => {
+				finish(() => {
+					if (xhr.status === 204) return resolve(undefined as T);
+					let json: unknown;
+					try {
+						json = xhr.responseText ? JSON.parse(xhr.responseText) : undefined;
+					} catch {
+						json = undefined;
+					}
+					if (xhr.status < 200 || xhr.status >= 300) {
+						return reject(this.toApiError({ status: xhr.status, statusText: xhr.statusText } as Response, json));
+					}
+					resolve(json as T);
+				});
+			};
+			xhr.onerror = () => finish(() => reject(new ApiError(0, "network", t("서버에 연결할 수 없습니다"))));
+			xhr.onabort = () =>
+				finish(() =>
+					reject(
+						signal?.aborted && !timedOut
+							? new DOMException("Aborted", "AbortError")
+							: new ApiError(0, "network", t("서버에 연결할 수 없습니다")),
+					),
+				);
+			try {
+				xhr.send(raw);
+			} catch {
+				finish(() => reject(new ApiError(0, "network", t("서버에 연결할 수 없습니다"))));
+			}
+		});
 	}
 
 	/** Access tokens issued to paired devices (admin token only). The secret itself is never listed. */
@@ -557,13 +659,35 @@ export class Api {
 	/** Persisted messages strictly after `after`, oldest first (used to fill any gap when catching up a finished run). */
 	messagesAfter = (id: string, after: number, limit = 200) =>
 		this.req<{ messages: StoredMessage[] }>("GET", `/sessions/${id}/messages?after=${after}&limit=${limit}&omitToolImages=true`).then((r) => r.messages);
-	send = (id: string, text: string, mode: SendMode = "prompt", images?: { type: "image"; data: string; mimeType: string }[], files?: { name: string; data: string }[]) =>
-		this.req<{ accepted: SendMode }>("POST", `/sessions/${id}/messages`, {
+	send = (
+		id: string,
+		text: string,
+		mode: SendMode = "prompt",
+		images?: { type: "image"; data: string; mimeType: string }[],
+		files?: { name: string; data: string }[],
+		opts?: SendOptions,
+	) => {
+		const payload = {
 			text,
 			mode,
 			...(images?.length ? { images } : {}),
 			...(files?.length ? { files: files.map((f) => ({ name: f.name, data: f.data })) } : {}),
-		}, undefined, sendTimeoutMs(images, files));
+			...(opts?.clientRequestId ? { clientRequestId: opts.clientRequestId } : {}),
+		};
+		const timeoutMs = sendTimeoutMs(images, files);
+		if (opts?.onProgress && typeof XMLHttpRequest !== "undefined") {
+			return this.reqWithUploadProgress<{ accepted: SendMode }>(
+				"POST",
+				`/sessions/${id}/messages`,
+				payload,
+				opts.signal,
+				timeoutMs,
+				opts.onProgress,
+			);
+		}
+		const sig = opts?.signal ? this.combineSignals(opts.signal, this.defaultTimeout(timeoutMs)) : undefined;
+		return this.req<{ accepted: SendMode }>("POST", `/sessions/${id}/messages`, payload, sig, timeoutMs);
+	};
 	/** Upload an image (base64) to use as a model icon; returns the value for a model's `icon`. */
 	uploadIcon = (data: string) => this.req<{ icon: string }>("POST", "/configuration/icons", { data });
 	/** Icon values of the images already uploaded to this server, newest first. */

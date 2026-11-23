@@ -98,8 +98,8 @@ export function paneAdapter(app: typeof AppStore): PaneAdapter {
     };
   };
   const settled = async (id: string, what: () => Promise<boolean>) => {
-    // `app.send` refuses while another send is in flight; an orchestrator sending to several panes just waits its turn.
-    for (let i = 0; i < 40 && app.sending; i++) await sleep(50);
+    // `app.send` refuses while another send for the same session is in flight; wait its turn.
+    for (let i = 0; i < 40 && app.isSending(id); i++) await sleep(50);
     await app.ensureChat(id);
     if (!(await what())) fail(t("보내지 못했습니다"));
   };

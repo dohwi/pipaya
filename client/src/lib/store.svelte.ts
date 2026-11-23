@@ -97,6 +97,20 @@ import { forgetAttachments } from "./composer/saved-attachments";
 
 const NO_DIRS: DirBlock[] = [];
 
+export interface SendingState {
+  /** Upload progress 0..1 when uploading attachments, or null before the first progress event. */
+  progress: number | null;
+  loaded: number;
+  total: number;
+  /** True once upload bytes finished reaching the server and we are awaiting its 202 response. */
+  waiting: boolean;
+  /** True when this send carries images or files (drives the composer upload progress row). */
+  hasAttachments: boolean;
+  /** True after a short anti-flicker delay (150 ms) so instant LAN uploads do not flash the toolbar. */
+  visible: boolean;
+  cancel: () => void;
+}
+
 class AppStore {
   servers = $state<Server[]>(loadServers());
   serverId = $state<string | null>(null);
@@ -429,7 +443,77 @@ class AppStore {
     this.scheduleEdit = id;
     this.openSettings("schedules");
   }
-  sending = $state(false);
+  /** In-flight sends keyed by `serverId\0sessionId` so one slow upload never blocks other conversations. */
+  private sendingMap = $state<Record<string, SendingState>>({});
+  private sendKey(serverId: string | null, sessionId: string | null): string {
+    return `${serverId ?? ""}\0${sessionId ?? ""}`;
+  }
+  /** Active send/upload state for `id` on the open server, or null when idle. */
+  sendingOf(id: string | null = this.activeId): SendingState | null {
+    return this.sendingMap[this.sendKey(this.serverId, id)] ?? null;
+  }
+  /** True while a send/upload is in flight for `id` on the open server. */
+  isSending(id: string | null = this.activeId): boolean {
+    return Boolean(this.sendingOf(id));
+  }
+  /** Whether the focused session is currently sending. */
+  get sending(): boolean {
+    return this.isSending(this.activeId);
+  }
+  /** Cancel an in-flight send/upload for `id` on the open server. */
+  cancelSend(id: string | null = this.activeId): void {
+    this.sendingOf(id)?.cancel();
+  }
+
+  private beginSend(serverId: string | null, sessionId: string | null, hasAttachments: boolean, estimatedTotal: number) {
+    let key = this.sendKey(serverId, sessionId);
+    const abort = new AbortController();
+    let disposed = false;
+    const initial: SendingState = {
+      progress: null,
+      loaded: 0,
+      total: estimatedTotal,
+      waiting: false,
+      hasAttachments,
+      visible: false,
+      cancel: () => abort.abort(),
+    };
+    this.sendingMap = { ...this.sendingMap, [key]: initial };
+    const revealTimer = hasAttachments
+      ? setTimeout(() => {
+          if (disposed) return;
+          const cur = this.sendingMap[key];
+          if (cur && !cur.visible) this.sendingMap = { ...this.sendingMap, [key]: { ...cur, visible: true } };
+        }, 150)
+      : undefined;
+    const onProgress = (loaded: number, total: number) => {
+      if (disposed) return;
+      const cur = this.sendingMap[key];
+      if (!cur) return;
+      const progress = total > 0 ? Math.min(1, loaded / total) : null;
+      const waiting = total > 0 && loaded >= total;
+      this.sendingMap = { ...this.sendingMap, [key]: { ...cur, loaded, total, progress, waiting } };
+    };
+    const migrate = (nextSessionId: string | null) => {
+      if (disposed) return;
+      const nextKey = this.sendKey(serverId, nextSessionId);
+      if (nextKey === key) return;
+      const cur = this.sendingMap[key];
+      const { [key]: _old, ...rest } = this.sendingMap;
+      this.sendingMap = cur ? { ...rest, [nextKey]: cur } : rest;
+      key = nextKey;
+    };
+    const dispose = () => {
+      if (disposed) return;
+      disposed = true;
+      if (revealTimer !== undefined) clearTimeout(revealTimer);
+      if (key in this.sendingMap) {
+        const { [key]: _gone, ...rest } = this.sendingMap;
+        this.sendingMap = rest;
+      }
+    };
+    return { abort, onProgress, migrate, dispose };
+  }
 
   /** The open server's connection. */
   get api(): Api | null {
@@ -1904,15 +1988,20 @@ class AppStore {
     images: ImageBlock[] = [],
     to: string | null = this.activeId,
     files: UploadFile[] = [],
+    clientRequestId?: string,
   ): Promise<boolean> {
     const link = this.link;
     const api = link?.api;
-    if (!api) return false;
-    if (this.sending) return void this.toast(t("이전 메시지를 보내는 중입니다. 잠시 후 다시 시도하세요"), "error", to), false;
+    if (!api || !link) return false;
+    if (this.isSending(to)) return void this.toast(t("이전 메시지를 보내는 중입니다. 잠시 후 다시 시도하세요"), "error", to), false;
     text = text.trim();
     if (!text && !images.length && !files.length) return false;
     if (!text) text = files.length && !images.length ? t("(첨부한 파일을 봐 주세요)") : t("(첨부한 이미지를 봐 주세요)");
-    this.sending = true;
+    const hasAttachments = images.length > 0 || files.length > 0;
+    const estimatedTotal =
+      images.reduce((n, img) => n + img.data.length, 0) +
+      files.reduce((n, f) => n + f.data.length, 0);
+    const tx = this.beginSend(link.id, to, hasAttachments, estimatedTotal);
     let seeded = false;
     try {
       if (!to) {
@@ -1931,20 +2020,24 @@ class AppStore {
           thinkingLevel: normalizeThinking(d.thinkingLevel),
           serviceTier: d.serviceTier,
         });
+        if (tx.abort.signal.aborted) return false;
         // Switched servers while createSession was slow: do not attach the old server's session to the new server.
         if (this.api !== api || this.link !== link) return false;
         if (!this.sessions.some((x) => x.id === s.id)) this.sessions.unshift(s);
         // Load the new chat off-screen and put the prompt in it first, so the pane goes from the welcome screen
         // straight to the sent message instead of flashing a skeleton and an empty transcript in between.
-        const fresh = new ChatState(s.id, api, (c, kind) => { if (link) this.syncChatStatus(link, c, kind); });
+        const fresh = new ChatState(s.id, api, (c, kind) => { this.syncChatStatus(link, c, kind); });
         await fresh.load();
+        if (tx.abort.signal.aborted) return false;
         if (this.api !== api || this.link !== link) return false;
         if (!fresh.ready) throw new Error(fresh.loadError || t("불러오지 못했습니다"));
         fresh.addOptimisticUser(text, images, files.map((f) => ({ path: "", name: f.name, size: f.size, mimeType: f.mimeType })));
         this.chats = { ...this.chats, [s.id]: fresh };
         await this.openSession(s.id);
+        if (tx.abort.signal.aborted) return false;
         if (this.api !== api || this.link !== link) return false;
         to = s.id;
+        tx.migrate(to);
         seeded = true;
       }
       const chat = this.chatOf(to);
@@ -1961,18 +2054,23 @@ class AppStore {
       if (mode === "prompt" && !seeded) chat.addOptimisticUser(text, images, files.map((f) => ({ path: "", name: f.name, size: f.size, mimeType: f.mimeType })));
       chat.requestBottom();
       try {
-        await api.send(chat.id, text, mode, images.length ? images : undefined, files.length ? files : undefined);
+        await api.send(chat.id, text, mode, images.length ? images : undefined, files.length ? files : undefined, {
+          ...(clientRequestId ? { clientRequestId } : {}),
+          signal: tx.abort.signal,
+          ...(hasAttachments ? { onProgress: tx.onProgress } : {}),
+        });
       } catch (e) {
         if (mode === "prompt") chat.dropOptimisticUser();
         throw e;
       }
       return true;
     } catch (e) {
-      if (link) this.probeIfNetwork(link, e);
+      if (tx.abort.signal.aborted && (e as Error)?.name === "AbortError") return false;
+      this.probeIfNetwork(link, e);
       this.fail(e, t("보내지 못했습니다"), to);
       return false;
     } finally {
-      this.sending = false;
+      tx.dispose();
     }
   }
 
@@ -2001,20 +2099,30 @@ class AppStore {
     failMsg: string,
     to: string | null,
     files: UploadFile[] = [],
+    clientRequestId?: string,
   ): Promise<boolean> {
     const chat = this.chatOf(to);
     const link = this.link;
     const api = link?.api;
     text = text.trim();
-    if (!api || !chat || (!text && !images.length && !files.length)) return false;
+    if (!api || !link || !chat || (!text && !images.length && !files.length)) return false;
     if (!text) text = files.length && !images.length ? t("(첨부한 파일을 봐 주세요)") : t("(첨부한 이미지를 봐 주세요)");
+    const hasAttachments = images.length > 0 || files.length > 0;
+    const estimatedTotal =
+      images.reduce((n, img) => n + img.data.length, 0) +
+      files.reduce((n, f) => n + f.data.length, 0);
+    const tx = this.beginSend(link.id, chat.id, hasAttachments, estimatedTotal);
     chat.requestBottom();
     // Kept until delivered: a stop drops it on the server, and then it goes back to the input with its attachments.
     const own: Outgoing = { text, images, files, at: Date.now(), pending: true };
     chat.mine.push(own);
     const notSent = () => (this.toast(t("작업이 중지되어 보내지 않았습니다"), "error", chat.id), false);
     try {
-      await api.send(chat.id, text, mode, images.length ? images : undefined, files.length ? files : undefined);
+      await api.send(chat.id, text, mode, images.length ? images : undefined, files.length ? files : undefined, {
+        ...(clientRequestId ? { clientRequestId } : {}),
+        signal: tx.abort.signal,
+        ...(hasAttachments ? { onProgress: tx.onProgress } : {}),
+      });
       own.pending = false;
       // Accepted, then dropped by a stop before this answer came back: the caller still holds it, so it stays there.
       return own.returned ? notSent() : true;
@@ -2022,24 +2130,28 @@ class AppStore {
       own.pending = false;
       const i = chat.mine.indexOf(own);
       if (i >= 0) chat.mine.splice(i, 1);
+      if (tx.abort.signal.aborted && (e as Error)?.name === "AbortError") return false;
       // The run was stopped: it takes nothing more, and starting a new run with this text is not what was asked.
       // The caller keeps the text (this returns false), to send again on purpose.
       if (e instanceof ApiError && e.status === 409 && (e.data?.reason === "stopped" || chat.stopped)) return notSent();
       if (e instanceof ApiError && e.status === 409) {
-        // The run ended a moment ago: start a new one. `send` refuses while another send is in flight, so wait for it.
-        for (let i = 0; i < 40 && this.sending; i++) await new Promise((r) => setTimeout(r, 50));
-        return this.send(text, images, to, files);
+        // The run ended a moment ago: start a new one. Release our sending slot first so `send` can take it.
+        tx.dispose();
+        for (let i = 0; i < 40 && this.isSending(to); i++) await new Promise((r) => setTimeout(r, 50));
+        return this.send(text, images, to, files, clientRequestId);
       }
-      if (link) this.probeIfNetwork(link, e);
+      this.probeIfNetwork(link, e);
       this.fail(e, failMsg, chat.id);
       return false;
+    } finally {
+      tx.dispose();
     }
   }
 
-  steer = (text: string, images: ImageBlock[] = [], to = this.activeId, files: UploadFile[] = []) =>
-    this.during("steer", text, images, t("끼워 넣지 못했습니다"), to, files);
-  queue = (text: string, images: ImageBlock[] = [], to = this.activeId, files: UploadFile[] = []) =>
-    this.during("follow_up", text, images, t("대기열에 추가하지 못했습니다"), to, files);
+  steer = (text: string, images: ImageBlock[] = [], to = this.activeId, files: UploadFile[] = [], clientRequestId?: string) =>
+    this.during("steer", text, images, t("끼워 넣지 못했습니다"), to, files, clientRequestId);
+  queue = (text: string, images: ImageBlock[] = [], to = this.activeId, files: UploadFile[] = [], clientRequestId?: string) =>
+    this.during("follow_up", text, images, t("대기열에 추가하지 못했습니다"), to, files, clientRequestId);
 
   /** Open a file preview (null = closed) */
   filePreview = $state<{ sessionId: string; file: FileRef } | null>(null);
@@ -2156,7 +2268,7 @@ class AppStore {
         }
       }
     }
-    if (!chat.ready || chat.loadError || this.sending || chat.running || chat.compacting) {
+    if (!chat.ready || chat.loadError || this.isSending(id) || chat.running || chat.compacting) {
       this.toast(t("진행 중인 작업이 끝난 뒤 압축하세요"), "error", id);
       return false;
     }

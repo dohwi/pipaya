@@ -32,6 +32,7 @@
 	import ModelPicker from "../models/ModelPicker.svelte";
 	import RetryNotice from "./RetryNotice.svelte";
 	import SendControls from "./SendControls.svelte";
+	import UploadProgress from "./UploadProgress.svelte";
 	import VoiceInput from "./VoiceInput.svelte";
 	import VoiceRecording from "./VoiceRecording.svelte";
 	import AttachmentStrip from "./AttachmentStrip.svelte";
@@ -99,7 +100,10 @@
 	const vision = $derived(app.effectiveModelOf(pane.id)?.vision ?? false);
 	let submitBusy = $state(false);
 	let duringBusy = $state(false); // a second Enter while the first is still in flight would send the same text twice
-	const canSend = $derived((text.trim().length > 0 || attached.any) && (app.net === "online" || parseSlash(text) !== null) && !app.sending && !submitBusy);
+	const sendingState = $derived(app.sendingOf(pane.id));
+	const paneSending = $derived(Boolean(sendingState) || submitBusy || duringBusy);
+	const uploadActive = $derived(Boolean(sendingState?.hasAttachments && sendingState.visible));
+	const canSend = $derived((text.trim().length > 0 || attached.any) && (app.net === "online" || parseSlash(text) !== null) && !Boolean(sendingState) && !submitBusy);
 
 	export function focus() {
 		ta?.focus();
@@ -626,12 +630,32 @@
 		};
 	}
 
+	/**
+	 * Stable idempotency key per unsent message payload: if a send fails on a timeout/lost ACK and the user clicks Send
+	 * again without changing the text/attachments, the server recognizes the retry and returns 202 without re-running.
+	 */
+	let retryKey: { sig: string; id: string } | null = null;
+	function requestIdFor(out: { key: string | null; body: string; images: { data: string }[]; files: { name: string; size: number }[] }): string {
+		const sig = `${out.key ?? ""}\0${out.body}\0${out.images.map((i) => i.data.length).join(",")}\0${out.files.map((f) => `${f.name}:${f.size}`).join(",")}`;
+		if (retryKey?.sig === sig) return retryKey.id;
+		const id = typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+			? crypto.randomUUID()
+			: `req-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+		retryKey = { sig, id };
+		return id;
+	}
+
 	async function submit() {
 		if (!canSend || submitBusy) return;
 		submitBusy = true;
 		try {
 			const out = await prepare();
-			if (out && (await app.send(out.body, out.images, out.key, out.files))) clearSent(out.key, out.sentText);
+			if (!out) return;
+			const reqId = requestIdFor(out);
+			if (await app.send(out.body, out.images, out.key, out.files, reqId)) {
+				retryKey = null;
+				clearSent(out.key, out.sentText);
+			}
 		} finally {
 			submitBusy = false;
 		}
@@ -641,14 +665,20 @@
 
 	/** While a run is active: deliver the input as `steer` (between tool calls) or `follow_up` (after the run). */
 	async function during(kind: "steer" | "queue") {
-		if (!hasInput || duringBusy) return;
+		if (!hasInput || duringBusy || Boolean(sendingState)) return;
 		if (app.net !== "online") return void app.toast(t("서버에 연결되어 있지 않아 보내지 못했습니다"), "error", pane.id);
 		duringBusy = true;
 		try {
 			const out = await prepare();
 			if (!out) return;
-			const ok = await (kind === "steer" ? app.steer(out.body, out.images, out.key, out.files) : app.queue(out.body, out.images, out.key, out.files));
-			if (ok) clearSent(out.key, out.sentText);
+			const reqId = requestIdFor(out);
+			const ok = await (kind === "steer"
+				? app.steer(out.body, out.images, out.key, out.files, reqId)
+				: app.queue(out.body, out.images, out.key, out.files, reqId));
+			if (ok) {
+				retryKey = null;
+				clearSent(out.key, out.sentText);
+			}
 		} finally {
 			duringBusy = false;
 		}
@@ -890,7 +920,7 @@
 			oncompositionstart={() => ime.start()}
 			oncompositionend={onCompositionEnd}
 			rows="1"
-			readonly={voiceActive}
+			readonly={voiceActive || uploadActive}
 			placeholder={promptHint ? "" : voice.recording && voiceActive ? (voice.realtime ? t("말씀하세요… 말하는 대로 글이 들어갑니다") : t("말씀하세요… 끝나면 ✓를 누르세요")) : voiceActive ? t("글로 바꾸는 중…") : running ? runningHint : t("에이전트에게 메시지 보내기 · / 명령")}
 			aria-label={running ? runningHint : t("에이전트에게 메시지 보내기 · / 명령")}
 			enterkeyhint="enter"
@@ -903,6 +933,8 @@
 			<!-- Recording or transcribing: only the toolbar's row is swapped, so the box keeps the height it has when idle
 			     (the draft above stays where it is, read-only). Another pane keeps its own toolbar (its microphone stops it). -->
 			<VoiceRecording />
+		{:else if uploadActive && sendingState}
+			<UploadProgress state={sendingState} oncancel={() => app.cancelSend(pane.id)} />
 		{:else}
 		<div class="bar" data-part="composer.bar">
 			<IconButton icon="attach" label={t("파일 첨부")} title={vision ? t("파일 첨부") : t("파일 첨부 (이 모델은 이미지를 직접 보지 못해 파일로 전달됩니다)")} onclick={() => fileInput?.click()} />
@@ -919,7 +951,7 @@
 				{running}
 				{canSend}
 				{hasInput}
-				sending={app.sending || submitBusy || duringBusy}
+				sending={paneSending}
 				online={app.net === "online"}
 				onsend={submit}
 				onqueue={() => during("queue")}
