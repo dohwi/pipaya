@@ -744,7 +744,11 @@ export class ChatState {
 						this.items.push({ kind: "assistant", key: `m${seq}`, seq, streaming: false, fresh: true, ...assistantFields(m) });
 					}
 				} else if (m.role === "toolResult") {
-					this.tools[m.toolCallId] = toolRunFrom(m);
+					const prev = this.tools[m.toolCallId];
+					const next = toolRunFrom(m);
+					// `message_end` strips inline base64 images to keep SSE/replay small; preserve any live preview from `tool_execution_end`.
+					if (!next.images?.length && prev?.images?.length) next.images = prev.images;
+					this.tools[m.toolCallId] = next;
 				}
 				break;
 			}

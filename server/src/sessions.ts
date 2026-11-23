@@ -30,6 +30,7 @@ import type { ExtensionHost } from "./extensions/host.ts";
 import type { MessageNote } from "./extensions/types.ts";
 import { IMAGE_TOOL, imageTool, type ImageModelSettings } from "./image-generation.ts";
 import { fitImagesInContext } from "./image-guard.ts";
+import { stripToolMessageImages, stripToolResultImages } from "./tool-images.ts";
 import { describeTools, enabledTools, planTools } from "./tool-plan.ts";
 import { afterTurn, FORCE_STOP_ERROR, isEmptyFailedReply, RESTART_RUN_ERROR, RESTART_TOOL_ERROR, runawayReason, SHUTDOWN_RUN_ERROR, SHUTDOWN_TOOL_ERROR, type RunStopCause } from "./run-guard.ts";
 import { chooseModel, DelegateLimits, finalText, freeRole, repeatedReadSignature, runDelegateWithinDeadline, subagentReport, subagentReportReserveMs, subagentUsage, loadSubagents, SUBAGENT_NAME, SUBAGENT_TIMEOUT_MS, SUBAGENT_WRAP_UP, subagentSystem, type SubagentDef, type SubagentLimit } from "./subagents.ts";
@@ -1686,14 +1687,21 @@ export class SessionManager {
 
 	private onAgentEvent(sessionId: string, live: Live, event: AgentEvent): void {
 		this.forwardToExtensions(sessionId, event);
-		const pub = (type: string, data: unknown, ephemeral = false) => this.bus.publish(sessionId, type, data, { ephemeral });
+		const pub = (type: string, data: unknown, opts: { ephemeral?: boolean; persistData?: unknown } = {}) =>
+			this.bus.publish(sessionId, type, data, opts);
 
 		switch (event.type) {
 			case "message_update":
-				pub("message_update", { message: undefined, event: slimAssistantEvent(event.assistantMessageEvent) }, true);
+				pub("message_update", { message: undefined, event: slimAssistantEvent(event.assistantMessageEvent) }, { ephemeral: true });
 				return;
 			case "tool_execution_update":
-				pub("tool_execution_update", { toolCallId: event.toolCallId, toolName: event.toolName, partialResult: event.partialResult }, true);
+				pub("tool_execution_update", { toolCallId: event.toolCallId, toolName: event.toolName, partialResult: event.partialResult }, { ephemeral: true });
+				return;
+			case "message_start":
+				pub("message_start", { message: stripToolMessageImages(event.message) });
+				return;
+			case "tool_execution_end":
+				pub("tool_execution_end", event, { persistData: { ...event, result: stripToolResultImages(event.result) } });
 				return;
 			case "message_end": {
 				if (live.pendingPrompt && event.message.role === "user") {
@@ -1718,7 +1726,7 @@ export class SessionManager {
 					(event.message as { thinkingLevel?: string }).thinkingLevel = st.thinkingLevel;
 				}
 				this.store.appendMessage(sessionId, seq, event.message);
-				pub("message_end", { seq, message: event.message });
+				pub("message_end", { seq, message: stripToolMessageImages(event.message) });
 				this.ext?.notify("message_end", { sessionId, message: event.message, seq }, sessionId);
 				return;
 			}
@@ -1726,7 +1734,7 @@ export class SessionManager {
 				pub("agent_end", { messageCount: event.messages.length });
 				return;
 			case "turn_end":
-				pub(event.type, event);
+				pub("turn_end", { ...event, toolResults: event.toolResults.map(stripToolMessageImages) });
 				this.guardRunaway(sessionId, live, event);
 				return;
 			default:

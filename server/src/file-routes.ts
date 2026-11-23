@@ -4,6 +4,7 @@ import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { basename, dirname, extname } from "node:path";
 import Type from "typebox";
 import { badRequest, HttpError, notFound } from "./errors.ts";
+import { previewImage } from "./image-resize.ts";
 import { errors } from "./schemas.ts";
 import { safePath } from "./tools.ts";
 import type { TypeBoxProvider } from "./typebox-provider.ts";
@@ -14,6 +15,13 @@ export const MAX_FILE_BYTES = 50 * 1024 * 1024;
 export const MAX_FILES = 8;
 /** One message may carry this many bytes of files in total. */
 export const MAX_FILES_TOTAL = 100 * 1024 * 1024;
+
+/** Images larger than this are downscaled when requested with `?max=` for fast inline preview. */
+const PREVIEW_MIN_BYTES = 100 * 1024;
+const PREVIEW_MIME = new Set(["image/png", "image/jpeg", "image/webp", "image/bmp"]);
+const PREVIEW_CACHE_MAX_ENTRIES = 80;
+const PREVIEW_CACHE_MAX_BYTES = 24 * 1024 * 1024;
+const FILE_CACHE_CONTROL = "private, max-age=60, must-revalidate";
 
 const MIME: Record<string, string> = {
 	png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", webp: "image/webp", bmp: "image/bmp", avif: "image/avif",
@@ -61,7 +69,67 @@ export function filesNote(saved: SavedFile[]): string {
 	return `${FILES_OPEN}${JSON.stringify(saved)}</pipaya-files>\nThe user attached these files (saved in the working directory):\n${list}`;
 }
 
-export const FileQuery = Type.Object({ path: Type.String({ minLength: 1, description: "Relative to the session's working directory, or absolute" }) });
+export const FileQuery = Type.Object({
+	path: Type.String({ minLength: 1, description: "Relative to the session's working directory, or absolute" }),
+	max: Type.Optional(Type.Integer({ minimum: 64, maximum: 4096, description: "Optional max dimension in pixels for raster image previews" })),
+});
+
+type CachedPreview = { bytes: Buffer; mimeType: string };
+
+class PreviewCache {
+	private readonly entries = new Map<string, CachedPreview>();
+	private readonly inflight = new Map<string, Promise<CachedPreview>>();
+	private totalBytes = 0;
+
+	private touch(key: string, val: CachedPreview): CachedPreview {
+		this.entries.delete(key);
+		this.entries.set(key, val);
+		return val;
+	}
+
+	private put(key: string, val: CachedPreview): void {
+		const existing = this.entries.get(key);
+		if (existing) {
+			this.totalBytes -= existing.bytes.byteLength;
+			this.entries.delete(key);
+		}
+		this.entries.set(key, val);
+		this.totalBytes += val.bytes.byteLength;
+		while (this.entries.size > PREVIEW_CACHE_MAX_ENTRIES || this.totalBytes > PREVIEW_CACHE_MAX_BYTES) {
+			const oldest = this.entries.keys().next().value;
+			if (oldest === undefined) break;
+			const dropped = this.entries.get(oldest)!;
+			this.entries.delete(oldest);
+			this.totalBytes -= dropped.bytes.byteLength;
+		}
+	}
+
+	async getOrBuild(key: string, abs: string, origMime: string, maxDim: number): Promise<CachedPreview> {
+		const hit = this.entries.get(key);
+		if (hit) return this.touch(key, hit);
+		const pending = this.inflight.get(key);
+		if (pending) return pending;
+		const work = (async (): Promise<CachedPreview> => {
+			const raw = await readFile(abs);
+			const resized = await previewImage(raw, maxDim);
+			const val: CachedPreview = resized ? { bytes: Buffer.from(resized.bytes), mimeType: resized.mimeType } : { bytes: raw, mimeType: origMime };
+			this.put(key, val);
+			return val;
+		})().finally(() => {
+			this.inflight.delete(key);
+		});
+		this.inflight.set(key, work);
+		return work;
+	}
+}
+
+const previewCache = new PreviewCache();
+
+function etagMatches(header: string | string[] | undefined, etag: string): boolean {
+	if (!header) return false;
+	const raw = Array.isArray(header) ? header.join(",") : header;
+	return raw.split(",").some((part) => part.trim() === etag || part.trim() === `W/${etag}` || part.trim() === "*");
+}
 
 /**
  * Read a file back for previews. Paths resolve against the session's working directory but are not confined to it
@@ -86,12 +154,32 @@ export function registerFileRoutes(server: FastifyInstance, dirsOf: (sessionId: 
 			}
 			if (!info) throw notFound("file");
 			if (info.size > MAX_FILE_BYTES) throw new HttpError(413, "too_large", "file is too large to preview");
+
+			const origMime = mimeOf(abs);
+			const maxDim = req.query.max;
+			const usePreview = maxDim !== undefined && PREVIEW_MIME.has(origMime) && info.size > PREVIEW_MIN_BYTES;
+			const etag = `"${Math.trunc(info.mtimeMs)}-${info.size}${usePreview ? `-m${maxDim}` : ""}"`;
+
+			if (etagMatches(req.headers["if-none-match"], etag)) {
+				return reply
+					.code(304)
+					.header("etag", etag)
+					.header("cache-control", FILE_CACHE_CONTROL)
+					.send();
+			}
+
+			const body = usePreview
+				? await previewCache.getOrBuild(`${abs}\0${Math.trunc(info.mtimeMs)}\0${info.size}\0${maxDim}`, abs, origMime, maxDim)
+				: { bytes: await readFile(abs), mimeType: origMime };
+
 			return reply
-				.header("content-type", mimeOf(abs))
+				.header("content-type", body.mimeType)
+				.header("etag", etag)
+				.header("cache-control", FILE_CACHE_CONTROL)
 				// bytes made by the user or the agent: never let a browser run them as a page
 				.header("x-content-type-options", "nosniff")
 				.header("content-security-policy", "sandbox; default-src 'none'")
-				.send(await readFile(abs));
+				.send(body.bytes);
 		},
 	});
 }

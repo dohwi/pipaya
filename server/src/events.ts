@@ -51,11 +51,12 @@ export class EventBus {
 		this.selectLatest = db.query("SELECT COALESCE((SELECT seq FROM sqlite_sequence WHERE name = 'events'), 0) AS id");
 	}
 
-	publish(sessionId: string | null, type: string, data: unknown, opts: { ephemeral?: boolean } = {}): PipayaEvent {
+	publish(sessionId: string | null, type: string, data: unknown, opts: { ephemeral?: boolean; persistData?: unknown } = {}): PipayaEvent {
 		const ts = Date.now();
 		let id = 0;
 		if (!opts.ephemeral) {
-			const res = this.insert.run({ sessionId, type, data: JSON.stringify(data ?? null), ts });
+			const stored = opts.persistData !== undefined ? opts.persistData : data;
+			const res = this.insert.run({ sessionId, type, data: JSON.stringify(stored ?? null), ts });
 			id = Number(res.lastInsertRowid);
 		}
 		const event: PipayaEvent = { id, sessionId, type, ts, data };

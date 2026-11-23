@@ -10,6 +10,7 @@ import type { QuestionManager } from "../questions.ts";
 import * as S from "../schemas.ts";
 import type { SessionManager } from "../sessions.ts";
 import type { SessionStore } from "../store.ts";
+import { stripToolMessageImages } from "../tool-images.ts";
 import type { TypeBoxProvider } from "../typebox-provider.ts";
 import type { UnreadTracker } from "../unread.ts";
 
@@ -193,8 +194,9 @@ export function registerSessionRoutes(server: FastifyInstance, deps: SessionRout
 		schema: { params: S.IdParams, querystring: S.MessagesQuery, response: { 200: S.MessageList, ...S.errors(400, 401, 404) } },
 		handler: async (req) => {
 			sessions.get(req.params.id);
-			const { after, limit, tail, before, turn } = req.query;
-			return { messages: store.messages(req.params.id, tail ? { after, tail, before, wholeTurn: turn === true } : { after, limit: limit ?? 1000 }) };
+			const { after, limit, tail, before, turn, omitToolImages } = req.query;
+			const rows = store.messages(req.params.id, tail ? { after, tail, before, wholeTurn: turn === true } : { after, limit: limit ?? 1000 });
+			return { messages: omitToolImages ? rows.map((r) => ({ ...r, message: stripToolMessageImages(r.message) })) : rows };
 		},
 	});
 	app.get("/questions", {
