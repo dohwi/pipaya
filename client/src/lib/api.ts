@@ -520,8 +520,10 @@ export class Api {
 	/** Icon values of the images already uploaded to this server, newest first. */
 	listIcons = () => this.req<{ icons: string[] }>("GET", "/configuration/icons");
 	/** A file of the session's working directory (an upload, or something the agent wrote), as bytes. */
-	async fetchFile(id: string, path: string, signal?: AbortSignal): Promise<Blob> {
-		const res = await this.sendFetch(`/sessions/${encodeURIComponent(id)}/files?${new URLSearchParams({ path })}`, { signal, headers: this.authHeaders() });
+	async fetchFile(id: string, path: string, signal?: AbortSignal, opts?: { max?: number }): Promise<Blob> {
+		const params = new URLSearchParams({ path });
+		if (opts?.max !== undefined) params.set("max", String(opts.max));
+		const res = await this.sendFetch(`/sessions/${encodeURIComponent(id)}/files?${params}`, { signal, headers: this.authHeaders() });
 		if (!res.ok) {
 			const json = await res.json().catch(() => undefined);
 			throw this.toApiError(res, json);

@@ -215,4 +215,49 @@ describe("catching up after the window was in the background", () => {
 			{ kind: "catchUp", running: false },
 		]);
 	});
+
+	test("message_end with stripped toolResult keeps live preview images from tool_execution_end", async () => {
+		const api = {
+			tailMessages: async () => [],
+			questions: async () => [],
+			serverExtensionEntries: async () => [],
+			getSession: async () => ({ status: { ...base, running: true, pendingToolCalls: [] }, context: { tokens: 10, contextWindow: 128000 }, usage: {} }),
+		} as unknown as Api;
+		const chat = new ChatState("session", api);
+		await chat.load();
+		chat.apply({
+			id: 1,
+			sessionId: "session",
+			type: "tool_execution_end",
+			ts: 100,
+			data: {
+				toolCallId: "tc1",
+				toolName: "generate_image",
+				isError: false,
+				durationMs: 500,
+				result: { content: [{ type: "text", text: "Saved a.png" }, { type: "image", data: "IMGDATA", mimeType: "image/png" }], details: { paths: ["a.png"] } },
+			},
+		});
+		expect(chat.tools.tc1?.images).toEqual([{ type: "image", data: "IMGDATA", mimeType: "image/png" }]);
+
+		chat.apply({
+			id: 2,
+			sessionId: "session",
+			type: "message_end",
+			ts: 101,
+			data: {
+				seq: 1,
+				message: {
+					role: "toolResult",
+					toolCallId: "tc1",
+					toolName: "generate_image",
+					content: [{ type: "text", text: "Saved a.png" }],
+					details: { paths: ["a.png"] },
+					isError: false,
+					timestamp: 101,
+				},
+			},
+		});
+		expect(chat.tools.tc1?.images).toEqual([{ type: "image", data: "IMGDATA", mimeType: "image/png" }]);
+	});
 });

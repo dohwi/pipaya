@@ -1,11 +1,12 @@
-import type { ResizedImage, ResizeLimits } from "./image-resize-core.ts";
+import type { PreviewResult, ResizedImage, ResizeLimits } from "./image-resize-core.ts";
+import type { WorkerRequest } from "./image-resize-worker.ts";
 
 /** A decode + several encodes of a very large picture; past this the worker is given up on. */
 const RESIZE_TIMEOUT_MS = 30_000;
 /** An idle worker is let go after this, so its decoder memory is not held between rare bursts of pictures. */
 const IDLE_MS = 5 * 60_000;
 
-type Job = { bytes: Uint8Array; limits: Partial<ResizeLimits>; signal?: AbortSignal; resolve: (r: ResizedImage | null) => void };
+type Job = { payload: WorkerRequest; signal?: AbortSignal; resolve: (r: unknown) => void };
 
 /**
  * One worker thread, reused for every picture, one picture at a time. A fresh worker per picture leaked: Bun keeps an
@@ -18,18 +19,21 @@ class ResizePool {
 	private running: { job: Job; timer: ReturnType<typeof setTimeout>; onAbort: () => void } | null = null;
 	private idle: ReturnType<typeof setTimeout> | undefined;
 
-	run(job: Job): void {
-		if (job.signal?.aborted) {
-			job.resolve(null);
-			return;
-		}
-		this.queue.push(job);
-		// A queued picture that is no longer wanted is dropped before it costs the worker anything.
-		job.signal?.addEventListener("abort", () => {
-			const i = this.queue.indexOf(job);
-			if (i >= 0) { this.queue.splice(i, 1); job.resolve(null); }
-		}, { once: true });
-		this.next();
+	run<T>(payload: WorkerRequest, signal?: AbortSignal): Promise<T | null> {
+		return new Promise((resolve) => {
+			if (signal?.aborted) {
+				resolve(null);
+				return;
+			}
+			const job: Job = { payload, signal, resolve: (r) => resolve(r as T | null) };
+			this.queue.push(job);
+			// A queued picture that is no longer wanted is dropped before it costs the worker anything.
+			signal?.addEventListener("abort", () => {
+				const i = this.queue.indexOf(job);
+				if (i >= 0) { this.queue.splice(i, 1); resolve(null); }
+			}, { once: true });
+			this.next();
+		});
 	}
 
 	private spawn(): Worker | null {
@@ -37,7 +41,7 @@ class ResizePool {
 		try {
 			const w = new Worker(new URL("./image-resize-worker.ts", import.meta.url));
 			w.unref?.(); // an idle worker must not keep the process alive
-			w.onmessage = (e: MessageEvent) => this.settle((e.data?.result as ResizedImage | null) ?? null);
+			w.onmessage = (e: MessageEvent) => this.settle(e.data?.result ?? null);
 			w.onerror = () => this.fail();
 			this.worker = w;
 			return w;
@@ -68,10 +72,10 @@ class ResizePool {
 		const timer = setTimeout(() => this.fail(), RESIZE_TIMEOUT_MS);
 		this.running = { job, timer, onAbort };
 		// The bytes are copied: the caller may keep using its buffer.
-		worker.postMessage({ bytes: job.bytes, limits: job.limits });
+		worker.postMessage(job.payload);
 	}
 
-	private settle(result: ResizedImage | null): void {
+	private settle(result: unknown): void {
 		const r = this.running;
 		if (!r) return;
 		this.running = null;
@@ -101,5 +105,13 @@ const pool = new ResizePool();
  * Null when the picture cannot be decoded, nothing fits, or the worker fails or times out.
  */
 export function resizeImage(bytes: Uint8Array, limits: Partial<ResizeLimits> = {}, signal?: AbortSignal): Promise<ResizedImage | null> {
-	return new Promise((resolve) => pool.run({ bytes, limits, signal, resolve }));
+	return pool.run<ResizedImage>({ kind: "fit", bytes, limits }, signal);
+}
+
+/**
+ * Downscales a raster image for inline preview in a worker thread. Returns null when the input cannot be decoded,
+ * the worker times out, or the re-encoded preview is not smaller than the original bytes.
+ */
+export function previewImage(bytes: Uint8Array, maxDim: number, jpegQuality = 82, signal?: AbortSignal): Promise<PreviewResult | null> {
+	return pool.run<PreviewResult>({ kind: "preview", bytes, maxDim, jpegQuality }, signal);
 }

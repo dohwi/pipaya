@@ -2093,4 +2093,5 @@ export const en: Record<string, string> = {
 	"서버가 예기치 않게 멈춰 작업이 중단되었습니다.": "The run was interrupted because the server stopped unexpectedly.",
 	"작업이 제때 끝나지 않아 강제로 중단되었습니다.": "The run did not stop in time and was forced to stop.",
 	"오류로 작업이 중단되었습니다.": "The run stopped due to an error.",
+	"이미지를 불러오지 못했습니다 · 눌러서 다시 시도": "Couldn't load image · click to retry",
 };

@@ -7,9 +7,11 @@
 	import { onHighlightReady } from "../../lib/code-highlight";
 	import { copyText } from "../../lib/clipboard";
 	import { openExternal } from "../../lib/tauri";
-	import { MediaUrls } from "../../lib/media-urls";
+	import { sharedMedia } from "../../lib/media-urls";
 	import { patchHtml } from "../../lib/patch-html";
 	import { closeVideoView, videoPlayer } from "../../lib/video-view";
+
+	const INLINE_IMAGE_MAX = 1280;
 
 	let { text, streaming = false, sessionId = null }: { text: string; streaming?: boolean; sessionId?: string | null } = $props();
 	let root: HTMLElement | undefined = $state();
@@ -40,14 +42,11 @@
 	});
 
 	// Pictures the agent wrote into the working directory (`![](out/chart.png)`) are fetched with the token and shown inline.
-	// Only once the reply has settled: while streaming, the path may still be half written.
+	// Blob URLs live in the app-wide LRU cache (`sharedMedia`) so switching tabs or remounting after a stream settles
+	// displays already-fetched pictures immediately without downloading them again.
 	let media = $derived.by(() => {
 		const api = app.api, id = sessionId;
-		return api && id ? { api, id, urls: new MediaUrls() } : null;
-	});
-	$effect(() => {
-		const owner = media;
-		return () => owner?.urls.dispose();
+		return api && id ? { api, id, base: api.baseUrl } : null;
 	});
 	/** the video players this message drew: a player left on the whole screen goes away with the message */
 	const videos: HTMLDivElement[] = [];
@@ -56,15 +55,83 @@
 		const rendered = html;
 		const host = root;
 		const owner = media;
-		if (!rendered || !host || !owner || streaming) return;
+		const live = streaming;
+		if (!rendered || !host || !owner) return;
 		const ctl = new AbortController();
 		// the new HTML is put into the page after this effect runs: look for the picture slots once it is there
 		void tick().then(() => {
 			if (ctl.signal.aborted) return;
-			fillPictures(host, owner, ctl.signal);
+			if (live) prefetchPictures(host, owner);
+			else fillPictures(host, owner, ctl.signal);
 		});
 		return () => ctl.abort();
 	});
+	function mediaKey(owner: NonNullable<typeof media>, kind: "image" | "audio" | "video", path: string): string {
+		return `${owner.base}\0${owner.id}\0${kind === "image" ? INLINE_IMAGE_MAX : kind}\0${path}`;
+	}
+	function loadSlotBlob(owner: NonNullable<typeof media>, kind: "image" | "audio" | "video", path: string): () => Promise<Blob> {
+		return async () => {
+			const blob = await owner.api.fetchFile(owner.id, path, undefined, kind === "image" ? { max: INLINE_IMAGE_MAX } : undefined);
+			if (blob.type.startsWith(`${kind}/`)) return blob;
+			if (kind === "image") throw new Error("Not an image");
+			// Some servers return application/octet-stream; players need a media type to pick a decoder.
+			return new Blob([blob], { type: kind === "video" ? "video/mp4" : "audio/mpeg" });
+		};
+	}
+	/** Prefetch completed image links into `sharedMedia` while the rest of the reply still streams, without touching the DOM. */
+	function prefetchPictures(host: HTMLElement, owner: NonNullable<typeof media>) {
+		for (const slot of host.querySelectorAll<HTMLElement>("span.wd-img[data-wd-src]")) {
+			const path = slot.dataset.wdSrc!;
+			sharedMedia.prefetch(mediaKey(owner, "image", path), loadSlotBlob(owner, "image", path));
+		}
+	}
+	function applyLoadedSlot(slot: HTMLElement, kind: "image" | "audio" | "video", src: string) {
+		if (kind === "video") {
+			const player = videoPlayer(src);
+			videos.push(player);
+			slot.replaceWith(player);
+		} else if (kind === "audio") {
+			const audio = document.createElement("audio");
+			audio.src = src;
+			audio.controls = true;
+			audio.preload = "metadata";
+			audio.className = "wd-audio";
+			slot.replaceWith(audio);
+		} else {
+			const img = document.createElement("img");
+			img.alt = slot.dataset.alt ?? "";
+			img.decoding = "async";
+			img.src = src;
+			img.className = "wd-pic";
+			slot.replaceWith(img);
+		}
+	}
+	function loadSlot(slot: HTMLElement, owner: NonNullable<typeof media>, signal?: AbortSignal) {
+		const path = slot.dataset.wdSrc!;
+		const kind = slot.classList.contains("wd-img") ? "image" : slot.dataset.kind === "audio" ? "audio" : "video";
+		const key = mediaKey(owner, kind, path);
+		const cached = sharedMedia.peek(key);
+		if (cached) {
+			applyLoadedSlot(slot, kind, cached);
+			return;
+		}
+		slot.classList.remove("missing");
+		slot.classList.add("loading");
+		slot.removeAttribute("role");
+		slot.removeAttribute("tabindex");
+		slot.removeAttribute("title");
+		void sharedMedia.get(key, loadSlotBlob(owner, kind, path)).then((src) => {
+			if (signal?.aborted || !slot.isConnected) return;
+			applyLoadedSlot(slot, kind, src);
+		}).catch(() => {
+			if (signal?.aborted || !slot.isConnected) return;
+			slot.classList.remove("loading");
+			slot.classList.add("missing");
+			slot.setAttribute("role", "button");
+			slot.setAttribute("tabindex", "0");
+			slot.title = t("이미지를 불러오지 못했습니다 · 눌러서 다시 시도");
+		});
+	}
 	/** More than four pictures: the fourth cell shows how many more there are (the rest are hidden until opened). */
 	function setupGalleries(host: HTMLElement) {
 		for (const g of host.querySelectorAll<HTMLElement>(".gallery:not([data-ready])")) {
@@ -80,35 +147,7 @@
 	function fillPictures(host: HTMLElement, owner: NonNullable<typeof media>, signal: AbortSignal) {
 		setupGalleries(host);
 		for (const slot of host.querySelectorAll<HTMLElement>("span.wd-media[data-wd-src], span.wd-img[data-wd-src]")) {
-			const path = slot.dataset.wdSrc!;
-			const kind = slot.classList.contains("wd-img") ? "image" : slot.dataset.kind === "audio" ? "audio" : "video";
-			void owner.urls.get(path, async (lifetime) => {
-				const blob = await owner.api.fetchFile(owner.id, path, lifetime);
-				if (blob.type.startsWith(`${kind}/`)) return blob;
-				if (kind === "image") throw new Error("Not an image");
-				// Some servers return application/octet-stream; players need a media type to pick a decoder.
-				return new Blob([blob], { type: kind === "video" ? "video/mp4" : "audio/mpeg" });
-			}).then((src) => {
-				if (signal.aborted || !slot.isConnected) return;
-				if (kind === "video") {
-					const player = videoPlayer(src);
-					videos.push(player);
-					slot.replaceWith(player);
-				} else if (kind === "audio") {
-					const audio = document.createElement("audio");
-					audio.src = src;
-					audio.controls = true;
-					audio.preload = "metadata";
-					audio.className = "wd-audio";
-					slot.replaceWith(audio);
-				} else {
-					const img = document.createElement("img");
-					img.alt = slot.dataset.alt ?? "";
-					img.src = src;
-					img.className = "wd-pic";
-					slot.replaceWith(img);
-				}
-			}).catch(() => { if (!signal.aborted) slot.classList.add("missing"); });
+			loadSlot(slot, owner, signal);
 		}
 	}
 	onDestroy(() => {
@@ -140,6 +179,11 @@
 			app.openImage(all.map((p) => ({ src: p.src, mimeType: "image/*" })), Math.max(0, all.indexOf(pic)));
 			return;
 		}
+		const retry = el.closest<HTMLElement>(".wd-img.missing[data-wd-src], .wd-media.missing[data-wd-src]");
+		if (retry && media) {
+			loadSlot(retry, media);
+			return;
+		}
 		const remote = el.closest<HTMLButtonElement>("button[data-img-src]");
 		if (remote) {
 			// Explicit consent: only now is the remote image requested.
@@ -156,11 +200,19 @@
 			if (isSafeExternalUrl(a.href)) void openExternal(a.href);
 		}
 	}
+	function onKeyDown(e: KeyboardEvent) {
+		if (e.key !== "Enter" && e.key !== " ") return;
+		const retry = (e.target as HTMLElement | null)?.closest<HTMLElement>(".wd-img.missing[data-wd-src], .wd-media.missing[data-wd-src]");
+		if (retry && media) {
+			e.preventDefault();
+			loadSlot(retry, media);
+		}
+	}
 </script>
 
 <!-- Delegated click for the links and buttons inside the rendered HTML: those are focusable and keyboard-activated themselves. -->
-<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
-<div class="md" class:streaming bind:this={root} onclick={onClick} use:patchHtml={html}></div>
+<!-- svelte-ignore a11y_no_static_element_interactions -->
+<div class="md" class:streaming bind:this={root} onclick={onClick} onkeydown={onKeyDown} use:patchHtml={html}></div>
 
 <style>
 	/* Korean wraps between words like the rest of the app (app.css keep-all); only a word wider than the line breaks */
@@ -374,6 +426,33 @@
 	.md :global(.wd-img) {
 		color: var(--text-faint);
 		font-size: var(--fs-xs);
+		line-height: 20px;
+	}
+	.md :global(.wd-img.loading),
+	.md :global(.wd-media.loading) {
+		animation: wd-pulse 1.4s ease-in-out infinite;
+	}
+	.md :global(.wd-img.missing),
+	.md :global(.wd-media.missing) {
+		color: var(--text-dim);
+		text-decoration: underline;
+		text-decoration-style: dashed;
+		cursor: pointer;
+	}
+	@keyframes wd-pulse {
+		0%,
+		100% {
+			opacity: 0.55;
+		}
+		50% {
+			opacity: 1;
+		}
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.md :global(.wd-img.loading),
+		.md :global(.wd-media.loading) {
+			animation: none;
+		}
 	}
 	.md :global(.wd-pic) {
 		display: block;

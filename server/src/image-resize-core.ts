@@ -113,6 +113,56 @@ function uprightImage(photon: Photon, img: PhotonImage, bytes: Uint8Array): Phot
 	}
 }
 
+export interface PreviewResult {
+	bytes: Uint8Array;
+	mimeType: string;
+}
+
+function hasTransparency(img: PhotonImage): boolean {
+	const pixels = img.get_raw_pixels();
+	for (let i = 3; i < pixels.length; i += 4) {
+		if (pixels[i]! < 255) return true;
+	}
+	return false;
+}
+
+/**
+ * Downscales a raster image to fit within `maxDim` and encodes it as JPEG (or PNG when it actually has transparent
+ * pixels) for fast inline chat previews. Returns null when the input cannot be decoded or the encoded result is not
+ * smaller than the original bytes.
+ */
+export async function previewToFit(input: Uint8Array, maxDim: number, jpegQuality = 82): Promise<PreviewResult | null> {
+	const photon = await loadPhoton();
+	if (!photon) return null;
+	let raw: PhotonImage | undefined;
+	let img: PhotonImage | undefined;
+	try {
+		raw = photon.PhotonImage.new_from_byteslice(input);
+		img = uprightImage(photon, raw, input);
+		if (img !== raw) { raw.free(); raw = undefined; }
+		const ow = img.get_width();
+		const oh = img.get_height();
+		const transparent = hasTransparency(img);
+		let w = ow;
+		let h = oh;
+		if (w > maxDim) { h = Math.max(1, Math.round((h * maxDim) / w)); w = maxDim; }
+		if (h > maxDim) { w = Math.max(1, Math.round((w * maxDim) / h)); h = maxDim; }
+		const resized = w === ow && h === oh ? img : photon.resize(img, w, h, photon.SamplingFilter.Lanczos3);
+		try {
+			const outBytes = transparent ? resized.get_bytes() : resized.get_bytes_jpeg(jpegQuality);
+			if (outBytes.byteLength >= input.byteLength) return null;
+			return { bytes: new Uint8Array(outBytes), mimeType: transparent ? "image/png" : "image/jpeg" };
+		} finally {
+			if (resized !== img) resized.free();
+		}
+	} catch {
+		return null;
+	} finally {
+		if (img && img !== raw) img.free();
+		raw?.free();
+	}
+}
+
 /**
  * Fits a picture into the limits: first the pixel size, then, while the encoding is still too big, JPEG at lower
  * quality and finally smaller dimensions. PNG and JPEG are both tried and the smaller one that fits wins.
