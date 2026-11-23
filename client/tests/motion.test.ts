@@ -70,7 +70,7 @@ describe("ripple", () => {
 	});
 });
 
-import { indicatorBox, shouldSlide } from "../src/lib/sliding-indicator";
+import { clipToRect, indicatorBox, shouldSlide } from "../src/lib/sliding-indicator";
 
 describe("sliding indicator", () => {
 	const container = { left: 10, top: 20, width: 200, height: 400, scrollLeft: 0, scrollTop: 0, clientLeft: 0, clientTop: 0 };
@@ -79,6 +79,19 @@ describe("sliding indicator", () => {
 		expect(indicatorBox(container, row)).toEqual({ x: 8, y: 100, width: 184, height: 36 });
 		expect(indicatorBox({ ...container, scrollTop: 50 }, row)).toEqual({ x: 8, y: 150, width: 184, height: 36 });
 		expect(indicatorBox({ ...container, clientLeft: 1, clientTop: 1 }, row)).toEqual({ x: 7, y: 99, width: 184, height: 36 });
+	});
+	test("clips to overflow:hidden/clip ancestors and hides once clipped out of view", () => {
+		const row = { left: 18, top: 120, width: 184, height: 32 };
+		// No clipping ancestors or ancestor larger than row: unchanged.
+		expect(clipToRect(row, [])).toEqual(row);
+		expect(clipToRect(row, [{ rect: { left: 10, top: 80, width: 220, height: 100 }, x: true, y: true }])).toEqual(row);
+		// Collapsing fold clips the bottom edge during the transition.
+		expect(clipToRect(row, [{ rect: { left: 10, top: 80, width: 220, height: 56 }, x: true, y: true }])).toEqual({ left: 18, top: 120, width: 184, height: 16 });
+		// Collapsing fold moved past the row's top: returns null so the indicator hides instead of floating below the card.
+		expect(clipToRect(row, [{ rect: { left: 10, top: 80, width: 220, height: 40 }, x: true, y: true }])).toBeNull();
+		expect(clipToRect(row, [{ rect: { left: 10, top: 80, width: 220, height: 0 }, x: true, y: true }])).toBeNull();
+		// Axis-selective clipping ignores overflow-y when only x is clipped.
+		expect(clipToRect(row, [{ rect: { left: 10, top: 80, width: 220, height: 10 }, x: true, y: false }])).toEqual(row);
 	});
 	test("hides when either side cannot be measured (display:none, nothing selected)", () => {
 		expect(indicatorBox(container, undefined)).toBeNull();

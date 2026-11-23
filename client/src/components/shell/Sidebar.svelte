@@ -123,7 +123,7 @@
 	 * The row that stands for what is open: the open tab, or, while its folder (or the project holding it) is folded, that
 	 * folder's row. Only one of them is ever drawn: a folded row hides the tabs under it.
 	 */
-	const OPEN_ROW = ".item.active, .dir.folded.cur, .proj.shown";
+	const OPEN_ROW = ".srv:not(.off) :is(.item.active, .dir.folded.cur, .proj.shown)";
 	/** The open row, when the list has it out of view (null while it is visible or missing). */
 	function offscreen(host: HTMLElement): HTMLElement | null {
 		const row = host.querySelector<HTMLElement>(OPEN_ROW);

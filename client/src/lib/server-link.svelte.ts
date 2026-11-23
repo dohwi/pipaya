@@ -40,6 +40,15 @@ const LISTS_TIMEOUT_MS = 15_000;
  */
 const MAX_RETRY_MS = 5_000;
 
+/**
+ * How long a reopened stream must stay up before backoff resets. Without this, a stream that opens (200) and drops
+ * immediately during replay resets `retryDelay` to 1 s every time and flickers online/offline once per second forever.
+ */
+const STABLE_STREAM_MS = 5_000;
+
+/** Consecutive reopen failures before falling back to a full sync (which advances the cursor past a broken replay). */
+const MAX_REOPEN_FAILS = 2;
+
 function withDeadline<T>(p: Promise<T>, ms: number, fail: () => Error): Promise<T> {
 	return new Promise<T>((resolve, reject) => {
 		const timer = setTimeout(() => reject(fail()), ms);
@@ -103,7 +112,9 @@ export class ServerLink {
 
 	private unsubscribe: (() => void) | null = null;
 	private retryTimer: ReturnType<typeof setTimeout> | undefined;
+	private stableTimer: ReturnType<typeof setTimeout> | undefined;
 	private retryDelay = 1000;
+	private reopenFails = 0;
 	/** Cancels the requests of the sync in progress. */
 	private attempt: AbortController | null = null;
 	private token = 0;
@@ -208,6 +219,7 @@ export class ServerLink {
 		this.stopped = true;
 		this.token++;
 		this.attempt?.abort();
+		this.disarmStable();
 		clearTimeout(this.retryTimer);
 		clearTimeout(this.saveTimer);
 		this.stopSaving?.();
@@ -216,14 +228,33 @@ export class ServerLink {
 		this.unsubscribe = null;
 	}
 
+	private armStable(token: number, onStable?: () => void): void {
+		clearTimeout(this.stableTimer);
+		this.stableTimer = setTimeout(() => {
+			this.stableTimer = undefined;
+			if (token !== this.token || this.stopped || this.net !== "online") return;
+			this.retryDelay = 1000;
+			this.reopenFails = 0;
+			onStable?.();
+		}, STABLE_STREAM_MS);
+	}
+
+	private disarmStable(): void {
+		clearTimeout(this.stableTimer);
+		this.stableTimer = undefined;
+	}
+
 	/**
 	 * Try again after a failure. A stream that dropped only needs its stream back (the replay covers the gap), so once the
 	 * lists are loaded a retry reopens the stream instead of reading everything again and rebuilding the open transcript.
+	 * If reopening fails repeatedly or dies right after opening, fall back to a full sync so the cursor moves past the gap.
 	 */
 	private scheduleRetry(): void {
 		clearTimeout(this.retryTimer);
 		if (this.stopped) return;
-		this.retryTimer = setTimeout(() => void (this.loaded ? this.reopen(false) : this.sync()), this.retryDelay);
+		const useSync = !this.loaded || this.reopenFails >= MAX_REOPEN_FAILS;
+		if (useSync) this.reopenFails = 0;
+		this.retryTimer = setTimeout(() => void (useSync ? this.sync(true) : this.reopen(false)), this.retryDelay);
 		this.retryDelay = Math.min(this.retryDelay * 2, MAX_RETRY_MS);
 	}
 
@@ -234,6 +265,7 @@ export class ServerLink {
 	async resume(force: boolean): Promise<void> {
 		if (this.stopped) return;
 		this.retryDelay = 1000;
+		this.reopenFails = 0;
 		if (!this.online) return this.sync();
 		if (!force) {
 			// A short absence: the socket is probably fine, so only check that the server answers at all.
@@ -300,7 +332,7 @@ export class ServerLink {
 				api.terminalSupport().catch(() => null),
 				api.latestEventId().catch(() => null),
 			]);
-			if (token !== this.token) return;
+			if (token !== this.token || this.net !== "online") return;
 			if (latestId !== null && latestId < this.cursor) {
 				void this.sync();
 				return;
@@ -324,25 +356,38 @@ export class ServerLink {
 			return;
 		}
 		const token = ++this.token;
+		this.disarmStable();
 		clearTimeout(this.retryTimer);
 		this.unsubscribe?.();
 		this.unsubscribe = null;
+		let opened = false;
+		let stable = false;
 		this.unsubscribe = this.api.subscribe(
 			{
 				onEvent: (e) => {
+					if (token !== this.token) return;
 					if (e.id > this.cursor) this.cursor = e.id;
 					this.hooks.event(this, e);
 				},
 				onOpen: () => {
+					if (token !== this.token) return;
+					opened = true;
+					stable = false;
 					this.net = "online";
 					this.netError = "";
-					this.retryDelay = 1000;
+					this.armStable(token, () => { stable = true; });
 					void this.catchUp();
 					this.hooks.ready(this, true);
 				},
 				onError: () => {
 					if (token !== this.token) return;
+					this.disarmStable();
 					this.net = "offline";
+					// A stream that opened and died before stabilizing (e.g. replay backpressure cutoff) will fail the same way on
+					// the same cursor: advance straight to a full sync on the next retry instead of looping on reopen().
+					if (stable) this.reopenFails = 0;
+					else if (opened) this.reopenFails = MAX_REOPEN_FAILS;
+					else this.reopenFails++;
 					this.scheduleRetry();
 				},
 			},
@@ -351,12 +396,17 @@ export class ServerLink {
 	}
 
 	/** (Re)load everything and (re)open the event stream. Safe to call repeatedly. */
-	async sync(): Promise<void> {
+	async sync(fromRetry = false): Promise<void> {
 		if (this.stopped) return;
 		const token = ++this.token;
+		this.disarmStable();
 		clearTimeout(this.retryTimer);
 		this.unsubscribe?.();
 		this.unsubscribe = null;
+		if (!fromRetry) {
+			this.retryDelay = 1000;
+			this.reopenFails = 0;
+		}
 		// "connecting" only before the first attempt settles; a retry keeps showing online/offline instead of flickering
 		if (this.net === "idle") this.net = "connecting";
 		// This attempt's requests end with it: a deadline, a newer attempt or stop() cancels the ones still out, so a server
@@ -453,20 +503,26 @@ export class ServerLink {
 			this.cursor = cursor;
 			void this.refreshModelSettings();
 
+			let stable = false;
 			this.unsubscribe = api.subscribe(
 				{
 					onEvent: (e) => {
+						if (token !== this.token) return;
 						if (e.id > this.cursor) this.cursor = e.id;
 						this.hooks.event(this, e);
 					},
 					onOpen: () => {
+						if (token !== this.token) return;
+						stable = false;
 						this.net = "online";
 						this.netError = "";
-						this.retryDelay = 1000;
+						this.armStable(token, () => { stable = true; });
 					},
 					onError: () => {
 						if (token !== this.token) return;
+						this.disarmStable();
 						this.net = "offline";
+						if (stable) this.reopenFails = 0;
 						this.scheduleRetry();
 					},
 				},
@@ -474,7 +530,10 @@ export class ServerLink {
 			);
 			this.net = "online";
 			this.netError = "";
-			this.retryDelay = 1000;
+			if (!fromRetry) {
+				this.retryDelay = 1000;
+				this.reopenFails = 0;
+			}
 			this.hooks.ready(this, false);
 		} catch (e) {
 			if (token !== this.token) return;
