@@ -381,7 +381,7 @@ describe("examples/extensions/todo.ts", () => {
 			expect((await call("POST", `/server-extensions/todo/methods/count?sessionId=${id}`, {})).json.result).toBe(1);
 			expect((await call("POST", "/server-extensions/todo/methods/count", {})).json.result).toBe(0);
 			const id2 = (await call("POST", "/sessions", { cwd: ws })).json.id as string;
-			await call("POST", `/sessions/${id2}/messages`, { text: `!bash ${JSON.stringify({ command: "rm -rf /" })}` });
+			await call("POST", `/sessions/${id2}/messages`, { text: `!bash ${JSON.stringify({ command: "echo rm -rf /" })}` }); // echo: harmless if the hook ever lets it through
 			for (let i = 0; i < 300 && (await call("GET", `/sessions/${id2}/status`)).json.running; i++) await Bun.sleep(20);
 			const res = ((await call("GET", `/sessions/${id2}/messages`)).json.messages as any[]).map((m) => m.message).find((m) => m.role === "toolResult");
 			expect(JSON.stringify(res)).toContain("Refused by the todo example");
