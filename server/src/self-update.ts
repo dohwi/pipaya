@@ -37,7 +37,7 @@ export interface UpdateStatus {
 	latest: string | null;
 	/** The version this server runs (`1.2.3`), the one a person recognises. */
 	currentVersion: string | null;
-	/** The version the release tag holds, or null when it could not be read (the update is still offered, by commit). */
+	/** The version the release tag holds, or null when it could not be read (no update is offered without a newer version). */
 	latestVersion: string | null;
 	available: boolean;
 	checkedAt: number;
@@ -72,6 +72,19 @@ const SHA_PATTERN = /^[0-9a-f]{7,64}$/;
 /** How much of the release branch's history is fetched to find the release commit on it, before fetching all of it. */
 const ANCESTRY_DEPTHS = [64, 512];
 const VERSION_PATTERN = /^\d+\.\d+\.\d+$/;
+
+/** Compares `major.minor.patch` versions; null when either is missing or not a valid triple. */
+export function compareVersions(a: string | null | undefined, b: string | null | undefined): number | null {
+	const parse = (v: string | null | undefined) => {
+		const m = /^(\d+)\.(\d+)\.(\d+)$/.exec(v?.trim() ?? "");
+		return m ? [Number(m[1]), Number(m[2]), Number(m[3])] : null;
+	};
+	const x = parse(a);
+	const y = parse(b);
+	if (!x || !y) return null;
+	for (let i = 0; i < 3; i++) if (x[i] !== y[i]) return x[i]! < y[i]! ? -1 : 1;
+	return 0;
+}
 
 export const defaultRun: Run = async (cmd, cwd, timeoutMs) => {
 	try {
@@ -118,23 +131,23 @@ export class SelfUpdater {
 
 	/**
 	 * The `version` in server/package.json at `sha`, read without touching the working tree: one shallow fetch of that commit,
-	 * then `git show`. Null when it cannot be read; the update is then offered by commit and shown without a version.
+	 * then `git show`. Distinguishes a fetch failure (`ok: false`, retried next time) from a commit whose version is missing
+	 * or unreadable (`ok: true, version: null`, cached).
 	 */
-	private async readVersionAt(sha: string): Promise<string | null> {
-		if (this.versionAt.has(sha)) return this.versionAt.get(sha) ?? null;
-		let found: string | null = null;
+	private async readVersionAt(sha: string): Promise<{ ok: true; version: string | null } | { ok: false }> {
+		if (this.versionAt.has(sha)) return { ok: true, version: this.versionAt.get(sha) ?? null };
 		const fetched = await this.git(["fetch", "--quiet", "--depth", "1", "origin", sha], 120_000);
-		if (fetched.code === 0) {
-			const shown = await this.git(["show", `${sha}:server/package.json`]);
-			if (shown.code === 0) {
-				try {
-					const v = (JSON.parse(shown.out) as { version?: unknown }).version;
-					if (typeof v === "string" && VERSION_PATTERN.test(v)) found = v;
-				} catch { /* not JSON: no version */ }
-			}
+		if (fetched.code !== 0) return { ok: false };
+		let found: string | null = null;
+		const shown = await this.git(["show", `${sha}:server/package.json`]);
+		if (shown.code === 0) {
+			try {
+				const v = (JSON.parse(shown.out) as { version?: unknown }).version;
+				if (typeof v === "string" && VERSION_PATTERN.test(v)) found = v;
+			} catch { /* not JSON: no version */ }
 		}
-		if (fetched.code === 0) this.versionAt.set(sha, found); // a failed fetch is retried next time
-		return found;
+		this.versionAt.set(sha, found);
+		return { ok: true, version: found };
 	}
 
 	private get releaseTag(): string {
@@ -219,9 +232,24 @@ export class SelfUpdater {
 		const tip = remote.code === 0 ? remote.out.split("\n").find((l) => l.endsWith(`\trefs/tags/${tag}`))?.split("\t")[0] : undefined;
 		const latest = tip && SHA_PATTERN.test(tip) ? tip : null;
 		if (!latest) return none("fetch_failed", { ref, current });
-		const available = latest !== current;
-		// Only worth a download when there is something new to name.
-		const latestVersion = available ? await this.readVersionAt(latest) : this.runningVersion;
+		if (latest === current) {
+			return (this.cached = {
+				managed: true,
+				ref,
+				current,
+				latest,
+				currentVersion: this.runningVersion,
+				latestVersion: this.runningVersion,
+				available: false,
+				checkedAt,
+			});
+		}
+		// Only offer an update when the release tag actually carries a newer version, matching the client updater.
+		const read = await this.readVersionAt(latest);
+		if (!read.ok) return none("fetch_failed", { ref, current, latest });
+		const latestVersion = read.version;
+		const cmp = compareVersions(latestVersion, this.runningVersion);
+		const available = cmp !== null && cmp > 0;
 		return (this.cached = { managed: true, ref, current, latest, currentVersion: this.runningVersion, latestVersion, available, checkedAt });
 	}
 
