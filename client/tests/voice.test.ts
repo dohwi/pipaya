@@ -1,4 +1,11 @@
-import { describe, expect, test } from "bun:test";
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
+import { compileModule } from "svelte/compiler";
+import ts from "typescript";
+import type { Api, VoiceView } from "../src/lib/api";
+import type { VoiceRemote as VoiceRemoteType } from "../src/lib/voice.svelte";
 import {
 	CONFIG_FAILURES, FAILURE_TEXT, failureHasFix, failureTone, MAX_RECORD_MS, MIME_CANDIDATES, TAP_MS, formatTime, isConfigFailure, micAvailability,
 	micFailure, pickMimeType, PressToTalk, serverFailure, upstreamDetail, voiceState,
@@ -171,5 +178,127 @@ describe("press to talk", () => {
 		expect(press.up()).toBeNull();
 		press.cancel();
 		expect(log).toEqual(["start", "stop"]);
+	});
+});
+
+describe("VoiceRemote", () => {
+	let VoiceRemote: typeof VoiceRemoteType;
+	let dir: string;
+
+	beforeAll(async () => {
+		dir = await mkdtemp(join(tmpdir(), "pipaya-voice-remote-"));
+		const srcPath = resolve("src/lib/voice.svelte.ts");
+		const build = await Bun.build({
+			entrypoints: [srcPath],
+			target: "bun",
+			plugins: [
+				{
+					name: "voice-runes",
+					setup(builder) {
+						builder.onResolve({ filter: /^\.\/store\.svelte$/ }, () => ({ path: "store-stub", namespace: "stub" }));
+						builder.onLoad({ filter: /.*/, namespace: "stub" }, () => ({
+							contents: "export const app = { prefs: { soundOn: false, cue() {} }, activeId: null, liveText: null, insertIntoComposer() {}, toast() {}, openSettings() {} };",
+							loader: "js",
+						}));
+						builder.onLoad({ filter: /voice\.svelte\.ts$/ }, async ({ path }) => {
+							const raw = await Bun.file(path).text();
+							const transpiled = ts.transpileModule(raw, {
+								compilerOptions: { target: ts.ScriptTarget.ESNext, module: ts.ModuleKind.ESNext },
+							}).outputText;
+							return { contents: compileModule(transpiled, { filename: path, generate: "client" }).js.code, loader: "js" };
+						});
+					},
+				},
+			],
+		});
+		if (!build.success) throw new Error(build.logs.join("\n"));
+		const file = join(dir, "voice.mjs");
+		await writeFile(file, await build.outputs[0]!.text());
+		VoiceRemote = (await import(file)).VoiceRemote;
+	});
+
+	afterAll(async () => {
+		if (dir) await rm(dir, { recursive: true, force: true });
+	});
+
+	const makeView = (over: Partial<VoiceView> = {}): VoiceView => ({
+		settings: {
+			enabled: true,
+			baseUrl: "https://ai.example.com",
+			path: "",
+			model: "gpt-transcribe",
+			language: "ko",
+			mode: "realtime",
+			realtime: { url: "wss://ai.example.com/v1/realtime", model: "gpt-realtime-2.1", transcribeModel: "gpt-live-transcribe", keywords: [], prompt: "" },
+		},
+		hasKey: true,
+		hasRealtimeKey: true,
+		realtimeEndpoint: "wss://ai.example.com/v1/realtime?model=gpt-realtime-2.1",
+		defaults: { enabled: false, baseUrl: "", path: "", model: "", language: "" },
+		defaultPath: "/v1/audio/transcriptions",
+		endpoint: "https://ai.example.com/v1/audio/transcriptions",
+		test: { ok: true, at: 1000, reason: null },
+		...over,
+	});
+
+	test("ignores stale load response when superseded by a newer server load", async () => {
+		const remote = new VoiceRemote();
+		let resolveSlow!: (v: VoiceView) => void;
+		const slowApi = {
+			voice: () => new Promise<VoiceView>((r) => { resolveSlow = r; }),
+		} as unknown as Api;
+		const fastApi = {
+			voice: async () => makeView({ settings: { enabled: true, baseUrl: "", path: "", model: "", language: "en", mode: "file" }, realtimeEndpoint: null }),
+		} as unknown as Api;
+
+		const pSlow = remote.load(slowApi, "server-a");
+		const pFast = remote.load(fastApi, "server-b");
+		await pFast;
+		expect(remote.loaded).toBe(true);
+		expect(remote.settings.mode).toBe("file");
+		expect(remote.settings.language).toBe("en");
+
+		resolveSlow(makeView());
+		await pSlow;
+		// server-a's late response must not overwrite server-b
+		expect(remote.settings.mode).toBe("file");
+		expect(remote.settings.language).toBe("en");
+	});
+
+	test("refreshes capabilities when re-loaded on the same server (e.g. after server upgrade)", async () => {
+		const remote = new VoiceRemote();
+		const oldApi = {
+			voice: async () => makeView({ settings: { enabled: true, baseUrl: "https://ai.example.com", path: "", model: "gpt-transcribe", language: "ko" }, hasRealtimeKey: undefined, realtimeEndpoint: undefined }),
+		} as unknown as Api;
+		const upgradedApi = {
+			voice: async () => makeView(),
+		} as unknown as Api;
+
+		await remote.load(oldApi, "ubuntu");
+		expect(remote.settings.mode).toBeUndefined();
+
+		await remote.load(upgradedApi, "ubuntu");
+		expect(remote.settings.mode).toBe("realtime");
+		expect(remote.realtime).toBe(true);
+		expect(remote.state).toBe("ready");
+	});
+
+	test("save supersedes an in-flight load", async () => {
+		const remote = new VoiceRemote();
+		let resolveLoad!: (v: VoiceView) => void;
+		const api = {
+			voice: () => new Promise<VoiceView>((r) => { resolveLoad = r; }),
+			saveVoice: async (settings: VoiceView["settings"]) => makeView({ settings }),
+		} as unknown as Api;
+
+		const pLoad = remote.load(api, "ubuntu");
+		const err = await remote.save(makeView().settings, undefined, "new-key");
+		expect(err).toBeNull();
+		expect(remote.settings.mode).toBe("realtime");
+
+		resolveLoad(makeView({ settings: { enabled: false, baseUrl: "", path: "", model: "", language: "", mode: "file" } }));
+		await pLoad;
+		expect(remote.settings.mode).toBe("realtime");
+		expect(remote.settings.enabled).toBe(true);
 	});
 });

@@ -197,8 +197,8 @@
 				<Extensions serverId={server?.id ?? null} bind:selected={extId} bind:marketFor bind:installFor />
 			{:else if tab === "backup"}
 				<Backup />
-			{:else if tab === "voice"}
-				<VoicePane />
+			{:else if tab === "voice" && server}
+				{#key server.id}<VoicePane serverId={server.id} />{/key}
 			{:else if tab === "schedules" && server}
 				{#key server.id}<SchedulesPane serverId={server.id} />{/key}
 			{:else if tab === "guard" && server}

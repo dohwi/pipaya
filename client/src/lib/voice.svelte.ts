@@ -24,7 +24,11 @@ import {
  */
 export type Tested = { at: number; ok: boolean; reason?: VoiceFailure };
 
-class VoiceStore {
+/**
+ * Voice input settings and connection-test state for one server (`VoiceRemote`), shared by the active server's `voice`
+ * store and any other server opened inside Settings.
+ */
+export class VoiceRemote {
 	settings = $state<VoiceSettings>({ enabled: false, baseUrl: "", path: "", model: "", language: "" });
 	/** Realtime mode: the server relays the microphone to a chat connection's Realtime API, phrase by phrase. */
 	get realtime() {
@@ -42,6 +46,119 @@ class VoiceStore {
 	testing = $state(false);
 	/** Why the microphone cannot work in this browser at all (`insecure`, `unsupported`), or null. */
 	availability = $state<"insecure" | "unsupported" | null>(null);
+
+	protected api: Api | null = null;
+	/** The server these settings came from, so switching servers clears what the other one had. */
+	private lastServer = "";
+	/** Monotonic counter so a slow load from an earlier server or before a save never overwrites newer state. */
+	private loadSeq = 0;
+
+	/** Called when the open server changes, reconnects/upgrades, or another device saved the settings: read its voice settings. */
+	async load(api: Api | null, serverKey: string) {
+		this.api = api;
+		const seq = ++this.loadSeq;
+		if (serverKey !== this.lastServer) {
+			this.lastServer = serverKey;
+			this.settings = { enabled: false, baseUrl: "", path: "", model: "", language: "" };
+			this.hasKey = false;
+			this.hasRealtimeKey = false;
+			this.realtimeEndpoint = null;
+			this.endpoint = null;
+			this.loaded = false;
+			this.tested = null;
+		}
+		if (!api) {
+			this.loading = false;
+			return;
+		}
+		this.loading = true;
+		try {
+			const view = await api.voice(AbortSignal.timeout(5000));
+			if (seq !== this.loadSeq) return;
+			this.apply(view);
+		} catch {
+			/* offline: keep what is shown, the settings screen says the server could not be read */
+		} finally {
+			if (seq === this.loadSeq) this.loading = false;
+		}
+	}
+
+	/**
+	 * Takes the server's answer. The settings are applied first and on their own: an older server (before the test
+	 * moved into its database) answers without `test`, and an exception on that one field used to throw away the whole
+	 * answer — the pane stayed empty and the microphone stayed hidden although everything was configured.
+	 */
+	protected apply(view: VoiceView) {
+		this.settings = view.settings;
+		this.hasKey = view.hasKey;
+		this.hasRealtimeKey = view.hasRealtimeKey ?? false;
+		this.realtimeEndpoint = view.realtimeEndpoint ?? null;
+		this.endpoint = view.endpoint;
+		this.tested = readTest(view.test);
+		this.loaded = true;
+	}
+
+	get state(): VoiceState {
+		return voiceState({
+			enabled: this.settings.enabled,
+			// a local Realtime server may need no key, so the address alone makes it usable
+			usable: this.realtime ? !!this.realtimeEndpoint : !!this.endpoint && this.hasKey,
+			// a test that has not run yet is not a failure: the settings alone are enough to try the microphone
+			failed: this.tested?.ok === false,
+			available: this.availability === null,
+		});
+	}
+
+	/** Why the microphone cannot be used, or null when it is fine. The button's tooltip and the settings row say it. */
+	get blockedReason(): string | null {
+		if (this.availability) return t(AVAILABILITY_TEXT[this.availability]);
+		if (!this.settings.enabled) return null;
+		if (this.realtime) {
+			if (!this.realtimeEndpoint) return t("실시간 변환 서버 주소를 입력하세요.");
+		} else {
+			if (!this.settings.baseUrl) return t("변환 서버 주소를 입력하세요.");
+			if (!this.hasKey) return t("변환 API 키를 입력하세요.");
+		}
+		// only a test that failed blocks it; an untested setup is offered and the first recording reports the problem
+		if (this.tested && !this.tested.ok) return (this.tested.reason && FAILURE_TEXT[this.tested.reason] && t(FAILURE_TEXT[this.tested.reason])) || t("연결 확인에 실패했습니다.");
+		return null;
+	}
+
+	async save(next: VoiceSettings, apiKey: string | undefined, realtimeApiKey?: string): Promise<string | null> {
+		if (!this.api) return t("서버에 연결할 수 없습니다");
+		this.loadSeq++;
+		try {
+			// the server forgets the old test with the new settings, and answers with the cleared state
+			const view = await this.api.saveVoice(next, apiKey, undefined, realtimeApiKey);
+			this.apply(view);
+			return null;
+		} catch (cause) {
+			return cause instanceof ApiError ? cause.message : t("저장하지 못했습니다");
+		}
+	}
+
+	/** The connection test: a second of silence through the server to the configured endpoint. */
+	async test(): Promise<{ ok: boolean; message: string }> {
+		if (!this.api) return { ok: false, message: t("서버에 연결할 수 없습니다") };
+		this.testing = true;
+		this.loadSeq++;
+		try {
+			const result = await this.api.testVoice(AbortSignal.timeout(70_000));
+			// An empty transcript is a pass: silence has nothing to say, and the answer was well formed.
+			this.tested = { at: Date.now(), ok: true };
+			return { ok: true, message: result.text ? t("연결되었습니다: {text}", { text: result.text }) : t("연결되었습니다. 입력창에 마이크가 나타납니다.") };
+		} catch (cause) {
+			const failure = cause instanceof ApiError ? serverFailure(cause.code) : "network";
+			this.tested = { at: Date.now(), ok: false, reason: failure };
+			const detail = cause instanceof ApiError ? upstreamDetail(cause.data) : null;
+			return { ok: false, message: detail ? t("{text} (서버 응답: {detail})", { text: t(FAILURE_TEXT[failure]), detail }) : t(FAILURE_TEXT[failure]) };
+		} finally {
+			this.testing = false;
+		}
+	}
+}
+
+class VoiceStore extends VoiceRemote {
 	/** A recording is running (the pill shows the time). */
 	recording = $state(false);
 	transcribing = $state(false);
@@ -50,9 +167,6 @@ class VoiceStore {
 	/** Seconds recorded so far, for the pill. */
 	elapsed = $state(0);
 
-	private api: Api | null = null;
-	/** The server these settings came from, so switching servers clears what the other one had. */
-	private lastServer = "";
 	private recorder: MediaRecorder | null = null;
 	private chunks: Blob[] = [];
 	private startedAt = 0;
@@ -74,46 +188,6 @@ class VoiceStore {
 	/** The pane the recording belongs to: the text goes back into that composer. */
 	paneId = $state<string | null>(null);
 
-	/** Called when the open server changes (or on start, or when another device saved the settings): read its voice settings. */
-	async load(api: Api | null, serverKey: string) {
-		this.api = api;
-		if (serverKey !== this.lastServer) {
-			this.lastServer = serverKey;
-			this.settings = { enabled: false, baseUrl: "", path: "", model: "", language: "" };
-			this.hasKey = false;
-			this.hasRealtimeKey = false;
-			this.realtimeEndpoint = null;
-			this.endpoint = null;
-			this.loaded = false;
-			this.tested = null;
-		}
-		if (!api) return;
-		this.loading = true;
-		try {
-			const view = await api.voice(AbortSignal.timeout(5000));
-			this.apply(view);
-		} catch {
-			/* offline: keep what is shown, the settings screen says the server could not be read */
-		} finally {
-			this.loading = false;
-		}
-	}
-
-	/**
-	 * Takes the server's answer. The settings are applied first and on their own: an older server (before the test
-	 * moved into its database) answers without `test`, and an exception on that one field used to throw away the whole
-	 * answer — the pane stayed empty and the microphone stayed hidden although everything was configured.
-	 */
-	private apply(view: VoiceView) {
-		this.settings = view.settings;
-		this.hasKey = view.hasKey;
-		this.hasRealtimeKey = view.hasRealtimeKey ?? false;
-		this.realtimeEndpoint = view.realtimeEndpoint ?? null;
-		this.endpoint = view.endpoint;
-		this.tested = readTest(view.test);
-		this.loaded = true;
-	}
-
 	/** Whether the browser can record at all; computed once, when the app starts. */
 	probe() {
 		const secure = typeof window !== "undefined" && (window.isSecureContext || location.protocol === "https:" || location.protocol === "tauri:");
@@ -121,17 +195,6 @@ class VoiceStore {
 		const hasGetUserMedia = typeof navigator !== "undefined" && typeof navigator.mediaDevices?.getUserMedia === "function";
 		const state = micAvailability(secure, hasRecorder, hasGetUserMedia);
 		this.availability = state === "ok" ? null : state;
-	}
-
-	get state(): VoiceState {
-		return voiceState({
-			enabled: this.settings.enabled,
-			// a local Realtime server may need no key, so the address alone makes it usable
-			usable: this.realtime ? !!this.realtimeEndpoint : !!this.endpoint && this.hasKey,
-			// a test that has not run yet is not a failure: the settings alone are enough to try the microphone
-			failed: this.tested?.ok === false,
-			available: this.availability === null,
-		});
 	}
 
 	/** Recording, or the microphone is still being opened for a recording. */
@@ -147,52 +210,6 @@ class VoiceStore {
 	/** The button records right now (on, configured and this browser can open a microphone). */
 	get ready() {
 		return this.state === "ready";
-	}
-
-	/** Why the microphone cannot be used, or null when it is fine. The button's tooltip and the settings row say it. */
-	get blockedReason(): string | null {
-		if (this.availability) return t(AVAILABILITY_TEXT[this.availability]);
-		if (!this.settings.enabled) return null;
-		if (this.realtime) {
-			if (!this.realtimeEndpoint) return t("실시간 변환 서버 주소를 입력하세요.");
-		} else {
-			if (!this.settings.baseUrl) return t("변환 서버 주소를 입력하세요.");
-			if (!this.hasKey) return t("변환 API 키를 입력하세요.");
-		}
-		// only a test that failed blocks it; an untested setup is offered and the first recording reports the problem
-		if (this.tested && !this.tested.ok) return (this.tested.reason && FAILURE_TEXT[this.tested.reason] && t(FAILURE_TEXT[this.tested.reason])) || t("연결 확인에 실패했습니다.");
-		return null;
-	}
-
-	async save(next: VoiceSettings, apiKey: string | undefined, realtimeApiKey?: string): Promise<string | null> {
-		if (!this.api) return t("서버에 연결할 수 없습니다");
-		try {
-			// the server forgets the old test with the new settings, and answers with the cleared state
-			const view = await this.api.saveVoice(next, apiKey, undefined, realtimeApiKey);
-			this.apply(view);
-			return null;
-		} catch (cause) {
-			return cause instanceof ApiError ? cause.message : t("저장하지 못했습니다");
-		}
-	}
-
-	/** The connection test: a second of silence through the server to the configured endpoint. */
-	async test(): Promise<{ ok: boolean; message: string }> {
-		if (!this.api) return { ok: false, message: t("서버에 연결할 수 없습니다") };
-		this.testing = true;
-		try {
-			const result = await this.api.testVoice(AbortSignal.timeout(70_000));
-			// An empty transcript is a pass: silence has nothing to say, and the answer was well formed.
-			this.tested = { at: Date.now(), ok: true };
-			return { ok: true, message: result.text ? t("연결되었습니다: {text}", { text: result.text }) : t("연결되었습니다. 입력창에 마이크가 나타납니다.") };
-		} catch (cause) {
-			const failure = cause instanceof ApiError ? serverFailure(cause.code) : "network";
-			this.tested = { at: Date.now(), ok: false, reason: failure };
-			const detail = cause instanceof ApiError ? upstreamDetail(cause.data) : null;
-			return { ok: false, message: detail ? t("{text} (서버 응답: {detail})", { text: t(FAILURE_TEXT[failure]), detail }) : t(FAILURE_TEXT[failure]) };
-		} finally {
-			this.testing = false;
-		}
 	}
 
 	/** Starts recording into `paneId`. Returns a failure kind when the microphone could not be opened. */

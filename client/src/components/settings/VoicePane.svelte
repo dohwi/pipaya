@@ -6,20 +6,42 @@
 	import Segmented from "../ui/Segmented.svelte";
 	import { t, getLang } from "../../lib/i18n";
 	import { extensions } from "../../lib/extensions/host.svelte";
-	import { voice } from "../../lib/voice.svelte";
-	import type { RealtimeVoiceSettings, VoiceSettings } from "../../lib/api";
+	import { Api, type RealtimeVoiceSettings, type VoiceSettings } from "../../lib/api";
+	import { voice, VoiceRemote } from "../../lib/voice.svelte";
 	import { untrack } from "svelte";
 	import { app } from "../../lib/store.svelte";
 	import { settingsDrafts } from "../../lib/settings-drafts.svelte";
 
 	/**
-	 * Settings > Voice. The connection lives on the server (so every device shares it) and the key is written once and
-	 * never read back. The microphone button in the composer appears only when voice input is on and the connection test
-	 * passed; this page is where the user turns it on, fixes it and tests it.
+	 * Settings > Voice for one server (`serverId`). The connection lives on the server (so every device shares it) and
+	 * the key is written once and never read back. The microphone button in the composer appears only when voice input
+	 * is on and the connection test passed; this page is where the user turns it on, fixes it and tests it.
 	 *
 	 * The page reads in the order the setup happens: switch it on, fill the connection top to bottom (address, model,
 	 * key, then the optional path and language), then check it. The status block at the bottom only reports.
 	 */
+	let { serverId }: { serverId: string } = $props();
+
+	const isOpenServer = $derived(serverId === app.serverId);
+	const remote = new VoiceRemote();
+	const target = $derived(isOpenServer ? voice : remote);
+	const apiOf = (id: string) => {
+		const s = app.servers.find((x) => x.id === id);
+		return s ? new Api({ baseUrl: s.baseUrl, token: s.token }) : null;
+	};
+
+	$effect(() => {
+		remote.availability = voice.availability;
+	});
+
+	// Always pull fresh settings when opening this pane (so a server upgrade or change on another device shows at once).
+	$effect(() => {
+		const id = serverId;
+		void app.voiceTick;
+		const t0 = untrack(() => (id === app.serverId ? voice : remote));
+		void t0.load(apiOf(id), id);
+	});
+
 	const REALTIME_DEFAULTS: RealtimeVoiceSettings = { url: "", model: "gpt-realtime-2.1", transcribeModel: "gpt-live-transcribe", keywords: [], prompt: "" };
 	let draft = $state<VoiceSettings>({ enabled: false, baseUrl: "", path: "", model: "", language: "", mode: "file", realtime: { ...REALTIME_DEFAULTS } });
 	/** The keywords as the user types them, one per line; turned into the list when saved. */
@@ -36,12 +58,12 @@
 	 * modes' fields are one draft, so switching file <-> realtime never drops what was typed for the other.
 	 */
 	type Draft = { draft: VoiceSettings; keywordText: string; key: string; keyTouched: boolean; rtKey: string; rtKeyTouched: boolean };
-	const draftKey = $derived(`voice:${app.serverId ?? ""}`);
+	const draftKey = $derived(`voice:${serverId}`);
 	let restored = false;
 
 	// The server's settings arrive after the first render (and again when the server changes or another device saves).
 	$effect(() => {
-		if (!voice.loaded) return;
+		if (!target.loaded) return;
 		const kept = untrack(() => (!restored ? settingsDrafts.get<Draft>(draftKey) : undefined));
 		if (kept) {
 			({ draft, keywordText, key, keyTouched, rtKey, rtKeyTouched } = kept);
@@ -51,8 +73,8 @@
 		// an unsaved edit is not overwritten by a reload from the server (the first load always fills the form)
 		if (restored && untrack(() => dirty)) return;
 		restored = true;
-		draft = { ...voice.settings, mode: voice.settings.mode ?? "file", realtime: { ...REALTIME_DEFAULTS, ...voice.settings.realtime } };
-		keywordText = (voice.settings.realtime?.keywords ?? []).join("\n");
+		draft = { ...target.settings, mode: target.settings.mode ?? "file", realtime: { ...REALTIME_DEFAULTS, ...target.settings.realtime } };
+		keywordText = (target.settings.realtime?.keywords ?? []).join("\n");
 		rtKey = "";
 		rtKeyTouched = false;
 		key = "";
@@ -61,7 +83,7 @@
 
 	// keep the draft while it differs from what is saved; once it matches again (saved, or typed back) it is dropped
 	$effect(() => {
-		if (!voice.loaded || !restored) return;
+		if (!target.loaded || !restored) return;
 		const snapshot: Draft = { draft, keywordText, key, keyTouched, rtKey, rtKeyTouched };
 		if (dirty) settingsDrafts.set(draftKey, snapshot);
 		else settingsDrafts.clear(draftKey);
@@ -70,8 +92,8 @@
 	/** Back to what the server has: the unsaved input of both modes is dropped. */
 	function revert() {
 		settingsDrafts.clear(draftKey);
-		draft = { ...voice.settings, mode: voice.settings.mode ?? "file", realtime: { ...REALTIME_DEFAULTS, ...voice.settings.realtime } };
-		keywordText = (voice.settings.realtime?.keywords ?? []).join("\n");
+		draft = { ...target.settings, mode: target.settings.mode ?? "file", realtime: { ...REALTIME_DEFAULTS, ...target.settings.realtime } };
+		keywordText = (target.settings.realtime?.keywords ?? []).join("\n");
 		key = rtKey = "";
 		keyTouched = rtKeyTouched = false;
 		message = null;
@@ -81,40 +103,40 @@
 	const oldExtension = $derived(extensions.installed.find((e) => e.package.manifest.id === "voice-input") ?? null);
 
 	/** Nothing set up yet: the placeholders then carry the whole example, so the first visit says what to type. */
-	const firstRun = $derived(!voice.settings.baseUrl && !voice.settings.model && !voice.hasKey);
+	const firstRun = $derived(!target.settings.baseUrl && !target.settings.model && !target.hasKey);
 
 	/** The language the UI is in, as the hint a person most likely wants ("ko" for Korean). Only a placeholder, never a value. */
 	const uiLang = $derived(getLang().slice(0, 2));
 
 	/** An older server knows only the file mode: the choice is not offered there. */
-	const hasModes = $derived(voice.settings.mode !== undefined);
+	const hasModes = $derived(target.settings.mode !== undefined);
 	const realtime = $derived(draft.mode === "realtime");
 	const rt = $derived(draft.realtime ?? REALTIME_DEFAULTS);
 	const keywords = $derived([...new Set(keywordText.split("\n").map((k) => k.trim()).filter(Boolean))]);
 	const setRt = (patch: Partial<RealtimeVoiceSettings>) => (draft = { ...draft, realtime: { ...rt, ...patch } });
-	const savedRt = $derived({ ...REALTIME_DEFAULTS, ...voice.settings.realtime });
+	const savedRt = $derived({ ...REALTIME_DEFAULTS, ...target.settings.realtime });
 
 	const dirty = $derived(
 		keyTouched ||
 			rtKeyTouched ||
-			(draft.mode ?? "file") !== (voice.settings.mode ?? "file") ||
+			(draft.mode ?? "file") !== (target.settings.mode ?? "file") ||
 			rt.url !== savedRt.url ||
 			rt.model !== savedRt.model ||
 			rt.transcribeModel !== savedRt.transcribeModel ||
 			rt.prompt !== savedRt.prompt ||
 			keywords.join("\n") !== savedRt.keywords.join("\n") ||
-			draft.enabled !== voice.settings.enabled ||
-			draft.baseUrl !== voice.settings.baseUrl ||
-			draft.path !== voice.settings.path ||
-			draft.model !== voice.settings.model ||
-			draft.language !== voice.settings.language,
+			draft.enabled !== target.settings.enabled ||
+			draft.baseUrl !== target.settings.baseUrl ||
+			draft.path !== target.settings.path ||
+			draft.model !== target.settings.model ||
+			draft.language !== target.settings.language,
 	);
 
 	async function save(): Promise<boolean> {
 		saving = true;
 		message = null;
 		const next: VoiceSettings = hasModes ? { ...draft, realtime: { ...rt, keywords } } : { enabled: draft.enabled, baseUrl: draft.baseUrl, path: draft.path, model: draft.model, language: draft.language };
-		const error = await voice.save(next, keyTouched ? key : undefined, rtKeyTouched ? rtKey : undefined);
+		const error = await target.save(next, keyTouched ? key : undefined, rtKeyTouched ? rtKey : undefined);
 		saving = false;
 		if (error) {
 			message = { ok: false, text: error };
@@ -130,7 +152,7 @@
 		message = null;
 		// A failed save is the answer; testing would only repeat it.
 		if (dirty && !(await save())) return;
-		const result = await voice.test();
+		const result = await target.test();
 		message = { ok: result.ok, text: result.message };
 	}
 </script>
@@ -147,8 +169,8 @@
 			{#if oldExtension.enabled}<span class="hint">{t("지금 켜져 있습니다")}</span>{:else}<span class="hint">{t("지금 꺼져 있습니다")}</span>{/if}
 		</Notice>
 	{/if}
-	{#if voice.availability}
-		<Notice tone="warn" size="sm" raised>{voice.blockedReason}</Notice>
+	{#if target.availability}
+		<Notice tone="warn" size="sm" raised>{target.blockedReason}</Notice>
 	{/if}
 </section>
 
@@ -181,7 +203,7 @@
 			type="password"
 			autocomplete="off"
 			spellcheck="false"
-			placeholder={voice.hasRealtimeKey && !rtKeyTouched ? t("저장된 키 사용 중") : t("sk-… (키가 없는 로컬 서버면 비워 둡니다)")}
+			placeholder={target.hasRealtimeKey && !rtKeyTouched ? t("저장된 키 사용 중") : t("sk-… (키가 없는 로컬 서버면 비워 둡니다)")}
 			bind:value={rtKey}
 			oninput={() => (rtKeyTouched = true)}
 			aria-label={t("실시간 변환 API 키")}
@@ -211,7 +233,7 @@
 	</label>
 	<div class="actions">
 		<Button size="sm" disabled={!dirty || saving || keywords.length > 20} onclick={save}>{t("저장")}</Button>
-		<Button size="sm" variant="ghost" disabled={voice.testing || voice.loading} onclick={test}>{voice.testing ? t("확인 중…") : t("연결 확인")}</Button>
+		<Button size="sm" variant="ghost" disabled={target.testing || target.loading} onclick={test}>{target.testing ? t("확인 중…") : t("연결 확인")}</Button>
 		{#if dirty}<Button size="sm" variant="ghost" disabled={saving} onclick={revert}>{t("변경 취소")}</Button>{/if}
 	</div>
 	{#if dirty && !message}<span class="note" role="status">{t("저장하지 않은 변경이 있습니다. 다른 화면에 다녀와도 남아 있습니다.")}</span>{/if}
@@ -239,7 +261,7 @@
 			type="password"
 			autocomplete="off"
 			spellcheck="false"
-			placeholder={voice.hasKey && !keyTouched ? t("저장된 키 사용 중") : t("sk-…")}
+			placeholder={target.hasKey && !keyTouched ? t("저장된 키 사용 중") : t("sk-…")}
 			bind:value={key}
 			oninput={() => (keyTouched = true)}
 			aria-label={t("변환 API 키")}
@@ -258,7 +280,7 @@
 	<span class="hint">{t("비우면 서버가 알아서 판단합니다. 두 글자 언어 코드를 넣으면 인식이 안정됩니다.")}</span>
 	<div class="actions">
 		<Button size="sm" disabled={!dirty || saving} onclick={save}>{t("저장")}</Button>
-		<Button size="sm" variant="ghost" disabled={voice.testing || voice.loading} onclick={test}>{voice.testing ? t("확인 중…") : t("연결 확인")}</Button>
+		<Button size="sm" variant="ghost" disabled={target.testing || target.loading} onclick={test}>{target.testing ? t("확인 중…") : t("연결 확인")}</Button>
 		{#if dirty}<Button size="sm" variant="ghost" disabled={saving} onclick={revert}>{t("변경 취소")}</Button>{/if}
 	</div>
 	{#if dirty && !message}<span class="note" role="status">{t("저장하지 않은 변경이 있습니다. 다른 화면에 다녀와도 남아 있습니다.")}</span>{/if}
@@ -268,11 +290,11 @@
 
 <section class="set-group">
 	<div class="section-label">{t("상태")}</div>
-	<SettingRow label={t("입력창의 마이크")} hint={voice.blockedReason ?? t("사용할 수 있습니다")}>
-		<span class="state" class:on={voice.state === "ready"} class:blocked={voice.state === "unusable"}>{voice.state === "ready" ? t("사용 가능") : voice.state === "off" ? t("꺼짐") : t("사용 안 함")}</span>
+	<SettingRow label={t("입력창의 마이크")} hint={target.blockedReason ?? t("사용할 수 있습니다")}>
+		<span class="state" class:on={target.state === "ready"} class:blocked={target.state === "unusable"}>{target.state === "ready" ? t("사용 가능") : target.state === "off" ? t("꺼짐") : t("사용 안 함")}</span>
 	</SettingRow>
-	{#if voice.realtime ? voice.realtimeEndpoint : voice.endpoint}<span class="hint mono">{voice.realtime ? voice.realtimeEndpoint : voice.endpoint}</span>{/if}
-	{#if voice.failure}<span class="note bad" role="status">{t("마지막 오류")}: {t("녹음 또는 변환에 실패했습니다. 위의 연결 확인으로 상태를 다시 확인하세요.")}</span>{/if}
+	{#if target.realtime ? target.realtimeEndpoint : target.endpoint}<span class="hint mono">{target.realtime ? target.realtimeEndpoint : target.endpoint}</span>{/if}
+	{#if isOpenServer && voice.failure}<span class="note bad" role="status">{t("마지막 오류")}: {t("녹음 또는 변환에 실패했습니다. 위의 연결 확인으로 상태를 다시 확인하세요.")}</span>{/if}
 </section>
 
 <style>
