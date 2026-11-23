@@ -171,4 +171,163 @@ describe("ServerLink stream drop and automatic reconnect", () => {
 		expect(link.data.running).toEqual({});
 		link.stop();
 	});
+
+	test("falls back to full sync and preserves backoff when reopen opens and immediately drops (replay cutoff)", async () => {
+		let latestId = 10;
+		const subscribedAfters: number[] = [];
+		const readyCalls: boolean[] = [];
+
+		const link = new ServerLink(
+			{ id: "srv4", name: "Dev", baseUrl: "http://127.0.0.1:9999", token: "tok" },
+			{
+				event: () => {},
+				ready: (_l, warm) => { readyCalls.push(warm); },
+			},
+		);
+		const fakeApi: any = {
+			scoped: () => fakeApi,
+			health: async () => ({ ok: true, version: "0.10.4", protocol: 1, minClientProtocol: 1 }),
+			listSessions: async () => ({ sessions: [], nextBefore: null, nextBeforeId: null }),
+			workspace: async () => ({ root: "/w", home: "/h", workdirs: [] }),
+			groups: async () => [],
+			terminals: async () => [],
+			terminalSupport: async () => null,
+			activity: async () => ({ sessions: [], unread: [] }),
+			models: async () => [],
+			providers: async () => [],
+			tools: async () => ({ tools: [], defaults: [] }),
+			latestEventId: async () => latestId,
+			configuration: async () => null,
+			compactionSettings: async () => null,
+			systemModelSettings: async () => null,
+			repos: async () => ({ repos: {} }),
+			subscribe: (handlers: { onOpen?: () => void; onError?: () => void }, after: number) => {
+				subscribedAfters.push(after);
+				if (after === 10 && subscribedAfters.length === 1) {
+					queueMicrotask(() => handlers.onOpen?.());
+					// Initial stream later drops (simulate a replay loop on after=10).
+					setTimeout(() => handlers.onError?.(), 15);
+				} else if (after === 10) {
+					// Reopen opens (200 OK) and drops right away before stabilizing (like an oversized replay cutoff).
+					queueMicrotask(() => {
+						handlers.onOpen?.();
+						queueMicrotask(() => handlers.onError?.());
+					});
+				} else {
+					// After falling back to sync() with the new cursor, the stream stays open.
+					queueMicrotask(() => handlers.onOpen?.());
+				}
+				return () => {};
+			},
+		};
+		(link as any).api = fakeApi;
+
+		await link.sync();
+		(link as any).retryDelay = 10;
+		latestId = 50;
+
+		// Wait long enough for: initial drop (15ms) -> reopen quick-drop (+10ms) -> backoff (+20ms) -> fallback sync(+microtasks).
+		await Bun.sleep(100);
+		expect(subscribedAfters).toEqual([10, 10, 50]);
+		expect(link.online).toBe(true);
+		expect(readyCalls).toEqual([false, true, false]);
+		link.stop();
+	});
+
+	test("falls back to full sync after consecutive reopen errors without opening, preserving backoff", async () => {
+		let latestId = 10;
+		const subscribedAfters: number[] = [];
+		const streams: { onOpen?: () => void; onError?: () => void }[] = [];
+
+		const link = new ServerLink(
+			{ id: "srv5", name: "Dev", baseUrl: "http://127.0.0.1:9999", token: "tok" },
+			{ event: () => {}, ready: () => {} },
+		);
+		const fakeApi: any = {
+			scoped: () => fakeApi,
+			health: async () => ({ ok: true, version: "0.10.4", protocol: 1, minClientProtocol: 1 }),
+			listSessions: async () => ({ sessions: [], nextBefore: null, nextBeforeId: null }),
+			workspace: async () => ({ root: "/w", home: "/h", workdirs: [] }),
+			groups: async () => [],
+			terminals: async () => [],
+			terminalSupport: async () => null,
+			activity: async () => ({ sessions: [], unread: [] }),
+			models: async () => [],
+			providers: async () => [],
+			tools: async () => ({ tools: [], defaults: [] }),
+			latestEventId: async () => latestId,
+			configuration: async () => null,
+			compactionSettings: async () => null,
+			systemModelSettings: async () => null,
+			repos: async () => ({ repos: {} }),
+			subscribe: (handlers: { onOpen?: () => void; onError?: () => void }, after: number) => {
+				subscribedAfters.push(after);
+				streams.push(handlers);
+				if (after === 10 && subscribedAfters.length === 1) {
+					queueMicrotask(() => handlers.onOpen?.());
+				} else if (after === 10) {
+					queueMicrotask(() => handlers.onError?.());
+				} else {
+					queueMicrotask(() => handlers.onOpen?.());
+				}
+				return () => {};
+			},
+		};
+		(link as any).api = fakeApi;
+
+		await link.sync();
+		(link as any).retryDelay = 10;
+		latestId = 25;
+		streams[0]!.onError?.();
+
+		// 1st drop (+10ms) -> reopen fail (+20ms) -> reopen fail (+40ms) -> fallback sync (after=25).
+		await Bun.sleep(130);
+		expect(subscribedAfters).toEqual([10, 10, 10, 25]);
+		expect(link.online).toBe(true);
+		link.stop();
+	});
+
+	test("does not reset retryDelay to 1000 on reopen onOpen before the stream stabilizes", async () => {
+		const link = new ServerLink(
+			{ id: "srv6", name: "Dev", baseUrl: "http://127.0.0.1:9999", token: "tok" },
+			{ event: () => {}, ready: () => {} },
+		);
+		let first = true;
+		const fakeApi: any = {
+			scoped: () => fakeApi,
+			health: async () => ({ ok: true, version: "0.10.4", protocol: 1, minClientProtocol: 1 }),
+			listSessions: async () => ({ sessions: [], nextBefore: null, nextBeforeId: null }),
+			workspace: async () => ({ root: "/w", home: "/h", workdirs: [] }),
+			groups: async () => [],
+			terminals: async () => [],
+			terminalSupport: async () => null,
+			activity: async () => ({ sessions: [], unread: [] }),
+			models: async () => [],
+			providers: async () => [],
+			tools: async () => ({ tools: [], defaults: [] }),
+			latestEventId: async () => 10,
+			configuration: async () => null,
+			compactionSettings: async () => null,
+			systemModelSettings: async () => null,
+			repos: async () => ({ repos: {} }),
+			subscribe: (handlers: { onOpen?: () => void; onError?: () => void }) => {
+				if (first) {
+					first = false;
+					queueMicrotask(() => handlers.onOpen?.());
+				} else {
+					// Reopen opens then drops immediately: retryDelay must stay backed off, not snap back to 1000.
+					handlers.onOpen?.();
+					handlers.onError?.();
+				}
+				return () => {};
+			},
+		};
+		(link as any).api = fakeApi;
+
+		await link.sync();
+		(link as any).retryDelay = 2000;
+		(link as any).reopen(false);
+		expect((link as any).retryDelay).toBe(4000);
+		link.stop();
+	});
 });

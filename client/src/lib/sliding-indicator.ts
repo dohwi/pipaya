@@ -39,6 +39,26 @@ export function indicatorBox(container: ContainerRect, selected: Rect | undefine
 	};
 }
 
+/** Intersect `target` with any clipping ancestor rects inside the container (`overflow: hidden | clip`), returning null once fully clipped. */
+export function clipToRect(target: Rect, clips: readonly { rect: Rect; x: boolean; y: boolean }[]): Rect | null {
+	let left = target.left;
+	let top = target.top;
+	let right = target.left + target.width;
+	let bottom = target.top + target.height;
+	for (const c of clips) {
+		if (c.x) {
+			left = Math.max(left, c.rect.left);
+			right = Math.min(right, c.rect.left + c.rect.width);
+		}
+		if (c.y) {
+			top = Math.max(top, c.rect.top);
+			bottom = Math.min(bottom, c.rect.top + c.rect.height);
+		}
+		if (right <= left || bottom <= top) return null;
+	}
+	return { left, top, width: right - left, height: bottom - top };
+}
+
 /** A bar along the bottom edge of `box` (underline tabs). */
 export const edgeBox = (box: Box, thickness: number): Box => ({ x: box.x, y: box.y + box.height - thickness, width: box.width, height: thickness });
 
@@ -91,9 +111,23 @@ export function slidingIndicator(container: HTMLElement, options: SlidingOptions
 
 	const resize = typeof ResizeObserver === "undefined" ? undefined : new ResizeObserver(() => schedule());
 
-	function observeChildren(selected: HTMLElement | null) {
+	function clippingAncestors(selected: HTMLElement | null): { node: HTMLElement; rect: Rect; x: boolean; y: boolean }[] {
+		const out: { node: HTMLElement; rect: Rect; x: boolean; y: boolean }[] = [];
+		let cur = selected?.parentElement ?? null;
+		while (cur && cur !== container) {
+			const cs = view!.getComputedStyle(cur);
+			const x = cs.overflowX === "hidden" || cs.overflowX === "clip";
+			const y = cs.overflowY === "hidden" || cs.overflowY === "clip";
+			if (x || y) out.push({ node: cur, rect: cur.getBoundingClientRect(), x, y });
+			cur = cur.parentElement;
+		}
+		return out;
+	}
+
+	function observeChildren(selected: HTMLElement | null, clippers: readonly { node: HTMLElement }[]) {
 		const next = new Set<Element>([container, ...Array.from(container.children).filter((c) => c !== el)]);
 		if (selected) next.add(selected);
+		for (const c of clippers) next.add(c.node);
 		for (const old of observed)
 			if (!next.has(old)) {
 				resize?.unobserve(old);
@@ -125,9 +159,11 @@ export function slidingIndicator(container: HTMLElement, options: SlidingOptions
 	function measure() {
 		if (disposed) return;
 		const selected = container.querySelector<HTMLElement>(selector);
-		observeChildren(selected);
+		const clippers = selected && container.isConnected ? clippingAncestors(selected) : [];
+		observeChildren(selected, clippers);
 		const cr = container.getBoundingClientRect();
-		const full = selected && container.isConnected ? indicatorBox(
+		const clipped = selected && container.isConnected ? clipToRect(selected.getBoundingClientRect(), clippers) : null;
+		const full = clipped ? indicatorBox(
 			{
 				left: cr.left,
 				top: cr.top,
@@ -140,7 +176,7 @@ export function slidingIndicator(container: HTMLElement, options: SlidingOptions
 				scaleX: container.offsetWidth ? cr.width / container.offsetWidth : 1,
 				scaleY: container.offsetHeight ? cr.height / container.offsetHeight : 1,
 			},
-			selected.getBoundingClientRect(),
+			clipped,
 		) : null;
 		if (!selected || !full) return hide();
 		const box = edge === "bottom" ? edgeBox(full, thickness) : full;
