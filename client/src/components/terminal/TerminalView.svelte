@@ -125,9 +125,11 @@
 		});
 		let ws: WebSocket | null = null;
 		let retry: ReturnType<typeof setTimeout> | undefined;
+		let openTimer: ReturnType<typeof setTimeout> | undefined;
 		let delay = 500;
 		let disposed = false;
 		let fresh = true;
+		const OPEN_TIMEOUT_MS = 15_000;
 
 		const send = (msg: unknown) => {
 			if (ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify(msg));
@@ -151,11 +153,21 @@
 		}, () => {});
 
 		const again = () => {
-			retry = setTimeout(() => void connect(), delay);
+			clearTimeout(retry);
+			const wait = Math.round(delay * (0.8 + Math.random() * 0.4));
+			retry = setTimeout(() => void connect(), wait);
 			delay = Math.min(delay * 2, 10_000);
+		};
+		const clearOpenTimer = () => {
+			if (openTimer !== undefined) {
+				clearTimeout(openTimer);
+				openTimer = undefined;
+			}
 		};
 		async function connect() {
 			if (disposed) return;
+			clearTimeout(retry);
+			clearOpenTimer();
 			status = "connecting";
 			// A one-time ticket, so the access token is not part of the socket's URL.
 			let credential: string;
@@ -170,6 +182,15 @@
 			const sock = new WebSocket(terminalSocketUrl(conn!.baseUrl, credential, terminal.id));
 			sock.binaryType = "arraybuffer";
 			ws = sock;
+			// Abort a stuck CONNECTING/pre-hello handshake so high-latency drops do not hang the terminal forever.
+			openTimer = setTimeout(() => {
+				if (ws !== sock || disposed) return;
+				sock.close();
+			}, OPEN_TIMEOUT_MS);
+			sock.onerror = () => {
+				if (ws !== sock || disposed) return;
+				sock.close();
+			};
 			sock.onmessage = (m) => {
 				if (typeof m.data !== "string") {
 					xt.write(new Uint8Array(m.data as ArrayBuffer));
@@ -182,6 +203,7 @@
 					return;
 				}
 				if (msg.type === "hello") {
+					clearOpenTimer();
 					status = "open";
 					delay = 500;
 					// The server replays the kept output next: start from a clean screen so nothing shows twice.
@@ -190,6 +212,7 @@
 					refit();
 					sendSize();
 				} else if (msg.type === "exit") {
+					clearOpenTimer();
 					status = "exited";
 					exitCode = msg.code ?? null;
 					if (msg.missing) app.dropTerminal(terminal.id);
@@ -197,12 +220,21 @@
 			};
 			sock.onclose = () => {
 				if (ws !== sock || disposed) return;
+				clearOpenTimer();
 				ws = null;
 				if (status === "exited") return;
 				status = "offline";
 				again();
 			};
 		}
+		const reconnectNow = () => {
+			if (disposed || status !== "offline") return;
+			delay = 500;
+			void connect();
+		};
+		const onVisible = () => { if (!document.hidden) reconnectNow(); };
+		window.addEventListener("online", reconnectNow);
+		document.addEventListener("visibilitychange", onVisible);
 
 		const input = (data: string) => {
 			if (status !== "open") return;
@@ -322,6 +354,9 @@
 		return () => {
 			disposed = true;
 			clearTimeout(retry);
+			clearOpenTimer();
+			window.removeEventListener("online", reconnectNow);
+			document.removeEventListener("visibilitychange", onVisible);
 			ro.disconnect();
 			cancelAnimationFrame(raf);
 			cancelAnimationFrame(glide);

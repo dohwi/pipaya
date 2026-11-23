@@ -1781,6 +1781,10 @@ class AppStore {
       const awaiting = Object.values(chat.tools).filter((t) => t.state === "awaiting_input").length;
       if ((link.data.awaiting[chat.id] ?? 0) !== awaiting) link.data.awaiting[chat.id] = awaiting;
     }
+    // If compaction finished while disconnected, flush messages held behind it now instead of stranding them.
+    if (!chat.compacting && chat.held.length && this.link === link && this.chats[chat.id] === chat) {
+      void this.flushHeld(chat);
+    }
   }
 
   /** Make sure a session's transcript is loaded. `fresh` reloads it from the server. */
@@ -1927,15 +1931,19 @@ class AppStore {
           thinkingLevel: normalizeThinking(d.thinkingLevel),
           serviceTier: d.serviceTier,
         });
+        // Switched servers while createSession was slow: do not attach the old server's session to the new server.
+        if (this.api !== api || this.link !== link) return false;
         if (!this.sessions.some((x) => x.id === s.id)) this.sessions.unshift(s);
         // Load the new chat off-screen and put the prompt in it first, so the pane goes from the welcome screen
         // straight to the sent message instead of flashing a skeleton and an empty transcript in between.
         const fresh = new ChatState(s.id, api, (c, kind) => { if (link) this.syncChatStatus(link, c, kind); });
         await fresh.load();
+        if (this.api !== api || this.link !== link) return false;
         if (!fresh.ready) throw new Error(fresh.loadError || t("불러오지 못했습니다"));
         fresh.addOptimisticUser(text, images, files.map((f) => ({ path: "", name: f.name, size: f.size, mimeType: f.mimeType })));
         this.chats = { ...this.chats, [s.id]: fresh };
         await this.openSession(s.id);
+        if (this.api !== api || this.link !== link) return false;
         to = s.id;
         seeded = true;
       }

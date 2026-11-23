@@ -97,7 +97,9 @@
 	/** Idle only: while a run works the textarea shows the running hint, so the last prompt never reads as an unsent draft. */
 	const promptHint = $derived(!compacting && !running && text.length === 0 && lastPrompt ? lastPrompt : "");
 	const vision = $derived(app.effectiveModelOf(pane.id)?.vision ?? false);
-	const canSend = $derived((text.trim().length > 0 || attached.any) && (app.net === "online" || parseSlash(text) !== null) && !app.sending);
+	let submitBusy = $state(false);
+	let duringBusy = $state(false); // a second Enter while the first is still in flight would send the same text twice
+	const canSend = $derived((text.trim().length > 0 || attached.any) && (app.net === "online" || parseSlash(text) !== null) && !app.sending && !submitBusy);
 
 	export function focus() {
 		ta?.focus();
@@ -584,13 +586,22 @@
 	 * After a successful send, forget the input. Sending from a new chat creates a session and switches this pane to it
 	 * mid-await, which stashes the just-sent text under the new-chat key; drop that or the next new chat shows it again.
 	 */
-	function clearSent(key: string | null) {
-		drafts.delete(key ?? "");
-		forgetDraft(key ?? "");
+	function clearSent(key: string | null, sentText: string) {
+		if (pane.id !== key) {
+			// already moved to the new session, whose input was restored empty
+			drafts.delete(key ?? "");
+			forgetDraft(key ?? "");
+			forgetAttachments(key ?? "");
+			return;
+		}
+		// Keep text the user typed while a slow send/upload was in flight instead of wiping it.
+		if (text === sentText) {
+			drafts.delete(key ?? "");
+			forgetDraft(key ?? "");
+			text = "";
+			caret = 0;
+		}
 		forgetAttachments(key ?? "");
-		if (pane.id !== key) return; // already moved to the new session, whose input was restored empty
-		text = "";
-		caret = 0;
 		reply = null;
 		attached.clear();
 	}
@@ -600,28 +611,35 @@
 	 * and an extension may veto or rewrite the text. Returns null when there is nothing to send.
 	 */
 	async function prepare() {
-		const parsed = parseSlash(text);
+		const raw = text;
+		const parsed = parseSlash(raw);
 		if (parsed) return void runSlash(parsed.cmd, parsed.arg), null;
 		if (rejectUnknownCommand()) return null;
-		const filtered = await extensions.filterComposer(text);
+		const filtered = await extensions.filterComposer(raw);
 		if ("cancel" in filtered) return void app.toast(filtered.cancel, "error", pane.id), null;
 		return {
 			key: pane.id,
+			sentText: raw,
 			body: (reply ? makeQuote(reply.text, reply.who) : "") + filtered.text,
 			images: attached.images.map((a) => ({ type: "image" as const, data: a.data, mimeType: a.mimeType })),
+			files: [...attached.files],
 		};
 	}
 
 	async function submit() {
-		if (!canSend) return;
-		const out = await prepare();
-		if (out && (await app.send(out.body, out.images, pane.id, attached.files))) clearSent(out.key);
+		if (!canSend || submitBusy) return;
+		submitBusy = true;
+		try {
+			const out = await prepare();
+			if (out && (await app.send(out.body, out.images, out.key, out.files))) clearSent(out.key, out.sentText);
+		} finally {
+			submitBusy = false;
+		}
 	}
 
 	const hasInput = $derived(text.trim().length > 0 || attached.any);
 
 	/** While a run is active: deliver the input as `steer` (between tool calls) or `follow_up` (after the run). */
-	let duringBusy = false; // a second Enter while the first is still in flight would send the same text twice
 	async function during(kind: "steer" | "queue") {
 		if (!hasInput || duringBusy) return;
 		if (app.net !== "online") return void app.toast(t("서버에 연결되어 있지 않아 보내지 못했습니다"), "error", pane.id);
@@ -629,8 +647,8 @@
 		try {
 			const out = await prepare();
 			if (!out) return;
-			const ok = await (kind === "steer" ? app.steer(out.body, out.images, pane.id, attached.files) : app.queue(out.body, out.images, pane.id, attached.files));
-			if (ok) clearSent(out.key);
+			const ok = await (kind === "steer" ? app.steer(out.body, out.images, out.key, out.files) : app.queue(out.body, out.images, out.key, out.files));
+			if (ok) clearSent(out.key, out.sentText);
 		} finally {
 			duringBusy = false;
 		}
@@ -901,7 +919,7 @@
 				{running}
 				{canSend}
 				{hasInput}
-				sending={app.sending}
+				sending={app.sending || submitBusy || duringBusy}
 				online={app.net === "online"}
 				onsend={submit}
 				onqueue={() => during("queue")}

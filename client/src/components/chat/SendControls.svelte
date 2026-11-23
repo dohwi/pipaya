@@ -140,7 +140,7 @@
 			{:else if mode === "running"}
 				<div class="stack">
 					{#if hasInput}
-					<button class="mode queue" onclick={onqueue} aria-label={t("대기열")} title={queueKey ? t("현재 작업이 모두 끝난 뒤 실행 ({key})", { key: queueKey }) : t("현재 작업이 모두 끝난 뒤 실행")}>
+					<button class="mode queue" onclick={onqueue} disabled={!online || sending} aria-label={t("대기열")} title={queueKey ? t("현재 작업이 모두 끝난 뒤 실행 ({key})", { key: queueKey }) : t("현재 작업이 모두 끝난 뒤 실행")}>
 						<Icon name="list" />
 					</button>
 					{/if}
@@ -161,6 +161,7 @@
 						<button
 							bind:this={steerBtn}
 							class="mode primary"
+							disabled={!online || sending}
 							aria-haspopup="menu"
 							aria-expanded={menu}
 							onpointerdown={pressStart}

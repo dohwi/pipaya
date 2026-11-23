@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { Api } from "../src/lib/api";
+import { Api, sendTimeoutMs } from "../src/lib/api";
 
 /** A server that accepts requests and never answers: a tailnet peer that went silent. */
 let server: ReturnType<typeof Bun.serve>;
@@ -55,5 +55,19 @@ describe("Api.scoped", () => {
 		const err = await api.fetchFile("s1", "a.bin", undefined, { timeoutMs: 60 }).catch((e) => e);
 		expect(err).toMatchObject({ status: 0, code: "network" });
 		expect(await until(() => open === 0)).toBe(true);
+	});
+});
+
+describe("sendTimeoutMs", () => {
+	test("keeps 30 s for plain text and scales for large base64 attachments up to 10 min", () => {
+		expect(sendTimeoutMs()).toBe(30_000);
+		expect(sendTimeoutMs([], [])).toBe(30_000);
+		expect(sendTimeoutMs([{ data: "" }], [{ data: "" }])).toBe(30_000);
+		// ~15 MB base64 (~11 MB raw) -> 30s + ~103s
+		const medium = sendTimeoutMs(undefined, [{ data: "a".repeat(15 * 1024 * 1024) }]);
+		expect(medium).toBeGreaterThan(120_000);
+		expect(medium).toBeLessThan(150_000);
+		// Huge payload caps cleanly at 10 minutes
+		expect(sendTimeoutMs(undefined, [{ data: "a".repeat(140 * 1024 * 1024) }])).toBe(10 * 60_000);
 	});
 });

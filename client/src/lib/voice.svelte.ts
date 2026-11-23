@@ -179,6 +179,9 @@ class VoiceStore extends VoiceRemote {
 	/** Realtime mode: the socket to the server and the microphone tap that feeds it. */
 	private socket: WebSocket | null = null;
 	private stopCapture: (() => void) | null = null;
+	private realtimeOpenTimer: ReturnType<typeof setTimeout> | undefined;
+	private realtimeStopTimer: ReturnType<typeof setTimeout> | undefined;
+	private realtimeStopOnOpen = false;
 	/** Realtime mode: phrases that landed in the composer during this recording (0 at the end = nothing was heard). */
 	private phrases = 0;
 	/** The microphone is being opened (a permission prompt may be up); `recording` follows once it is. */
@@ -291,12 +294,42 @@ class VoiceStore extends VoiceRemote {
 		const socket = new WebSocket(realtimeSocketUrl(this.api.baseUrl, credential, this.settings.language));
 		socket.binaryType = "arraybuffer";
 		this.socket = socket;
+		this.realtimeStopOnOpen = false;
 		const paneId = this.paneId;
 		const heard = new PhraseList();
 		let failed = false;
-		// the audio flows from the first moment: the server holds it until the upstream session is ready
+		// Buffer early PCM chunks while the WebSocket handshake finishes on high-latency links (capped at 5 s @ 24kHz 16-bit).
+		const earlyAudio: ArrayBuffer[] = [];
+		let earlyBytes = 0;
+		const MAX_EARLY_BYTES = 240_000;
+		this.realtimeOpenTimer = setTimeout(() => {
+			if (this.socket !== socket || socket.readyState === WebSocket.OPEN) return;
+			failed = true;
+			this.endRealtime();
+			this.fail("network");
+		}, 12_000);
+		socket.onopen = () => {
+			if (this.socket !== socket) return;
+			clearTimeout(this.realtimeOpenTimer);
+			this.realtimeOpenTimer = undefined;
+			for (const chunk of earlyAudio.splice(0)) socket.send(chunk);
+			earlyBytes = 0;
+			if (this.realtimeStopOnOpen) {
+				this.realtimeStopOnOpen = false;
+				socket.send(JSON.stringify({ type: "stop" }));
+				this.armRealtimeStopTimeout(socket);
+			}
+		};
+		// the audio flows from the first moment: early chunks buffer locally until the socket opens
 		this.stopCapture = capturePcm(stream, (pcm) => {
-			if (socket.readyState === WebSocket.OPEN && this.recording) socket.send(pcm.buffer);
+			if (!this.recording) return;
+			if (socket.readyState === WebSocket.OPEN) {
+				socket.send(pcm.buffer);
+			} else if (socket.readyState === WebSocket.CONNECTING && earlyBytes + pcm.byteLength <= MAX_EARLY_BYTES) {
+				const copy = pcm.slice().buffer;
+				earlyAudio.push(copy);
+				earlyBytes += copy.byteLength;
+			}
 		});
 		socket.onmessage = (m) => {
 			let msg: RealtimeMessage;
@@ -321,11 +354,21 @@ class VoiceStore extends VoiceRemote {
 		};
 		socket.onclose = () => {
 			if (this.socket !== socket) return;
-			const wasLive = this.recording;
+			const wasLive = this.recording || this.transcribing;
 			this.endRealtime();
 			if (wasLive && !failed) this.fail("network");
 		};
 		return null;
+	}
+
+	/** Bound waiting for the server's final `done` frame after `stop` so a half-open socket never locks the composer. */
+	private armRealtimeStopTimeout(socket: WebSocket) {
+		clearTimeout(this.realtimeStopTimer);
+		this.realtimeStopTimer = setTimeout(() => {
+			if (this.socket !== socket) return;
+			this.endRealtime();
+			this.fail("timeout");
+		}, 15_000);
 	}
 
 	/** Realtime mode: everything of this session is over (done, failed or cancelled). */
@@ -333,14 +376,19 @@ class VoiceStore extends VoiceRemote {
 		app.liveText = null;
 		this.recording = false;
 		this.transcribing = false;
+		this.realtimeStopOnOpen = false;
 		clearInterval(this.timer);
 		this.timer = undefined;
+		clearTimeout(this.realtimeOpenTimer);
+		this.realtimeOpenTimer = undefined;
+		clearTimeout(this.realtimeStopTimer);
+		this.realtimeStopTimer = undefined;
 		this.stopCapture?.();
 		this.stopCapture = null;
 		const socket = this.socket;
 		this.socket = null;
 		if (socket) {
-			socket.onmessage = socket.onclose = null;
+			socket.onopen = socket.onmessage = socket.onclose = null;
 			if (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING) socket.close(1000);
 		}
 		this.releaseStream();
@@ -360,10 +408,19 @@ class VoiceStore extends VoiceRemote {
 			this.releaseStream();
 			app.prefs.cue("recStop");
 			const socket = this.socket;
-			if (!socket || socket.readyState !== WebSocket.OPEN) return this.endRealtime();
+			if (!socket) return this.endRealtime();
+			if (socket.readyState === WebSocket.CONNECTING) {
+				// Released push-to-talk during a slow handshake: send buffered audio + stop once open instead of dropping.
+				this.transcribing = true;
+				this.transcribeStartedAt = performance.now();
+				this.realtimeStopOnOpen = true;
+				return;
+			}
+			if (socket.readyState !== WebSocket.OPEN) return this.endRealtime();
 			this.transcribing = true;
 			this.transcribeStartedAt = performance.now();
 			socket.send(JSON.stringify({ type: "stop" }));
+			this.armRealtimeStopTimeout(socket);
 			return;
 		}
 		this.recording = false;
