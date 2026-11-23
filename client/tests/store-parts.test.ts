@@ -194,9 +194,9 @@ describe("sidebar shared part", () => {
 describe("feedback", () => {
 	test("a session's toast shows in its pane while on screen, globally otherwise", () => {
 		const f = new Feedback();
-		f.toast("global");
+		f.toast("global", "info", null, undefined, "copy");
 		f.toast("about s1", "error", "s1");
-		expect(f.global(["s1"]).map((x) => x.text)).toEqual(["global"]);
+		expect(f.global(["s1"]).map((x) => [x.text, x.icon])).toEqual([["global", "copy"]]);
 		expect(f.of("s1", ["s1"]).map((x) => x.text)).toEqual(["about s1"]);
 		expect(f.global([]).map((x) => x.text)).toEqual(["global", "about s1"]);
 		for (const x of [...f.toasts]) f.dismissToast(x.id);

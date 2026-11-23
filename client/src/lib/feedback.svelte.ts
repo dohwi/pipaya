@@ -4,10 +4,14 @@
  * the caller, which knows what is on screen.
  */
 
+import type { IconName } from "./icons";
+
 export interface Toast {
   id: number;
   text: string;
   tone: "info" | "warn" | "error" | "ok";
+  /** Optional icon override; defaults to a tone icon in ToastStrip. */
+  icon?: IconName;
   /** The session it is about: shown inside that session's pane while it is on screen, else as a normal strip. */
   sid?: string;
   /** How long it stays, for the ring on its close button. */
@@ -55,10 +59,10 @@ export class Feedback {
   private noticeTimers = new Map<number, ReturnType<typeof setTimeout>>();
 
   /** `sid`: the session the message is about, so it appears inside that session's pane (see SessionToasts). */
-  toast(text: string, tone: Toast["tone"] = "info", sid?: string | null, action?: Toast["action"]) {
+  toast(text: string, tone: Toast["tone"] = "info", sid?: string | null, action?: Toast["action"], icon?: IconName) {
     const id = seq++;
     const ms = tone === "error" || tone === "warn" ? 6000 : 4000; // a warning is a whole sentence: as long to read as an error
-    this.toasts.push({ id, text, tone, ms, ...(sid ? { sid } : {}), ...(action ? { action } : {}) });
+    this.toasts.push({ id, text, tone, ms, ...(icon ? { icon } : {}), ...(sid ? { sid } : {}), ...(action ? { action } : {}) });
     const entry: ToastTimer = {
       startedAt: Date.now(),
       remaining: ms,
