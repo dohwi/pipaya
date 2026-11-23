@@ -1,10 +1,10 @@
 import { Agent, type AgentEvent, type AgentMessage, type AgentTool } from "@earendil-works/pi-agent-core";
-import { isContextOverflow, retryDelayMs, type ImageContent } from "@earendil-works/pi-ai";
+import { isContextOverflow, type ImageContent } from "@earendil-works/pi-ai";
 import { randomUUID } from "node:crypto";
 import { mkdirSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { isAbsolute, relative, resolve, sep } from "node:path";
-import type { QuestionManager } from "./questions.ts";
+import { askQuestion, type QuestionManager } from "./questions.ts";
 import { DEFAULT_MAX_SESSIONS, type Config } from "./config.ts";
 import { advertisedSkills, aggregateReadFiles, buildSystemPrompt, discoverInstructions, previewContext, type ContextSnapshot, type ContextTool, type SessionContext, type SystemPromptEntry } from "./context.ts";
 import { systemPromptEntries } from "./system-prompts.ts";
@@ -36,7 +36,8 @@ import { stripOversizedToolResultImages, stripToolMessageImages, stripToolResult
 import { describeTools, enabledTools, planTools } from "./tool-plan.ts";
 import { afterTurn, FORCE_STOP_ERROR, isEmptyFailedReply, RESTART_RUN_ERROR, RESTART_TOOL_ERROR, runawayReason, SHUTDOWN_RUN_ERROR, SHUTDOWN_TOOL_ERROR, type RunStopCause } from "./run-guard.ts";
 import { chooseModel, DelegateLimits, finalText, freeRole, repeatedReadSignature, runDelegateWithinDeadline, subagentReport, subagentReportReserveMs, subagentUsage, loadSubagents, SUBAGENT_NAME, SUBAGENT_TIMEOUT_MS, SUBAGENT_WRAP_UP, subagentSystem, type SubagentDef, type SubagentLimit } from "./subagents.ts";
-import { classifyUpstreamError, COMPLETION_RETRY, completeWithUpstreamRetry, DEFAULT_UPSTREAM_RETRY, isZeroOutputError, logUnknownUpstreamError, retryReason, sleepAbortable, STREAM_RETRY, withUpstreamRetry } from "./upstream-retry.ts";
+import { COMPLETION_RETRY, completeWithUpstreamRetry, DEFAULT_UPSTREAM_RETRY, isZeroOutputError, retryReason, sleepAbortable, withUpstreamRetry } from "./upstream-retry.ts";
+import { recoverWithFallback, retryDroppedMidStream } from "./stream-runner.ts";
 import { autoTitle, DESCRIBE_MAX_TOKENS, DESCRIBE_SYSTEM, describeRequest, parseDescription, type SystemModelSettings } from "./system-model.ts";
 import type { FallbackModelSettings } from "./fallback-model.ts";
 import type { GuardSettings } from "./guard.ts";
@@ -1140,36 +1141,25 @@ export class SessionManager {
 				}
 				// The gateway closed the socket after part of the reply had streamed: a half-written answer cannot be resumed,
 				// so drop it and ask again with backoff instead of ending the run on a transport hiccup.
-				// An unclassified error gets a single restart (and a log line), a transient one the full STREAM_RETRY budget.
-				for (let attempt = 1, unknownUsed = false; !error && !live.forceStopped && live.stopCause !== "shutdown" && attempt <= STREAM_RETRY.maxRetries; attempt++) {
-					const kind = this.droppedMidStream(live);
-					if (!kind || (kind === "unknown" && unknownUsed)) break;
-					const zero = isZeroOutputError(this.lastErrorMessage(live));
-					const zeroCap = STREAM_RETRY.maxZeroOutputRetries !== undefined ? Math.min(STREAM_RETRY.maxRetries, STREAM_RETRY.maxZeroOutputRetries) : STREAM_RETRY.maxRetries;
-					if (zero && attempt > zeroCap) break;
-					let maxRetries = zero ? zeroCap : STREAM_RETRY.maxRetries;
-					if (kind === "unknown") {
-						unknownUsed = true;
-						maxRetries = attempt;
-						logUnknownUpstreamError(this.lastErrorMessage(live));
-					}
-					const delayMs = kind === "unknown" ? STREAM_RETRY.baseDelayMs : retryDelayMs({ baseDelayMs: STREAM_RETRY.baseDelayMs, maxAgentDelayMs: STREAM_RETRY.maxDelayMs }, attempt);
-					this.bus.publish(id, "run_retrying", { attempt, maxRetries, delayMs, restart: true, ...this.retryReasonField(live) }, { ephemeral: true });
-					const wait = new AbortController();
-					live.retryWait = wait;
-					await sleepAbortable(delayMs, wait.signal);
-					live.retryWait = undefined;
-					if (live.forceStopped) return; // run_finished was already published when it was cut loose
-					if (wait.signal.aborted) {
-						if ((live.stopCause as RunStopCause | undefined) !== "shutdown") interrupted = true; // the user stopped the run while it waited: keep the partial reply, report an abort
-						break;
-					}
-					this.dropLastReply(id, live);
-					try {
-						await live.agent.continue();
-					} catch (e) {
-						error = e instanceof Error ? e.message : String(e);
-					}
+				if (!error && !live.forceStopped && live.stopCause !== "shutdown") {
+					const retried = await retryDroppedMidStream({
+						getLastMessage: () => live.agent.state.messages[live.agent.state.messages.length - 1],
+						shouldStop: () => live.forceStopped || live.stopCause === "shutdown",
+						sleep: async (delayMs) => {
+							const wait = new AbortController();
+							live.retryWait = wait;
+							await sleepAbortable(delayMs, wait.signal);
+							live.retryWait = undefined;
+							return { aborted: wait.signal.aborted, forceStopped: live.forceStopped };
+						},
+						dropLastReply: () => this.dropLastReply(id, live),
+						continueRun: () => live.agent.continue(),
+						onRetry: (notice) => this.bus.publish(id, "run_retrying", notice, { ephemeral: true }),
+						catchErrors: true,
+					});
+					if (retried.forceStopped) return; // run_finished was already published when it was cut loose
+					if (retried.aborted && (live.stopCause as RunStopCause | undefined) !== "shutdown") interrupted = true;
+					if (retried.error !== null) error = retried.error;
 				}
 				// When the primary model stalls repeatedly with zero output, switch to the configured fallback model for this run.
 				if (!error && !interrupted && !live.forceStopped && !live.stopCause) {
@@ -1370,43 +1360,46 @@ export class SessionManager {
 	 */
 	private async recoverWithFallbackModel(id: string, live: Live): Promise<{ attempted: boolean; interrupted?: boolean; error?: string | null }> {
 		if (!this.fallbackModel) return { attempted: false };
-		const messages = live.agent.state.messages;
-		const last = messages[messages.length - 1];
-		if (last?.role !== "assistant" || last.stopReason !== "error" || !isZeroOutputError(last.errorMessage)) return { attempted: false };
-		const activeModel = live.agent.state.model;
-		const currentRecord = this.store.get(id);
-		const primary = { provider: activeModel?.provider ?? currentRecord?.provider ?? "", model: activeModel?.id ?? currentRecord?.model ?? "" };
-		const fb = this.fallbackModel.resolve(primary);
-		if (!fb) return { attempted: false };
-		const fbModel = this.registry.models.getModel(fb.provider, fb.model);
-		if (!fbModel || !(await this.registry.models.checkAuth(fb.provider))) return { attempted: false };
-
-		const delayMs = 1000;
-		const reason = retryReason(`${last.errorMessage ?? "zero output"} → ${fb.provider}/${fb.model}`);
-		this.bus.publish(id, "run_retrying", { attempt: 1, maxRetries: 1, delayMs, ...(last.content.length ? { restart: true } : {}), ...(reason ? { reason } : {}) }, { ephemeral: true });
-		const wait = new AbortController();
-		live.retryWait = wait;
-		await sleepAbortable(delayMs, wait.signal);
-		live.retryWait = undefined;
-		if (live.forceStopped) return { attempted: false };
-		if (wait.signal.aborted) return { attempted: true, interrupted: (live.stopCause as RunStopCause | undefined) !== "shutdown" };
-
-		this.dropLastReply(id, live);
-		const prevModel = live.agent.state.model;
-		const prevThinking = live.agent.state.thinkingLevel;
-		live.agent.state.model = fbModel;
-		live.agent.state.thinkingLevel = fb.thinkingLevel ?? this.defaultThinkingLevel(fb.provider, fb.model);
-		let error: string | null = null;
-		try {
-			await live.agent.continue();
-		} catch (e) {
-			error = e instanceof Error ? e.message : String(e);
-		} finally {
-			const latest = this.store.get(id);
-			live.agent.state.model = (latest && this.registry.models.getModel(latest.provider, latest.model)) ?? prevModel;
-			live.agent.state.thinkingLevel = latest?.thinkingLevel ?? prevThinking;
-		}
-		return { attempted: true, error };
+		const fallbackSettings = this.fallbackModel;
+		const res = await recoverWithFallback({
+			getLastMessage: () => live.agent.state.messages[live.agent.state.messages.length - 1],
+			resolveFallback: async () => {
+				const activeModel = live.agent.state.model;
+				const currentRecord = this.store.get(id);
+				const primary = { provider: activeModel?.provider ?? currentRecord?.provider ?? "", model: activeModel?.id ?? currentRecord?.model ?? "" };
+				const fb = fallbackSettings.resolve(primary);
+				if (!fb) return null;
+				const fbModel = this.registry.models.getModel(fb.provider, fb.model);
+				if (!fbModel || !(await this.registry.models.checkAuth(fb.provider))) return null;
+				return { fb, fbModel, label: `${fb.provider}/${fb.model}` };
+			},
+			sleep: async (delayMs) => {
+				const wait = new AbortController();
+				live.retryWait = wait;
+				await sleepAbortable(delayMs, wait.signal);
+				live.retryWait = undefined;
+				return { aborted: wait.signal.aborted, forceStopped: live.forceStopped };
+			},
+			dropLastReply: () => this.dropLastReply(id, live),
+			runWithFallback: async ({ fb, fbModel }) => {
+				const prevModel = live.agent.state.model;
+				const prevThinking = live.agent.state.thinkingLevel;
+				live.agent.state.model = fbModel;
+				live.agent.state.thinkingLevel = fb.thinkingLevel ?? this.defaultThinkingLevel(fb.provider, fb.model);
+				try {
+					await live.agent.continue();
+				} finally {
+					const latest = this.store.get(id);
+					live.agent.state.model = (latest && this.registry.models.getModel(latest.provider, latest.model)) ?? prevModel;
+					live.agent.state.thinkingLevel = latest?.thinkingLevel ?? prevThinking;
+				}
+			},
+			onRetry: (notice) => this.bus.publish(id, "run_retrying", notice, { ephemeral: true }),
+			catchErrors: true,
+		});
+		if (res.forceStopped) return { attempted: false };
+		if (res.aborted) return { attempted: true, interrupted: (live.stopCause as RunStopCause | undefined) !== "shutdown" };
+		return { attempted: res.attempted, error: res.error };
 	}
 
 	/**
@@ -1441,30 +1434,6 @@ export class SessionManager {
 		}
 		const next = live.agent.state.messages[live.agent.state.messages.length - 1];
 		return !!next && next.role !== "assistant" && next.role !== "system";
-	}
-
-	/**
-	 * The error kind when the run ended on a retryable transport error (a gateway closing the socket mid-answer) *after* the model
-	 * had already started replying. The reply is then half-written and cannot be resumed; the caller repeats the request.
-	 * An empty reply never gets here: withUpstreamRetry already retried it inside the stream call.
-	 */
-	private droppedMidStream(live: Live): "transient" | "unknown" | undefined {
-		const last = live.agent.state.messages[live.agent.state.messages.length - 1];
-		if (last?.role !== "assistant" || last.stopReason !== "error" || !last.content.length) return undefined;
-		const kind = classifyUpstreamError(last);
-		return kind === "permanent" ? undefined : kind;
-	}
-
-	private lastErrorMessage(live: Live): string {
-		const last = live.agent.state.messages[live.agent.state.messages.length - 1];
-		return last?.role === "assistant" ? (last.errorMessage ?? "") : "";
-	}
-
-	/** `{ reason }` for run_retrying from the failed reply at the tail, or nothing. */
-	private retryReasonField(live: Live): { reason?: string } {
-		const last = live.agent.state.messages[live.agent.state.messages.length - 1];
-		const reason = last?.role === "assistant" ? retryReason(last.errorMessage) : "";
-		return reason ? { reason } : {};
 	}
 
 	/** Throws the half-written reply away (`continue()` then replaces it, without asking the model to repeat itself). */
@@ -1608,12 +1577,7 @@ export class SessionManager {
 			move: (path) => this.moveWorkdir(sessionId, path, "agent").note,
 		} };
 		if (q) {
-			ctx.ask = async (toolCallId, req, signal) => {
-				const items = req.items?.map((i) => ({ ...i, allowFreeText: i.allowFreeText ?? true }));
-				const outcome = await q.ask({ sessionId, toolCallId, question: req.question, options: req.options, ...(req.recommended ? { recommended: req.recommended } : {}), ...(req.scale ? { scale: true } : {}), ...(req.multiple ? { multiple: true } : {}), ...(req.descriptions ? { descriptions: req.descriptions } : {}), allowFreeText: req.allowFreeText ?? true, ...(items?.length ? { items } : {}) }, signal);
-				if (outcome.status === "abort") throw new Error("Run aborted while waiting for the user");
-				return outcome.answer;
-			};
+			ctx.ask = (toolCallId, req, signal) => askQuestion(q, sessionId, toolCallId, req, signal);
 		}
 		ctx.canSeeImages = () => {
 			const liveModel = this.live.get(sessionId)?.agent.state.model;
@@ -1727,38 +1691,44 @@ export class SessionManager {
 					await agent.prompt(input.task);
 					// A stream cut off after thinking/partial text (e.g. post-thought MALFORMED_FUNCTION_CALL or reset)
 					// bypasses withUpstreamRetry; drop the half-written reply and continue just like SessionManager.run.
-					for (let attempt = 1, unknownUsed = false; !stopping && !retrySignal.aborted && attempt <= STREAM_RETRY.maxRetries; attempt++) {
-						const last = agent.state.messages[agent.state.messages.length - 1];
-						if (last?.role !== "assistant" || last.stopReason !== "error" || !last.content.length) break;
-						const kind = classifyUpstreamError(last);
-						if (kind === "permanent" || (kind === "unknown" && unknownUsed)) break;
-						if (isZeroOutputError(last.errorMessage) && attempt > (STREAM_RETRY.maxZeroOutputRetries ?? STREAM_RETRY.maxRetries)) break;
-						if (kind === "unknown") {
-							unknownUsed = true;
-							logUnknownUpstreamError(last.errorMessage ?? "");
-						}
-						const delayMs = kind === "unknown" ? STREAM_RETRY.baseDelayMs : retryDelayMs({ baseDelayMs: STREAM_RETRY.baseDelayMs, maxAgentDelayMs: STREAM_RETRY.maxDelayMs }, attempt);
-						await sleepAbortable(delayMs, retrySignal);
-						if (stopping || retrySignal.aborted) break;
-						agent.state.messages = agent.state.messages.slice(0, -1);
-						turns = Math.max(0, turns - 1);
-						await agent.continue();
-					}
-					const afterRetry = agent.state.messages[agent.state.messages.length - 1];
-					if (!stopping && !retrySignal.aborted && afterRetry?.role === "assistant" && afterRetry.stopReason === "error" && isZeroOutputError(afterRetry.errorMessage) && this.fallbackModel) {
-						const active = agent.state.model;
-						const fb = this.fallbackModel.resolve({ provider: active.provider, model: active.id });
-						const fbModel = fb && this.registry.models.getModel(fb.provider, fb.model);
-						if (fb && fbModel && (await this.registry.models.checkAuth(fb.provider))) {
-							await sleepAbortable(1000, retrySignal);
-							if (!stopping && !retrySignal.aborted) {
+					await retryDroppedMidStream({
+						getLastMessage: () => agent.state.messages[agent.state.messages.length - 1],
+						shouldStop: () => stopping || retrySignal.aborted,
+						sleep: async (delayMs) => {
+							await sleepAbortable(delayMs, retrySignal);
+							return { aborted: stopping || retrySignal.aborted };
+						},
+						dropLastReply: () => {
+							agent.state.messages = agent.state.messages.slice(0, -1);
+							turns = Math.max(0, turns - 1);
+						},
+						continueRun: () => agent.continue(),
+					});
+					const fallbackSettings = this.fallbackModel;
+					if (!stopping && !retrySignal.aborted && fallbackSettings) {
+						await recoverWithFallback({
+							getLastMessage: () => agent.state.messages[agent.state.messages.length - 1],
+							resolveFallback: async () => {
+								const active = agent.state.model;
+								const fb = fallbackSettings.resolve({ provider: active.provider, model: active.id });
+								const fbModel = fb && this.registry.models.getModel(fb.provider, fb.model);
+								if (!fb || !fbModel || !(await this.registry.models.checkAuth(fb.provider))) return null;
+								return { fb, fbModel, label: `${fb.provider}/${fb.model}` };
+							},
+							sleep: async (delayMs) => {
+								await sleepAbortable(delayMs, retrySignal);
+								return { aborted: stopping || retrySignal.aborted };
+							},
+							dropLastReply: () => {
 								agent.state.messages = agent.state.messages.slice(0, -1);
 								turns = Math.max(0, turns - 1);
+							},
+							runWithFallback: async ({ fb, fbModel }) => {
 								agent.state.model = fbModel;
 								agent.state.thinkingLevel = fb.thinkingLevel ?? this.subagentThinking(rec, requestedThinking, def.thinking, fb.provider, fb.model);
 								await agent.continue();
-							}
-						}
+							},
+						});
 					}
 				} finally { release(); }
 			},

@@ -1,7 +1,7 @@
 import cors from "@fastify/cors";
 import Fastify, { type FastifyInstance } from "fastify";
 import { join, resolve } from "node:path";
-import { QuestionManager } from "./questions.ts";
+import { askQuestion, QuestionManager } from "./questions.ts";
 import type { Config } from "./config.ts";
 import { Configuration } from "./configuration.ts";
 import { registerConfigurationRoutes } from "./configuration-routes.ts";
@@ -265,12 +265,7 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 		send: (id, text, mode) => sessions.send(id, { text, mode }),
 		abort: (id) => sessions.abort(id),
 		isRunning: (id) => sessions.isRunning(id),
-		ask: async (id, toolCallId, req, signal) => {
-			const items = req.items?.map((q) => ({ ...q, allowFreeText: q.allowFreeText ?? true }));
-			const outcome = await questions.ask({ sessionId: id, toolCallId, question: req.question, options: req.options, ...(req.recommended ? { recommended: req.recommended } : {}), ...(req.scale ? { scale: true } : {}), ...(req.multiple ? { multiple: true } : {}), ...(req.descriptions ? { descriptions: req.descriptions } : {}), allowFreeText: req.allowFreeText ?? true, ...(items?.length ? { items } : {}) }, signal);
-			if (outcome.status === "abort") throw new Error("Run aborted while waiting for the user");
-			return outcome.answer;
-		},
+		ask: (id, toolCallId, req, signal) => askQuestion(questions, id, toolCallId, req, signal),
 	});
 	const terminals = new TerminalManager(bus, {
 		enabled: cfg.terminals !== false,
