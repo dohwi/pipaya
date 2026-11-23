@@ -170,9 +170,10 @@ function escapeLayer(e: KeyboardEvent, layer: Layer) {
 }
 
 /** Match the opener locally, including ordered chords, without arming any other app shortcut. */
-function toggleLayer(e: KeyboardEvent, layer: Layer) {
+export function toggleLayer(e: KeyboardEvent, layer: Layer) {
 	const binding = layer.opts.closeBinding;
-	if (!binding || e.defaultPrevented || e.isComposing || e.keyCode === 229 || e.getModifierState?.("AltGraph")) {
+	const composing = (e.isComposing || e.keyCode === 229) && !(e.ctrlKey || e.metaKey);
+	if (!binding || e.defaultPrevented || composing || e.getModifierState?.("AltGraph")) {
 		layer.prefix = undefined;
 		return;
 	}

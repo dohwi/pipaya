@@ -25,6 +25,18 @@
 		[app.servers.find((x) => x.id === server)?.name ?? server, s?.name ? `@${s.name}` : "", s?.cwd.split("/").slice(-2).join("/") ?? ""].filter(Boolean).join(" · "),
 	);
 
+	let closing = false;
+	/** Close this conversation (same as Ctrl+D in the main view); the store closes the modal when it succeeds. */
+	async function closeChat() {
+		if (closing) return;
+		closing = true;
+		try {
+			await app.close(session, false, server);
+		} finally {
+			closing = false;
+		}
+	}
+
 	/** Leave the graph for this chat (not back to where the graph was opened from). */
 	function openChat() {
 		// read the props first: closing clears the store's peek, and the props are read through it (`quick.server`)
@@ -36,7 +48,7 @@
 </script>
 
 <!-- Large on a desktop (most of the window, up to a comfortable reading width); the usual 90% sheet on a phone -->
-<Modal {onclose} label={sessionTitle(s?.title)} title={sessionTitle(s?.title)} {sub} subMono width="min(var(--modal-w-3xl), calc(var(--vw) * 0.8))" height="calc(var(--dvh) * 0.86)" maxHeight="1000px" divider quick>
+<Modal {onclose} closeShortcut="closeSession" onshortcutclose={() => void closeChat()} label={sessionTitle(s?.title)} title={sessionTitle(s?.title)} {sub} subMono width="min(var(--modal-w-3xl), calc(var(--vw) * 0.8))" height="calc(var(--dvh) * 0.86)" maxHeight="1000px" divider quick>
 	{#snippet headerLead()}
 		<span class="st" title={ACTIVITY_LABEL[activity]}><AgentBadge id={session} {server} state={activity} size={24} /></span>
 	{/snippet}
