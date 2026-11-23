@@ -6,6 +6,7 @@ import type { DeviceTokens } from "./device-tokens.ts";
 import { HttpError } from "./errors.ts";
 import type { ExtensionHost } from "./extensions/host.ts";
 import { ROUTE_PREFIX } from "./extensions/host.ts";
+import { parseExtensionRouteRequest } from "./extensions/route-path.ts";
 import type { IdleSockets } from "./idle-sockets.ts";
 import type { CorsPolicy } from "./security.ts";
 import type { StreamTickets } from "./stream-tickets.ts";
@@ -61,16 +62,20 @@ export function registerHttpHooks(server: FastifyInstance, deps: HttpHooksDeps):
 		const bearer = bearerOf(req.headers.authorization);
 		// An extension route marked public (a webhook, a page) is open; the extension checks its own secret. A token that
 		// comes along anyway is still recognised, so the handler can tell the owner from a stranger.
-		if (path.startsWith(ROUTE_PREFIX) && extensions.isPublicRoute(req.method, path)) {
-			if (tokenMatches(bearer)) publicAuthed.add(req.raw);
-			else {
-				const device = bearer ? deviceTokens.verify(bearer) : null;
-				if (device) {
-					publicAuthed.add(req.raw);
-					deviceOf.set(req.raw, device);
+		// Normalize with the exact same helper as `extensions/routes.ts` so dot-segments cannot cause auth/dispatch mismatch.
+		if (path.startsWith(ROUTE_PREFIX)) {
+			const extRoute = parseExtensionRouteRequest(req.url);
+			if (extRoute && extensions.isPublicRoute(req.method, extRoute.pathname)) {
+				if (tokenMatches(bearer)) publicAuthed.add(req.raw);
+				else {
+					const device = bearer ? deviceTokens.verify(bearer) : null;
+					if (device) {
+						publicAuthed.add(req.raw);
+						deviceOf.set(req.raw, device);
+					}
 				}
+				return;
 			}
-			return;
 		}
 		// Too many wrong tokens from this address: nothing is checked until its minute has passed (auth-throttle.ts).
 		const wait = authThrottle.blockedFor(req.ip);

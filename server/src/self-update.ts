@@ -73,18 +73,8 @@ const SHA_PATTERN = /^[0-9a-f]{7,64}$/;
 const ANCESTRY_DEPTHS = [64, 512];
 const VERSION_PATTERN = /^\d+\.\d+\.\d+$/;
 
-/** Compares `major.minor.patch` versions; null when either is missing or not a valid triple. */
-export function compareVersions(a: string | null | undefined, b: string | null | undefined): number | null {
-	const parse = (v: string | null | undefined) => {
-		const m = /^(\d+)\.(\d+)\.(\d+)$/.exec(v?.trim() ?? "");
-		return m ? [Number(m[1]), Number(m[2]), Number(m[3])] : null;
-	};
-	const x = parse(a);
-	const y = parse(b);
-	if (!x || !y) return null;
-	for (let i = 0; i < 3; i++) if (x[i] !== y[i]) return x[i]! < y[i]! ? -1 : 1;
-	return 0;
-}
+import { compareVersions } from "./shared/version.ts";
+export { compareVersions };
 
 export const defaultRun: Run = async (cmd, cwd, timeoutMs) => {
 	try {

@@ -72,6 +72,8 @@ export function previewOfStored(messages: readonly StoredMessage[]): Preview | n
 
 
 /** The last two steps of a path, as the header shows a working directory (`proj/app`). */
+import { clampTo } from "./number";
+
 export const shortPath = (p: string): string => p.split(/[\\/]/).filter(Boolean).slice(-2).join("/") || p;
 
 /**
@@ -81,7 +83,7 @@ export const shortPath = (p: string): string => p.split(/[\\/]/).filter(Boolean)
 export function gridNext(key: string, index: number, count: number, cols: number): number | null {
 	if (count <= 0 || index < 0) return null;
 	const c = Math.max(1, cols);
-	const clamp = (i: number) => Math.min(count - 1, Math.max(0, i));
+	const clamp = (i: number) => clampTo(i, 0, count - 1, 0);
 	switch (key) {
 		case "ArrowRight":
 			return clamp(index + 1);
