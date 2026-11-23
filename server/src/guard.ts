@@ -4,8 +4,8 @@ import Type, { type Static } from "typebox";
 
 /**
  * Built-in command guard for `bash` tool calls: refuses destructive or high-risk shell commands across toggleable rule
- * groups. Core protections (`wipe`, `disk`, `fork`, `permissions`) default to ON; stricter operational protections
- * (`remoteExec`, `systemPower`, `forcePush`) default to OFF so users can opt in when needed.
+ * groups. Core protections (`wipe`, `disk`, `fork`, `permissions`, `systemPower`, `forcePush`) default to ON;
+ * `remoteExec` defaults to OFF so package/CLI installer pipes work unless the user opts in.
  *
  * Every regex here runs on the agent's hot path, so patterns stay linear (no nested quantifiers over overlapping
  * character classes). Multi-condition rules split the command into pipelines/segments first and test each requirement
@@ -152,8 +152,8 @@ const DEFAULTS: Readonly<GuardSettingsValue> = {
 	fork: true,
 	permissions: true,
 	remoteExec: false,
-	systemPower: false,
-	forcePush: false,
+	systemPower: true,
+	forcePush: true,
 };
 
 export const DEFAULT_GUARD_SETTINGS = (): GuardSettingsValue => ({ ...DEFAULTS });
@@ -165,8 +165,8 @@ export const GuardInfoSchema = Type.Object({
 
 /**
  * Coerces a partial or legacy settings object into valid booleans:
- * - default-ON groups (`wipe`, `disk`, `fork`, `permissions`) stay ON unless explicitly `false`;
- * - default-OFF groups (`remoteExec`, `systemPower`, `forcePush`) stay OFF unless explicitly `true`.
+ * - default-ON groups (`wipe`, `disk`, `fork`, `permissions`, `systemPower`, `forcePush`) stay ON unless explicitly `false`;
+ * - default-OFF group (`remoteExec`) stays OFF unless explicitly `true`.
  */
 export function normalizeGuardSettings(raw: unknown): GuardSettingsValue {
 	const saved = raw && typeof raw === "object" && !Array.isArray(raw) ? (raw as Record<string, unknown>) : {};
@@ -176,8 +176,8 @@ export function normalizeGuardSettings(raw: unknown): GuardSettingsValue {
 		fork: saved.fork !== false,
 		permissions: saved.permissions !== false,
 		remoteExec: saved.remoteExec === true,
-		systemPower: saved.systemPower === true,
-		forcePush: saved.forcePush === true,
+		systemPower: saved.systemPower !== false,
+		forcePush: saved.forcePush !== false,
 	};
 }
 
