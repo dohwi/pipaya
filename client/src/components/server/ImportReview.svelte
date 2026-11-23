@@ -132,10 +132,15 @@
 	}
 	.chg {
 		display: flex;
-		align-items: baseline;
+		align-items: flex-start;
 		gap: 8px;
 		min-width: 0;
 		font-size: var(--fs-sm);
+		line-height: 20px;
+	}
+	/* centres the 18px sm badge against the first 20px text line even when long URLs wrap */
+	.chg > :global(.badge) {
+		margin-top: 1px;
 	}
 	.cn {
 		overflow-wrap: anywhere;
@@ -144,6 +149,7 @@
 		margin-left: auto;
 		padding-left: 8px;
 		font-size: var(--fs-xs);
+		line-height: 16px;
 		color: var(--text-faint);
 		overflow-wrap: anywhere;
 		text-align: right;

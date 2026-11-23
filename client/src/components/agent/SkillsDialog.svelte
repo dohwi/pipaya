@@ -177,7 +177,7 @@
 		{#snippet title()}
 			<span class="name mono">{s.name}</span>
 			<Badge size="sm" variant="outline">{s.scope === "project" ? t("프로젝트") : s.scope === "builtin" ? t("기본 내장") : t("전역")}</Badge>
-			{#if !s.modelInvocable}<span title={t("에이전트는 이 스킬을 모릅니다. /skill:이름 으로 직접 부를 때만 쓰입니다.")}><Badge size="sm" variant="outline">{t("수동 전용")}</Badge></span>{/if}
+			{#if !s.modelInvocable}<Badge size="sm" variant="outline" title={t("에이전트는 이 스킬을 모릅니다. /skill:이름 으로 직접 부를 때만 쓰입니다.")}>{t("수동 전용")}</Badge>{/if}
 			{#if mode === "project" && s.override !== null}
 				<Badge size="sm" variant="solid" tone="accent">{s.override ? t("프로젝트에서 켬") : t("프로젝트에서 끔")}</Badge>
 				<button class="link small" onclick={() => reset(s)} disabled={saving[mode + s.name]} title={t("기본값을 따르도록 되돌리기")}>{t("되돌리기")}</button>
@@ -261,8 +261,8 @@
 	.tools { display: flex; padding: 0 var(--dlg-px) var(--dlg-foot-t); flex: none; }
 	.link:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 	.list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
-	.link { padding: 0; font: inherit; font-size: var(--fs-xs); color: var(--text-dim); text-decoration: underline; background: none; border: 0; cursor: pointer; }
-	.link.small { font-size: var(--fs-2xs); }
+	.link { padding: 0; font: inherit; font-size: var(--fs-xs); line-height: 20px; color: var(--text-dim); text-decoration: underline; background: none; border: 0; cursor: pointer; }
+	.link.small { font-size: var(--fs-2xs); line-height: 18px; }
 	@media (hover: hover) {
 		.link:hover:not(:disabled) { color: var(--text); }
 	}

@@ -91,14 +91,14 @@
 	--font-input: "Manrope Input", "SUIT", -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", "Segoe UI", Roboto, sans-serif; /* composer text: a shorter caret, see @font-face */
 	--mono: "JetBrains Mono", "SUIT", "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 
-	/* Shape: actions and fields share one radius and height; pills are for tags, circles for icon-only buttons.
+	/* Shape: actions and fields share one radius and height; tags and badges use --radius-xs, circles icon-only buttons.
 	   Containers step up (control 10 → card 12 → panel 16) so nested corners stay concentric. */
 	--radius-control: 10px; /* buttons, inputs, dropdowns, segmented cards */
 	--radius: 12px; /* card */
 	--radius-panel: 16px;
 	--radius-sm: 8px; /* rows inside a list or menu */
-	--radius-pill: 999px; /* chips, badges, avatars */
-	--radius-xs: 4px; /* inline marks, tiny badges */
+	--radius-pill: 999px; /* switches, counters, filter chips, avatars */
+	--radius-xs: 4px; /* badges, model chips, inline marks */
 	--control-h: 40px;
 	--control-h-sm: 34px;
 
@@ -746,7 +746,7 @@ input[type="checkbox"]:disabled {
 	gap: 4px;
 	height: 22px;
 	padding: 0 8px 1px; /* 1px lift, the same as Badge: this font sits ~0.5px low when centred (measured at 8x on Hangul, Latin, digits) */
-	border-radius: var(--radius-pill);
+	border-radius: var(--radius-xs);
 	font-size: var(--fs-2xs);
 	font-weight: 600;
 	letter-spacing: 0.01em;
@@ -755,7 +755,7 @@ input[type="checkbox"]:disabled {
 	white-space: nowrap;
 	flex: none;
 }
-/* A key cap in running text ("Esc 취소"): the one square-cornered label. */
+/* A key cap in running text ("Esc 취소"): bordered key shape on --radius-xs. */
 kbd {
 	display: inline-block;
 	padding: 1px 4px;
@@ -920,6 +920,7 @@ kbd {
 .facts {
 	font-family: var(--mono);
 	font-size: var(--fs-2xs);
+	line-height: 16px;
 	color: var(--text-faint);
 	overflow-wrap: anywhere;
 }

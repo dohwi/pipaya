@@ -78,7 +78,7 @@
 <style>
 	.list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
 	li { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--radius); }
-	.pname { flex: 1; min-width: 120px; font-size: var(--fs-sm); display: flex; flex-direction: column; }
-	.email { font-size: var(--fs-xs); color: var(--text-dim); overflow-wrap: anywhere; }
+	.pname { flex: 1; min-width: 120px; font-size: var(--fs-sm); line-height: 20px; display: flex; flex-direction: column; }
+	.email { font-size: var(--fs-xs); line-height: 16px; color: var(--text-dim); overflow-wrap: anywhere; }
 	.bad { color: var(--danger); margin: 0; font-size: var(--fs-sm); }
 </style>

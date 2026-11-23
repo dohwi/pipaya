@@ -55,8 +55,8 @@
 	.card { margin-top: 12px; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
 	.item { display: flex; align-items: center; gap: 8px; padding: 12px 12px; min-height: 56px; }
 	.meta { display: flex; flex-direction: column; gap: 4px; flex: 1 1 auto; min-width: max-content; }
-	.name { font-size: var(--fs-sm); font-weight: 500; }
-	.ver { white-space: nowrap; font-size: var(--fs-xs); color: var(--text-dim); font-variant-numeric: tabular-nums; }
+	.name { font-size: var(--fs-sm); line-height: 20px; font-weight: 500; }
+	.ver { white-space: nowrap; font-size: var(--fs-xs); line-height: 16px; color: var(--text-dim); font-variant-numeric: tabular-nums; }
 	.item :global(.btn) { flex: none; white-space: nowrap; }
 	.bar { height: 3px; background: var(--border); }
 	.bar span { display: block; height: 100%; background: var(--accent); transition: width var(--motion-fast) var(--ease-std); }

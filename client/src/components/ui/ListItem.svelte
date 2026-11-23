@@ -84,6 +84,7 @@
 		gap: 4px;
 		flex: none;
 		justify-content: flex-end;
+		min-height: var(--row);
 	}
 	/* whole-pixel line boxes (the body's 1.55 would make 13px text 20.15px tall) so a list's height stays an integer */
 	.item :global(.name) {

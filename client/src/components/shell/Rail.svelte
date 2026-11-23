@@ -15,7 +15,6 @@
 	import { platformName } from "../../lib/terminal";
 	import { openContextMenu, closeContextMenu } from "../../lib/context-menu";
 	import { pressMenu, type Point } from "../../lib/press-menu";
-	import Badge from "../ui/Badge.svelte";
 	import Icon from "../ui/Icon.svelte";
 	const hint = $derived(app.prefs.bindings.toggleSidebar ? ` (${formatCombo(app.prefs.bindings.toggleSidebar)})` : "");
 	// the bottom of the rail: the same places as the sidebar's bottom (graph view, scheduled tasks, settings), as icons
@@ -122,7 +121,7 @@
 		{#if schedulesShown}
 			<button class="nav" onclick={() => (app.schedulesDialog = true)} aria-label={t("예약 작업")} title={schedulesTip}>
 				<Icon name="clock" />
-				{#if scheduled.count}<span class="cnt"><Badge size="sm">{scheduled.count}</Badge></span>{/if}
+				{#if scheduled.count}<span class="cnt"><span class="cbadge">{scheduled.count}</span></span>{/if}
 			</button>
 		{/if}
 		<IconButton icon="settings" size="sm" label={t("설정")} tip onclick={() => app.openSettings()} />
@@ -300,6 +299,7 @@
 		background: var(--text);
 	}
 	.cnt {
+		display: inline-flex;
 		position: absolute;
 		top: -4px;
 		right: -6px;

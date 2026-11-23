@@ -28,9 +28,9 @@
 <style>
 	/* the space between two groups is the caller's (a flex column with `gap: var(--dlg-gap)`), this is only inside one */
 	.group { display: flex; flex-direction: column; gap: 8px; }
-	.head { display: flex; align-items: baseline; gap: 8px; min-width: 0; font-size: var(--fs-xs); line-height: 20px; }
+	.head { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: var(--fs-xs); line-height: 20px; }
 	.title { flex: none; font-weight: 600; color: var(--text); }
 	.count { flex: none; color: var(--text-faint); }
-	.path { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--fs-2xs); color: var(--text-faint); }
+	.path { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--fs-2xs); line-height: 16px; color: var(--text-faint); }
 	.hint { margin: 0; font-size: var(--fs-2xs); line-height: 16px; color: var(--text-faint); }
 </style>

@@ -281,8 +281,8 @@
 	.list { font-size: var(--fs-md); line-height: 1.5; list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 8px; }
 	.item { display: flex; flex-direction: column; gap: 8px; padding: 12px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg-elev); }
 	.top { display: flex; align-items: center; gap: 8px; min-width: 0; }
-	.name { font-size: var(--fs-md); font-weight: 600; min-width: 0; overflow-wrap: anywhere; }
-	.ver { margin-left: auto; flex: none; font-family: var(--mono); font-size: var(--fs-2xs); color: var(--text-faint); }
+	.name { font-size: var(--fs-md); line-height: 20px; font-weight: 600; min-width: 0; overflow-wrap: anywhere; }
+	.ver { margin-left: auto; flex: none; font-family: var(--mono); font-size: var(--fs-2xs); line-height: 16px; color: var(--text-faint); }
 	.foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: auto; }
 	.foot .facts { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; margin: 0; min-width: 0; }
 	.star { display: inline-flex; align-items: center; gap: 4px; }
