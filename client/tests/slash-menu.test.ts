@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { fileRows, folderRows, mentionRows, menuKey, menuKindOf, menuOpen, optionRows, slashRows } from "../src/lib/slash-menu";
+import { fileRows, folderRows, mentionRows, menuKey, menuKindOf, menuOpen, optionRows, slashRows, slashScopeOf } from "../src/lib/slash-menu";
 
 describe("recommendation menu rows", () => {
 	test("commands, skills, prompt templates and extension commands each get their own heading and text", () => {
@@ -58,8 +58,49 @@ describe("which menu the typing asks for", () => {
 	});
 });
 
+describe("which slash entries apply for the cursor and attachments", () => {
+	test("empty draft at the start allows every category and shows even when nothing matches", () => {
+		expect(slashScopeOf({ atStart: true, hasTrailing: false, attachments: 0 })).toEqual({
+			commands: "all",
+			skills: true,
+			startMacros: true,
+			onlyWhenMatched: false,
+		});
+	});
+	test("start of an existing draft keeps only args-taking commands, skills and start macros", () => {
+		expect(slashScopeOf({ atStart: true, hasTrailing: true, attachments: 0 })).toEqual({
+			commands: "args",
+			skills: true,
+			startMacros: true,
+			onlyWhenMatched: true,
+		});
+	});
+	test("mid-message offers only inline skills and opens only on a match", () => {
+		expect(slashScopeOf({ atStart: false, hasTrailing: false, attachments: 0 })).toEqual({
+			commands: "none",
+			skills: true,
+			startMacros: false,
+			onlyWhenMatched: true,
+		});
+		expect(slashScopeOf({ atStart: false, hasTrailing: true, attachments: 2 })).toEqual({
+			commands: "none",
+			skills: true,
+			startMacros: false,
+			onlyWhenMatched: true,
+		});
+	});
+	test("with attached images at the start, only message-carrying skills and start macros apply", () => {
+		expect(slashScopeOf({ atStart: true, hasTrailing: false, attachments: 1 })).toEqual({
+			commands: "none",
+			skills: true,
+			startMacros: true,
+			onlyWhenMatched: true,
+		});
+	});
+});
+
 describe("whether the menu shows", () => {
-	const s = { dismissed: false, cdRows: 0, fileLoaded: false, files: 0, images: 0, mentions: 0, attachments: 0 };
+	const s = { dismissed: false, cdRows: 0, fileLoaded: false, files: 0, images: 0, mentions: 0, attachments: 0, slashRows: 0, slashRequireMatch: false };
 	test("no kind, no menu", () => {
 		expect(menuOpen("none", s)).toBe(false);
 	});
@@ -77,12 +118,17 @@ describe("whether the menu shows", () => {
 		expect(menuOpen("mention", s)).toBe(false);
 		expect(menuOpen("mention", { ...s, mentions: 1 })).toBe(true);
 	});
-	test("a /command menu steps aside once images are attached", () => {
+	test("a plain /command menu steps aside once images are attached, while matched inline/attachment-safe rows still open", () => {
 		expect(menuOpen("slash", s)).toBe(true);
 		expect(menuOpen("slash", { ...s, attachments: 1 })).toBe(false);
+		expect(menuOpen("slash", { ...s, slashRequireMatch: true, slashRows: 0 })).toBe(false);
+		expect(menuOpen("slash", { ...s, slashRequireMatch: true, slashRows: 1 })).toBe(true);
+		expect(menuOpen("slash", { ...s, attachments: 1, slashRequireMatch: true, slashRows: 0 })).toBe(false);
+		expect(menuOpen("slash", { ...s, attachments: 1, slashRequireMatch: true, slashRows: 2 })).toBe(true);
 	});
 	test("Esc closes any of them", () => {
 		expect(menuOpen("slash", { ...s, dismissed: true })).toBe(false);
+		expect(menuOpen("slash", { ...s, slashRequireMatch: true, slashRows: 2, dismissed: true })).toBe(false);
 		expect(menuOpen("cd", { ...s, cdRows: 3, dismissed: true })).toBe(false);
 		expect(menuOpen("file", { ...s, files: 3, dismissed: true })).toBe(false);
 		expect(menuOpen("mention", { ...s, mentions: 3, dismissed: true })).toBe(false);

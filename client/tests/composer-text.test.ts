@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { dropImageToken, insertToken, knownMention, mentionAt, mirrorHtml, replaceMention, splitTokens } from "../src/lib/composer-text";
+import { dropImageToken, insertToken, knownMention, mentionAt, mirrorHtml, replaceMention, slashAt, splitTokens } from "../src/lib/composer-text";
 
 describe("mentionAt", () => {
 	test("finds the token that ends at the caret", () => {
@@ -14,6 +14,68 @@ describe("mentionAt", () => {
 	});
 	test("reads only up to the caret", () => {
 		expect(mentionAt("file", "#abc rest", 2)).toEqual({ query: "a", start: 0 });
+	});
+});
+
+describe("slashAt", () => {
+	test("finds a slash token at the start, with or without trailing draft text", () => {
+		expect(slashAt("/", 1)).toEqual({ query: "", start: 0, atStart: true, hasTrailing: false });
+		expect(slashAt("/comp", 5)).toEqual({ query: "comp", start: 0, atStart: true, hasTrailing: false });
+		expect(slashAt("  /skill:rel", 12)).toEqual({ query: "skill:rel", start: 2, atStart: true, hasTrailing: false });
+		expect(slashAt("/추가적으로 고쳐줘", 1)).toEqual({ query: "", start: 0, atStart: true, hasTrailing: true });
+		expect(slashAt("/fix this bug", 1)).toEqual({ query: "", start: 0, atStart: true, hasTrailing: true });
+		expect(slashAt("/orch추가적으로", 5)).toEqual({ query: "orch", start: 0, atStart: true, hasTrailing: true });
+		expect(slashAt("/orch 추가적으로", 5)).toEqual({ query: "orch", start: 0, atStart: true, hasTrailing: true });
+		expect(slashAt("/comp   ", 5)).toEqual({ query: "comp", start: 0, atStart: true, hasTrailing: false });
+	});
+	test("does not split an existing ASCII slash token when clicking in the middle of it", () => {
+		expect(slashAt("/model gpt", 3)).toBeNull();
+		expect(slashAt("/skill:orchestrate", 9)).toBeNull();
+		expect(slashAt("fix /skill:orchestrate now", 13)).toBeNull();
+	});
+	test("finds an inline slash token after whitespace or a newline", () => {
+		expect(slashAt("fix this /", 10)).toEqual({ query: "", start: 9, atStart: false, hasTrailing: false });
+		expect(slashAt("fix this /orch", 14)).toEqual({ query: "orch", start: 9, atStart: false, hasTrailing: false });
+		expect(slashAt("line1\n/skill:a", 14)).toEqual({ query: "skill:a", start: 6, atStart: false, hasTrailing: false });
+		expect(slashAt("before /orch after", 12)).toEqual({ query: "orch", start: 7, atStart: false, hasTrailing: true });
+		expect(slashAt("/skill:a /b", 11)).toEqual({ query: "b", start: 9, atStart: false, hasTrailing: false });
+	});
+	test("ignores paths, URLs, numbers, completed arguments, and mid-word slashes", () => {
+		for (const [text, caret] of [
+			["", 0],
+			["/comp", 0],
+			["a/b", 3],
+			["http://example.com", 7],
+			["/src/file.ts", 12],
+			["/README.md", 10],
+			["/123", 4],
+			["/compact instructions", 21],
+			["fix /src/a.ts", 13],
+			["#src/", 5],
+		] as const) {
+			expect(slashAt(text, caret)).toBeNull();
+		}
+	});
+	test("clamps out-of-range carets safely", () => {
+		expect(slashAt("/orch", 99)).toEqual({ query: "orch", start: 0, atStart: true, hasTrailing: false });
+		expect(slashAt("/orch", -5)).toBeNull();
+	});
+	test("splices cleanly with replaceMention while preserving surrounding text", () => {
+		const lead = slashAt("/orch추가적으로", 5)!;
+		expect(replaceMention("/orch추가적으로", 5, lead, "/skill:orchestrate ")).toEqual({
+			text: "/skill:orchestrate 추가적으로",
+			caret: 19,
+		});
+		const leadSpaced = slashAt("/orch 추가적으로", 5)!;
+		expect(replaceMention("/orch 추가적으로", 5, leadSpaced, "/skill:orchestrate ")).toEqual({
+			text: "/skill:orchestrate 추가적으로",
+			caret: 19,
+		});
+		const mid = slashAt("앞 /orch 뒤", 7)!;
+		expect(replaceMention("앞 /orch 뒤", 7, mid, "/skill:orchestrate ")).toEqual({
+			text: "앞 /skill:orchestrate 뒤",
+			caret: 21,
+		});
 	});
 });
 

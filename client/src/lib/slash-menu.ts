@@ -56,6 +56,25 @@ export function slashRows(entries: readonly SlashEntry[]): MenuRow[] {
 	});
 }
 
+/** Which slash categories fit the cursor position and attachment state. */
+export interface SlashScope {
+	/** Built-in/client/server commands: all (empty draft), args-taking only (trailing text), or none (inline / images attached). */
+	commands: "all" | "args" | "none";
+	/** `/skill:name` entries (the server detects them anywhere in a message, and with attachments). */
+	skills: boolean;
+	/** `/prompt:name` and `/prefix:name` entries (the server runs them at the start of a message, with trailing text or attachments). */
+	startMacros: boolean;
+	/** Open the menu only when at least one row matches, so inline `/` or attached-image drafts do not show an empty menu. */
+	onlyWhenMatched: boolean;
+}
+
+export function slashScopeOf(s: { atStart: boolean; hasTrailing: boolean; attachments: number }): SlashScope {
+	if (!s.atStart) return { commands: "none", skills: true, startMacros: false, onlyWhenMatched: true };
+	if (s.attachments > 0) return { commands: "none", skills: true, startMacros: true, onlyWhenMatched: true };
+	if (s.hasTrailing) return { commands: "args", skills: true, startMacros: true, onlyWhenMatched: true };
+	return { commands: "all", skills: true, startMacros: true, onlyWhenMatched: false };
+}
+
 /** What the input is asking the menu for: nothing, a /command (or its argument), a folder for /cd, a #file or an @mention. */
 export type MenuKind = "none" | "slash" | "cd" | "file" | "mention";
 
@@ -72,15 +91,22 @@ export function menuKindOf(s: { slashQuery: string | null; hasArgSuggestions: bo
 }
 
 /**
- * Whether the menu is showing. Esc dismisses it for the text it was pressed on. A `/command` menu stays out of the way
- * once images are attached, because Enter then sends. A `#` menu waits for its first answer so it does not flash empty.
+ * Whether the menu is showing. Esc dismisses it for the text it was pressed on. A plain `/command` menu stays out of the
+ * way once images are attached (because Enter then sends), whereas inline/attachment-safe suggestions (`slashRequireMatch`)
+ * open only when at least one row matches. A `#` menu waits for its first answer so it does not flash empty.
  */
-export function menuOpen(kind: MenuKind, s: { dismissed: boolean; cdRows: number; fileLoaded: boolean; files: number; images: number; mentions: number; attachments: number }): boolean {
+export function menuOpen(
+	kind: MenuKind,
+	s: { dismissed: boolean; cdRows: number; fileLoaded: boolean; files: number; images: number; mentions: number; attachments: number; slashRows: number; slashRequireMatch: boolean },
+): boolean {
 	switch (kind) {
 		case "cd": return s.cdRows > 0 && !s.dismissed;
 		case "file": return !s.dismissed && (s.fileLoaded || s.files > 0 || s.images > 0);
 		case "mention": return !s.dismissed && s.mentions > 0;
-		case "slash": return !s.dismissed && s.attachments === 0;
+		case "slash":
+			if (s.dismissed) return false;
+			if (s.slashRequireMatch) return s.slashRows > 0;
+			return s.attachments === 0;
 		case "none": return false;
 	}
 }
