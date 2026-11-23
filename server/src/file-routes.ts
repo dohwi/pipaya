@@ -21,6 +21,7 @@ const PREVIEW_MIN_BYTES = 100 * 1024;
 const PREVIEW_MIME = new Set(["image/png", "image/jpeg", "image/webp", "image/bmp"]);
 const PREVIEW_CACHE_MAX_ENTRIES = 80;
 const PREVIEW_CACHE_MAX_BYTES = 24 * 1024 * 1024;
+const PREVIEW_CACHE_MAX_RAW_FALLBACK_BYTES = 4 * 1024 * 1024;
 const FILE_CACHE_CONTROL = "private, max-age=60, must-revalidate";
 
 const MIME: Record<string, string> = {
@@ -93,6 +94,7 @@ class PreviewCache {
 			this.totalBytes -= existing.bytes.byteLength;
 			this.entries.delete(key);
 		}
+		if (val.bytes.byteLength > PREVIEW_CACHE_MAX_BYTES) return;
 		this.entries.set(key, val);
 		this.totalBytes += val.bytes.byteLength;
 		while (this.entries.size > PREVIEW_CACHE_MAX_ENTRIES || this.totalBytes > PREVIEW_CACHE_MAX_BYTES) {
@@ -112,8 +114,14 @@ class PreviewCache {
 		const work = (async (): Promise<CachedPreview> => {
 			const raw = await readFile(abs);
 			const resized = await previewImage(raw, maxDim);
-			const val: CachedPreview = resized ? { bytes: Buffer.from(resized.bytes), mimeType: resized.mimeType } : { bytes: raw, mimeType: origMime };
-			this.put(key, val);
+			if (resized) {
+				const val: CachedPreview = { bytes: Buffer.from(resized.bytes), mimeType: resized.mimeType };
+				this.put(key, val);
+				return val;
+			}
+			const val: CachedPreview = { bytes: raw, mimeType: origMime };
+			// Large raw fallbacks stay uncached in memory so a single unshrinkable file does not evict smaller previews.
+			if (raw.byteLength <= PREVIEW_CACHE_MAX_RAW_FALLBACK_BYTES) this.put(key, val);
 			return val;
 		})().finally(() => {
 			this.inflight.delete(key);

@@ -5,33 +5,48 @@ import { resizeImage } from "./image-resize.ts";
 
 type Block = { type?: string; data?: string; mimeType?: string; [k: string]: unknown };
 
-/** Result per picture (keyed by a cheap fingerprint), so a long history is not decoded again on every turn. */
-const cache = new Map<string, Block>();
+/** Result per picture (keyed by a cheap fingerprint), so a long history is not decoded again on every turn. `null` means already within limits. */
+const cache = new Map<string, Block | null>();
 const CACHE_MAX = 200;
 
 const fingerprint = (data: string, limits: ResizeLimits) =>
-	`${limits.maxWidth}x${limits.maxHeight}:${data.length}:${Bun.hash(data)}`;
+	`${limits.maxWidth}x${limits.maxHeight}:${limits.maxBytes}:${data.length}:${Bun.hash(data)}`;
 
 const placeholder = (why: string): Block => ({ type: "text", text: `[image omitted: ${why}]` });
+
+function remember(key: string, val: Block | null): void {
+	if (cache.has(key)) cache.delete(key);
+	else if (cache.size >= CACHE_MAX) cache.delete(cache.keys().next().value!);
+	cache.set(key, val);
+}
 
 async function fit(block: Block, limits: ResizeLimits, signal?: AbortSignal): Promise<Block> {
 	const data = block.data;
 	if (typeof data !== "string") return block;
+	if (signal?.aborted) return block;
+
+	const key = fingerprint(data, limits);
+	if (cache.has(key)) {
+		const hit = cache.get(key) ?? null;
+		cache.delete(key);
+		cache.set(key, hit);
+		return hit ?? block;
+	}
+
 	const bytes = Buffer.from(data, "base64");
 	const info = sniffImage(bytes);
 	const oversize = !info?.width || !info.height || info.width > limits.maxWidth || info.height > limits.maxHeight || data.length >= limits.maxBytes;
-	if (!oversize) return block;
-
-	const key = fingerprint(data, limits);
-	const hit = cache.get(key);
-	if (hit) return hit;
+	if (!oversize) {
+		remember(key, null);
+		return block;
+	}
 
 	const resized = await resizeImage(bytes, limits, signal);
+	if (!resized && signal?.aborted) return block;
 	const out: Block = resized
 		? { ...block, data: resized.data, mimeType: resized.mimeType }
 		: placeholder(`${info?.width ?? "?"}x${info?.height ?? "?"} picture could not be resized to fit the model's limits`);
-	if (cache.size >= CACHE_MAX) cache.delete(cache.keys().next().value!);
-	cache.set(key, out);
+	remember(key, out);
 	return out;
 }
 

@@ -29,7 +29,7 @@ export class MediaUrls {
 	}
 }
 
-const DEFAULT_MAX_CACHED = 120;
+const DEFAULT_MAX_CACHED = 240;
 
 /**
  * App-wide LRU cache of `blob:` object URLs so switching tabs, remounting Markdown after a stream settles, or

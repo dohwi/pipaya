@@ -36,4 +36,21 @@ describe("fitImagesInContext", () => {
 		await fitImagesInContext(input);
 		expect(imageOf(input[0]!).data).toBe(before);
 	});
+
+	test("already-valid images hit the cache on repeat turns and aborted resizes are not cached as failures", async () => {
+		const small = [msg("user", png(120, 120))];
+		expect(await fitImagesInContext(small)).toBe(small);
+		expect(await fitImagesInContext(small)).toBe(small);
+
+		const big = [msg("toolResult", png(3100, 1700))];
+		const ctl = new AbortController();
+		ctl.abort();
+		expect(await fitImagesInContext(big, {}, ctl.signal)).toBe(big);
+
+		const resized = await fitImagesInContext(big);
+		expect(resized).not.toBe(big);
+		expect(imageOf(resized[0]!).type).toBe("image");
+		const info = sniffImage(Buffer.from(imageOf(resized[0]!).data, "base64"))!;
+		expect(Math.max(info.width!, info.height!)).toBeLessThanOrEqual(2000);
+	});
 });

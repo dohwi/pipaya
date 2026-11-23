@@ -17,11 +17,13 @@
 	const close = () => (app.filePreview = null);
 
 	const MAX_TEXT = 400_000;
+	const FILE_PREVIEW_IMAGE_MAX = 1600;
 	let url = $state<string | null>(null);
 	let text = $state<string | null>(null);
 	let truncated = $state(false);
 	let failed = $state<string | null>(null);
 	let loading = $state(true);
+	let saving = $state(false);
 	let size = $state<number | undefined>(undefined);
 	let copied = $state(false);
 	/** HTML shows as a page by default; this flips it to the source */
@@ -62,11 +64,15 @@
 		truncated = false;
 		source = false;
 		mediaFailed = false;
+		saving = false;
+		size = f.file.size;
 		loading = true;
+		const reqKind = previewKind(f.file.name, f.file.mimeType);
 		app.api
-			.fetchFile(f.sessionId, f.file.path, ctl.signal)
+			.fetchFile(f.sessionId, f.file.path, ctl.signal, reqKind === "image" ? { max: FILE_PREVIEW_IMAGE_MAX } : undefined)
 			.then(async (blob) => {
-				size = blob.size;
+				// Keep the known original file size when loading a downscaled image preview.
+				if (reqKind !== "image") size = blob.size;
 				// the server names the type; trust the file name for the preview kind, and always hand the browser the right type
 				const k = previewKind(f.file.name, blob.type || f.file.mimeType);
 				if (k === "text" || k === "markdown" || k === "table" || k === "html") {
@@ -86,11 +92,27 @@
 	});
 
 	async function save() {
-		if (!url || !open) return;
+		const target = open;
+		if (!url || !target || saving) return;
+		if (kind !== "image" || !app.api) {
+			try {
+				await saveFile(url, target.file.name);
+			} catch (e) {
+				app.toast(`${t("저장하지 못했습니다")}: ${errorText(e)}`, "error");
+			}
+			return;
+		}
+		saving = true;
+		let fullUrl: string | null = null;
 		try {
-			await saveFile(url, open.file.name);
+			const full = await app.api.fetchFile(target.sessionId, target.file.path);
+			fullUrl = URL.createObjectURL(full);
+			await saveFile(fullUrl, target.file.name);
 		} catch (e) {
 			app.toast(`${t("저장하지 못했습니다")}: ${errorText(e)}`, "error");
+		} finally {
+			if (fullUrl) URL.revokeObjectURL(fullUrl);
+			saving = false;
 		}
 	}
 
@@ -111,7 +133,7 @@
 			{#if text !== null}
 				<IconButton icon={copied ? "check" : "copy"} label={t("복사")} tip onclick={copy} />
 			{/if}
-			<IconButton icon="download" label={t("저장")} tip onclick={save} disabled={!url} />
+			<IconButton icon="download" label={t("저장")} tip onclick={save} disabled={!url || saving} />
 		{/snippet}
 		<div class="body">
 			{#if loading}

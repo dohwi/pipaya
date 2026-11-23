@@ -195,5 +195,14 @@ describe("fast session messages, events and cached file previews", () => {
 		expect(svgRes.status).toBe(200);
 		expect(svgRes.headers["content-type"]).toBe("image/svg+xml");
 		expect(svgRes.body.byteLength).toBe(svg.byteLength);
+
+		// Large (>4 MB) unshrinkable raw fallback does not blow away existing cached previews
+		const hugeRaw = Buffer.alloc(5 * 1024 * 1024, 0xaa);
+		writeFileSync(join(ws, "corrupt.png"), hugeRaw);
+		const corruptRes = await call("GET", `/sessions/${id}/files?path=corrupt.png&max=300`);
+		expect(corruptRes.status).toBe(200);
+		expect(corruptRes.body.byteLength).toBe(hugeRaw.byteLength);
+		const stillCached = await call("GET", `/sessions/${id}/files?path=big.png&max=300`, undefined, { "if-none-match": String(p1.headers.etag) });
+		expect(stillCached.status).toBe(304);
 	});
 });
