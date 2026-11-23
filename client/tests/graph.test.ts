@@ -48,9 +48,72 @@ describe("buildGraph", () => {
 		expect(g.cards.get("v:a")!.count).toBe(3);
 		expect(g.cards.get(pid("p"))!.count).toBe(2);
 		expect([g.cards.get("v:a")!.col, g.cards.get(pid("p"))!.col, g.cards.get(mid("p", "m"))!.col, g.cards.get("s:a/s1")!.col]).toEqual([0, 1, 2, 3]);
-		// a hub sits in the middle of what is under it
-		const p = g.cards.get(pid("p"))!, m1 = g.cards.get(mid("p", "m"))!, m2 = g.cards.get(mid("p", "m2"))!;
-		expect(p.y).toBe((m1.y + m2.y) / 2);
+		// a hub aligns horizontally with its topmost child (top-aligned spine)
+		const v = g.cards.get("v:a")!, p = g.cards.get(pid("p"))!, m1 = g.cards.get(mid("p", "m"))!, m2 = g.cards.get(mid("p", "m2"))!;
+		expect(p.y).toBe(m1.y);
+		expect(v.y).toBe(p.y);
+		expect(m2.y).toBeGreaterThan(m1.y);
+	});
+
+	test("active top-aligned spine: working server, provider, model, chat and subagent line up across the top", () => {
+		const g = buildGraph([
+			server("local", [session("l1"), session("l2"), session("l3")]),
+			server("ubuntu", [
+				session("u_idle1", { model: "big", updatedAt: 10 }),
+				session("u_idle2", { model: "big", updatedAt: 9 }),
+				session("u_idle3", { model: "big", updatedAt: 8 }),
+				session("u_work", { provider: "q", model: "fast", updatedAt: 5 }),
+			], {
+				states: { u_work: "working" },
+				runs: [
+					run("u_idle1", "explore", { model: "p/m", at: 10 }),
+					run("u_work", "runner", { model: "q/fast", at: 5, running: true, doneAt: null }),
+				],
+			}),
+		]);
+		const srv = g.cards.get("v:ubuntu")!;
+		const idleSrv = g.cards.get("v:local")!;
+		const prov = g.cards.get(pid("q"))!;
+		const idleProv = g.cards.get(pid("p"))!;
+		const mod = g.cards.get(mid("q", "fast"))!;
+		const chat = g.cards.get("s:ubuntu/u_work")!;
+		const sub = g.cards.get(roleCardId("ubuntu", "runner", "q/fast"))!;
+		const idleSub = g.cards.get(roleCardId("ubuntu", "explore", "p/m"))!;
+
+		// entire active flow sits on one horizontal spine at the top
+		expect(srv.y).toBe(chat.y);
+		expect(prov.y).toBe(chat.y);
+		expect(mod.y).toBe(chat.y);
+		expect(sub.y).toBe(chat.y);
+
+		// idle items deepen below the active spine
+		expect(idleSrv.y).toBeGreaterThan(srv.y);
+		expect(idleProv.y).toBeGreaterThan(prov.y);
+		expect(idleSub.y).toBeGreaterThan(sub.y);
+
+		// no two cards in the same column overlap
+		const byCol = new Map<number, typeof srv[]>();
+		for (const c of g.cards.values()) byCol.set(c.col, [...(byCol.get(c.col) ?? []), c]);
+		for (const list of byCol.values()) {
+			list.sort((a, b) => a.y - b.y);
+			for (let i = 1; i < list.length; i++) {
+				const prev = list[i - 1]!, cur = list[i]!;
+				expect(prev.y + prev.h / 2 + ROW_GAP).toBeLessThanOrEqual(cur.y - cur.h / 2);
+			}
+		}
+	});
+
+	test("an idle parent chat with a working branched child rises to the top spine level with its child", () => {
+		const g = buildGraph([server("a", [
+			session("idle1", { updatedAt: 10 }),
+			session("parent", { updatedAt: 1 }),
+			session("child", { parentId: "parent", updatedAt: 2 }),
+		], { states: { child: "working" } })]);
+		const parent = g.cards.get("s:a/parent")!;
+		const child = g.cards.get("s:a/child")!;
+		const idle1 = g.cards.get("s:a/idle1")!;
+		expect(parent.y).toBe(child.y);
+		expect(parent.y).toBeLessThan(idle1.y);
 	});
 
 	test("an empty or unreachable server still shows; closed chats do not", () => {
