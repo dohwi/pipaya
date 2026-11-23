@@ -60,3 +60,35 @@ test("SharedMediaCache reuses URLs across callers, touches LRU on peek, evicts o
 		cache.dispose();
 	} finally { revoke.mockRestore(); }
 });
+
+test("SharedMediaCache aborts fetch when the only waiter cancels, and keeps going while another waiter remains", async () => {
+	const cache = new SharedMediaCache(4);
+	// Single caller aborts -> underlying fetch receives abort signal
+	const gate1 = Promise.withResolvers<Blob>();
+	let sig1: AbortSignal | undefined;
+	const c1 = new AbortController();
+	const p1 = cache.get("only", (s) => { sig1 = s; return gate1.promise; }, c1.signal);
+	await Promise.resolve();
+	expect(sig1?.aborted).toBe(false);
+	c1.abort();
+	await expect(p1).rejects.toHaveProperty("name", "AbortError");
+	expect(sig1?.aborted).toBe(true);
+	gate1.resolve(new Blob(["late"]));
+	await Bun.sleep(0);
+	expect(cache.peek("only")).toBeNull();
+
+	// Two callers share one fetch: aborting caller A must not abort caller B
+	const gate2 = Promise.withResolvers<Blob>();
+	let sig2: AbortSignal | undefined;
+	const ca = new AbortController();
+	const cb = new AbortController();
+	const pa = cache.get("shared", (s) => { sig2 = s; return gate2.promise; }, ca.signal);
+	const pb = cache.get("shared", (s) => { sig2 = s; return gate2.promise; }, cb.signal);
+	await Promise.resolve();
+	ca.abort();
+	await expect(pa).rejects.toHaveProperty("name", "AbortError");
+	expect(sig2?.aborted).toBe(false);
+	gate2.resolve(new Blob(["ok"]));
+	expect(await pb).toBeTruthy();
+	cache.dispose();
+});

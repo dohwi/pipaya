@@ -6,7 +6,7 @@ import * as photon from "@silvia-odwyer/photon-node";
 import { buildApp, type App } from "../src/app.ts";
 import type { Config } from "../src/config.ts";
 import { previewToFit } from "../src/image-resize-core.ts";
-import { stripToolMessageImages, stripToolResultImages } from "../src/tool-images.ts";
+import { stripOversizedToolResultImages, stripToolMessageImages, stripToolResultImages } from "../src/tool-images.ts";
 import { ECHO_MODEL, ECHO_PNG, echoProviderBody, startEchoUpstream, type EchoUpstream } from "./support/openai-upstream.ts";
 
 const IMG = { id: "img-model", name: "Img", contextWindow: 65536, maxTokens: 32768, reasoning: false, vision: true, imageGeneration: true };
@@ -48,6 +48,19 @@ describe("stripToolMessageImages", () => {
 
 		const res = { content: [{ type: "text", text: "Saved" }, { type: "image", data: "CCC", mimeType: "image/png" }], details: {} };
 		expect(stripToolResultImages(res).content).toEqual([{ type: "text", text: "Saved" }]);
+
+		const mixed = {
+			content: [
+				{ type: "text", text: "Saved" },
+				{ type: "image", data: "SMALL", mimeType: "image/png" },
+				{ type: "image", data: "X".repeat(100), mimeType: "image/png" },
+			],
+		};
+		expect(stripOversizedToolResultImages(mixed, 20).content).toEqual([
+			{ type: "text", text: "Saved" },
+			{ type: "image", data: "SMALL", mimeType: "image/png" },
+		]);
+		expect(mixed.content).toHaveLength(3);
 	});
 });
 
@@ -204,5 +217,36 @@ describe("fast session messages, events and cached file previews", () => {
 		expect(corruptRes.body.byteLength).toBe(hugeRaw.byteLength);
 		const stillCached = await call("GET", `/sessions/${id}/files?path=big.png&max=300`, undefined, { "if-none-match": String(p1.headers.etag) });
 		expect(stillCached.status).toBe(304);
+	});
+
+	test("file route supports Accept-Ranges, 206 Partial Content slices, and 416 for unsatisfiable ranges", async () => {
+		const id = (await call("POST", "/sessions", { cwd: ws })).json.id as string;
+		const data = Buffer.from("0123456789abcdefghij");
+		writeFileSync(join(ws, "clip.bin"), data);
+
+		const full = await call("GET", `/sessions/${id}/files?path=clip.bin`);
+		expect(full.status).toBe(200);
+		expect(full.headers["accept-ranges"]).toBe("bytes");
+		expect(full.body.toString()).toBe("0123456789abcdefghij");
+
+		const mid = await call("GET", `/sessions/${id}/files?path=clip.bin`, undefined, { range: "bytes=4-9" });
+		expect(mid.status).toBe(206);
+		expect(mid.headers["content-range"]).toBe("bytes 4-9/20");
+		expect(mid.headers["content-length"]).toBe("6");
+		expect(mid.body.toString()).toBe("456789");
+
+		const tail = await call("GET", `/sessions/${id}/files?path=clip.bin`, undefined, { range: "bytes=-5" });
+		expect(tail.status).toBe(206);
+		expect(tail.headers["content-range"]).toBe("bytes 15-19/20");
+		expect(tail.body.toString()).toBe("fghij");
+
+		const open = await call("GET", `/sessions/${id}/files?path=clip.bin`, undefined, { range: "bytes=17-" });
+		expect(open.status).toBe(206);
+		expect(open.headers["content-range"]).toBe("bytes 17-19/20");
+		expect(open.body.toString()).toBe("hij");
+
+		const oob = await call("GET", `/sessions/${id}/files?path=clip.bin`, undefined, { range: "bytes=100-200" });
+		expect(oob.status).toBe(416);
+		expect(oob.headers["content-range"]).toBe("bytes */20");
 	});
 });

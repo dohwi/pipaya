@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { randomUUID } from "node:crypto";
+import { createReadStream } from "node:fs";
 import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { basename, dirname, extname } from "node:path";
 import Type from "typebox";
@@ -8,6 +9,28 @@ import { previewImage } from "./image-resize.ts";
 import { errors } from "./schemas.ts";
 import { safePath } from "./tools.ts";
 import type { TypeBoxProvider } from "./typebox-provider.ts";
+
+/** Files larger than this are streamed directly from disk instead of buffered whole into RAM. */
+const STREAM_MIN_BYTES = 256 * 1024;
+
+/** Parse a single `Range: bytes=...` header. Returns `invalid` (416), a concrete `{ start, end }` slice, or `null` (ignore). */
+export function parseByteRange(header: string | undefined, size: number): { start: number; end: number } | "unsatisfiable" | null {
+	if (!header) return null;
+	const m = /^bytes=(\d*)-(\d*)$/i.exec(header.trim());
+	if (!m) return null;
+	const [, a, b] = m;
+	if (!a && !b) return null;
+	if (size <= 0) return "unsatisfiable";
+	if (!a) {
+		const suffix = Number.parseInt(b!, 10);
+		if (!Number.isFinite(suffix) || suffix <= 0) return "unsatisfiable";
+		return { start: Math.max(0, size - suffix), end: size - 1 };
+	}
+	const start = Number.parseInt(a, 10);
+	const end = b ? Math.min(size - 1, Number.parseInt(b, 10)) : size - 1;
+	if (!Number.isFinite(start) || !Number.isFinite(end) || start >= size || start > end) return "unsatisfiable";
+	return { start, end };
+}
 
 /** Where files the user attaches land, relative to the session's working directory. */
 export const UPLOAD_DIR = ".pipaya/uploads";
@@ -176,18 +199,51 @@ export function registerFileRoutes(server: FastifyInstance, dirsOf: (sessionId: 
 					.send();
 			}
 
-			const body = usePreview
-				? await previewCache.getOrBuild(`${abs}\0${Math.trunc(info.mtimeMs)}\0${info.size}\0${maxDim}`, abs, origMime, maxDim)
-				: { bytes: await readFile(abs), mimeType: origMime };
+			if (usePreview) {
+				const body = await previewCache.getOrBuild(`${abs}\0${Math.trunc(info.mtimeMs)}\0${info.size}\0${maxDim}`, abs, origMime, maxDim);
+				return reply
+					.header("content-type", body.mimeType)
+					.header("etag", etag)
+					.header("cache-control", FILE_CACHE_CONTROL)
+					.header("x-content-type-options", "nosniff")
+					.header("content-security-policy", "sandbox; default-src 'none'")
+					.send(body.bytes);
+			}
+
+			const rangeHeader = typeof req.headers.range === "string" ? req.headers.range : undefined;
+			const range = parseByteRange(rangeHeader, info.size);
+			if (range === "unsatisfiable") {
+				return reply
+					.code(416)
+					.header("content-range", `bytes */${info.size}`)
+					.header("accept-ranges", "bytes")
+					.send();
+			}
+			if (range) {
+				const length = range.end - range.start + 1;
+				return reply
+					.code(206)
+					.header("content-type", origMime)
+					.header("content-range", `bytes ${range.start}-${range.end}/${info.size}`)
+					.header("content-length", String(length))
+					.header("accept-ranges", "bytes")
+					.header("etag", etag)
+					.header("cache-control", FILE_CACHE_CONTROL)
+					.header("x-content-type-options", "nosniff")
+					.header("content-security-policy", "sandbox; default-src 'none'")
+					.send(createReadStream(abs, { start: range.start, end: range.end }));
+			}
 
 			return reply
-				.header("content-type", body.mimeType)
+				.header("content-type", origMime)
+				.header("content-length", String(info.size))
+				.header("accept-ranges", "bytes")
 				.header("etag", etag)
 				.header("cache-control", FILE_CACHE_CONTROL)
 				// bytes made by the user or the agent: never let a browser run them as a page
 				.header("x-content-type-options", "nosniff")
 				.header("content-security-policy", "sandbox; default-src 'none'")
-				.send(body.bytes);
+				.send(info.size > STREAM_MIN_BYTES ? createReadStream(abs) : await readFile(abs));
 		},
 	});
 }

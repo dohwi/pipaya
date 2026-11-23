@@ -69,9 +69,9 @@
 	function mediaKey(owner: NonNullable<typeof media>, kind: "image" | "audio" | "video", path: string): string {
 		return `${owner.base}\0${owner.id}\0${kind === "image" ? INLINE_IMAGE_MAX : kind}\0${path}`;
 	}
-	function loadSlotBlob(owner: NonNullable<typeof media>, kind: "image" | "audio" | "video", path: string): () => Promise<Blob> {
-		return async () => {
-			const blob = await owner.api.fetchFile(owner.id, path, undefined, kind === "image" ? { max: INLINE_IMAGE_MAX } : undefined);
+	function loadSlotBlob(owner: NonNullable<typeof media>, kind: "image" | "audio" | "video", path: string): (signal: AbortSignal) => Promise<Blob> {
+		return async (signal) => {
+			const blob = await owner.api.fetchFile(owner.id, path, signal, kind === "image" ? { max: INLINE_IMAGE_MAX } : undefined);
 			if (blob.type.startsWith(`${kind}/`)) return blob;
 			if (kind === "image") throw new Error("Not an image");
 			// Some servers return application/octet-stream; players need a media type to pick a decoder.
@@ -120,7 +120,7 @@
 		slot.removeAttribute("role");
 		slot.removeAttribute("tabindex");
 		slot.removeAttribute("title");
-		void sharedMedia.get(key, loadSlotBlob(owner, kind, path)).then((src) => {
+		void sharedMedia.get(key, loadSlotBlob(owner, kind, path), signal).then((src) => {
 			if (signal?.aborted || !slot.isConnected) return;
 			applyLoadedSlot(slot, kind, src);
 		}).catch(() => {

@@ -101,8 +101,10 @@ export async function registerWebSocket(
 
 			let lastSent = after ?? 0;
 			let replaying = after !== undefined;
+			let cancelled = false;
 			const buffered: Parameters<Parameters<EventBus["subscribe"]>[0]>[0][] = [];
 			const emit = (e: (typeof buffered)[number]) => {
+				if (cancelled) return;
 				if (wanted && !wanted.has(e.type)) return;
 				if (e.id !== 0) {
 					if (e.id <= lastSent) return;
@@ -110,24 +112,38 @@ export async function registerWebSocket(
 				}
 				send({ type: "event", event: e });
 			};
-			const unsubscribe = deps.bus.subscribe((e) => (replaying ? buffered.push(e) : emit(e)), sessionId);
-			if (after !== undefined) {
-				// The cursor must advance on every row read, including ones `emit` filters out;
-				// otherwise a batch of all-filtered events is re-read forever.
-				let cursor = after;
-				for (;;) {
-					const batch = deps.bus.history({ sessionId, after: cursor, limit: 500 });
-					// One stored event can be megabytes. Stop as soon as the client is cut off for being too slow, instead of
-					// serialising the rest of the backlog into a socket nobody reads.
-					for (const e of batch) { if (socket.readyState !== socket.OPEN) break; emit(e); }
-					if (socket.readyState !== socket.OPEN || batch.length < 500) break;
-					cursor = batch[batch.length - 1]!.id;
-					if (cursor - after > REPLAY_LIMIT) break; // like SSE: a client that far behind resyncs from a snapshot
-				}
-				replaying = false;
-				buffered.splice(0).forEach(emit);
-			}
+			const off = deps.bus.subscribe((e) => (replaying ? buffered.push(e) : emit(e)), sessionId);
+			const unsubscribe = () => {
+				cancelled = true;
+				off();
+			};
 			subs.set(key, { unsubscribe });
+			if (after !== undefined) {
+				// Replay in async batches yielding via setImmediate so a large backlog never starves other sockets or HTTP requests.
+				void (async () => {
+					let cursor = after;
+					for (;;) {
+						if (cancelled || socket.readyState !== socket.OPEN) return;
+						const batch = deps.bus.history({ sessionId, after: cursor, limit: 500 });
+						for (const e of batch) {
+							if (cancelled || socket.readyState !== socket.OPEN) return;
+							emit(e);
+						}
+						if (cancelled || socket.readyState !== socket.OPEN || batch.length < 500) break;
+						cursor = batch[batch.length - 1]!.id;
+						if (cursor - after > REPLAY_LIMIT) break; // like SSE: a client that far behind resyncs from a snapshot
+						await new Promise<void>((resolve) => setImmediate(resolve));
+					}
+					if (cancelled || socket.readyState !== socket.OPEN) return;
+					while (buffered.length > 0) {
+						for (const e of buffered.splice(0)) {
+							if (cancelled || socket.readyState !== socket.OPEN) return;
+							emit(e);
+						}
+					}
+					replaying = false;
+				})();
+			}
 		};
 
 		const handlers: Record<string, (m: Record<string, unknown>) => Promise<unknown> | unknown> = {
