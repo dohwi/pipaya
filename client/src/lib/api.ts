@@ -490,7 +490,7 @@ export class Api {
 	messages = (id: string, after?: number) =>
 		this.req<{ messages: StoredMessage[] }>(
 			"GET",
-			`/sessions/${id}/messages?limit=5000${after !== undefined ? `&after=${after}` : ""}`,
+			`/sessions/${id}/messages?limit=5000&omitToolImages=true${after !== undefined ? `&after=${after}` : ""}`,
 		).then((r) => r.messages);
 	/**
 	 * The newest `n` messages (below seq `before` when paging back), oldest first. A page that would start inside a reply
@@ -500,14 +500,14 @@ export class Api {
 	tailMessages = (id: string, n: number, before?: number) =>
 		this.req<{ messages: StoredMessage[] }>(
 			"GET",
-			`/sessions/${id}/messages?limit=5000&tail=${n}&turn=true${before !== undefined ? `&before=${before}` : ""}`,
+			`/sessions/${id}/messages?limit=5000&tail=${n}&turn=true&omitToolImages=true${before !== undefined ? `&before=${before}` : ""}`,
 		).then((r) => r.messages);
 	/** The newest `n` messages, oldest first, without reaching back to the turn's prompt: a preview needs only the end. */
 	recentMessages = (id: string, n: number, signal?: AbortSignal) =>
-		this.req<{ messages: StoredMessage[] }>("GET", `/sessions/${id}/messages?tail=${n}`, undefined, signal).then((r) => r.messages);
+		this.req<{ messages: StoredMessage[] }>("GET", `/sessions/${id}/messages?tail=${n}&omitToolImages=true`, undefined, signal).then((r) => r.messages);
 	/** Persisted messages strictly after `after`, oldest first (used to fill any gap when catching up a finished run). */
 	messagesAfter = (id: string, after: number, limit = 200) =>
-		this.req<{ messages: StoredMessage[] }>("GET", `/sessions/${id}/messages?after=${after}&limit=${limit}`).then((r) => r.messages);
+		this.req<{ messages: StoredMessage[] }>("GET", `/sessions/${id}/messages?after=${after}&limit=${limit}&omitToolImages=true`).then((r) => r.messages);
 	send = (id: string, text: string, mode: SendMode = "prompt", images?: { type: "image"; data: string; mimeType: string }[], files?: { name: string; data: string }[]) =>
 		this.req<{ accepted: SendMode }>("POST", `/sessions/${id}/messages`, {
 			text,
