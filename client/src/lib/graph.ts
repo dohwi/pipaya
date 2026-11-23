@@ -395,10 +395,21 @@ function layout(
 		c.count = c.children.reduce((a, k) => a + count(k), 0);
 		return c.count;
 	};
+	/** Best (lowest) urgency rank in a card's subtree, so active paths rise to the top horizontal spine in every column. */
+	const rankCache = new Map<string, number>();
+	const subtreeRank = (id: string): number => {
+		const hit = rankCache.get(id);
+		if (hit !== undefined) return hit;
+		const c = get(id);
+		let best = c.kind === "session" ? RANK[c.activity!] : 5;
+		for (const k of c.children) best = Math.min(best, subtreeRank(k));
+		rankCache.set(id, best);
+		return best;
+	};
 	const order = (a: string, b: string) => {
 		const x = get(a), y = get(b);
-		if (x.kind === "session" && y.kind === "session") return RANK[x.activity!] - RANK[y.activity!] || y.session!.updatedAt - x.session!.updatedAt;
-		return y.count - x.count || x.name.localeCompare(y.name);
+		if (x.kind === "session" && y.kind === "session") return subtreeRank(a) - subtreeRank(b) || RANK[x.activity!] - RANK[y.activity!] || y.session!.updatedAt - x.session!.updatedAt;
+		return subtreeRank(a) - subtreeRank(b) || y.count - x.count || x.name.localeCompare(y.name);
 	};
 	let cursor = 0, maxCol = 0;
 	const maxLanes = Math.max(1, Math.floor(opts.lanes ?? 1));
@@ -406,9 +417,11 @@ function layout(
 	/** The bus line's height for each wrapped chat, set once the columns have their x. */
 	const busY = new Map<string, number>();
 	/**
-	 * Leaves take the next row; a card with children is centred on them. Many chats under one card (each with nothing
-	 * under it) wrap into a block of columns, filled top to bottom so the first column keeps the urgency order; the
-	 * chats that call subagents go last, nearest the subagents, so their lines cross no other column.
+	 * Leaves take the next row; a card with children aligns horizontally with its first (topmost, highest-urgency) child
+	 * in the next column so the active flow runs along a straight top spine while idle/older items deepen downward.
+	 * Many chats under one card (each with nothing under it) wrap into a block of columns, filled top to bottom so the
+	 * first column keeps the urgency order; the chats that call subagents go last, nearest the subagents, so their lines
+	 * cross no other column.
 	 */
 	const place = (id: string, col: number) => {
 		const c = get(id);
@@ -439,10 +452,10 @@ function layout(
 				maxCol = Math.max(maxCol, kc.col);
 			});
 		}
-		const ys = c.children.map((k) => get(k).y);
-		c.y = (Math.min(...ys) + Math.max(...ys)) / 2;
-		// a card taller than the rows under it (a working chat over one branch) would reach into the rows above and below:
-		// move what is under it down so it is centred on them, and its own rows end below it
+		const firstColYs = c.children.filter((k) => get(k).col === col + 1).map((k) => get(k).y);
+		c.y = Math.min(...(firstColYs.length ? firstColYs : c.children.map((k) => get(k).y)));
+		// a card taller than its first child (a working chat over an idle branch) would reach into the rows above:
+		// move what is under it down so it stays level with its top child without overlapping the row above or below
 		const lift = top + c.h / 2 - c.y;
 		if (lift > 0) {
 			const down = (id: string) => {
@@ -460,24 +473,38 @@ function layout(
 	};
 
 	// count sessions per server directly (shared provider/model trees can span multiple servers)
+	const serverBestRank = new Map<string, number>();
+	for (const c of cards.values()) {
+		if (c.kind !== "session") continue;
+		const prev = serverBestRank.get(c.server) ?? 5;
+		serverBestRank.set(c.server, Math.min(prev, RANK[c.activity!]));
+	}
 	for (const v of servers) {
 		const root = get(`v:${v.id}`);
 		root.col = 0;
 		root.count = serverOpenCounts.get(root.id) ?? 0;
 	}
+	// active servers rise to the top of column 0 so the working path runs straight across; ties keep the user's server order
+	const origServerIndex = new Map(servers.map((v, i) => [v.id, i]));
+	const sortedServers = [...servers].sort((a, b) => {
+		const ra = serverBestRank.get(a.id) ?? (a.online ? 5 : 6);
+		const rb = serverBestRank.get(b.id) ?? (b.online ? 5 : 6);
+		return ra - rb || (origServerIndex.get(a.id) ?? 0) - (origServerIndex.get(b.id) ?? 0);
+	});
 
-	// order shared providers by the average index of the servers using them, minimizing server→provider edge crossings
-	const serverIndex = new Map(servers.map((v, i) => [v.id, i]));
+	// order shared providers: active ones first (aligned with the top spine), then by server barycenter to minimize crossings
+	const serverIndex = new Map(sortedServers.map((v, i) => [v.id, i]));
 	const bary = (c: Card) => {
 		const list = c.servers ?? [c.server];
 		return list.reduce((sum, sid) => sum + (serverIndex.get(sid) ?? 0), 0) / list.length;
 	};
 	const providers = [...cards.values()].filter((c) => c.kind === "provider");
 	for (const p of providers) count(p.id);
-	providers.sort((a, b) => bary(a) - bary(b) || b.count - a.count || a.name.localeCompare(b.name));
+	providers.sort((a, b) => subtreeRank(a.id) - subtreeRank(b.id) || bary(a) - bary(b) || b.count - a.count || a.name.localeCompare(b.name));
 	for (const p of providers) place(p.id, 1);
 
-	// subagent cards sit in the rightmost column beside their calling chats, grouped per (server, role)
+	// subagent cards sit in the rightmost column beside their calling chats, grouped per (server, role);
+	// running roles and roles called by the top (active) chats sit at the top horizontal spine
 	const roles = [...cards.values()].filter((c) => c.kind === "subagent");
 	const roleGroups = new Map<string, Card[]>();
 	for (const r of roles) {
@@ -485,26 +512,31 @@ function layout(
 		roleGroups.set(gk, [...(roleGroups.get(gk) ?? []), r]);
 	}
 	const runs = [...roleGroups.values()].map((g) => {
-		const ys = g.flatMap((r) => delegates.filter((e) => e.to === r.id).map((e) => get(e.from).y));
-		return { cards: g.sort((a, b) => b.last! - a.last! || a.id.localeCompare(b.id)), y: ys.reduce((a, b) => a + b, 0) / ys.length };
+		const edges = g.flatMap((r) => delegates.filter((e) => e.to === r.id));
+		const ys = edges.map((e) => get(e.from).y);
+		const liveYs = edges.filter((e) => e.live).map((e) => get(e.from).y);
+		const live = g.some((r) => r.running! > 0);
+		return {
+			cards: g.sort((a, b) => b.last! - a.last! || a.id.localeCompare(b.id)),
+			live,
+			topY: Math.min(...(liveYs.length ? liveYs : ys)),
+			meanY: ys.reduce((a, b) => a + b, 0) / ys.length,
+		};
 	});
-	runs.sort((a, b) => a.y - b.y || a.cards[0]!.server.localeCompare(b.cards[0]!.server) || a.cards[0]!.label.localeCompare(b.cards[0]!.label));
+	runs.sort((a, b) => Number(b.live) - Number(a.live) || a.topY - b.topY || a.meanY - b.meanY || a.cards[0]!.server.localeCompare(b.cards[0]!.server) || a.cards[0]!.label.localeCompare(b.cards[0]!.label));
 	let below = 0;
 	for (const g of runs) {
-		const tall = g.cards.reduce((n, r) => n + r.h, 0) + ROW_GAP * (g.cards.length - 1);
-		let y = Math.max(below, g.y - tall / 2);
+		let y = Math.max(below, g.topY - g.cards[0]!.h / 2);
 		for (const r of g.cards) { r.y = y + r.h / 2; y += r.h + ROW_GAP; }
 		below = y;
 	}
 	if (runs.length) cursor = Math.max(cursor, below);
 	for (const r of roles) r.col = maxCol + 1;
 
-	// place servers stacked tightly together on the left, centred on the right-hand tree
+	// place servers stacked tightly on the left, with the top (active) server level with the top provider
 	const rightBottom = Math.max(0, cursor - ROW_GAP);
-	const serverBlockH = servers.length ? servers.reduce((n, v) => n + get(`v:${v.id}`).h, 0) + ROW_GAP * (servers.length - 1) : 0;
 	const rightCards = [...cards.values()].filter((c) => c.kind !== "server");
-	const rightCentre = rightCards.length ? (Math.min(...rightCards.map((c) => c.y - c.h / 2)) + Math.max(...rightCards.map((c) => c.y + c.h / 2))) / 2 : serverBlockH / 2;
-	let sy = rightCentre - serverBlockH / 2;
+	let sy = sortedServers.length && providers.length ? providers[0]!.y - get(`v:${sortedServers[0]!.id}`).h / 2 : 0;
 	if (sy < 0 && rightCards.length) {
 		const shift = -sy;
 		for (const c of rightCards) c.y += shift;
@@ -514,7 +546,7 @@ function layout(
 	} else if (sy < 0) {
 		sy = 0;
 	}
-	for (const v of servers) {
+	for (const v of sortedServers) {
 		const sv = get(`v:${v.id}`);
 		sv.y = sy + sv.h / 2;
 		sy += sv.h + ROW_GAP;
