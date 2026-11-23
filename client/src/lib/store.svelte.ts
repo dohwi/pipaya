@@ -49,11 +49,11 @@ import { Preferences } from "./prefs.svelte";
 import { ServerPrefs, serverPrefKeys } from "./server-prefs.svelte";
 import { Feedback, type Toast } from "./feedback.svelte";
 import { watchWake } from "./store/wake";
+import { UiOverlayState, type ViewerImage, type ViewerState, type SettingsTargetTab } from "./store/ui-overlay.svelte";
 import { applyDraftPatch, resolveDraftFallback, shouldAdoptServerDefault, startingTierOf } from "./store/draft-model";
 import { canAddToGroup, findSessionNeighbour, stripSessionFromGroups } from "./store/groups-ops";
 import { parseAppBackup } from "./store/configuration-ops";
 import { cueBackgroundEvent, handleOpenServerEvent } from "./store/event-handler";
-import type { SettingsTabId } from "./settings-search";
 import type { SettingsFocus } from "./settings-focus";
 import { SidebarState, reorder } from "./sidebar.svelte";
 import { ScheduleBook } from "./schedule-book.svelte";
@@ -114,8 +114,11 @@ export interface SendingState {
 class AppStore {
   servers = $state<Server[]>(loadServers());
   serverId = $state<string | null>(null);
+  /** Transient UI overlays, modals, graph view, cross-component ticks, and one-shot composer handoffs. */
+  readonly ui = new UiOverlayState();
   /** Add-server / edit-server dialog: `null` = closed, `"new"` = add, otherwise the id being edited. */
-  serverForm = $state<string | "new" | null>(null);
+  get serverForm(): string | "new" | null { return this.ui.serverForm; }
+  set serverForm(v: string | "new" | null) { this.ui.serverForm = v; }
   /** Every saved server, kept live (lists, models, activity) by its own event stream; the open one is only the one in view. */
   links = $state<Record<string, ServerLink>>({});
   /** The link of the server in view. */
@@ -146,14 +149,16 @@ class AppStore {
     if (this.link) this.link.data.sessions = v;
   }
   /** The tab overview (the folder's tabs as a grid of cards, behind the tab count button) is open. */
-  tabOverview = $state(false);
+  get tabOverview(): boolean { return this.ui.tabOverview; }
+  set tabOverview(v: boolean) { this.ui.tabOverview = v; }
   /** The server whose conversation list (close / delete) is open, or null. */
-  sessionsDialog = $state<string | null>(null);
+  get sessionsDialog(): string | null { return this.ui.sessionsDialog; }
+  set sessionsDialog(v: string | null) { this.ui.sessionsDialog = v; }
   /** Narrows the open conversation list to one folder (`cwd`). */
-  sessionsFilter = $state<{ cwd?: string } | null>(null);
+  get sessionsFilter(): { cwd?: string } | null { return this.ui.sessionsFilter; }
+  set sessionsFilter(v: { cwd?: string } | null) { this.ui.sessionsFilter = v; }
   openSessions(serverId: string, filter: { cwd?: string } | null = null) {
-    this.sessionsFilter = filter;
-    this.sessionsDialog = serverId;
+    this.ui.openSessions(serverId, filter);
   }
   /** Workspace root on the server; every session lives in a working directory under it. */
   get workspace(): WorkspaceInfo | null {
@@ -179,15 +184,14 @@ class AppStore {
     if (this.link) this.link.toolsInfo = v;
   }
   /** Open the directory picker */
-  dirPicker = $state(false);
+  get dirPicker(): boolean { return this.ui.dirPicker; }
+  set dirPicker(v: boolean) { this.ui.dirPicker = v; }
   /** Images open in the full-screen viewer (null = closed) */
-  viewer = $state<{
-    images: { src: string; mimeType: string; loadFull?: (signal?: AbortSignal) => Promise<string> }[];
-    index: number;
-  } | null>(null);
+  get viewer(): ViewerState | null { return this.ui.viewer; }
+  set viewer(v: ViewerState | null) { this.ui.viewer = v; }
 
-  openImage(images: { src: string; mimeType: string; loadFull?: (signal?: AbortSignal) => Promise<string> }[], index = 0) {
-    if (images.length) this.viewer = { images, index };
+  openImage(images: ViewerImage[], index = 0) {
+    this.ui.openImage(images, index);
   }
   /** Stars and the notification delay of the open server (server scope: shared with every client of that server). */
   private readonly serverPrefs = new ServerPrefs((key) => this.settingsSync?.changed(key), () => this.models);
@@ -204,17 +208,23 @@ class AppStore {
   isFavDir(path: string) { return this.serverPrefs.isFavDir(path); }
   toggleFavDir(path: string) { this.serverPrefs.toggleFavDir(path); }
   /** Picker overlay opened by a slash command. */
-  palette = $state.raw<PaletteSpec | null>(null);
+  get palette(): PaletteSpec | null { return this.ui.palette; }
+  set palette(v: PaletteSpec | null) { this.ui.palette = v; }
   /** Bumped by /model to open the model picker. */
-  modelPickerTick = $state(0);
+  get modelPickerTick(): number { return this.ui.modelPickerTick; }
+  set modelPickerTick(v: number) { this.ui.modelPickerTick = v; }
   /** Bumped by the "queue message" shortcut: the focused composer queues its input. */
-  queueSendTick = $state(0);
+  get queueSendTick(): number { return this.ui.queueSendTick; }
+  set queueSendTick(v: number) { this.ui.queueSendTick = v; }
   /** Bumped by the "find in chat" shortcut; the focused pane opens its search bar. */
-  findTick = $state(0);
+  get findTick(): number { return this.ui.findTick; }
+  set findTick(v: number) { this.ui.findTick = v; }
   /** Bumped when the open server reports a model-connection change (any client) */
-  configTick = $state(0);
+  get configTick(): number { return this.ui.configTick; }
+  set configTick(v: number) { this.ui.configTick = v; }
   /** Bumped when the open server reports a voice-input change (settings saved or a connection test run on any device) */
-  voiceTick = $state(0);
+  get voiceTick(): number { return this.ui.voiceTick; }
+  set voiceTick(v: number) { this.ui.voiceTick = v; }
   /** Model new chats start with on this server (saved default, else the server's startup default) */
   get serverDefault(): DefaultModelSelection | null {
     return this.link?.serverDefault ?? null;
@@ -307,54 +317,68 @@ class AppStore {
   readonly goals = new GoalBook();
 
   /** Text the composer should pick up once (edit-and-branch). */
-  prefill = $state<string | null>(null);
+  get prefill(): string | null { return this.ui.prefill; }
+  set prefill(v: string | null) { this.ui.prefill = v; }
   /** Text to put into the composer at the caret, once: voice input's transcript (a plain append would add a line break). */
-  insertText = $state<{ paneId: string; text: string } | null>(null);
+  get insertText(): { paneId: string; text: string } | null { return this.ui.insertText; }
+  set insertText(v: { paneId: string; text: string } | null) { this.ui.insertText = v; }
   /**
    * Live dictation in a composer: everything heard so far in this recording, rewritten as words arrive. The composer
    * shows it after the text that was there when the recording began; null when no live dictation is running.
    */
-  liveText = $state<{ paneId: string; text: string } | null>(null);
+  get liveText(): { paneId: string; text: string } | null { return this.ui.liveText; }
+  set liveText(v: { paneId: string; text: string } | null) { this.ui.liveText = v; }
   /** Message the next prompt answers (the Reply button); the composer shows it as a badge and quotes it on send. */
-  replyTo = $state<{ text: string; who?: string } | null>(null);
-  settingsOpen = $state(false);
+  get replyTo(): { text: string; who?: string } | null { return this.ui.replyTo; }
+  set replyTo(v: { text: string; who?: string } | null) { this.ui.replyTo = v; }
+  get settingsOpen(): boolean { return this.ui.settingsOpen; }
+  set settingsOpen(v: boolean) { this.ui.settingsOpen = v; }
   /** Skills dialog (opened from the footer badge). cwd decides which project's skills; sessionId marks the ones that conversation already uses. */
-  skillsDialog = $state<{ cwd: string; sessionId: string | null } | null>(null);
+  get skillsDialog(): { cwd: string; sessionId: string | null } | null { return this.ui.skillsDialog; }
+  set skillsDialog(v: { cwd: string; sessionId: string | null } | null) { this.ui.skillsDialog = v; }
   /** Bumped when any client changes a skill, so footers and dialogs re-read it. */
-  skillsTick = $state(0);
+  get skillsTick(): number { return this.ui.skillsTick; }
+  set skillsTick(v: number) { this.ui.skillsTick = v; }
   openSkills(sessionId: string | null = this.activeId) {
     if (!this.api) return;
-    this.skillsDialog = { cwd: this.session(sessionId)?.cwd ?? this.workdirAbs, sessionId };
+    this.ui.skillsDialog = { cwd: this.session(sessionId)?.cwd ?? this.workdirAbs, sessionId };
   }
   /** MCP servers dialog (opened from the footer badge). */
-  mcpDialog = $state(false);
+  get mcpDialog(): boolean { return this.ui.mcpDialog; }
+  set mcpDialog(v: boolean) { this.ui.mcpDialog = v; }
   /** Bumped when an MCP server is changed or connects/disconnects, so footers and the dialog re-read it. */
-  mcpTick = $state(0);
+  get mcpTick(): number { return this.ui.mcpTick; }
+  set mcpTick(v: number) { this.ui.mcpTick = v; }
   /** Bumped by `schedules_updated`; the scheduled-tasks list reads it to refetch. */
-  schedulesTick = $state(0);
+  get schedulesTick(): number { return this.ui.schedulesTick; }
+  set schedulesTick(v: number) { this.ui.schedulesTick = v; }
   /** Bumped by `goals_updated`; App.svelte refetches the open server's goals. */
-  goalsTick = $state(0);
+  get goalsTick(): number { return this.ui.goalsTick; }
+  set goalsTick(v: number) { this.ui.goalsTick = v; }
   /** Session whose goal edit dialog is open. null = closed. */
-  goalDialog = $state<string | null>(null);
+  get goalDialog(): string | null { return this.ui.goalDialog; }
+  set goalDialog(v: string | null) { this.ui.goalDialog = v; }
   openGoal(id: string | null = this.activeId) {
-    if (!id) return;
-    this.goalDialog = id;
+    this.ui.openGoal(id);
   }
   /**
    * The graph view (every server's chats, their models and subagents) shown in place of the conversation. Opening a
    * conversation, a new chat or a terminal leaves it (`openIn`, `openSession`, `newChat`); Ctrl+G toggles it.
    */
-  graphOpen = $state(false);
+  get graphOpen(): boolean { return this.ui.graphOpen; }
+  set graphOpen(v: boolean) { this.ui.graphOpen = v; }
   /** The conversation the graph was opened from, so the toggle can go back to it. */
-  graphFrom = $state<{ server: string; session: string } | null>(null);
+  get graphFrom(): { server: string; session: string } | null { return this.ui.graphFrom; }
+  set graphFrom(v: { server: string; session: string } | null) { this.ui.graphFrom = v; }
   /**
    * The graph view's quick look: the chat shown in a dialog over the graph. It is the real conversation (the pane, its
    * input and status line), opened on its server the usual way while the graph stays up; the graph remembers where the
    * user came from (`graphFrom`) and goes back there when it closes.
    */
-  graphPeek = $state<{ server: string; session: string } | null>(null);
+  get graphPeek(): { server: string; session: string } | null { return this.ui.graphPeek; }
+  set graphPeek(v: { server: string; session: string } | null) { this.ui.graphPeek = v; }
   async peekChat(server: string, session: string) {
-    this.graphPeek = { server, session };
+    this.ui.graphPeek = { server, session };
     // the chat's own server becomes the open one (its transcript, composer and status read from it)
     if (server !== this.serverId || this.net === "idle") {
       write(`${K.active}.${server}`, session);
@@ -364,84 +388,87 @@ class AppStore {
     await this.openSession(session, false, false);
   }
   closePeek() {
-    this.graphPeek = null;
+    this.ui.closePeek();
   }
 
-  toggleGraph(open = !this.graphOpen) {
-    if (open === this.graphOpen) return;
+  toggleGraph(open = !this.ui.graphOpen) {
+    if (open === this.ui.graphOpen) return;
     if (open) {
-      this.graphFrom = this.serverId && this.activeId ? { server: this.serverId, session: this.activeId } : null;
-      this.graphOpen = true;
+      this.ui.graphFrom = this.serverId && this.activeId ? { server: this.serverId, session: this.activeId } : null;
+      this.ui.graphOpen = true;
       this.sidebar.open = false;
       return;
     }
-    this.graphOpen = false;
-    this.graphPeek = null;
+    this.ui.graphOpen = false;
+    this.ui.graphPeek = null;
     // back to the chat the graph was opened from (a quick look may have opened others meanwhile)
-    const from = this.graphFrom;
+    const from = this.ui.graphFrom;
     if (!from) return;
     if (from.server !== this.serverId) this.openIn(from.server, { session: from.session });
     else if (from.session !== this.activeId && this.shows(from.session)) void this.openSession(from.session, false, false);
   }
   /** The scheduled-tasks window opened from the sidebar (the open server's list and form), or false. */
-  schedulesDialog = $state(false);
+  get schedulesDialog(): boolean { return this.ui.schedulesDialog; }
+  set schedulesDialog(v: boolean) { this.ui.schedulesDialog = v; }
   /** The session the scheduled-tasks page opens a new-task form for (set by a conversation's menu, taken by the page). */
-  scheduleFor = $state<string | null>(null);
+  get scheduleFor(): string | null { return this.ui.scheduleFor; }
+  set scheduleFor(v: string | null) { this.ui.scheduleFor = v; }
   /** The task the scheduled-tasks page opens in its edit form (set by a row above the input, taken by the page). */
-  scheduleEdit = $state<string | null>(null);
+  get scheduleEdit(): string | null { return this.ui.scheduleEdit; }
+  set scheduleEdit(v: string | null) { this.ui.scheduleEdit = v; }
   openMcp() {
-    if (this.api) this.mcpDialog = true;
+    if (this.api) this.ui.mcpDialog = true;
   }
   /** Subagent roles dialog (`delegate` roles, opened from the footer). cwd decides which folder's project roles are listed. */
-  subagentsDialog = $state<{ cwd: string } | null>(null);
+  get subagentsDialog(): { cwd: string } | null { return this.ui.subagentsDialog; }
+  set subagentsDialog(v: { cwd: string } | null) { this.ui.subagentsDialog = v; }
   openSubagents(sessionId: string | null = this.activeId) {
     if (!this.api) return;
-    this.subagentsDialog = { cwd: this.session(sessionId)?.cwd ?? this.workdirAbs };
+    this.ui.subagentsDialog = { cwd: this.session(sessionId)?.cwd ?? this.workdirAbs };
   }
   /** Extension commands dialog (`/prefix:name`, opened from the footer badge). cwd decides which folder's commands are listed. */
-  commandsDialog = $state<{ cwd: string } | null>(null);
+  get commandsDialog(): { cwd: string } | null { return this.ui.commandsDialog; }
+  set commandsDialog(v: { cwd: string } | null) { this.ui.commandsDialog = v; }
   openCommands(sessionId: string | null = this.activeId) {
     if (!this.api) return;
-    this.commandsDialog = { cwd: this.session(sessionId)?.cwd ?? this.workdirAbs };
+    this.ui.commandsDialog = { cwd: this.session(sessionId)?.cwd ?? this.workdirAbs };
   }
   /** Built-in prompt templates dialog (`/prompt:<name>`, opened from the footer or settings). */
-  templatesDialog = $state<{ cwd: string } | null>(null);
+  get templatesDialog(): { cwd: string } | null { return this.ui.templatesDialog; }
+  set templatesDialog(v: { cwd: string } | null) { this.ui.templatesDialog = v; }
   openTemplates(sessionId: string | null = this.activeId) {
     if (!this.api) return;
-    this.templatesDialog = { cwd: this.session(sessionId)?.cwd ?? this.workdirAbs };
+    this.ui.templatesDialog = { cwd: this.session(sessionId)?.cwd ?? this.workdirAbs };
   }
   /**
    * The section the settings window opens on. `"servers"` and `"agent"` are old links (the server list and the model
    * connection); `Settings` maps them to the sections they became, so a stored or linked value still lands somewhere.
    */
-  settingsTab = $state<SettingsTabId | "servers" | "agent">("general");
+  get settingsTab(): SettingsTargetTab { return this.ui.settingsTab; }
+  set settingsTab(v: SettingsTargetTab) { this.ui.settingsTab = v; }
   /** The server whose sections the settings window opens on (`"new"` for the add form), or null for the open server. */
-  settingsServer = $state<string | "new" | null>(null);
+  get settingsServer(): string | "new" | null { return this.ui.settingsServer; }
+  set settingsServer(v: string | "new" | null) { this.ui.settingsServer = v; }
   /** True when a section was asked for (not a plain open): on a phone it opens straight on that section instead of the list. */
-  settingsDirect = false;
+  get settingsDirect(): boolean { return this.ui.settingsDirect; }
+  set settingsDirect(v: boolean) { this.ui.settingsDirect = v; }
   /** One row to bring into view once the section opens (handed over once: the section that shows it clears it). */
-  settingsFocus = $state<SettingsFocus | null>(null);
+  get settingsFocus(): SettingsFocus | null { return this.ui.settingsFocus; }
+  set settingsFocus(v: SettingsFocus | null) { this.ui.settingsFocus = v; }
   openSettings(
-    tab?: SettingsTabId | "servers" | "agent",
+    tab?: SettingsTargetTab,
     server: string | "new" | null = null,
     focus: SettingsFocus | null = null,
   ) {
-    this.settingsFocus = focus;
-    this.settingsDirect = tab !== undefined;
-    tab ??= "general";
-    this.settingsTab = tab;
-    this.settingsServer = server;
-    this.settingsOpen = true;
+    this.ui.openSettings(tab, server, focus);
   }
   /** Opens the scheduled-tasks page with a new-task form for this conversation. */
   openScheduleFor(sessionId: string) {
-    this.scheduleFor = sessionId;
-    this.openSettings("schedules");
+    this.ui.openScheduleFor(sessionId);
   }
   /** Opens the scheduled-tasks page with this task in the edit form. */
   openScheduleEdit(id: string) {
-    this.scheduleEdit = id;
-    this.openSettings("schedules");
+    this.ui.openScheduleEdit(id);
   }
   /** In-flight sends keyed by `serverId\0sessionId` so one slow upload never blocks other conversations. */
   private sendingMap = $state<Record<string, SendingState>>({});
