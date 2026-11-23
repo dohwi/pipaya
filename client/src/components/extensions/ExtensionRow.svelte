@@ -66,7 +66,7 @@
 	@media (hover: hover) { .expand:hover .ename { text-decoration: underline; text-underline-offset: 3px; } } /* not on touch: a tap left the name underlined */
 	.expand:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 	.who { display: flex; flex-direction: column; min-width: 0; flex: 1; }
-	.top { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 8px; min-width: 0; }
+	.top { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; min-width: 0; }
 	.ename { font-size: var(--fs-md); line-height: 20px; /* whole-pixel line boxes (rule 3): 1.35 left the card 61.1px tall */ font-weight: 600; overflow-wrap: anywhere; }
 	.brief { font-size: var(--fs-xs); line-height: 16px; color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 	.chev { flex: none; display: inline-flex; color: var(--text-faint); transition: transform var(--motion-fast) var(--ease-exit); }

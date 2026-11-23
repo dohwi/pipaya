@@ -53,7 +53,7 @@
 <style>
 	.card { display: flex; flex-direction: column; gap: 8px; min-width: 0; padding: 12px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg-elev); }
 	.heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-	h4 { margin: 0; font-size: var(--fs-base); font-weight: 600; overflow-wrap: anywhere; min-width: 0; }
+	h4 { margin: 0; font-size: var(--fs-base); line-height: 20px; font-weight: 600; overflow-wrap: anywhere; min-width: 0; }
 	p { margin: 0; }
 	.hint { overflow-wrap: anywhere; }
 </style>

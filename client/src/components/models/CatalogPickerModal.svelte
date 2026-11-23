@@ -65,9 +65,13 @@
 
 </script>
 
+{#snippet recBadge()}
+	<Badge tone="ok" size="sm">{t("추천")}</Badge>
+{/snippet}
+
 {#snippet opt(c: CatalogModel, recommended: boolean)}
-	<PickerOption selected={value === c.id} onclick={() => onpick(c)}>
-		{#snippet name()}{c.name.replace(/^[^:]+:\s*/, "")}{#if recommended}<span class="rec"><Badge tone="ok" size="sm">{t("추천")}</Badge></span>{/if}{/snippet}
+	<PickerOption selected={value === c.id} onclick={() => onpick(c)} aside={recommended ? recBadge : undefined}>
+		{#snippet name()}{c.name.replace(/^[^:]+:\s*/, "")}{/snippet}
 		{#snippet meta()}<span class="mono">{c.id}</span> · <CapTags model={{ reasoning: c.reasoning, vision: c.vision, imageGeneration: c.image }} ctx={c.image ? undefined : compact(c.contextWindow)} />{/snippet}
 	</PickerOption>
 {/snippet}
@@ -139,10 +143,5 @@
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
-	}
-	.rec {
-		display: inline-flex;
-		margin-left: 8px;
-		vertical-align: 1px;
 	}
 </style>

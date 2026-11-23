@@ -542,7 +542,7 @@
 		{#if schedulesShown}
 			<button class="navbtn wide" onclick={() => ((app.schedulesDialog = true), (app.sidebar.open = false))} title={schedulesTip}>
 				<span class="sico"><Icon name="clock" /></span> {t("예약 작업")}
-				{#if scheduled.count}<span class="salert"><Badge size="sm">{scheduled.count}</Badge></span>{/if}
+				{#if scheduled.count}<span class="salert"><span class="cbadge">{scheduled.count}</span></span>{/if}
 			</button>
 		{/if}
 		<!-- the phone drawer steps aside for the sheet (like the graph view does): it was left open behind it, two layers deep -->

@@ -170,11 +170,13 @@
 	}
 	.pid {
 		font-size: var(--fs-2xs);
+		line-height: 16px;
 		color: var(--text-faint);
 	}
 	.ptitle {
 		font-weight: 550;
 		font-size: var(--fs-md);
+		line-height: 20px;
 	}
 	.mlist {
 		list-style: none;
@@ -215,6 +217,7 @@
 	}
 	.mid {
 		font-size: var(--fs-sm);
+		line-height: 20px;
 		font-weight: 550;
 		overflow: hidden;
 		text-overflow: ellipsis;
@@ -222,6 +225,7 @@
 	}
 	.msub {
 		font-size: var(--fs-2xs);
+		line-height: 16px;
 		color: var(--text-faint);
 		overflow: hidden;
 		text-overflow: ellipsis;

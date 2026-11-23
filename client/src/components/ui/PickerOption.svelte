@@ -126,6 +126,12 @@
 			column-gap: 8px;
 			align-items: start;
 		}
+		.pk-opt.has-aside:not(:has(.lead)) {
+			grid-template-columns: minmax(0, 1fr);
+			grid-template-areas:
+				"main"
+				"aside";
+		}
 		.pk-opt.has-aside .lead {
 			grid-area: lead;
 		}

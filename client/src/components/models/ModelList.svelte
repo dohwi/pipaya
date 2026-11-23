@@ -153,6 +153,7 @@
 		flex: 1;
 		min-width: 0;
 		font-size: var(--fs-md);
+		line-height: 20px;
 		font-weight: 550;
 		overflow: hidden;
 		text-overflow: ellipsis;

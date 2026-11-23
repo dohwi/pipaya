@@ -2,14 +2,15 @@
 	import type { Snippet } from "svelte";
 
 	/**
-	 * The one static label/badge. Use it for every small pill or tag that only displays a state or category
+	 * The one static label/badge. Use it for every small tag that only displays a state or category
 	 * (activity state, "this device", scope tags, diff kinds, queue mode). Clickable filters are not badges.
 	 *
-	 *  tone     meaning: neutral | ok | warn | danger | accent
+	 *  tone     meaning: neutral | ok | warn | danger | accent | info
 	 *  variant  soft = tinted fill (default), outline = border only, solid = filled with the accent colour
 	 *  size     sm (18px) for dense rows, md (22px, matches the model field's `.chip`)
 	 *  mono     monospace face, for codes and counts
-	 * Every badge is a pill: square corners are kept for key caps (`kbd`) only.
+	 *  title    native tooltip on the badge itself (do not wrap `<Badge>` in a bare `<span>`, which breaks flex centring)
+	 * Every badge uses `--radius-xs` (4px) rounded corners; round pills are kept for counters (`.cbadge`) and switches.
 	 */
 	let {
 		tone = "neutral",
@@ -17,6 +18,7 @@
 		size = "md",
 		mono = false,
 		minWidth,
+		title,
 		children,
 	}: {
 		tone?: "neutral" | "ok" | "warn" | "danger" | "accent" | "info";
@@ -25,11 +27,12 @@
 		mono?: boolean;
 		/** Keeps a column of badges the same width (e.g. diff kinds). */
 		minWidth?: number;
+		title?: string;
 		children: Snippet;
 	} = $props();
 </script>
 
-<span class="badge {tone} {variant} {size}" class:mono style:min-width={minWidth ? `${minWidth}px` : undefined}>{@render children()}</span>
+<span class="badge {tone} {variant} {size}" class:mono style:min-width={minWidth ? `${minWidth}px` : undefined} {title}>{@render children()}</span>
 
 <style>
 	.badge {
@@ -38,7 +41,7 @@
 		align-items: center;
 		justify-content: center;
 		gap: 4px;
-		border-radius: var(--radius-pill);
+		border-radius: var(--radius-xs);
 		font-weight: 600;
 		white-space: nowrap;
 		color: var(--badge-fg);
@@ -47,7 +50,7 @@
 		--badge-fg: var(--text-dim);
 		--badge-bg: var(--bg-active);
 	}
-	/* The font leaves more room below the baseline than above, so centred text sits ~0.5px low in a pill: 1px of bottom padding lifts it
+	/* The font leaves more room below the baseline than above, so centred text sits ~0.5px low in a badge: 1px of bottom padding lifts it
 	   by half that (measured at 8x on Hangul, Latin and digits: ink centre within 0.2px of the box centre). */
 	.md {
 		height: 22px;
@@ -57,7 +60,7 @@
 	}
 	.sm {
 		height: 18px;
-		/* 6px horizontal inset keeps the 18px pill tighter than md without crowding the text */
+		/* 6px horizontal inset keeps the 18px badge tighter than md without crowding the text */
 		padding: 0 6px 1px;
 		font-size: var(--fs-2xs);
 	}

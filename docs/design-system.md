@@ -54,8 +54,8 @@ share one left and one right line. Never write a raw side padding in a dialog; u
 
 - **On / off is a `Switch`** (in a `SettingRow`, a `ListItem` lead or a switch row). Never a chip or pill that stays pressed.
 - **One of a few is `Segmented`** (`fill` for a mode, `cards` for a setting). A list of many is a picker (`PickerOption`).
-- **A state or category you only read is a `Badge`** (`tone`: neutral, ok, warn, danger, accent, info). No hand-made
-  `.chip` / `.pill` / `.tag` spans with their own colours, no leading dot inside the pill (the tone already says it).
+- **A state or category you only read is a `Badge`** (`tone`: neutral, ok, warn, danger, accent, info; `--radius-xs` 4px rounded corners, not a round pill). No hand-made
+  `.chip` / `.pill` / `.tag` spans with their own colours, no leading dot inside the badge (the tone already says it). Pass `title` directly on `<Badge>` instead of wrapping it in a bare `<span>`, which breaks flex centring.
 - Chips that stay pressed are only for filters and multi-pick from a long list (`FilterChip`: settings servers,
   quick folders, a role's tools). Toolbar toggles (mic, source view, a terminal modifier, favourite star) are icon
   buttons with `aria-pressed`, not chips.
@@ -80,11 +80,11 @@ share one left and one right line. Never write a raw side padding in a dialog; u
 - `.sr-only` (`app.css`): text for a screen reader only.
 - Check by measuring: every item in a row must have the same top, height and icon/text centre (`getBoundingClientRect`), at 1440, 820 and 390.
 
-### Text inside pills (measure the ink, not the box)
+### Text inside badges and pills (measure the ink, not the box)
 
 - A box can be centred and its text still look off: the fonts (Manrope, SUIT, JetBrains Mono) leave more room under the baseline than above. Measured at 8x on Hangul, Latin and digits, centred text sits **+1.0px low at 11px** (Badge, `.chip`), +0.66 at 12px, +0.3 at 13px, ~0 in mono.
 - The composer (textarea, its mirror and hint) uses `--font-input`, a second Manrope face trimmed to ascent/descent 96.6% / 20% (1.166em, was 1.366em): Manrope's own metrics drew the text caret 22px at 16px, 2.5x a lowercase letter; now 18px, and the `#image`/`@name` highlights hug the text the same way. Keep ascent − descent at 76.6% so the text stays put. Do not move the override onto `--font`: Chromium rounds ascent and descent to whole pixels separately, so at 12, 18 and 28px every fixed line box shifted its text 1px.
-- So `Badge` and `.chip` carry `padding: 0 8px 1px` (a 1px lift). A new pill style gets its own measured value, never a guess.
+- So `Badge` and `.chip` carry `padding: 0 8px 1px` (a 1px lift). A new badge or pill style gets its own measured value, never a guess.
 - Dialogs sit on whole pixels (`Modal` places the panel by pixel offsets, not `top: 50%` + `translate`), otherwise a panel with the other parity than the window lands on x.5 and its badges are painted 0.5px higher than in the next dialog. Header title/subtitle have whole-pixel line boxes (28 / 18).
 - A small label next to bigger text in a centred row (the `@name` handle and the parent mark beside a conversation title, the time on a graph card, a dialog title's sub line, a settings search hit's location) is aligned on the **centre line**, not the baseline: no nudge, just a whole-pixel line box (16px) centred by the row against the title's (20px). Measured on the Hangul ink, label centre − title centre is 0 at 1x and within ±0.5px at 1.5x / 2x. (It was lowered 1px onto the baseline in #135/#139; that left the handle's centre 1px below the title's.) Rows that put a small sub beside a big title use `align-items: center`, not `baseline` (the connection dialog's `연결 수정  fake` sat 2.5px low on the baseline).
 - An icon beside a label in a flex row is centred by the row, not nudged: the queued row's sender icon once carried `top: -1px` from a 4x measurement and sat 1px high at 1x.
