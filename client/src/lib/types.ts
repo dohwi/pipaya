@@ -759,6 +759,8 @@ export interface UserItem {
 	images: ImageBlock[];
 	/** Files attached to this message, saved in the session's working directory */
 	files?: FileRef[];
+	/** Skills explicitly invoked in this message (`/skill:name`) and confirmed by a server `<pipaya-hint>` block */
+	skills?: string[];
 	/** A note a server extension stored with the message (`pipaya-note`): shown on it, never sent to the model. */
 	note?: MessageNote;
 	/** Sent by a scheduled task, not typed by the person (the server stores a `pipaya-schedule` block with it) */

@@ -62,6 +62,11 @@ describe("workSummary (Korean)", () => {
 		const steps = [tool("bash"), tool("read", { path: "a" }), tool("grep"), tool("delegate"), tool("peer")];
 		expect(workSummary(steps)).toBe("명령 1개 실행, 파일 1개 읽음 및 그 밖의 도구 3개 사용");
 	});
+	test("skill stays visible instead of being lumped into other tools when 4+ kinds appear", () => {
+		const steps = [tool("bash"), tool("read", { path: "a" }), tool("grep"), tool("read", { path: "/s/x/SKILL.md" })];
+		expect(workSummary(steps)).toBe("명령 1개 실행, 스킬 1개 불러옴 및 그 밖의 도구 2개 사용");
+		expect(workIcon(steps)).toBe("terminal");
+	});
 	test("exactly three kinds including other: no lumping", () => {
 		expect(workSummary([tool("bash"), tool("grep"), tool("peer")])).toBe("명령 1개 실행, 검색 1회 및 도구 1개 사용");
 	});

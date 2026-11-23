@@ -100,8 +100,15 @@ export function workSummary(steps: readonly Step[]): string {
 	let known = [...counts] as [Exclude<WorkKind, "other">, number][];
 	const lumped = known.length + (rest ? 1 : 0) > MAX_PARTS;
 	if (lumped) {
-		for (const [, n] of known.slice(MAX_PARTS - 1)) rest += n;
-		known = known.slice(0, MAX_PARTS - 1);
+		const keep = known.slice(0, MAX_PARTS - 1);
+		const dropped = known.slice(MAX_PARTS - 1);
+		const skillIdx = dropped.findIndex(([k]) => k === "skill");
+		if (skillIdx >= 0 && keep.length) {
+			const [displaced] = keep.splice(keep.length - 1, 1, dropped[skillIdx]!);
+			dropped.splice(skillIdx, 1, displaced!);
+		}
+		for (const [, n] of dropped) rest += n;
+		known = keep;
 	}
 	const words = known.map(([k, n]) => phrase(k, n));
 	if (rest) words.push(lumped ? t("그 밖의 도구 {n}개 사용", { n: rest }) : t("도구 {n}개 사용", { n: rest }));

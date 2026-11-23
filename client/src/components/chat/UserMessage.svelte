@@ -70,7 +70,7 @@
 			<blockquote class="quote">{shown.quote}</blockquote>
 		{/if}
 		{#if shown.rest}
-			<div class="txt" class:clamp={item.note?.collapse && !expanded}><TokenText text={shown.rest} images={item.images} sessionId={session?.id ?? null} /></div>
+			<div class="txt" class:clamp={item.note?.collapse && !expanded}><TokenText text={shown.rest} images={item.images} skills={item.skills ?? []} sessionId={session?.id ?? null} /></div>
 		{/if}
 		{#if item.note}
 			<div class="tplnote" title={item.note.call} use:tapTitle>

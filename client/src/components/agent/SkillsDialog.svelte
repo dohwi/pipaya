@@ -14,6 +14,7 @@
 	import { untrack } from "svelte";
 	import { errorText, type Api, type ApiError } from "../../lib/api";
 	import { app } from "../../lib/store.svelte";
+	import { skillOf } from "../../lib/tools";
 	import type { SessionContext, SkillInfo, SkillList, SkillSource } from "../../lib/types";
 	import DialogBody from "../ui/DialogBody.svelte";
 	import ExtrasIntro from "../ui/ExtrasIntro.svelte";
@@ -65,7 +66,29 @@
 	const projectEnabled = (s: SkillInfo) => s.override ?? s.globalEnabled;
 	const effective = (s: SkillInfo, mode: Mode) => (mode === "project" ? projectEnabled(s) : s.globalEnabled);
 	const onCount = $derived((data?.skills ?? []).filter(s => s.enabled).length);
-	const used = $derived(new Set(session?.skills.map(s => s.name)));
+	const injected = $derived(new Set(session?.skills.map(s => s.name)));
+	const loaded = $derived.by(() => {
+		const out = new Set<string>();
+		const byPath = new Map((data?.skills ?? []).map(s => [s.path, s.name]));
+		for (const rf of session?.readFiles ?? []) {
+			const hit = byPath.get(rf.path) ?? skillOf("read", { path: rf.path });
+			if (hit) out.add(hit);
+		}
+		const chat = target.sessionId ? app.chatOf(target.sessionId) : null;
+		for (const item of chat?.items ?? []) {
+			if (item.kind === "user") {
+				for (const name of item.skills ?? []) out.add(name);
+			} else if (item.kind === "assistant") {
+				for (const b of item.blocks) {
+					if (b.type === "tool" && chat?.tools[b.id]?.state === "done") {
+						const hit = (typeof b.args.path === "string" && byPath.get(b.args.path)) || skillOf(b.name, b.args);
+						if (hit) out.add(hit);
+					}
+				}
+			}
+		}
+		return out;
+	});
 
 	async function toggle(s: SkillInfo, next: boolean, mode: Mode) {
 		const key = mode + s.name;
@@ -161,7 +184,8 @@
 			{:else if mode === "global" && s.override !== null}
 				<Badge size="sm" variant="outline">{t("프로젝트 설정 있음")}</Badge>
 			{/if}
-			{#if used.has(s.name)}<Badge size="sm" tone="ok">{t("이 대화에서 사용 중")}</Badge>{/if}
+			{#if loaded.has(s.name)}<Badge size="sm" tone="ok">{t("이 대화에서 불러옴")}</Badge>
+			{:else if injected.has(s.name)}<Badge size="sm" variant="outline">{t("이 대화에 주입됨")}</Badge>{/if}
 		{/snippet}
 		<p class="desc">{s.description}</p>
 		<p class="meta mono">{home(s.path)}</p>

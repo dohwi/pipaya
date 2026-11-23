@@ -475,7 +475,7 @@ const MAX_INLINE_SKILL_CHARS = 40_000;
 /** Names written as `/skill:name` in a message, limited to skills in `names`, in order of appearance, without repeats. */
 export function mentionedSkills(text: string, names: string[]): string[] {
 	const out: string[] = [];
-	for (const m of text.matchAll(/(?:^|\s)\/skill:([a-z0-9]+(?:-[a-z0-9]+)*)(?=$|[\s.,;:!?)])/g)) {
+	for (const m of text.matchAll(/(?:^|\s)\/skill:([a-z0-9]+(?:-[a-z0-9]+)*)(?![A-Za-z0-9_/-])/g)) {
 		const name = m[1]!;
 		if (names.includes(name) && !out.includes(name)) out.push(name);
 	}

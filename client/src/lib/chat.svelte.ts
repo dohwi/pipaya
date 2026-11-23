@@ -87,9 +87,12 @@ function assistantFields(m: AssistantMessage) {
 	};
 }
 
-function userFields(m: Extract<AgentMessage, { role: "user" }>): { text: string; images: ImageBlock[]; files: FileRef[]; note?: MessageNote; scheduled?: true; goal?: true } {
+const SKILL_HINT = /^<pipaya-hint>The user explicitly invoked the skill "([a-z0-9]+(?:-[a-z0-9]+)*)"/;
+
+function userFields(m: Extract<AgentMessage, { role: "user" }>): { text: string; images: ImageBlock[]; files: FileRef[]; skills?: string[]; note?: MessageNote; scheduled?: true; goal?: true } {
 	const images = Array.isArray(m.content) ? (m.content.filter((c) => c.type === "image") as ImageBlock[]) : [];
 	const files: FileRef[] = [];
+	const skills: string[] = [];
 	let note: MessageNote | undefined;
 	let scheduled = false;
 	let goal = false;
@@ -120,10 +123,15 @@ function userFields(m: Extract<AgentMessage, { role: "user" }>): { text: string;
 					} catch { /* an unreadable note is simply not shown */ }
 					return false;
 				}
+				if (s.startsWith("<pipaya-hint>")) {
+					const hit = SKILL_HINT.exec(s);
+					if (hit && !skills.includes(hit[1]!)) skills.push(hit[1]!);
+					return false;
+				}
 				return !s.startsWith("<pipaya-");
 			})
 		: m.content;
-	return { text: textOf(shown), images, files, ...(note ? { note } : {}), ...(scheduled ? { scheduled: true as const } : {}), ...(goal ? { goal: true as const } : {}) };
+	return { text: textOf(shown), images, files, ...(skills.length ? { skills } : {}), ...(note ? { note } : {}), ...(scheduled ? { scheduled: true as const } : {}), ...(goal ? { goal: true as const } : {}) };
 }
 
 function toolRunFrom(m: Extract<AgentMessage, { role: "toolResult" }>): ToolRun {
@@ -762,9 +770,10 @@ export class ChatState {
 					const opt = this.items.find((x): x is UserItem => x.kind === "user" && x.seq === null);
 					if (opt) {
 						opt.seq = seq;
-						// A command typed short but stored expanded (with a note): show what was really sent.
+						// A command typed short but stored expanded (with a note) or with `/skill:` hints: show what was really sent.
 						const full = userFields(m);
 						if (full.note) Object.assign(opt, { text: full.text, note: full.note });
+						if (full.skills?.length) opt.skills = full.skills;
 					} else {
 						this.items.push({ kind: "user", key: `m${seq}`, seq, ts: m.timestamp ?? e.ts, fresh: true, ...userFields(m) });
 					}

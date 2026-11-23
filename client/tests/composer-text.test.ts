@@ -60,12 +60,27 @@ describe("splitTokens", () => {
 		for (const t of ["@누구 a@미나.com", "#image3", "PR #96 병합", "#main 브랜치", "hello"]) expect(splitTokens(t, known)).toEqual([{ text: t }]);
 		expect(splitTokens("@미나", { names: [] })).toEqual([{ text: "@미나" }]);
 	});
+	test("marks confirmed /skill:name tokens and keeps Korean particles or punctuation outside", () => {
+		const withSkills = { ...known, skills: ["review", "my-skill"] };
+		expect(splitTokens("/skill:review로 @미나랑 /skill:my-skill.", withSkills)).toEqual([
+			{ text: "/skill:review", kind: "skill", name: "review" },
+			{ text: "로 " },
+			{ text: "@미나", kind: "mention", name: "미나" },
+			{ text: "랑 " },
+			{ text: "/skill:my-skill", kind: "skill", name: "my-skill" },
+			{ text: "." },
+		]);
+		expect(splitTokens("/skill:review-extra /skill:unknown /skill:review_x foo/skill:review", withSkills)).toEqual([
+			{ text: "/skill:review-extra /skill:unknown /skill:review_x foo/skill:review" },
+		]);
+		expect(splitTokens("/skill:review", known)).toEqual([{ text: "/skill:review" }]);
+	});
 });
 
 describe("mirrorHtml", () => {
 	const known = { commands: ["snip:fix"], skills: [{ name: "review" }], mentions: ["미나"], images: 1, paths: ["src/a.ts"] };
 	test("marks only tokens that refer to something real", () => {
-		const html = mirrorHtml("#src/a.ts #nope $explore #image1 #image2 @미나랑 @철수 /skill:review /snip:fix", known);
+		const html = mirrorHtml("#src/a.ts #nope $explore #image1 #image2 @미나랑 @철수 /skill:review /skill:review로 /skill:review-2 /skill:review_x /snip:fix", known);
 		expect(html).toContain('<mark class="file">#src/a.ts</mark>');
 		expect(html).not.toContain('<mark class="file">#nope');
 		expect(html).not.toContain("ghost</mark>");
@@ -75,6 +90,9 @@ describe("mirrorHtml", () => {
 		expect(html).toContain('<mark class="mention">@미나</mark>랑');
 		expect(html).not.toContain("@철수</mark>");
 		expect(html).toContain('<mark class="skill">/skill:review</mark>');
+		expect(html).toContain('<mark class="skill">/skill:review</mark>로');
+		expect(html).not.toContain("/skill:review-2</mark>");
+		expect(html).not.toContain("/skill:review_x</mark>");
 		expect(html).toContain('<mark class="skill">/snip:fix</mark>');
 	});
 	test("escapes the text and ends with a newline (keeps the layer as tall as the textarea)", () => {
