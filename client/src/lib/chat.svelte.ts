@@ -328,6 +328,9 @@ export class ChatState {
 	private syncing = false;
 	private buffer: PipayaEvent[] = [];
 	private token = 0;
+	/** Monotonic counters incremented on live SSE transitions so a slow `catchUp()` never overwrites newer live state. */
+	private runRev = 0;
+	private streamRev = 0;
 	/** Cancels the requests of the load in progress (a newer load, or its deadline). */
 	private loading: AbortController | null = null;
 
@@ -455,6 +458,8 @@ export class ChatState {
 	async catchUp(): Promise<void> {
 		if (!this.ready || this.syncing) return;
 		const token = this.token;
+		const startRunRev = this.runRev;
+		const startStreamRev = this.streamRev;
 		const api = typeof this.api.scoped === "function" ? this.api.scoped(AbortSignal.timeout(10_000)) : this.api;
 		let detail: Awaited<ReturnType<Api["getSession"]>>;
 		try {
@@ -465,7 +470,8 @@ export class ChatState {
 		if (token !== this.token || !this.ready) return;
 		const st = detail.status;
 		const wasRunning = this.running;
-		if (st.running !== this.running) {
+		// If a live run_started/run_finished arrived while getSession() was in flight, trust the newer live stream.
+		if (this.runRev === startRunRev && st.running !== this.running) {
 			this.running = st.running;
 			if (st.running) this.runStartedAt = this.runStartedAt ?? Date.now();
 			else {
@@ -480,8 +486,11 @@ export class ChatState {
 		this.serverCompacting = st.compacting ?? false;
 		this.queued = (st.queuedMessages ?? []).map((q) => ({ mode: q.mode, text: q.text, ...(q.deferred ? { deferred: true } : {}) }));
 		const partial = st.streamingMessage as AssistantMessage | null;
-		if (st.running && partial && partial.role === "assistant") this.catchUpStream(partial);
-		if (wasRunning && !st.running && typeof api.messagesAfter === "function") {
+		// Only overwrite the streaming bubble if no live message_start/message_update/message_end arrived during getSession().
+		if (this.runRev === startRunRev && this.streamRev === startStreamRev && st.running && partial && partial.role === "assistant") {
+			this.catchUpStream(partial);
+		}
+		if (this.runRev === startRunRev && wasRunning && !st.running && typeof api.messagesAfter === "function") {
 			try {
 				const missed = await api.messagesAfter(this.id, this.lastSeq, 100);
 				if (token !== this.token || !this.ready) return;
@@ -648,6 +657,7 @@ export class ChatState {
 				break;
 
 			case "run_started":
+				this.runRev++;
 				this.retrying = null;
 				this.contextRevision++;
 				this.running = true;
@@ -661,6 +671,8 @@ export class ChatState {
 				break;
 
 			case "run_finished": {
+				this.runRev++;
+				this.streamRev++;
 				this.retrying = null;
 				this.running = false;
 				this.stopped = d.status === "aborted";
@@ -689,11 +701,13 @@ export class ChatState {
 			}
 
 			case "message_start":
+				this.streamRev++;
 				this.retrying = null;
 				if (d.message?.role === "assistant") this.ensureStream();
 				break;
 
 			case "message_update":
+				this.streamRev++;
 				this.applyDelta(this.ensureStream(), d.event as StreamDelta);
 				break;
 
@@ -718,9 +732,18 @@ export class ChatState {
 			}
 
 			case "message_end": {
+				this.streamRev++;
 				const seq = d.seq as number;
 				const m = d.message as AgentMessage;
-				if (seq <= this.lastSeq) break;
+				if (seq <= this.lastSeq) {
+					// A replayed `message_start` for a message already loaded by `load()` leaves an empty ghost bubble;
+					// clean it up when its matching `message_end` is skipped as a duplicate.
+					if (m.role === "assistant") {
+						const ghost = this.streamItem();
+						if (ghost && ghost.seq === null && ghost.blocks.length === 0) this.items.pop();
+					}
+					break;
+				}
 				this.lastSeq = seq;
 				this.contextRevision++;
 				// Newly appended inputs/tool results are not reflected in the previous measurement, but blanking it

@@ -30,15 +30,24 @@ export interface LinkHooks {
 /** How long a change to the lists waits before they are written to the cache. */
 const SAVE_DELAY_MS = 2000;
 
-/** How long the initial lists may take before the attempt counts as a network failure (and is retried). */
-const LISTS_TIMEOUT_MS = 15_000;
+/** How long the initial sidebar lists may take before the attempt counts as a network failure (and is retried). */
+const LISTS_TIMEOUT_MS = 25_000;
+
+/** How long the model/provider catalog may take after the sidebar lists have loaded. */
+const CATALOG_TIMEOUT_MS = 25_000;
+
+/** How long `/health` may take during sync before counting as unreachable (allows high-latency / relayed links). */
+const HEALTH_SYNC_TIMEOUT_MS = 8_000;
+
+/** How long `/health` may take during a foreground probe or wake check. */
+const HEALTH_PROBE_TIMEOUT_MS = 6_000;
 
 /**
  * Longest wait between two tries at a server that does not answer. A tailnet that comes back (VPN reconnected, phone off
  * the lift) fires no browser event, so this is how long the app may stay offline after the server is reachable again.
- * A failed try is cheap: its requests are cancelled together once /health gives up.
+ * Offline retries check `/health` alone before fanning out, so waiting up to 10 s stays responsive without flooding.
  */
-const MAX_RETRY_MS = 5_000;
+const MAX_RETRY_MS = 10_000;
 
 /**
  * How long a reopened stream must stay up before backoff resets. Without this, a stream that opens (200) and drops
@@ -120,6 +129,7 @@ export class ServerLink {
 	private token = 0;
 	private stopped = false;
 	private probing = false;
+	private resuming = false;
 	/** The newest event id that reached `hooks.event`: where a reopened stream resumes from. */
 	private cursor = 0;
 
@@ -224,6 +234,7 @@ export class ServerLink {
 	stop(): void {
 		this.stopped = true;
 		this.probing = false;
+		this.resuming = false;
 		this.token++;
 		this.attempt?.abort();
 		this.disarmStable();
@@ -244,7 +255,7 @@ export class ServerLink {
 		this.probing = true;
 		const token = this.token;
 		try {
-			await this.api.health(AbortSignal.timeout(3000));
+			await this.api.health(AbortSignal.timeout(HEALTH_PROBE_TIMEOUT_MS));
 		} catch {
 			if (token === this.token && !this.stopped && this.online) {
 				this.net = "offline";
@@ -281,7 +292,9 @@ export class ServerLink {
 		if (this.stopped) return;
 		const useSync = !this.loaded || this.reopenFails >= MAX_REOPEN_FAILS;
 		if (useSync) this.reopenFails = 0;
-		this.retryTimer = setTimeout(() => void (useSync ? this.sync(true) : this.reopen(false)), this.retryDelay);
+		// Spread concurrent retries across saved servers / clients with ±20% jitter (keep short test delays exact).
+		const wait = this.retryDelay >= 500 ? Math.round(this.retryDelay * (0.8 + Math.random() * 0.4)) : this.retryDelay;
+		this.retryTimer = setTimeout(() => void (useSync ? this.sync(true) : this.reopen(false)), wait);
 		this.retryDelay = Math.min(this.retryDelay * 2, MAX_RETRY_MS);
 	}
 
@@ -295,13 +308,17 @@ export class ServerLink {
 		this.reopenFails = 0;
 		if (!this.online) return this.sync();
 		if (!force) {
+			if (this.resuming) return;
+			this.resuming = true;
 			// A short absence: the socket is probably fine, so only check that the server answers at all.
 			const token = this.token;
 			try {
-				await this.api.health(AbortSignal.timeout(3000));
+				await this.api.health(AbortSignal.timeout(HEALTH_PROBE_TIMEOUT_MS));
 			} catch {
 				if (token === this.token) void this.sync();
 				return;
+			} finally {
+				this.resuming = false;
 			}
 			if (token !== this.token) return;
 		}
@@ -442,41 +459,36 @@ export class ServerLink {
 		const attempt = (this.attempt = new AbortController());
 		const api = this.api.scoped(attempt.signal);
 		try {
-			// Health and the lists go out together (one round trip over a slow link, not two); health is judged first.
-			const healthReq = api.health(AbortSignal.timeout(5000)); // a silent server counts as offline after 5s
-			// Capture the replay cursor before reading /activity, so any run_started/run_finished between them is replayed
-			// once the stream opens instead of falling into a gap between the snapshot and the cursor.
-			const latestIdReq = api.latestEventId();
-			latestIdReq.catch(() => {});
-			// What the sidebar draws comes in its own batch: the catalog (models, providers ask every provider for its auth)
-			// can be much slower, and the conversation list used to wait for the slowest of them behind a skeleton.
-			const listedReq = Promise.all([
-				api.listSessions(200, false),
-				api.workspace().catch(() => null), // servers from before workspaces existed
-				api.groups().catch(() => [] as Group[]), // servers from before session groups existed
-				api.terminals().catch(() => [] as TerminalInfo[]), // servers from before terminals existed
-				api.terminalSupport().catch(() => null),
-				latestIdReq.then(
-					() => api.activity().catch(() => null),
-					() => api.activity().catch(() => null),
-				),
-			]);
-			const catalogReq = Promise.all([
-				api.models(),
-				api.providers(),
-				api.tools(),
-				latestIdReq,
-				api.configuration().catch(() => null), // servers from before model configuration existed
-			]);
-			const listsReq = Promise.all([listedReq, catalogReq]);
-			listsReq.catch(() => {}); // judged below; a failure before that point must not go unhandled
-			// Only /health had a deadline: a list request stuck on a connection the OS killed in the background never settled,
-			// so sync hung (spinner forever, no retry scheduled). Past the deadline it fails like any other network error.
-			const lists = withDeadline(listsReq, LISTS_TIMEOUT_MS, () => new ApiError(0, "network", t("서버에 연결할 수 없습니다")));
-			lists.catch(() => {});
-			// The sidebar's part as soon as it is here; past the deadline (or on an error) it fails with the whole batch.
-			const listed = Promise.race([listedReq, lists.then(([l]) => l)]);
-			listed.catch(() => {});
+			const startListed = () => {
+				// Capture the replay cursor before reading /activity, so any run_started/run_finished between them is replayed
+				// once the stream opens instead of falling into a gap between the snapshot and the cursor.
+				const latestIdReq = api.latestEventId();
+				latestIdReq.catch(() => {});
+				// Sidebar batch stays within HTTP/1.1's 6-connection-per-host budget; the heavier model/provider catalog waits
+				// for Wave 2 so it never blocks the conversation list or `/health` on slow or relayed links.
+				const req = Promise.all([
+					api.listSessions(200, false),
+					api.workspace().catch(() => null), // servers from before workspaces existed
+					api.groups().catch(() => [] as Group[]), // servers from before session groups existed
+					api.terminals().catch(() => [] as TerminalInfo[]), // servers from before terminals existed
+					api.terminalSupport().catch(() => null),
+					latestIdReq.then(
+						() => api.activity().catch(() => null),
+						() => api.activity().catch(() => null),
+					),
+					latestIdReq,
+				]);
+				req.catch(() => {});
+				const bounded = withDeadline(req, LISTS_TIMEOUT_MS, () => new ApiError(0, "network", t("서버에 연결할 수 없습니다")));
+				bounded.catch(() => {});
+				return bounded;
+			};
+
+			// Offline retries probe `/health` alone first so an unreachable server does not re-fire a burst of list requests
+			// every retry interval. Initial boot and foreground syncs pipeline `/health` + sidebar lists in one round trip.
+			const gateOnHealth = fromRetry && !this.listed;
+			const healthReq = api.health(AbortSignal.timeout(HEALTH_SYNC_TIMEOUT_MS));
+			const listed = gateOnHealth ? null : startListed();
 			const health = await healthReq;
 			if (token !== this.token) return;
 			this.versions = { version: health.version, protocol: health.protocol, minClientProtocol: health.minClientProtocol };
@@ -487,7 +499,7 @@ export class ServerLink {
 				this.netError = t("이 서버는 더 새로운 앱이 필요합니다. 앱을 업데이트하세요");
 				return;
 			}
-			const [list, workspace, groups, terminals, terminalSupport, activity] = await listed;
+			const [list, workspace, groups, terminals, terminalSupport, activity, cursor] = await (listed ?? startListed());
 			if (token !== this.token) return;
 			const running: Record<string, boolean> = {};
 			const awaiting: Record<string, number> = {};
@@ -515,8 +527,20 @@ export class ServerLink {
 			this.listed = true;
 			this.cached = false;
 			this.followLists();
-			void this.lookUpRepos(this.listedPaths(), true);
-			const [models, providers, tools, cursor, config] = (await lists)[1];
+
+			// Wave 2: model/provider catalog (4 requests, cleanly within HTTP/1.1's socket budget and its own deadline).
+			const catalogReq = Promise.all([
+				api.models(),
+				api.providers(),
+				api.tools(),
+				api.configuration().catch(() => null), // servers from before model configuration existed
+			]);
+			catalogReq.catch(() => {});
+			const [models, providers, tools, config] = await withDeadline(
+				catalogReq,
+				CATALOG_TIMEOUT_MS,
+				() => new ApiError(0, "network", t("서버에 연결할 수 없습니다")),
+			);
 			if (token !== this.token) return;
 			this.models = models;
 			this.providers = providers;
@@ -529,8 +553,8 @@ export class ServerLink {
 			// Where a reopened stream resumes from: the newest event id the server has, so a wake does not replay the
 			// whole history (it did: 1.7s of re-rendering in one frame).
 			this.cursor = cursor;
-			void this.refreshModelSettings();
 
+			let opened = false;
 			let stable = false;
 			this.unsubscribe = this.api.subscribe(
 				{
@@ -541,10 +565,23 @@ export class ServerLink {
 					},
 					onOpen: () => {
 						if (token !== this.token) return;
+						const first = !opened;
+						opened = true;
 						stable = false;
 						this.net = "online";
 						this.netError = "";
+						if (first && !fromRetry) {
+							this.retryDelay = 1000;
+							this.reopenFails = 0;
+						}
 						this.armStable(token, () => { stable = true; });
+						if (first) {
+							// Background metadata waits until the stream is open so it does not compete for HTTP/1.1 sockets
+							// with `/stream-tickets` or `/events`.
+							void this.lookUpRepos(this.listedPaths(), true);
+							void this.refreshModelSettings();
+							this.hooks.ready(this, false);
+						}
 					},
 					onError: () => {
 						if (token !== this.token) return;
@@ -556,13 +593,6 @@ export class ServerLink {
 				},
 				cursor,
 			);
-			this.net = "online";
-			this.netError = "";
-			if (!fromRetry) {
-				this.retryDelay = 1000;
-				this.reopenFails = 0;
-			}
-			this.hooks.ready(this, false);
 		} catch (e) {
 			if (token !== this.token) return;
 			attempt.abort(); // what is still out (the catalog after a health failure, the rest after a deadline) stops here

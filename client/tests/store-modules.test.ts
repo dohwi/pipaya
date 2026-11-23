@@ -176,7 +176,8 @@ describe("store/wake", () => {
       for (const fn of winListeners.get("focus") ?? []) fn();
       expect(calls).toEqual([false, true]);
 
-      // Online always forces resync
+      // Online always forces resync, but rapid consecutive online events are debounced
+      for (const fn of winListeners.get("online") ?? []) fn();
       for (const fn of winListeners.get("online") ?? []) fn();
       expect(calls).toEqual([false, true, true]);
 

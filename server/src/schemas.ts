@@ -416,6 +416,7 @@ export const StreamQuery = Type.Object({
 	after: Type.Optional(Type.Integer({ minimum: 0, description: "Replay persisted events with id > after, then go live. Same as the Last-Event-ID header." })),
 	types: Type.Optional(Type.String({ description: "Comma-separated event types to receive" })),
 	token: Type.Optional(Type.String({ description: "Auth token, for EventSource which cannot set headers" })),
+	ping: Type.Optional(Type.String({ description: "Set to '1' to receive named SSE 'ping' heartbeat events instead of comments" })),
 });
 export const HistoryQuery = Type.Object({
 	sessionId: Type.Optional(Type.String()),

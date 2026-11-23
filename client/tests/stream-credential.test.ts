@@ -142,4 +142,66 @@ describe("the event stream", () => {
 		expect(opened[0]!.closed).toBe(false);
 		stop();
 	});
+	test("idle watchdog arms on the first ping event, resets on activity, and fails silent half-open streams", async () => {
+		serve(() => Response.json({ ticket: "tk", expiresAt: 1 }));
+		const listeners = new Map<string, ((e: MessageEvent) => void)[]>();
+		const opened: { closed: boolean; onopen?: () => void }[] = [];
+		globalThis.EventSource = class {
+			closed = false;
+			onopen?: () => void;
+			onerror?: () => void;
+			constructor() { opened.push(this); }
+			addEventListener(type: string, fn: (e: MessageEvent) => void) {
+				const list = listeners.get(type) ?? [];
+				list.push(fn);
+				listeners.set(type, list);
+			}
+			close() { this.closed = true; }
+		} as unknown as typeof EventSource;
+		const emit = (type: string, data = "{}") => {
+			for (const fn of listeners.get(type) ?? []) fn({ data } as MessageEvent);
+		};
+		let errors = 0;
+		new Api({ baseUrl: "http://srv", token: "secret" }, undefined, { streamOpenTimeoutMs: 0, streamIdleTimeoutMs: 50 }).subscribe(
+			{ onEvent() {}, onError: () => errors++ },
+			0,
+		);
+		await tick();
+		opened[0]!.onopen?.();
+		// Arm watchdog with initial ping, then keep it alive with another ping + regular event.
+		emit("ping", "1");
+		await Bun.sleep(25);
+		emit("ping", "2");
+		await Bun.sleep(25);
+		emit("run_started", JSON.stringify({ id: 1, sessionId: "s1", type: "run_started", data: {}, ts: 1 }));
+		expect(errors).toBe(0);
+		expect(opened[0]!.closed).toBe(false);
+		// Going completely silent past streamIdleTimeoutMs closes the zombie socket and notifies onError once.
+		await Bun.sleep(80);
+		expect(errors).toBe(1);
+		expect(opened[0]!.closed).toBe(true);
+	});
+	test("idle watchdog stays disarmed for older servers that never emit ping events", async () => {
+		serve(() => Response.json({ ticket: "tk", expiresAt: 1 }));
+		const opened: { closed: boolean; onopen?: () => void }[] = [];
+		globalThis.EventSource = class {
+			closed = false;
+			onopen?: () => void;
+			onerror?: () => void;
+			constructor() { opened.push(this); }
+			addEventListener() {}
+			close() { this.closed = true; }
+		} as unknown as typeof EventSource;
+		let errors = 0;
+		const stop = new Api({ baseUrl: "http://srv", token: "secret" }, undefined, { streamOpenTimeoutMs: 0, streamIdleTimeoutMs: 30 }).subscribe(
+			{ onEvent() {}, onError: () => errors++ },
+			0,
+		);
+		await tick();
+		opened[0]!.onopen?.();
+		await Bun.sleep(60);
+		expect(errors).toBe(0);
+		expect(opened[0]!.closed).toBe(false);
+		stop();
+	});
 });

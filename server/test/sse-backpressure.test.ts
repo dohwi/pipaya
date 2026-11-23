@@ -77,11 +77,35 @@ describe("SSE slow client", () => {
 
 		const res = stalledResponse();
 		const raw: any = new EventEmitter();
-		const req: any = { query: { after: "0" }, headers: {}, raw };
+		const req: any = { query: {}, headers: {}, raw };
+		req.query.after = "0";
 		const reply: any = { hijack() {}, raw: res };
 		streamEvents(req, reply, bus, { corsPolicy: { allows: () => false } as any, maxBuffered: 2000, drainTimeoutMs: 30 });
 
 		for (let i = 0; i < 20 && !res.destroyed; i++) await Bun.sleep(10);
 		expect(res.destroyed).toBe(true);
+	});
+
+	test("emits named ping events on open and periodically so clients can detect half-open streams", async () => {
+		const bus = new EventBus(openDb(":memory:"));
+		const chunks: string[] = [];
+		const res: any = new EventEmitter();
+		res.writableLength = 0;
+		res.destroyed = false;
+		res.writeHead = () => {};
+		res.write = (chunk: string) => { chunks.push(chunk); return true; };
+		res.destroy = () => { res.destroyed = true; };
+
+		const raw: any = new EventEmitter();
+		const req: any = { query: { ping: "1" }, headers: {}, raw };
+		const reply: any = { hijack() {}, raw: res };
+		streamEvents(req, reply, bus, { corsPolicy: { allows: () => false } as any, heartbeatMs: 25 });
+
+		// Initial ping arrives immediately on open.
+		expect(chunks.some((c) => c.startsWith("event: ping\n"))).toBe(true);
+		const initialPings = chunks.filter((c) => c.startsWith("event: ping\n")).length;
+		await Bun.sleep(65);
+		expect(chunks.filter((c) => c.startsWith("event: ping\n")).length).toBeGreaterThan(initialPings);
+		raw.emit("close");
 	});
 });

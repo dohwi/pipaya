@@ -16,6 +16,7 @@ export function watchWake(
   now: () => number = () => Date.now(),
 ): () => void {
   let wokeAt = 0;
+  let onlineAt = 0;
   let leftAt = 0;
   const left = () => {
     if (!leftAt) leftAt = now();
@@ -32,7 +33,12 @@ export function watchWake(
     if (document.hidden) left();
     else wake();
   };
-  const onOnline = () => onResync(true);
+  const onOnline = () => {
+    const t = now();
+    if (t - onlineAt < WAKE_DEBOUNCE_MS) return;
+    onlineAt = t;
+    onResync(true);
+  };
   window.addEventListener("blur", left);
   document.addEventListener("visibilitychange", onVisibility);
   window.addEventListener("focus", wake);
