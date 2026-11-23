@@ -379,9 +379,11 @@
 	}
 	/* the 13px mark's ink lands on the row centre with the 16px button glyphs: at -2px it sat 0.5px high of them and
 	   1.5px high of the text's body, which is what reads as "the logo and the model name do not line up" */
-	/* the time under a progress note: on the text's left line, the foot's size and colour, 4px under the text */
+	/* the time under a progress note: on the text's left line, the foot's size and colour, 4px under the text.
+	   fit-content keeps the tap target on the time text itself instead of spanning the whole row width */
 	.note-when {
 		display: block;
+		width: fit-content;
 		margin-top: 4px;
 		font-size: var(--fs-2xs);
 		line-height: 16px;
