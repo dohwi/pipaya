@@ -1,4 +1,4 @@
-import { Marked } from "marked";
+import { Marked, type Tokens } from "marked";
 import createDOMPurify, { type DOMPurify } from "dompurify";
 import { getLang, t } from "./i18n";
 import { remoteImageHost } from "./remote-image";
@@ -13,6 +13,8 @@ const md = new Marked(MARKED_OPTIONS, NO_INDENTED_CODE, BARE_URL_END);
 let colourCode = true;
 /** Set when a code block was drawn plain because its grammar is still loading: that HTML must not be cached. */
 let waited = false;
+/** Normalized server-file paths already rendered inline in the current parse (pre-populated from `![](...)` tokens). */
+let embeddedMedia: Set<string> | null = null;
 
 const escapeHtml = (s: string) =>
 	s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
@@ -41,6 +43,13 @@ function wdMedia(href: string, text: string, kind: string): string {
 }
 
 md.use({
+	// Pre-scan `![](...)` tokens before rendering so a `[label](path)` appearing before or after an image embed
+	// for the same server file falls back to a normal link instead of rendering a second inline image/media block.
+	walkTokens(token) {
+		if (token.type !== "image" || !embeddedMedia) return;
+		const href = (token as Tokens.Image).href;
+		if (href && (isWorkdirPath(href) || isLocalFilePath(href))) embeddedMedia.add(filePathOf(href));
+	},
 	renderer: {
 		// Code blocks get a header with a copy button; MarkdownView wires up the click via delegation.
 		code({ text, lang }) {
@@ -59,10 +68,26 @@ md.use({
 		link({ href, title, text, tokens }) {
 			const inner = this.parser.parseInline(tokens);
 			const t = title ? ` title="${escapeHtml(title)}"` : "";
-			// A link to a picture on the server is the picture: shown inline (and enlarged on click) like `![](...)`.
-			if ((isWorkdirPath(href) || isLocalFilePath(href)) && isImagePath(href)) return wdImage(href, text);
-			const kind = isWorkdirPath(href) || isLocalFilePath(href) ? mediaKindOf(href) : null;
-			if (kind) return wdMedia(href, text, kind);
+			const local = isWorkdirPath(href) || isLocalFilePath(href);
+			if (local) {
+				const path = filePathOf(href);
+				// `[![alt](a.png)](a.png)`: the inner `image()` already rendered the picture; keep it unwrapped.
+				if (tokens.length === 1 && tokens[0]?.type === "image" && filePathOf((tokens[0] as Tokens.Image).href) === path) {
+					return inner;
+				}
+				if (!embeddedMedia?.has(path)) {
+					// A link to a picture on the server is the picture: shown inline (and enlarged on click) like `![](...)`.
+					if (isImagePath(href)) {
+						embeddedMedia?.add(path);
+						return wdImage(href, text);
+					}
+					const kind = mediaKindOf(href);
+					if (kind) {
+						embeddedMedia?.add(path);
+						return wdMedia(href, text, kind);
+					}
+				}
+			}
 			// A relative link is a file in the session's working directory (the agent wrote it): preview it in the app.
 			if (isWorkdirPath(href)) return `<a href="#" class="wd-file"${t} data-file="${escapeHtml(cleanWorkdirPath(href))}">${inner}</a>`;
 			if (!isSafeExternalUrl(href)) return inner;
@@ -137,7 +162,14 @@ export function renderMarkdown(src: string, opts: { cache?: boolean } = {}): str
 	const store = opts.cache ?? true;
 	waited = false;
 	parseRuns.n++;
-	const html = groupPictures(purifier().sanitize(md.parse(src, { async: false }) as string, {
+	embeddedMedia = new Set();
+	let parsed: string;
+	try {
+		parsed = md.parse(src, { async: false }) as string;
+	} finally {
+		embeddedMedia = null;
+	}
+	const html = groupPictures(purifier().sanitize(parsed, {
 		ALLOWED_URI_REGEXP: SAFE_URI_REGEXP,
 		ADD_ATTR: ["data-copy", "data-ext", "data-img-src", "data-alt", "data-file", "data-wd-src", "data-kind", "data-hl-wait"],
 		FORBID_TAGS: ["style", "form", "input", "iframe", "object", "embed", "img", "picture", "source", "video", "audio", "link", "meta"],
