@@ -71,3 +71,95 @@ describe("sendTimeoutMs", () => {
 		expect(sendTimeoutMs(undefined, [{ data: "a".repeat(140 * 1024 * 1024) }])).toBe(10 * 60_000);
 	});
 });
+
+describe("Api.send progress, cancellation, and clientRequestId", () => {
+	const realXhr = globalThis.XMLHttpRequest;
+	const installMockXhr = () => {
+		const instances: {
+			method: string;
+			url: string;
+			headers: Record<string, string>;
+			body: string;
+			status: number;
+			statusText: string;
+			responseText: string;
+			aborted: boolean;
+			upload: { onprogress?: (e: { lengthComputable: boolean; loaded: number; total: number }) => void; onload?: () => void };
+			onload?: () => void;
+			onerror?: () => void;
+			onabort?: () => void;
+		}[] = [];
+		globalThis.XMLHttpRequest = class {
+			method = "";
+			url = "";
+			headers: Record<string, string> = {};
+			body = "";
+			status = 0;
+			statusText = "";
+			responseText = "";
+			aborted = false;
+			upload: { onprogress?: (e: { lengthComputable: boolean; loaded: number; total: number }) => void; onload?: () => void } = {};
+			onload?: () => void;
+			onerror?: () => void;
+			onabort?: () => void;
+			constructor() { instances.push(this); }
+			open(method: string, url: string) { this.method = method; this.url = url; }
+			setRequestHeader(k: string, v: string) { this.headers[k] = v; }
+			send(body: string) { this.body = body; }
+			abort() { this.aborted = true; this.onabort?.(); }
+		} as unknown as typeof XMLHttpRequest;
+		return instances;
+	};
+
+	test("uses XHR when onProgress is passed, reports byte progress, sends clientRequestId, and resolves 202 JSON", async () => {
+		const xhrs = installMockXhr();
+		try {
+			const api = new Api({ baseUrl: "http://srv", token: "tok" });
+			const steps: [number, number][] = [];
+			const pending = api.send("s1", "hi", "prompt", undefined, [{ name: "a.bin", data: "QUJD" }], {
+				clientRequestId: "req-123",
+				onProgress: (loaded, total) => steps.push([loaded, total]),
+			});
+			expect(xhrs).toHaveLength(1);
+			const x = xhrs[0]!;
+			expect(x.method).toBe("POST");
+			expect(x.url).toBe("http://srv/sessions/s1/messages");
+			expect(x.headers.Authorization).toBe("Bearer tok");
+			expect(JSON.parse(x.body)).toMatchObject({ text: "hi", mode: "prompt", clientRequestId: "req-123" });
+
+			x.upload.onprogress?.({ lengthComputable: true, loaded: 50, total: 100 });
+			x.upload.onload?.();
+			x.status = 202;
+			x.responseText = JSON.stringify({ accepted: "prompt" });
+			x.onload?.();
+
+			expect(await pending).toEqual({ accepted: "prompt" });
+			expect(steps).toEqual([[50, 100], [100, 100]]);
+		} finally {
+			globalThis.XMLHttpRequest = realXhr;
+		}
+	});
+
+	test("aborts XHR upload on caller signal with AbortError and turns network errors into ApiError(0)", async () => {
+		const xhrs = installMockXhr();
+		try {
+			const api = new Api({ baseUrl: "http://srv", token: "tok" });
+			const ctl = new AbortController();
+			const p1 = api.send("s1", "hi", "prompt", undefined, [{ name: "a.bin", data: "QUJD" }], {
+				signal: ctl.signal,
+				onProgress: () => {},
+			});
+			ctl.abort();
+			expect(xhrs[0]!.aborted).toBe(true);
+			await expect(p1).rejects.toHaveProperty("name", "AbortError");
+
+			const p2 = api.send("s1", "hi", "prompt", undefined, [{ name: "a.bin", data: "QUJD" }], {
+				onProgress: () => {},
+			});
+			xhrs[1]!.onerror?.();
+			await expect(p2).rejects.toMatchObject({ status: 0, code: "network" });
+		} finally {
+			globalThis.XMLHttpRequest = realXhr;
+		}
+	});
+});

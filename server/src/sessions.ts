@@ -70,6 +70,9 @@ export class SessionManager {
 	private stopped = new Set<string>();
 	/** Runs that have not yet published run_finished. Tracked apart from `live`, which shutdown and delete empty first. */
 	private pendingRuns = new Set<Promise<void>>();
+	/** Accepted sends keyed by `sessionId\0clientRequestId` so retries after a lost ACK do not duplicate prompts. */
+	private recentSends = new Map<string, { accepted: PromptMode; at: number }>();
+	private inflightSends = new Map<string, Promise<{ accepted: PromptMode }>>();
 	/** Title/role calls in flight (one per session), and when one last failed. */
 	private describing = new Map<string, AbortController>();
 	private describeFailedAt = new Map<string, number>();
@@ -595,6 +598,8 @@ export class SessionManager {
 		this.describing.get(id)?.abort();
 		this.dispose(id);
 		this.stopped.delete(id);
+		const prefix = `${id}\0`;
+		for (const k of this.recentSends.keys()) if (k.startsWith(prefix)) this.recentSends.delete(k);
 		this.store.delete(id);
 		this.bus.publish(null, "session_deleted", { id });
 	}
@@ -625,9 +630,57 @@ export class SessionManager {
 
 	async send(
 		id: string,
-		input: { text: string; images?: ImageContent[]; files?: { name: string; data: string }[]; mode?: PromptMode; origin?: RunOrigin; command?: { name: "compact"; instructions?: string } },
+		input: {
+			text: string;
+			images?: ImageContent[];
+			files?: { name: string; data: string }[];
+			mode?: PromptMode;
+			origin?: RunOrigin;
+			command?: { name: "compact"; instructions?: string };
+			clientRequestId?: string;
+		},
 	): Promise<{ accepted: "prompt" | "steer" | "follow_up" }> {
 		const record = this.get(id);
+		const key = input.clientRequestId ? `${id}\0${input.clientRequestId}` : null;
+		if (key) {
+			this.pruneRecentSends();
+			const cached = this.recentSends.get(key);
+			if (cached) return { accepted: cached.accepted };
+			const inflight = this.inflightSends.get(key);
+			if (inflight) return inflight;
+		}
+		const task = this.sendInner(id, record, input);
+		if (!key) return task;
+		const tracked = task.then((res) => {
+			this.recentSends.set(key, { accepted: res.accepted, at: Date.now() });
+			this.pruneRecentSends();
+			return res;
+		});
+		this.inflightSends.set(key, tracked);
+		tracked.finally(() => {
+			if (this.inflightSends.get(key) === tracked) this.inflightSends.delete(key);
+		}).catch(() => {});
+		return tracked;
+	}
+
+	private pruneRecentSends(now = Date.now()): void {
+		const ttl = 5 * 60_000;
+		const max = 1000;
+		for (const [k, v] of this.recentSends) {
+			if (now - v.at > ttl) this.recentSends.delete(k);
+		}
+		while (this.recentSends.size > max) {
+			const oldest = this.recentSends.keys().next().value;
+			if (oldest === undefined) break;
+			this.recentSends.delete(oldest);
+		}
+	}
+
+	private async sendInner(
+		id: string,
+		record: SessionRecord,
+		input: { text: string; images?: ImageContent[]; files?: { name: string; data: string }[]; mode?: PromptMode; origin?: RunOrigin; command?: { name: "compact"; instructions?: string } },
+	): Promise<{ accepted: "prompt" | "steer" | "follow_up" }> {
 		if (record.closed) throw conflict("session is closed; resume it first (PATCH closed=false)");
 		this.assertChatModel(record.provider, record.model);
 		const mode = input.mode ?? "prompt";
@@ -2065,6 +2118,7 @@ export class SessionManager {
 
 	private evictIdle(): void {
 		const now = Date.now();
+		this.pruneRecentSends(now);
 		for (const [id, live] of this.live) {
 			if (!live.running && now - live.lastActive > IDLE_EVICT_MS) this.dispose(id);
 		}

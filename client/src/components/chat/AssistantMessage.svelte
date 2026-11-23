@@ -171,7 +171,7 @@
 					<Notice tone="warn" size="sm" role="status">
 						{t("최대 출력 길이에 도달해 답변이 중간에 끊겼습니다.")}
 						{#snippet action()}
-							<Button size="sm" disabled={app.sending} onclick={() => void app.continueCut(paneId)}>{t("이어서 작성")}</Button>
+							<Button size="sm" disabled={app.isSending(paneId)} onclick={() => void app.continueCut(paneId)}>{t("이어서 작성")}</Button>
 						{/snippet}
 					</Notice>
 				{:else}
