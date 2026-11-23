@@ -288,6 +288,19 @@ export const MIGRATIONS: (string | ((db: Database) => void))[] = [
 		started_at     INTEGER NOT NULL,
 		pending_prompt TEXT
 	);`,
+	// One long-running goal per session: the agent keeps working across turns until complete, blocked, paused or budget-limited.
+	`CREATE TABLE IF NOT EXISTS session_goals (
+		session_id        TEXT PRIMARY KEY REFERENCES sessions(id) ON DELETE CASCADE,
+		goal_id           TEXT NOT NULL,
+		objective         TEXT NOT NULL,
+		status            TEXT NOT NULL DEFAULT 'active',
+		token_budget      INTEGER,
+		tokens_used       INTEGER NOT NULL DEFAULT 0,
+		time_used_seconds INTEGER NOT NULL DEFAULT 0,
+		created_at        INTEGER NOT NULL,
+		updated_at        INTEGER NOT NULL
+	);
+	CREATE INDEX IF NOT EXISTS idx_session_goals_status ON session_goals(status);`,
 ];
 
 export function openDb(path: string): Database {

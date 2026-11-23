@@ -29,7 +29,7 @@ RADIUS = re.compile(r"(?<![-\w])border(?:-(?:top|bottom|start|end)-(?:left|right
 PX = re.compile(r"(-?\d*\.?\d+)px")
 EM = re.compile(r"(-?\d*\.?\d+)em\b")
 # the PinMark hosts (PinMark.svelte's :where list): a rule reaching every svg inside them also hits the mark's own pin
-PIN_HOSTS = ("lead", "dicon", "ico")
+PIN_HOSTS = ("lead", "dicon", "ico", "agent")
 PINHOST = re.compile(r"\.(" + "|".join(PIN_HOSTS) + r")\s+(?::global\()?svg\b")
 # properties a hover may change and still be "only a tint"; anything else (opacity, display, transform) reveals or moves something
 # a blurred coloured shadow: `0 0 <blur>px …` (any blur > 0 with a 0 offset) in a colour, not an elevation token

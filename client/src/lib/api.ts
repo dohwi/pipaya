@@ -1,7 +1,7 @@
 import { EVENT_TYPES } from "@shared/events";
 import type { ExtensionSaveResult, StoredExtensionSettings } from "./extensions/settings-store";
 import type { DelegateRun } from "./graph";
-import type { CatalogInfo, CompactionSettings, CompactionSettingsInfo, DefaultModelSelection, ImageModelSettings, ImageModelSettingsInfo, RetentionInfo, RetentionSettings, Schedule, ScheduleInput, SchedulePatch, SystemModelSettings, SystemModelSettingsInfo,
+import type { CatalogInfo, CompactionSettings, CompactionSettingsInfo, DefaultModelSelection, ImageModelSettings, ImageModelSettingsInfo, RetentionInfo, RetentionSettings, Goal, GoalInput, GoalPatch, Schedule, ScheduleInput, SchedulePatch, SystemModelSettings, SystemModelSettingsInfo,
 	AgentMessage,
 	Question,
 	ActivityInfo,
@@ -425,6 +425,10 @@ export class Api {
 	patchSchedule = (id: string, patch: SchedulePatch) => this.req<Schedule>("PATCH", `/schedules/${encodeURIComponent(id)}`, patch);
 	deleteSchedule = (id: string) => this.req<{ ok: boolean }>("DELETE", `/schedules/${encodeURIComponent(id)}`);
 	runSchedule = (id: string) => this.req<Schedule>("POST", `/schedules/${encodeURIComponent(id)}/run`, undefined, undefined, 60_000);
+	goals = (sessionId?: string, signal?: AbortSignal) => this.req<{ goals: Goal[] }>("GET", `/goals${sessionId ? `?${new URLSearchParams({ sessionId })}` : ""}`, undefined, signal);
+	putGoal = (sessionId: string, input: GoalInput) => this.req<Goal>("PUT", `/sessions/${encodeURIComponent(sessionId)}/goal`, input);
+	patchGoal = (sessionId: string, patch: GoalPatch) => this.req<Goal>("PATCH", `/sessions/${encodeURIComponent(sessionId)}/goal`, patch);
+	deleteGoal = (sessionId: string) => this.req<{ ok: boolean }>("DELETE", `/sessions/${encodeURIComponent(sessionId)}/goal`);
 	retention = () => this.req<RetentionInfo>("GET", "/retention");
 	setRetention = (settings: RetentionSettings) => this.req<RetentionInfo>("PUT", "/retention", settings);
 	runRetention = () => this.req<{ deleted: number }>("POST", "/retention/run", undefined, undefined, 60_000);

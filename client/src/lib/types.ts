@@ -246,6 +246,30 @@ export interface ScheduleInput {
 }
 export type SchedulePatch = Partial<Pick<Schedule, "title" | "prompt" | "enabled" | "runAt" | "everyMs">>;
 
+/** A persistent per-session goal (server/src/goals.ts). Times are Unix ms; timeUsedSeconds is whole seconds. */
+export type GoalStatus = "active" | "paused" | "blocked" | "usage_limited" | "budget_limited" | "complete";
+export interface Goal {
+	sessionId: string;
+	goalId: string;
+	objective: string;
+	status: GoalStatus;
+	tokenBudget: number | null;
+	tokensUsed: number;
+	timeUsedSeconds: number;
+	createdAt: number;
+	updatedAt: number;
+}
+export interface GoalInput {
+	objective: string;
+	tokenBudget?: number | null;
+	replace?: boolean;
+}
+export interface GoalPatch {
+	objective?: string;
+	status?: GoalStatus;
+	tokenBudget?: number | null;
+}
+
 export interface McpInfo {
 	servers: McpServerInfo[];
 	/** Servers connected right now */
@@ -739,6 +763,8 @@ export interface UserItem {
 	note?: MessageNote;
 	/** Sent by a scheduled task, not typed by the person (the server stores a `pipaya-schedule` block with it) */
 	scheduled?: boolean;
+	/** Sent by the conversation's goal to keep working (the server stores a `pipaya-goal` block with it) */
+	goal?: boolean;
 	ts: number;
 	fresh?: boolean;
 }

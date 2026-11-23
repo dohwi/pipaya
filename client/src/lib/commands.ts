@@ -6,6 +6,8 @@ import { clip } from "./format";
 import type { AssistantItem, Session, UserItem } from "./types";
 import { msg, t } from "./i18n";
 import { SKILL_PREFIX } from "./slash-menu";
+import { errorText } from "./api";
+import { goalLabel, resumable } from "./goals";
 
 export interface CommandArgument {
 	value: string;
@@ -25,6 +27,8 @@ export interface SlashCommand {
 	/** Finite argument choices, evaluated against the current model/settings. */
 	argumentOptions?: () => CommandArgument[];
 	argumentEmpty?: string;
+	/** The argument may also be free text (`/goal <objective>`): no menu while nothing matches. */
+	argumentFree?: boolean;
 	run(arg: string): void | Promise<void>;
 }
 
@@ -247,6 +251,54 @@ const DEFINITIONS: SlashCommand[] = [
 		run: async (a) => { await app.compact(a); },
 	},
 	{ name: "retry", aliases: ["regenerate"], desc: msg("응답 재시도"), needsChat: true, run: () => void app.retry() },
+	{
+		name: "goal",
+		args: "[objective|edit|pause|resume|clear]",
+		desc: msg("목표를 정하고 끝날 때까지 이어서 작업"),
+		needsChat: true,
+		argumentFree: true,
+		argumentOptions: () => {
+			const g = app.goals.of(app.serverId, app.activeId);
+			if (!g) return [];
+			return [
+				{ value: "edit", desc: t("목표와 토큰 예산 고치기") },
+				...(g.status === "active" ? [{ value: "pause", desc: t("이어서 작업하지 않고 멈추기") }] : []),
+				...(resumable(g.status) ? [{ value: "resume", desc: t("다시 이어서 작업") }] : []),
+				{ value: "clear", desc: t("목표 지우기") },
+			];
+		},
+		run: async (a) => {
+			const id = app.activeId;
+			const serverId = app.serverId;
+			const api = app.api;
+			if (!id || !serverId || !api) return;
+			const arg = a.trim();
+			const g = app.goals.of(serverId, id);
+			if (!arg || arg === "edit") return void app.openGoal(id);
+			try {
+				if (arg === "pause" || arg === "resume" || arg === "clear") {
+					if (!g) return void app.toast(t("이 대화에는 목표가 없습니다"), "error", id);
+					if (arg === "clear") {
+						await api.deleteGoal(id);
+						app.goals.patch(serverId, id, null);
+					} else if (arg === "pause" ? g.status === "active" : resumable(g.status)) {
+						const saved = await api.patchGoal(id, { status: arg === "pause" ? "paused" : "active" });
+						app.goals.patch(serverId, id, saved);
+					} else {
+						return void app.toast(t("목표가 {state} 상태입니다", { state: goalLabel(g.status) }), "error", id);
+					}
+					return void app.toast(arg === "clear" ? t("목표를 지웠습니다") : arg === "pause" ? t("목표를 일시정지했습니다") : t("목표를 다시 이어 갑니다"), "ok", id);
+				}
+				// `/goal <text>`: a new goal starts at once; one that is still open is edited in the dialog so it is not overwritten silently.
+				if (g && g.status !== "complete") return void app.openGoal(id);
+				const saved = await api.putGoal(id, { objective: arg, tokenBudget: null });
+				app.goals.patch(serverId, id, saved);
+				app.toast(t("목표를 정했습니다. 끝날 때까지 이어서 작업합니다"), "ok", id);
+			} catch (e) {
+				app.toast(errorText(e), "error", id);
+			}
+		},
+	},
 	{ name: "stop", aliases: ["abort"], desc: msg("진행 중인 작업 중지"), needsChat: true, run: () => void app.abort() },
 	{ name: "cancel", desc: msg("대기열 / 끼워 넣기 취소"), needsChat: true, run: () => app.openQueue() },
 	{
@@ -279,7 +331,7 @@ const DEFINITIONS: SlashCommand[] = [
 ];
 
 // Stable default order: conversations → settings → execution → history → utilities.
-const DEFAULT_ORDER = ["new", "clear", "model", "resume", "fork", "tree", "rename", "close", "cd", "compact", "retry", "stop", "cancel", "copy", "delete"];
+const DEFAULT_ORDER = ["new", "clear", "model", "resume", "fork", "tree", "rename", "close", "cd", "compact", "goal", "retry", "stop", "cancel", "copy", "delete"];
 export const COMMANDS: SlashCommand[] = DEFAULT_ORDER.map((name) => DEFINITIONS.find((c) => c.name === name)!);
 
 /** Run a built-in command by name, as a shortcut would: with its "needs an open chat" rule applied. */
@@ -330,6 +382,7 @@ export function argumentSuggestions(text: string): { cmd: SlashCommand; options:
 	if (!parsed?.cmd.argumentOptions) return null;
 	const all = parsed.cmd.argumentOptions();
 	const query = parsed.arg.trim().toLowerCase();
+	if (parsed.cmd.argumentFree && !all.some((option) => option.value.toLowerCase().startsWith(query))) return null;
 	return {
 		cmd: parsed.cmd,
 		options: all.filter((option) => option.value.toLowerCase().startsWith(query)),

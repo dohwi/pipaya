@@ -7,6 +7,7 @@
 <script lang="ts">
 	import Button from "../ui/Button.svelte";
 	import { localeTag, t } from "../../lib/i18n";
+	import { fullTime } from "../../lib/format";
 	import { dayLabel, dayStart } from "../../lib/format";
 	import { today } from "../../lib/today.svelte";
 	import { fadeIn, fadeOut, ms } from "../../lib/motion";
@@ -410,6 +411,9 @@
 						<div class="notice"><Icon name="alert" /> {u.item.text}</div>
 					{:else if u.kind === "entry"}
 						<EntryCard item={u.item} />
+					{:else if u.kind === "user" && u.item.goal}
+						<!-- a turn the goal started by itself: no bubble (the person did not write it), a line like the day heading -->
+						<div class="cont" role="separator" aria-label={t("목표를 이어서 진행")} title={fullTime(u.item.ts)}><span class="cl"><Icon name="target" />{t("목표를 이어서 진행")}</span></div>
 					{:else if u.kind === "user"}
 						<Message item={u.item} working={u.item.key === lastUserKey} />
 					{:else}
@@ -511,6 +515,33 @@
 		flex: 1;
 		height: 1px;
 		background: var(--border);
+	}
+	/* the day heading's line (.day), with the goal's mark: a turn the goal started reads as a break, not as a message */
+	.cont {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		margin: 16px 0;
+		font-size: var(--fs-2xs);
+		line-height: 16px;
+		color: var(--text-faint);
+	}
+	.cont::before,
+	.cont::after {
+		content: "";
+		flex: 1;
+		height: 1px;
+		background: var(--border);
+	}
+	.cl {
+		display: inline-flex;
+		align-items: center;
+		gap: 4px;
+	}
+	.cl :global(svg) {
+		width: 12px;
+		height: 12px;
+		stroke-width: 2;
 	}
 	.notice {
 		display: flex;

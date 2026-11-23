@@ -14,6 +14,8 @@ import { Retention } from "./retention.ts";
 import { registerRetentionRoutes } from "./retention-routes.ts";
 import { Scheduler } from "./scheduler.ts";
 import { registerSchedulerRoutes } from "./scheduler-routes.ts";
+import { GoalManager } from "./goals.ts";
+import { registerGoalRoutes } from "./goals-routes.ts";
 import { GROUP_NAME_SYSTEM, groupNameRequest, parseGroupName, SystemModelSettings } from "./system-model.ts";
 import { registerSystemModelRoutes } from "./system-model-routes.ts";
 import { TOGGLEABLE_TOOLS } from "./tools.ts";
@@ -131,12 +133,14 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 	const store = new SessionStore(db);
 	const push = await createPushTransports(opts.pushTransports === undefined && cfg.pushEnabled === true);
 	const clientSettings = new ClientSettings(db);
+	let goalActive = (_id: string) => false;
 	const notifications = new NotificationService(db, bus, opts.pushTransports ?? push.transports, Date.now, opts.mobileDelayMs, () => clientSettings.escalateMs(), {
 		title: (id) => store.get(id)?.title ?? "",
 		lastAnswer: (id) => lastAnswer(store, id),
 		quietPeers: () => clientSettings.quietPeers(),
+		isGoalActive: (id) => goalActive(id),
 	});
-	const unread = new UnreadTracker(db, bus, (id) => notifications.watching(id), () => clientSettings.quietPeers());
+	const unread = new UnreadTracker(db, bus, (id) => notifications.watching(id), () => clientSettings.quietPeers(), (id) => goalActive(id));
 	notifications.onLook = (ids) => unread.read(ids);
 	const credentials = new SqliteCredentialStore(db);
 	const registry = createModelRegistry(credentials);
@@ -394,6 +398,27 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 	bus.subscribe((e) => { if (e.type === "session_deleted") scheduler.onSessionDeleted((e.data as { id: string }).id); });
 	registerSchedulerRoutes(server, scheduler);
 	sessions.setScheduler(scheduler);
+	const goals = new GoalManager(
+		db,
+		{
+			session: (id) => store.get(id),
+			isRunning: (id) => sessions.isRunning(id),
+			tokens: (id) => {
+				const u = store.usage(id);
+				const billable = u.input + u.output;
+				return billable > 0 ? billable : u.totalTokens;
+			},
+			send: (id, input) => sessions.send(id, input),
+		},
+		{
+			onChange: (c) => bus.publish(null, "goals_updated", c, { ephemeral: true }),
+			log: (m) => server.log.info(m),
+		},
+	);
+	goalActive = (id) => goals.isActive(id);
+	bus.subscribe((e) => { if (e.type === "session_deleted") goals.onSessionDeleted((e.data as { id: string }).id); });
+	registerGoalRoutes(server, goals);
+	sessions.setGoals(goals);
 	registerSystemModelRoutes(server, systemModel, bus, () => sessions.describeAll());
 	registerImageModelRoutes(server, imageModel, bus);
 	// Realtime voice input: its own address and key (Settings > Voice), so any OpenAI-compatible Realtime server works.
@@ -467,6 +492,7 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 		idleSockets.stop();
 		retention.stop();
 		scheduler.stop();
+		goals.stop();
 		configuration.close();
 		agentsWatch.stop();
 		terminals.shutdown();

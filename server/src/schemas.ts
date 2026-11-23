@@ -11,7 +11,7 @@ export const PromptMode = Type.Union([Type.Literal("prompt"), Type.Literal("stee
 	description: "prompt: start a run (session must be idle). steer: inject into the active run. follow_up: queue for after the active run.",
 });
 
-const Nullable = <T extends TSchema>(s: T) => Type.Union([s, Type.Null()]);
+export const Nullable = <T extends TSchema>(s: T) => Type.Union([s, Type.Null()]);
 
 export const ErrorBody = Type.Object(
 	{ error: Type.Object({ code: Type.String(), message: Type.String() }) },
@@ -451,6 +451,11 @@ export const EVENTS: EventDef[] = [
 		data: Type.Object({ id: Nullable(Type.String()), action: Type.Union([Type.Literal("created"), Type.Literal("updated"), Type.Literal("deleted"), Type.Literal("ran")]) }),
 	},
 	{
+		type: "goals_updated", persisted: false,
+		description: "A session's goal was set, updated, accounted or cleared (sessionId is null; refetch GET /goals). Live only: a client that reconnects refetches anyway",
+		data: Type.Object({ sessionId: Type.String(), action: Type.Union([Type.Literal("set"), Type.Literal("updated"), Type.Literal("cleared")]) }),
+	},
+	{
 		type: "skills_updated", persisted: true,
 		description: "A skill was switched on/off globally, for a project or for one session (event sessionId is null; the payload's sessionId names the session for scope session; refetch GET /skills). Also published (empty name, source \"files\") when files under ~/.agents or a project's .agents/.pi change on disk, e.g. a skill or a file an extension command reads was added or edited (refetch GET /skills and GET /server-extensions/commands). Running sessions pick the change up on their next message",
 		data: Type.Object({ name: Type.String(), scope: Type.Union([Type.Literal("global"), Type.Literal("project")]), project: Type.String(), source: Type.Optional(Type.Literal("files")) }),
@@ -505,7 +510,7 @@ export const EVENTS: EventDef[] = [
 	{ type: "compaction_failed", persisted: true, description: "A compaction failed or was cancelled; the context is unchanged", data: Type.Object({ aborted: Type.Boolean(), errorMessage: Type.Optional(Type.String()) }) },
 	{ type: "context_updated", persisted: true, description: "The size of what the model will see changed", data: Type.Object({ context: ContextUsage }) },
 	{ type: "run_retrying", persisted: false, description: "The model provider failed for a moment (e.g. 502); the call is retried after delayMs. Live only: cleared by the next message_start or run_finished. `restart` means a reply that had already streamed was dropped and is requested again, so the client discards the partial message it showed", data: Type.Object({ attempt: Type.Integer(), maxRetries: Type.Integer(), delayMs: Type.Integer(), restart: Type.Optional(Type.Boolean()), reason: Type.Optional(Type.String({ maxLength: 200, description: "Short, secret-free cause of the failure (status code, ECONNREFUSED …); absent on older servers" })) }) },
-	{ type: "run_started", persisted: true, description: "The agent began working. `origin` peer = started by another session's message or a server report to a watcher, schedule = started by a scheduled task (absent in older records = user)", data: Type.Object({ mode: Type.String(), origin: Type.Optional(Type.Union([Type.Literal("user"), Type.Literal("peer"), Type.Literal("schedule")])) }) },
+	{ type: "run_started", persisted: true, description: "The agent began working. `origin` peer = started by another session's message or a server report to a watcher, schedule = started by a scheduled task, goal = automatic goal continuation (absent in older records = user)", data: Type.Object({ mode: Type.String(), origin: Type.Optional(Type.Union([Type.Literal("user"), Type.Literal("peer"), Type.Literal("schedule"), Type.Literal("goal")])) }) },
 	{
 		type: "run_finished",
 		persisted: true,
@@ -514,7 +519,7 @@ export const EVENTS: EventDef[] = [
 			status: Type.Union([Type.Literal("ok"), Type.Literal("error"), Type.Literal("aborted")]),
 			error: Nullable(Type.String()),
 			durationMs: Type.Integer(),
-			origin: Type.Optional(Type.Union([Type.Literal("user"), Type.Literal("peer"), Type.Literal("schedule")], { description: "Who the run was for; peer = agent-to-agent traffic, which the quietPeers notification policy keeps silent; schedule = a scheduled task (notifies like user). The last hop of an agent-to-agent chain a user run started (A → B → A, A passes nothing more on) ends as user, so it notifies" })),
+			origin: Type.Optional(Type.Union([Type.Literal("user"), Type.Literal("peer"), Type.Literal("schedule"), Type.Literal("goal")], { description: "Who the run was for; peer = agent-to-agent traffic, which the quietPeers notification policy keeps silent; schedule = a scheduled task (notifies like user); goal = automatic continuation of a session goal (silent while active, notifies on final stop). The last hop of an agent-to-agent chain a user run started (A → B → A, A passes nothing more on) ends as user, so it notifies" })),
 			usage: Usage,
 			cause: Type.Optional(Type.Union([Type.Literal("user"), Type.Literal("limit"), Type.Literal("close"), Type.Literal("shutdown"), Type.Literal("restart"), Type.Literal("force")], { description: "Who stopped the run from outside; absent when it ended by itself (or in an older record)" })),
 		}),

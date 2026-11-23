@@ -16,6 +16,7 @@
 	import IconButton from "../ui/IconButton.svelte";
 	import Icon from "../ui/Icon.svelte";
 	import Pin from "../ui/Pin.svelte";
+	import PinMark from "../ui/PinMark.svelte";
 	import StatusDot from "../ui/StatusDot.svelte";
 	import AgentBadge from "./AgentBadge.svelte";
 
@@ -209,11 +210,12 @@
 						>
 							<div class="top">
 								{#if x.kind === "group"}
-									<span class="ico"><Icon name="columns" />{#if st !== "idle"}<Pin tone={ACTIVITY_TONE[st] === "neutral" ? "danger" : ACTIVITY_TONE[st]} pulse={st === "working"} ping={st === "asking"} />{/if}</span>
+									<span class="ico"><Icon name="columns" />{#if st !== "idle"}<Pin tone={ACTIVITY_TONE[st] === "neutral" ? "danger" : ACTIVITY_TONE[st]} pulse={st === "working"} ping={st === "asking"} />{/if}{#if pinned(x.id)}<PinMark />{/if}</span>
 								{:else if x.kind === "terminal"}
-									<span class="ico"><Icon name="terminal" /></span>
+									<span class="ico"><Icon name="terminal" />{#if pinned(x.id)}<PinMark />{/if}</span>
 								{:else}
-									<span class="ico"><AgentBadge id={x.id} state={st} size={16} /></span>
+									<!-- one corner mark: a goal's (AgentBadge) takes the corner from the pin, as in the tab strip and the sidebar -->
+									<span class="ico"><AgentBadge id={x.id} state={st} size={16} />{#if pinned(x.id) && !app.goals.of(app.serverId, x.id)}<PinMark tone={ACTIVITY_TONE[st]} />{/if}</span>
 								{/if}
 								<span class="t">{titleOf(x)}</span>
 								{#if x.kind !== "group"}
@@ -383,7 +385,7 @@
 		padding: 12px;
 	}
 	.ico {
-		position: relative; /* hosts the group's status dot (Pin) */
+		position: relative; /* hosts the group's status dot (Pin) and the pinned mark (PinMark) */
 		display: grid;
 		flex: none;
 		color: var(--text-dim);

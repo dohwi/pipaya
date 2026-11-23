@@ -66,6 +66,7 @@
 	const chat = $derived(app.chatOf(pane.id));
 	/** This conversation's scheduled tasks (the open server's list, kept current by App), paused ones included. */
 	const scheduled = $derived(app.schedules.listOf(app.serverId, pane.id));
+	const goal = $derived(app.goals.of(app.serverId, pane.id));
 	/** A new chat is a real, still empty session (outside a group); its folder can be changed until the first message. */
 	const freshSession = $derived(!!pane.id && !app.groupOf(pane.id) && !!chat?.ready && !chat.loadError && chat.items.length === 0);
 	const whereShown = $derived(!pane.id || freshSession);
@@ -794,10 +795,10 @@
 		{#if slashOpen}
 			<SlashMenu items={menuItems} index={slashIndex} label={menuKind === "cd" ? msg("폴더") : menuKind === "file" ? msg("파일") : menuKind === "mention" ? msg("멘션") : argSuggestions ? t("{cmd} 값 선택", { cmd: commandText(argSuggestions.cmd) }) : msg("명령")} empty={menuKind === "cd" ? msg("일치하는 폴더가 없습니다") : menuKind === "file" ? msg("일치하는 파일이 없습니다") : argSuggestions?.empty} listId={menuListId} optionId={menuOptionId} onpick={pickRecommendation} onhover={(i) => (slashIndex = i)} />
 		{/if}
-		{#if chat?.waiting.length || (scheduled.length && app.serverId && pane.id)}
+		{#if chat?.waiting.length || ((scheduled.length || goal) && app.serverId && pane.id)}
 			<!-- keyed by session: a height pulled in one conversation does not carry over when the pane switches to another.
 			     The conversation's scheduled tasks are the last rows of the same list (after what waits for the next turn). -->
-			{#key pane.id}<QueuedList queued={chat?.waiting ?? []} oncancel={(q) => app.cancelQueued(q, pane.id)} onopen={(q) => app.openQueue(pane.id, q)} schedules={scheduled} scheduleOf={app.serverId && pane.id ? { serverId: app.serverId, sessionId: pane.id } : null} />{/key}
+			{#key pane.id}<QueuedList queued={chat?.waiting ?? []} oncancel={(q) => app.cancelQueued(q, pane.id)} onopen={(q) => app.openQueue(pane.id, q)} schedules={scheduled} {goal} scheduleOf={app.serverId && pane.id ? { serverId: app.serverId, sessionId: pane.id } : null} />{/key}
 		{/if}
 		{#if reply}
 			<ReplyBadge who={reply.who} text={replyPreview} oncancel={() => (reply = null)} />

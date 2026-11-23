@@ -8,6 +8,7 @@ import { DEFAULT_LIMITS, exifOrientation, type ResizeLimits } from "./image-resi
 import { resizeImage } from "./image-resize.ts";
 import { commandArgv, pickCommandShell, shellNote } from "./command-shell.ts";
 import type { ManageAction, ManageArgs, PeerCreateInput } from "./peers.ts";
+import { goalTool, type GoalOps } from "./goal-tool.ts";
 import { scheduleTool, type ScheduleOps } from "./schedule-tool.ts";
 import { LEFT_TO_AGENT } from "./questions.ts";
 
@@ -54,6 +55,8 @@ export interface ToolContext {
 	};
 	/** Scheduled tasks (`schedule`). */
 	schedules?: ScheduleOps;
+	/** Per-session goal (`goal`). */
+	goals?: GoalOps;
 	/** The session's working folder (`workdir`): where it works now, and moving it to another working tree of its repository. */
 	workdir?: {
 		show(): string;
@@ -711,14 +714,14 @@ const workdirTool: ToolDef = {
 
 const PEER_DEFS = [peerTool];
 /** Built-in tools the user may switch off in the settings; every other built-in tool is locked on. */
-export const TOGGLEABLE_TOOLS = [askUserTool.name, ...PEER_DEFS.map((t) => t.name), DELEGATE_TOOL, scheduleTool.name];
+export const TOGGLEABLE_TOOLS = [askUserTool.name, ...PEER_DEFS.map((t) => t.name), DELEGATE_TOOL, scheduleTool.name, goalTool.name];
 /** Tools every session gets whatever list it was created with (the other sessions must always be reachable). */
 export const PEER_TOOLS = PEER_DEFS.map((t) => t.name);
 /** Tools every session gets, locked on: moving between working trees is part of how the session works, not an option. */
 export const ALWAYS_TOOLS = [WORKDIR_TOOL];
 
 export const TOOL_DEFS: Record<string, ToolDef> = Object.fromEntries(
-	[readTool, writeTool, editTool, lsTool, grepTool, bashTool, askUserTool, ...PEER_DEFS, delegateTool, scheduleTool, workdirTool].map((t) => [t.name, t]),
+	[readTool, writeTool, editTool, lsTool, grepTool, bashTool, askUserTool, ...PEER_DEFS, delegateTool, scheduleTool, goalTool, workdirTool].map((t) => [t.name, t]),
 );
 export const DEFAULT_TOOLS = Object.keys(TOOL_DEFS);
 

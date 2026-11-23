@@ -1,9 +1,10 @@
 <script lang="ts">
 	import { sessionTitle } from "../../../lib/session-title";
 	import { extensions } from "../../../lib/extensions/host.svelte";
-	import { ACTIVITY_LABEL } from "../../../lib/activity";
+	import { ACTIVITY_LABEL, ACTIVITY_TONE } from "../../../lib/activity";
 	import { t } from "../../../lib/i18n";
 	import { liveNext } from "../../../lib/minute-clock.svelte";
+	import { goalLabel, goalUsage } from "../../../lib/goals";
 	import { parentLabel, peerLabel } from "../../../lib/peers";
 	import type { DropOpts } from "../../../lib/dnd.svelte";
 	import { getSidebarCtx, type SidebarNode } from "../../../lib/sidebar-ctx";
@@ -24,14 +25,16 @@
 	const label = $derived(peerLabel(x) ?? extensions.labelOf(x.id));
 	/** the parent mark ("made by @parent") when another open session made this one (an agent's peer create, or a fork) */
 	const parent = $derived(parentLabel(x, (id) => app.links[n.server.id]?.sessionById.get(id)));
-	const tip = $derived([label?.title ?? "", sessionTitle(x.title), st !== "idle" ? ACTIVITY_LABEL[st] : "", parent?.title ?? (x.parentId ? t("분기된 대화") : "")].filter(Boolean).join(" · "));
+	/** The conversation's goal: its mark is in the agent badge's corner (AgentBadge), which the pin gives up meanwhile. */
+	const goal = $derived(app.goals.of(n.server.id, x.id));
+	const tip = $derived([label?.title ?? "", sessionTitle(x.title), st !== "idle" ? ACTIVITY_LABEL[st] : "", goal ? `${t("목표")} ${goalLabel(goal.status)} · ${goalUsage(goal)}` : "", parent?.title ?? (x.parentId ? t("분기된 대화") : "")].filter(Boolean).join(" · "));
 	/** Switched-on scheduled tasks of this conversation. Only the open server's list is kept current, so only its rows show it. */
 	const sched = $derived(n.current ? app.schedules.of(n.server.id, x.id) : { count: 0, next: null });
 	const schedTip = $derived(sched.next === null ? t("예약 {n}개", { n: sched.count }) : `${t("예약 {n}개", { n: sched.count })} · ${t("다음 실행 {when}", { when: liveNext(sched.next) })}`);
 </script>
 
 {#snippet body(pinned: boolean)}
-	<span class="lead"><AgentBadge id={x.id} server={n.server.id} state={st} size={16} />{#if pinned}<PinMark />{/if}</span>
+	<span class="lead"><AgentBadge id={x.id} server={n.server.id} state={st} size={16} />{#if pinned && !goal}<PinMark tone={ACTIVITY_TONE[st]} />{/if}</span>
 	{#if label}<Handle text={label.text} state={st} />{/if}
 	<RowTitle text={sessionTitle(x.title)} />
 	{#if parent}<span class="from mono"><Icon name="fork" /><span class="fn">{parent.text}</span></span>{/if}

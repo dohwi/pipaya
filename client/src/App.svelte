@@ -67,6 +67,12 @@
 		if (!link?.online) return;
 		return app.schedules.follow(link.id, link.api);
 	});
+	$effect(() => {
+		void app.goalsTick;
+		const link = app.link;
+		if (!link?.online) return;
+		return app.goals.follow(link.id, link.api);
+	});
 	const mobile = ["android", "ios"].includes(notificationPlatform());
 	const group = $derived(viewport.narrow ? undefined : app.activeGroup);
 
@@ -83,6 +89,7 @@
 		subagents: () => import("./components/agent/SubagentsDialog.svelte"),
 		lightbox: () => import("./components/chat/Lightbox.svelte"),
 		queue: () => import("./components/chat/QueueModal.svelte"),
+		goal: () => import("./components/agent/GoalDialog.svelte"),
 		filePreview: () => import("./components/chat/FilePreview.svelte"),
 		dirPicker: () => import("./components/server/DirPicker.svelte"),
 		serverForm: () => import("./components/server/ServerForm.svelte"),
@@ -591,6 +598,10 @@
 
 {#if app.queueDialog}
 	<Lazy load={load.queue} />
+{/if}
+
+{#if app.goalDialog}
+	{#key app.goalDialog}<Lazy load={load.goal} />{/key}
 {/if}
 
 {#if app.dirPicker}

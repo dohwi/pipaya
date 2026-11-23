@@ -57,6 +57,9 @@ import type { SettingsTabId } from "./settings-search";
 import type { SettingsFocus } from "./settings-focus";
 import { SidebarState, reorder } from "./sidebar.svelte";
 import { ScheduleBook } from "./schedule-book.svelte";
+import { GoalBook } from "./goal-book.svelte";
+import { setGoalActivity } from "./activity";
+import { goalActivity } from "./goals";
 import { isTerminalId, type TerminalInfo, type TerminalSupport } from "./terminal";
 import type {
   Group,
@@ -286,6 +289,8 @@ class AppStore {
   readonly sidebar = new SidebarState();
   /** Scheduled tasks per server as the sidebar shows them (the button's count, the clock on a conversation). */
   readonly schedules = new ScheduleBook();
+  /** Per-session goals per server (sidebar/tab corner marks, composer queue row, activity state). */
+  readonly goals = new GoalBook();
 
   /** Text the composer should pick up once (edit-and-branch). */
   prefill = $state<string | null>(null);
@@ -313,6 +318,14 @@ class AppStore {
   mcpTick = $state(0);
   /** Bumped by `schedules_updated`; the scheduled-tasks list reads it to refetch. */
   schedulesTick = $state(0);
+  /** Bumped by `goals_updated`; App.svelte refetches the open server's goals. */
+  goalsTick = $state(0);
+  /** Session whose goal edit dialog is open. null = closed. */
+  goalDialog = $state<string | null>(null);
+  openGoal(id: string | null = this.activeId) {
+    if (!id) return;
+    this.goalDialog = id;
+  }
   /**
    * The graph view (every server's chats, their models and subagents) shown in place of the conversation. Opening a
    * conversation, a new chat or a terminal leaves it (`openIn`, `openSession`, `newChat`); Ctrl+G toggles it.
@@ -1084,6 +1097,8 @@ class AppStore {
         bumpSkills: () => { this.skillsTick++; },
         bumpMcp: () => { this.mcpTick++; },
         bumpSchedules: () => { this.schedulesTick++; },
+        bumpGoals: () => { this.goalsTick++; },
+        isGoalActive: (sid) => this.goals.of(this.serverId, sid)?.status === "active",
         bumpConfig: () => { this.configTick++; },
         bumpVoice: () => { this.voiceTick++; },
         refreshWorkspace: () => { void this.refreshWorkspace(); },
@@ -2695,6 +2710,10 @@ class AppStore {
 }
 
 export const app = new AppStore();
+setGoalActivity((id) => {
+  const g = app.goals.bySessionId(id, app.serverId);
+  return g ? goalActivity(g.status) : null;
+});
 
 configureUiEnv({
   dark: () => app.prefs.resolvedDark,

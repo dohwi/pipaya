@@ -31,7 +31,7 @@ export type PromptMode = "prompt" | "steer" | "follow_up";
  * passes nothing more on, that run is the result the person waits for, so its run_finished says "user" (see
  * PeerService.settleRun).
  */
-export type RunOrigin = "user" | "peer" | "schedule";
+export type RunOrigin = "user" | "peer" | "schedule" | "goal";
 
 export interface CreateSessionInput {
 	title?: string;
