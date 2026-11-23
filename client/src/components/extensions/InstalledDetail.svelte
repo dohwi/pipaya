@@ -58,7 +58,7 @@
 		/** Go to the server extensions' marketplace for it */
 		oninstallserver?: () => void;
 		/** A newer marketplace version of this extension, with what the button does */
-		upgrade?: { version: string; disabled: boolean; onclick: () => void };
+		upgrade?: { version: string; busy?: boolean; disabled: boolean; onclick: () => void };
 		onback: () => void;
 		onenable: () => void;
 		ondisable: () => void;

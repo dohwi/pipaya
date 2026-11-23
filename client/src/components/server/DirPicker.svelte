@@ -227,6 +227,7 @@
 	.path,
 	.mk {
 		display: flex;
+		align-items: center;
 		gap: 8px;
 	}
 	.mk {
@@ -240,13 +241,13 @@
 	.mk input {
 		flex: 1;
 		min-width: 0;
-		height: 34px;
+		height: var(--control-h-sm);
 		padding: 0 12px;
 		font-size: var(--fs-sm);
 		color: var(--text);
 		background: var(--bg-elev);
 		border: 1px solid var(--border-strong);
-		border-radius: var(--radius);
+		border-radius: var(--radius-control);
 	}
 	input.mono:focus,
 	.mk input:focus {
@@ -285,9 +286,9 @@
 		flex: none;
 		display: grid;
 		place-items: center;
-		width: 34px;
-		height: 34px;
-		border-radius: var(--radius);
+		width: var(--control-h-sm);
+		height: var(--control-h-sm);
+		border-radius: var(--radius-control);
 		color: var(--text-dim);
 	}
 	@media (hover: hover) {
@@ -314,6 +315,10 @@
 		padding: 4px var(--dlg-px) 4px calc(var(--dlg-px) - 12px); /* rows carry their own 12px, so row text starts on the dialog edge */
 		border-top: 1px solid var(--border);
 		transition: opacity var(--motion-fast) var(--ease-std);
+	}
+	/* a notice sits directly in `.list` without `.row`'s 12px inner padding: restore the dialog's left edge */
+	.list > :global(.notice) {
+		margin: 8px 0 8px 12px;
 	}
 	.list.loading {
 		opacity: 0.5;

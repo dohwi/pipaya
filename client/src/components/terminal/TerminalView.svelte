@@ -428,13 +428,13 @@
 	.note {
 		position: absolute;
 		right: 12px;
-		bottom: 10px;
+		bottom: 12px;
 		display: flex;
 		align-items: center;
 		gap: 8px;
 		padding: 4px 8px;
 		border: 1px solid var(--border-strong);
-		border-radius: var(--radius-sm);
+		border-radius: var(--radius);
 		background: var(--bg-elev);
 		color: var(--text-dim);
 		font-size: var(--fs-xs);

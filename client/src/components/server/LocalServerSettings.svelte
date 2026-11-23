@@ -88,6 +88,12 @@
 		flex-direction: column;
 		gap: 12px;
 	}
+	/* matches `.set-group > .section-label` in app.css since `.stack` sits between the group and the heading */
+	.stack > .section-label {
+		font-size: var(--fs-sm);
+		line-height: 20px;
+		color: var(--text);
+	}
 	.hint {
 		margin: 0;
 	}
@@ -97,12 +103,13 @@
 	}
 	input {
 		width: 160px;
-		padding: 4px 8px;
-		border: 1px solid var(--border);
+		height: var(--control-h-sm);
+		padding: 0 12px;
+		border: 1px solid var(--border-strong);
 		border-radius: var(--radius-control);
 		background: var(--bg-input, transparent);
 		color: inherit;
-		font: inherit;
+		font-size: var(--fs-sm);
 	}
 	input:focus-visible {
 		outline: 2px solid var(--accent);

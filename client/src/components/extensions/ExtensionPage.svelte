@@ -39,7 +39,7 @@
 		busy?: boolean;
 		onback: () => void;
 		control?: Snippet;
-		upgrade?: { version: string; disabled: boolean; onclick: () => void };
+		upgrade?: { version: string; busy?: boolean; disabled: boolean; onclick: () => void };
 		children: Snippet;
 	} = $props();
 </script>
@@ -61,9 +61,9 @@
 		</div>
 	</div>
 	{#if upgrade}
-		<Notice tone="ok" size="sm" icon="arrow-up" role="status">
+		<Notice tone="ok" icon="arrow-up" role="status">
 			{t("새 버전 v{version}을 사용할 수 있습니다.", { version: upgrade.version })}
-			{#snippet action()}<Button size="sm" variant="update" disabled={upgrade.disabled} aria-label={t("v{version}으로 업데이트", { version: upgrade.version })} onclick={upgrade.onclick}>{t("업데이트")}</Button>{/snippet}
+			{#snippet action()}<Button size="sm" variant="update" busy={upgrade.busy} disabled={upgrade.disabled} aria-label={upgrade.busy ? undefined : t("v{version}으로 업데이트", { version: upgrade.version })} onclick={upgrade.onclick}>{upgrade.busy ? t("업데이트하는 중…") : t("업데이트")}</Button>{/snippet}
 		</Notice>
 	{/if}
 	{@render children()}

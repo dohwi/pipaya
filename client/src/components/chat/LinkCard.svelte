@@ -41,7 +41,7 @@
 			</div>
 		{:else if link.state === "failed"}
 			<Notice tone="danger">{link.error}</Notice>
-			<Button variant="primary" onclick={() => app.closeLinking()}>{t("닫기")}</Button>
+			<div class="actions"><Button variant="primary" onclick={() => app.closeLinking()}>{t("닫기")}</Button></div>
 		{/if}
 	</StatusCard>
 {/if}

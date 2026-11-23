@@ -137,21 +137,28 @@
 	};
 	const clientUpdate = (entry: Installed) => newerEntry(entry.package.manifest.id, "client", entry.package.manifest.version);
 	const serverUpdate = (ext: ServerExt) => { const e = newerEntry(ext.name, "server", ext.version); return e?.source.type === "git" ? e : undefined; };
+	let updating = $state<Record<string, boolean>>({});
 	/** Client: download, then the usual preview (permissions) before replacing. Server: reinstall at the catalog's commit. */
 	function update(entry: MarketEntry) {
-		void run(entry.kind === "server" ? srvKey(entry.id) : entry.id, async () => {
-			if (entry.kind === "client") {
-				const pkg = await fetchPackage(entry);
-				preview = pkg;
-				filename = `${entry.id}.json`;
-				return;
+		const key = entry.kind === "server" ? srvKey(entry.id) : entry.id;
+		void run(key, async () => {
+			updating[key] = true;
+			try {
+				if (entry.kind === "client") {
+					const pkg = await fetchPackage(entry);
+					preview = pkg;
+					filename = `${entry.id}.json`;
+					return;
+				}
+				const api = srvApi;
+				if (!api || entry.source.type !== "git") throw new LocalizedError(t("서버에 연결되어 있지 않습니다."));
+				const { repo, dir, ref, commit } = entry.source;
+				await api.installServerExtension({ id: entry.id, repo, ...(dir ? { dir } : {}), ref, commit });
+				await reloadServer();
+				tasks.notice = t("{name}을(를) v{version}(으)로 업데이트했습니다.", { name: entry.name, version: entry.version });
+			} finally {
+				delete updating[key];
 			}
-			const api = srvApi;
-			if (!api || entry.source.type !== "git") throw new LocalizedError(t("서버에 연결되어 있지 않습니다."));
-			const { repo, dir, ref, commit } = entry.source;
-			await api.installServerExtension({ id: entry.id, repo, ...(dir ? { dir } : {}), ref, commit });
-			await reloadServer();
-			tasks.notice = t("{name}을(를) v{version}(으)로 업데이트했습니다.", { name: entry.name, version: entry.version });
 		}, t("업데이트하지 못했습니다"));
 	}
 	/** Every extension of this tab that has a newer catalog entry. */
@@ -428,11 +435,10 @@
 {/snippet}
 
 {#snippet needLine(text: string, disabled: boolean, onclick: () => void)}
-	<div class="needline">
-		<Icon name="alert" />
-		<span class="need-text">{text}</span>
-		<Button size="sm" {disabled} {onclick}>{t("설치")}</Button>
-	</div>
+	<Notice tone="warn" size="sm">
+		{text}
+		{#snippet action()}<Button size="sm" {disabled} {onclick}>{t("설치")}</Button>{/snippet}
+	</Notice>
 {/snippet}
 
 {#snippet companionLine(id: string, disabled: boolean)}
@@ -483,7 +489,7 @@
 			{src}
 			{tasks}
 			{drafts}
-			upgrade={(() => { const u = clientUpdate(openEntry); return u ? { version: u.version, disabled: !!tasks.busy[id] || !!tasks.busy.$import || !!tasks.busy.$all, onclick: () => update(u) } : undefined; })()}
+			upgrade={(() => { const u = clientUpdate(openEntry); return u ? { version: u.version, busy: !!updating[id], disabled: !!tasks.busy[id] || !!tasks.busy.$import || !!tasks.busy.$all, onclick: () => update(u) } : undefined; })()}
 			pairedServer={pairedServer ? serverTitle(pairedServer) : undefined}
 			bundledBy={bundleOwner ? serverTitle(bundleOwner) : undefined}
 			needsServer={extensionUpdates.missingServerFor(id, serverId ?? app.serverId)}
@@ -510,7 +516,7 @@
 			oncall={(method, params) => callServerMethod(openServer, method, params)}
 			onpageevent={(event) => sendPageEvent(openServer, event)}
 			busy={!!tasks.busy[srvKey(openServer.name)]}
-			upgrade={(() => { const u = serverUpdate(openServer); return u ? { version: u.version, disabled: !!tasks.busy[srvKey(openServer.name)] || !!tasks.busy.$all, onclick: () => update(u) } : undefined; })()}
+			upgrade={(() => { const u = serverUpdate(openServer); return u ? { version: u.version, busy: !!updating[srvKey(openServer.name)], disabled: !!tasks.busy[srvKey(openServer.name)] || !!tasks.busy.$all, onclick: () => update(u) } : undefined; })()}
 			onback={() => (selected = null)}
 			onsave={(settings) => saveServerSettings(openServer, settings)}
 			oninstallclient={installCompanion}
@@ -605,11 +611,6 @@
 	.hint { overflow-wrap: anywhere; }
 	/* Same pattern as the app and server update rows: amber status chip, then the primary action on the right */
 	.extensions :global(.btn.update) { flex: none; }
-	/* a missing half: the same amber bar as the notices above, with the action on the right */
-	.needline { display: flex; align-items: center; gap: 8px; padding: 8px 8px 8px 12px; border-radius: var(--radius-sm); background: var(--warn-soft); color: var(--warn); font-size: var(--fs-xs); line-height: 1.5; }
-	.needline :global(svg) { flex: none; width: 16px; height: 16px; stroke-width: 1.8; }
-	.need-text { flex: 1; min-width: 0; overflow-wrap: anywhere; word-break: keep-all; }
-	.needline :global(.btn) { flex: none; }
 	.extensions :global(.btn.sm) { height: auto; min-height: var(--control-h-sm); padding: 4px 12px; white-space: normal; }
 
 	.bar { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }

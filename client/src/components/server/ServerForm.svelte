@@ -164,7 +164,7 @@
 		<div class="body pane" role="tabpanel" in:paneIn={{ x: dir * 18 }}>{#key editing.id}<DevicesPanel serverId={editing.id} />{/key}</div>
 	{:else if editing && tab === "sessions"}
 		<div class="body pane" role="tabpanel" in:paneIn={{ x: dir * 18 }}>
-			<section class="set-group">
+			<section class="set-group wd-group">
 				<div class="section-label">{t("기본 작업 폴더")}</div>
 	{#if wdError && !shownWd}
 			<Notice tone="danger">{wdError}</Notice>
@@ -350,6 +350,11 @@
 	.body.pane {
 		padding: var(--dlg-body-t) var(--dlg-px) var(--dlg-body-b);
 	}
+	.wd-group {
+		display: flex;
+		flex-direction: column;
+		gap: 8px;
+	}
 	.wd {
 		display: flex;
 		align-items: center;
@@ -375,7 +380,7 @@
 		text-overflow: ellipsis;
 		white-space: nowrap;
 	}
-	.mono {
+	.field.mono {
 		font-size: var(--fs-md);
 	}
 	.fields { display: flex; flex-direction: column; gap: var(--dlg-gap); }

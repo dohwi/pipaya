@@ -162,4 +162,9 @@
 		flex: none;
 		stroke-width: 1.9;
 	}
+	.actions {
+		display: flex;
+		justify-content: flex-end;
+		gap: 8px;
+	}
 </style>
