@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { composeSkillMessage, dropImageToken, extractSkillNames, insertToken, knownMention, mentionAt, mirrorHtml, removeSkillToken, replaceMention, slashAt, splitTokens, toggleSkillSelection } from "../src/lib/composer-text";
+import { dropImageToken, extractSkillNames, insertToken, knownMention, mentionAt, mirrorHtml, replaceMention, slashAt, splitTokens } from "../src/lib/composer-text";
 
 describe("mentionAt", () => {
 	test("finds the token that ends at the caret", () => {
@@ -186,38 +186,10 @@ describe("dropImageToken", () => {
 	});
 });
 
-describe("multi-skill helpers", () => {
-	test("extractSkillNames finds multiple skills in order without duplicates", () => {
+describe("extractSkillNames", () => {
+	test("finds multiple skills in order without duplicates", () => {
 		expect(extractSkillNames("/skill:alpha /skill:beta로 확인해줘 /skill:alpha")).toEqual(["alpha", "beta"]);
 		expect(extractSkillNames("hello /skill:alpha /skill:unknown", ["alpha", "beta"])).toEqual(["alpha"]);
 		expect(extractSkillNames("no skills here")).toEqual([]);
-	});
-
-	test("removeSkillToken drops inline tokens cleanly at start, middle, end and across lines", () => {
-		expect(removeSkillToken("/skill:alpha hello", "alpha")).toBe("hello");
-		expect(removeSkillToken("hello /skill:alpha world", "alpha")).toBe("hello world");
-		expect(removeSkillToken("hello /skill:alpha", "alpha")).toBe("hello");
-		expect(removeSkillToken("/skill:alpha /skill:beta hello", "alpha")).toBe("/skill:beta hello");
-		expect(removeSkillToken("first\n/skill:alpha\nsecond", "alpha")).toBe("first\n\nsecond");
-		expect(removeSkillToken("/skill:alpha로 해줘", "alpha")).toBe("로 해줘");
-		expect(removeSkillToken("hello /skill:alpha-two", "alpha")).toBe("hello /skill:alpha-two");
-		expect(removeSkillToken("hello", "")).toBe("hello");
-	});
-
-	test("composeSkillMessage prepends selected skills and skips duplicates already inline", () => {
-		expect(composeSkillMessage(["alpha", "beta"], "check this")).toBe("/skill:alpha /skill:beta check this");
-		expect(composeSkillMessage(["alpha", "beta"], "")).toBe("/skill:alpha /skill:beta");
-		expect(composeSkillMessage(["alpha", "beta"], "   ")).toBe("/skill:alpha /skill:beta");
-		expect(composeSkillMessage(["alpha", "beta", "alpha", ""], "/skill:alpha check this")).toBe("/skill:beta /skill:alpha check this");
-		expect(composeSkillMessage([], "check this")).toBe("check this");
-	});
-
-	test("toggleSkillSelection adds new skills and removes from both picker selection and inline text", () => {
-		expect(toggleSkillSelection([], "fix this", "alpha")).toEqual({ selected: ["alpha"], text: "fix this" });
-		expect(toggleSkillSelection(["alpha"], "fix this", "beta")).toEqual({ selected: ["alpha", "beta"], text: "fix this" });
-		expect(toggleSkillSelection(["alpha", "beta"], "fix this", "alpha")).toEqual({ selected: ["beta"], text: "fix this" });
-		expect(toggleSkillSelection([], "/skill:alpha fix this", "alpha")).toEqual({ selected: [], text: "fix this" });
-		expect(toggleSkillSelection(["alpha"], "/skill:alpha fix this", "alpha")).toEqual({ selected: [], text: "fix this" });
-		expect(toggleSkillSelection(["alpha"], "fix this", "")).toEqual({ selected: ["alpha"], text: "fix this" });
 	});
 });
