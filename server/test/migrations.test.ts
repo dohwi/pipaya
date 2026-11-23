@@ -89,4 +89,39 @@ describe("migrations", () => {
 		db.exec(step as string);
 		expect(db.query("SELECT id, enabled, fail_count, last_status FROM scheduled_tasks").all()).toEqual([{ id: "t", enabled: 1, fail_count: 0, last_status: null }]);
 	});
+
+	test("events FK migration removes orphaned rows, preserves valid and global events, and cascades on session delete", () => {
+		const db = openDb(":memory:");
+		// Simulate a legacy events table without a foreign key
+		db.exec(`
+			DROP TABLE events;
+			CREATE TABLE events (
+				id         INTEGER PRIMARY KEY AUTOINCREMENT,
+				session_id TEXT,
+				type       TEXT NOT NULL,
+				data       TEXT NOT NULL,
+				ts         INTEGER NOT NULL
+			);
+			CREATE INDEX events_session ON events(session_id, id);
+		`);
+		db.query("INSERT INTO sessions (id, title, cwd, provider, model, thinking_level, system_prompt, tools, parent_id, created_at, updated_at, closed, purpose) VALUES ('s1', 't', '/', 'p', 'm', 'medium', '', '[]', NULL, 1, 1, 0, '')").run();
+		db.query("INSERT INTO events (id, session_id, type, data, ts) VALUES (1, NULL, 'provider_updated', '{}', 10)").run();
+		db.query("INSERT INTO events (id, session_id, type, data, ts) VALUES (2, 's1', 'session_created', '{}', 20)").run();
+		db.query("INSERT INTO events (id, session_id, type, data, ts) VALUES (3, 'orphan', 'session_updated', '{}', 30)").run();
+
+		const step = MIGRATIONS[MIGRATIONS.length - 1]!;
+		expect(typeof step).toBe("function");
+		db.transaction(() => (step as (d: typeof db) => void)(db))();
+
+		// Orphaned event removed, global and valid session events preserved with original IDs
+		expect(db.query("SELECT id, session_id, type FROM events ORDER BY id").all()).toEqual([
+			{ id: 1, session_id: null, type: "provider_updated" },
+			{ id: 2, session_id: "s1", type: "session_created" },
+		]);
+		// Deleting the session cascades to its events, leaving global events intact
+		db.query("DELETE FROM sessions WHERE id = 's1'").run();
+		expect(db.query("SELECT id, session_id, type FROM events ORDER BY id").all()).toEqual([
+			{ id: 1, session_id: null, type: "provider_updated" },
+		]);
+	});
 });

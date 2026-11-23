@@ -268,15 +268,9 @@ export class SessionStore {
 		this.db.query("UPDATE sessions SET updated_at = $t WHERE id = $id").run({ id, t: Date.now() });
 	}
 
-	/** All or nothing: a crash halfway must not leave a session without its transcript, or events without their session. */
+	/** Cascade-deletes messages, contexts, compactions, events, and all other per-session rows via foreign keys. */
 	delete(id: string): boolean {
-		return this.db.transaction(() => {
-			this.db.query("DELETE FROM messages WHERE session_id = $id").run({ id });
-			this.db.query("DELETE FROM session_contexts WHERE session_id = $id").run({ id });
-			this.db.query("DELETE FROM session_compactions WHERE session_id = $id").run({ id });
-			this.db.query("DELETE FROM events WHERE session_id = $id").run({ id }); // events has no foreign key to cascade on
-			return this.db.query("DELETE FROM sessions WHERE id = $id").run({ id }).changes > 0;
-		})();
+		return this.db.query("DELETE FROM sessions WHERE id = $id").run({ id }).changes > 0;
 	}
 
 	context(id: string): ContextSnapshot | undefined {

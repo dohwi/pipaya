@@ -597,9 +597,7 @@ export class SessionManager {
 		}
 		this.describing.get(id)?.abort();
 		this.dispose(id);
-		this.stopped.delete(id);
-		const prefix = `${id}\0`;
-		for (const k of this.recentSends.keys()) if (k.startsWith(prefix)) this.recentSends.delete(k);
+		this.clearSessionMemory(id, true);
 		this.store.delete(id);
 		this.bus.publish(null, "session_deleted", { id });
 	}
@@ -2115,6 +2113,17 @@ export class SessionManager {
 		return [...new Set(names)];
 	}
 
+	/** Clears per-session in-memory state; `all` (on delete) also drops cached idempotency entries. */
+	private clearSessionMemory(id: string, all = false): void {
+		this.stopped.delete(id);
+		this.describeFailedAt.delete(id);
+		this.pendingNotes.delete(id);
+		if (all) {
+			const prefix = `${id}\0`;
+			for (const k of this.recentSends.keys()) if (k.startsWith(prefix)) this.recentSends.delete(k);
+		}
+	}
+
 	private dispose(id: string): void {
 		const live = this.live.get(id);
 		if (!live) return;
@@ -2126,7 +2135,13 @@ export class SessionManager {
 		const now = Date.now();
 		this.pruneRecentSends(now);
 		for (const [id, live] of this.live) {
-			if (!live.running && now - live.lastActive > IDLE_EVICT_MS) this.dispose(id);
+			if (!live.running && now - live.lastActive > IDLE_EVICT_MS) {
+				this.dispose(id);
+				this.clearSessionMemory(id);
+			}
+		}
+		for (const [id, at] of this.describeFailedAt) {
+			if (now - at >= DESCRIBE_RETRY_MS) this.describeFailedAt.delete(id);
 		}
 	}
 }
