@@ -105,4 +105,70 @@ describe("ServerLink stream drop and automatic reconnect", () => {
 		expect(readyCalls).toEqual([false, true]);
 		link.stop();
 	});
+
+	test("sync captures latestEventId before reading activity so events during slow catalog load are replayed", async () => {
+		const order: string[] = [];
+		let subscribedAfter = -1;
+		const link = new ServerLink(
+			{ id: "srv2", name: "Dev", baseUrl: "http://127.0.0.1:9999", token: "tok" },
+			{ event: () => {}, ready: () => {} },
+		);
+		const fakeApi: any = {
+			scoped: () => fakeApi,
+			health: async () => ({ ok: true, version: "0.10.4", protocol: 1, minClientProtocol: 1 }),
+			listSessions: async () => ({ sessions: [], nextBefore: null, nextBeforeId: null }),
+			workspace: async () => ({ root: "/w", home: "/h", workdirs: [] }),
+			groups: async () => [],
+			terminals: async () => [],
+			terminalSupport: async () => null,
+			latestEventId: async () => {
+				order.push("latestEventId");
+				return 42;
+			},
+			activity: async () => {
+				order.push("activity");
+				return { sessions: [], unread: [] };
+			},
+			models: async () => [],
+			providers: async () => [],
+			tools: async () => ({ tools: [], defaults: [] }),
+			configuration: async () => null,
+			compactionSettings: async () => null,
+			systemModelSettings: async () => null,
+			repos: async () => ({ repos: {} }),
+			subscribe: (_handlers: unknown, after: number) => {
+				subscribedAfter = after;
+				return () => {};
+			},
+		};
+		(link as any).api = fakeApi;
+
+		await link.sync();
+		expect(order).toEqual(["latestEventId", "activity"]);
+		expect(subscribedAfter).toBe(42);
+		link.stop();
+	});
+
+	test("refreshActivity updates running state from server snapshot", async () => {
+		let running = true;
+		const link = new ServerLink(
+			{ id: "srv3", name: "Dev", baseUrl: "http://127.0.0.1:9999", token: "tok" },
+			{ event: () => {}, ready: () => {} },
+		);
+		const fakeApi: any = {
+			scoped: () => fakeApi,
+			activity: async () => ({
+				sessions: running ? [{ sessionId: "s1", running: true, pendingQuestions: 0 }] : [],
+				unread: [],
+			}),
+		};
+		(link as any).api = fakeApi;
+		link.data.running = {};
+		await link.refreshActivity();
+		expect(link.data.running).toEqual({ s1: true });
+		running = false;
+		await link.refreshActivity();
+		expect(link.data.running).toEqual({});
+		link.stop();
+	});
 });

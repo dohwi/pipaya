@@ -253,6 +253,37 @@ export class ServerLink {
 		this.reopen(true);
 	}
 
+	private applyActivity(activity: { sessions: { sessionId: string; running: boolean; pendingQuestions: number }[]; unread: { sessionId: string; kind: "done" | "failed" }[] }): void {
+		const running: Record<string, boolean> = {};
+		const awaiting: Record<string, number> = {};
+		const unread: Record<string, boolean> = {};
+		const failed: Record<string, boolean> = {};
+		for (const a of activity.sessions) {
+			if (a.running) running[a.sessionId] = true;
+			if (a.pendingQuestions) awaiting[a.sessionId] = a.pendingQuestions;
+		}
+		for (const u of activity.unread) (u.kind === "failed" ? failed : unread)[u.sessionId] = true;
+		const d = this.data;
+		// Written one field at a time: a whole new object re-renders every badge that reads the lists.
+		if (!sameMap(d.running, running)) d.running = running;
+		for (const id of Object.keys(d.compacting)) if (!running[id]) delete d.compacting[id];
+		if (!sameMap(d.awaiting, awaiting)) d.awaiting = awaiting;
+		if (!sameMap(d.unread, unread)) d.unread = unread;
+		if (!sameMap(d.failed, failed)) d.failed = failed;
+	}
+
+	/** Re-read live activity when an event arrives without enough context to infer whether the session is still busy. */
+	async refreshActivity(): Promise<void> {
+		const token = this.token;
+		try {
+			const activity = await this.api.activity();
+			if (token !== this.token) return;
+			this.applyActivity(activity);
+		} catch {
+			/* ignore: the next catchUp or event will settle it */
+		}
+	}
+
 	/**
 	 * The events that are never persisted (a read mark, a terminal opening, an extension reloading, a run starting or
 	 * finishing) are the ones a replay cannot bring back, so they are read again here: one small request each, and only
@@ -274,23 +305,7 @@ export class ServerLink {
 				void this.sync();
 				return;
 			}
-			if (activity) {
-				const running: Record<string, boolean> = {};
-				const awaiting: Record<string, number> = {};
-				const unread: Record<string, boolean> = {};
-				const failed: Record<string, boolean> = {};
-				for (const a of activity.sessions) {
-					if (a.running) running[a.sessionId] = true;
-					if (a.pendingQuestions) awaiting[a.sessionId] = a.pendingQuestions;
-				}
-				for (const u of activity.unread) (u.kind === "failed" ? failed : unread)[u.sessionId] = true;
-				const d = this.data;
-				// Written one field at a time: a whole new object re-renders every badge that reads the lists.
-				if (!sameMap(d.running, running)) d.running = running;
-				if (!sameMap(d.awaiting, awaiting)) d.awaiting = awaiting;
-				if (!sameMap(d.unread, unread)) d.unread = unread;
-				if (!sameMap(d.failed, failed)) d.failed = failed;
-			}
+			if (activity) this.applyActivity(activity);
 			if (terminals && !sameTerminals(this.data.terminals, terminals)) this.data.terminals = terminals;
 			if (support) this.terminalSupport = support;
 		} catch {
@@ -352,6 +367,10 @@ export class ServerLink {
 		try {
 			// Health and the lists go out together (one round trip over a slow link, not two); health is judged first.
 			const healthReq = api.health(AbortSignal.timeout(5000)); // a silent server counts as offline after 5s
+			// Capture the replay cursor before reading /activity, so any run_started/run_finished between them is replayed
+			// once the stream opens instead of falling into a gap between the snapshot and the cursor.
+			const latestIdReq = api.latestEventId();
+			latestIdReq.catch(() => {});
 			// What the sidebar draws comes in its own batch: the catalog (models, providers ask every provider for its auth)
 			// can be much slower, and the conversation list used to wait for the slowest of them behind a skeleton.
 			const listedReq = Promise.all([
@@ -360,13 +379,16 @@ export class ServerLink {
 				api.groups().catch(() => [] as Group[]), // servers from before session groups existed
 				api.terminals().catch(() => [] as TerminalInfo[]), // servers from before terminals existed
 				api.terminalSupport().catch(() => null),
-				api.activity().catch(() => null),
+				latestIdReq.then(
+					() => api.activity().catch(() => null),
+					() => api.activity().catch(() => null),
+				),
 			]);
 			const catalogReq = Promise.all([
 				api.models(),
 				api.providers(),
 				api.tools(),
-				api.latestEventId(),
+				latestIdReq,
 				api.configuration().catch(() => null), // servers from before model configuration existed
 			]);
 			const listsReq = Promise.all([listedReq, catalogReq]);
@@ -403,6 +425,7 @@ export class ServerLink {
 				groups,
 				terminals,
 				running,
+				compacting: {},
 				awaiting,
 				unread,
 				failed,

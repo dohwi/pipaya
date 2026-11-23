@@ -2,12 +2,16 @@ import type { Group, PipayaEvent, Session } from "./types";
 import { applyQueueEvent, type QueuedItem } from "./queue";
 import type { TerminalInfo } from "./terminal";
 
+export type CompactionReason = "manual" | "threshold";
+
 /** What the client keeps live about one server: its lists and what each session is doing. */
 export interface LinkData {
 	sessions: Session[];
 	groups: Group[];
 	terminals: TerminalInfo[];
 	running: Record<string, boolean>;
+	/** Active compaction kind per session, so `compaction_finished` does not clear a running `threshold` compaction's outer run. */
+	compacting: Record<string, CompactionReason>;
 	awaiting: Record<string, number>;
 	unread: Record<string, boolean>;
 	failed: Record<string, boolean>;
@@ -19,7 +23,29 @@ export interface LinkData {
 	tool: Record<string, { name: string; args: Record<string, unknown> }>;
 }
 
-export const emptyLinkData = (): LinkData => ({ sessions: [], groups: [], terminals: [], running: {}, awaiting: {}, unread: {}, failed: {}, queued: {}, tool: {} });
+export const emptyLinkData = (): LinkData => ({ sessions: [], groups: [], terminals: [], running: {}, compacting: {}, awaiting: {}, unread: {}, failed: {}, queued: {}, tool: {} });
+
+/**
+ * Reconcile `running[sid]` when a compaction ends. A `threshold` compaction always runs inside an agent run (so the
+ * session is still working), whereas a `manual` compaction runs standalone and clears `running`. If the client never saw
+ * `compaction_started`, fall back to `chatRunning` or ask the caller to verify via `/activity`.
+ */
+export function settleCompactionRunning(
+	running: Record<string, boolean>,
+	compacting: Record<string, CompactionReason>,
+	sid: string,
+	chatRunning?: boolean,
+): "keep" | "cleared" | "unknown" {
+	const reason = compacting[sid];
+	delete compacting[sid];
+	if (reason === "threshold") return "keep";
+	if (reason === "manual") {
+		running[sid] = false;
+		return "cleared";
+	}
+	if (chatRunning) return "keep";
+	return "unknown";
+}
 
 /** Forget what a session was doing (it closed, was deleted, or its run ended). */
 function clearLive(d: LinkData, id: string) {
@@ -74,7 +100,7 @@ export function applyLiveEvent(d: LinkData, e: PipayaEvent): void {
 }
 
 /** Events that can change a link's lists (the rest are about a transcript, which a background server does not hold). */
-export function applyLinkEvent(d: LinkData, e: PipayaEvent): void {
+export function applyLinkEvent(d: LinkData, e: PipayaEvent, onUnknownCompaction?: (sid: string) => void): void {
 	const sid = e.sessionId;
 	switch (e.type) {
 		case "session_created": {
@@ -88,6 +114,7 @@ export function applyLinkEvent(d: LinkData, e: PipayaEvent): void {
 			d.sessions = d.sessions.filter((x) => x.id !== s.id);
 			if (s.closed) {
 				d.running[s.id] = false;
+				delete d.compacting[s.id];
 				d.awaiting[s.id] = 0;
 				delete d.unread[s.id];
 				delete d.failed[s.id];
@@ -98,6 +125,7 @@ export function applyLinkEvent(d: LinkData, e: PipayaEvent): void {
 			const id = (e.data as { id: string }).id;
 			d.sessions = d.sessions.filter((x) => x.id !== id);
 			delete d.running[id];
+			delete d.compacting[id];
 			delete d.awaiting[id];
 			delete d.unread[id];
 			delete d.failed[id];
@@ -128,21 +156,27 @@ export function applyLinkEvent(d: LinkData, e: PipayaEvent): void {
 		case "run_started":
 			if (sid) {
 				d.running[sid] = true;
+				delete d.compacting[sid];
 				delete d.failed[sid];
 			}
 			break;
 		case "run_finished":
 			if (sid) {
 				d.running[sid] = false;
+				delete d.compacting[sid];
 				d.awaiting[sid] = 0;
 			}
 			break;
 		case "compaction_started":
-			if (sid) d.running[sid] = true;
+			if (sid) {
+				const reason = (e.data as { reason?: unknown } | null)?.reason;
+				d.compacting[sid] = reason === "manual" ? "manual" : "threshold";
+				d.running[sid] = true;
+			}
 			break;
 		case "compaction_finished":
 		case "compaction_failed":
-			if (sid) d.running[sid] = false;
+			if (sid && settleCompactionRunning(d.running, d.compacting, sid) === "unknown") onUnknownCompaction?.(sid);
 			break;
 		case "question_requested":
 			if (sid) d.awaiting[sid] = (d.awaiting[sid] ?? 0) + 1;

@@ -194,4 +194,25 @@ describe("catching up after the window was in the background", () => {
 		expect(formatRunError("The run was interrupted because the server shut down.")).toBe("The run was interrupted because the server shut down.");
 		setLang("ko");
 	});
+
+	test("onStatus reports load and catchUp status changes once buffers are applied", async () => {
+		let running = true;
+		const seen: { kind: string; running: boolean }[] = [];
+		const api = {
+			tailMessages: async () => [],
+			questions: async () => [],
+			serverExtensionEntries: async () => [],
+			getSession: async () => ({ status: { ...base, running, pendingToolCalls: [] }, context: { tokens: 10, contextWindow: 128000 }, usage: {} }),
+		} as unknown as Api;
+		const chat = new ChatState("session", api, (c, kind) => seen.push({ kind, running: c.running }));
+		await chat.load();
+		expect(seen).toEqual([{ kind: "load", running: true }]);
+
+		running = false;
+		await chat.catchUp();
+		expect(seen).toEqual([
+			{ kind: "load", running: true },
+			{ kind: "catchUp", running: false },
+		]);
+	});
 });

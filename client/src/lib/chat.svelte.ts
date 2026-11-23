@@ -329,6 +329,7 @@ export class ChatState {
 	constructor(
 		readonly id: string,
 		private api: Api,
+		private onStatus?: (chat: ChatState, kind: "load" | "catchUp") => void,
 	) {}
 
 	get streaming(): boolean {
@@ -350,6 +351,7 @@ export class ChatState {
 		this.buffer = [];
 		this.loadError = "";
 		this.notFound = false;
+		let fetched = false;
 		// A refresh of a transcript already on screen (coming back to its tab) covers everything the reader had loaded,
 		// plus room for what arrived meanwhile. Cutting back to the first page made scrolled-in replies shrink and the
 		// view jump on every return, then grow again once the older page came back.
@@ -409,6 +411,7 @@ export class ChatState {
 			this.ready = true;
 			this.loadedAt = Date.now();
 			this.ahead = null;
+			fetched = true;
 			setTimeout(() => { if (token === this.token) this.prefetchEarlier(); }, 0);
 		} catch (e) {
 			if (token !== this.token) return;
@@ -423,6 +426,7 @@ export class ChatState {
 			if (token === this.token) {
 				this.syncing = false;
 				for (const e of this.buffer.splice(0)) this.reduce(e);
+				if (fetched) this.onStatus?.(this, "load");
 			}
 		}
 	}
@@ -480,6 +484,7 @@ export class ChatState {
 				}
 			} catch { /* SSE replay or the next catchUp will fill it */ }
 		}
+		if (token === this.token && this.ready) this.onStatus?.(this, "catchUp");
 	}
 
 	/** Put the server's partial reply in place of the one on screen, keeping the item (and its place) when there is one. */
