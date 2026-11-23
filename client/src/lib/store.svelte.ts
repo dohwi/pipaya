@@ -1570,7 +1570,21 @@ class AppStore {
       link.data.awaiting[id] = 0;
       delete link.data.unread[id];
       delete link.data.failed[id];
-      if (this.serverId === sid && this.activeId === id) this.leave(next);
+      if (this.graphPeek?.server === sid && this.graphPeek?.session === id) this.graphPeek = null;
+      if (this.graphFrom?.server === sid && this.graphFrom?.session === id) this.graphFrom = next ? { server: sid, session: next } : null;
+      if (this.serverId === sid && this.activeId === id) {
+        if (this.graphOpen) {
+          this.activeId = null;
+          try {
+            localStorage.removeItem(this.activeKey);
+          } catch {
+            /* ignore */
+          }
+          this.resetNewChatDraft();
+        } else {
+          this.leave(next);
+        }
+      }
       void link.refreshWorkspace();
     } catch (e) {
       this.probeIfNetwork(link, e);
@@ -1611,6 +1625,21 @@ class AppStore {
 
   /** The focused session is gone: focus its neighbour (see `neighbourOf`) if there is one, else fall back to a blank chat. */
   private leave(next?: string) {
+    if (this.graphOpen) {
+      const gone = this.activeId;
+      if (this.graphPeek?.server === this.serverId && this.graphPeek?.session === gone) this.graphPeek = null;
+      if (this.graphFrom?.server === this.serverId && this.graphFrom?.session === gone) {
+        this.graphFrom = next && this.serverId ? { server: this.serverId, session: next } : null;
+      }
+      this.activeId = null;
+      try {
+        localStorage.removeItem(this.activeKey);
+      } catch {
+        /* ignore */
+      }
+      this.resetNewChatDraft();
+      return;
+    }
     if (next && this.shows(next)) void this.openSession(next);
     else this.newChat();
   }

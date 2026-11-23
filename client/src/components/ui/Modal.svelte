@@ -21,6 +21,7 @@
 		onclose,
 		onescape,
 		closeShortcut,
+		onshortcutclose,
 		label,
 		labelledby,
 		describedby,
@@ -52,6 +53,8 @@
 	}: {
 		onclose: () => void;
 		closeShortcut?: ActionId;
+		/** Runs when `closeShortcut` is pressed; defaults to `onclose` */
+		onshortcutclose?: () => void;
 		/** Esc when it should do less than closing (step back from a sub-page); defaults to `onclose` */
 		onescape?: () => void;
 		label?: string;
@@ -222,7 +225,7 @@
 		style:--modal-max-h={maxHeight}
 		style:--modal-gut={gutter}
 		use:whole
-		use:modalLayer={{ onclose: onescape ?? onclose, onshortcutclose: onclose, closeBinding: closeShortcut ? uiEnv.closeBinding(closeShortcut) : undefined, dismissible, opener }}
+		use:modalLayer={{ onclose: onescape ?? onclose, onshortcutclose: onshortcutclose ?? onclose, closeBinding: closeShortcut ? uiEnv.closeBinding(closeShortcut) : undefined, dismissible, opener }}
 		in:enter|global
 		out:modalOut|global
 	>

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { backLayer, handleBack, trapTab } from "../src/lib/dialog";
+import { backLayer, handleBack, toggleLayer, trapTab, type LayerOpts } from "../src/lib/dialog";
 
 /** Just enough DOM for the Tab trap: focusable children with a layout box, and a document focus pointer. */
 type Fake = { name: string; tabIndex: number; focus: () => void; getClientRects: () => unknown[]; closest: () => null };
@@ -114,5 +114,93 @@ describe("handleBack (native back button)", () => {
 		expect(handleBack()).toBe(true);
 		expect(closed).toBe(0);
 		release();
+	});
+});
+
+describe("toggleLayer", () => {
+	function keyEvent(overrides: Partial<KeyboardEvent> & { code: string; key: string }) {
+		let prevented = false;
+		const e = {
+			ctrlKey: false,
+			metaKey: false,
+			altKey: false,
+			shiftKey: false,
+			repeat: false,
+			defaultPrevented: false,
+			isComposing: false,
+			keyCode: 0,
+			target: null,
+			getModifierState: () => false,
+			preventDefault: () => { prevented = true; },
+			...overrides,
+		};
+		return { e: e as unknown as KeyboardEvent, get prevented() { return prevented; } };
+	}
+
+	function layer(opts: LayerOpts) {
+		return { node: {} as HTMLElement, opts };
+	}
+
+	test("runs onshortcutclose instead of onclose when closeBinding matches", () => {
+		let closed = 0;
+		let shortcutClosed = 0;
+		const l = layer({
+			closeBinding: "Mod+D",
+			onclose: () => closed++,
+			onshortcutclose: () => shortcutClosed++,
+		});
+		const k = keyEvent({ code: "KeyD", key: "d", ctrlKey: true });
+		toggleLayer(k.e, l);
+		expect(k.prevented).toBe(true);
+		expect(shortcutClosed).toBe(1);
+		expect(closed).toBe(0);
+	});
+
+	test("falls back to onclose when onshortcutclose is omitted", () => {
+		let closed = 0;
+		const l = layer({ closeBinding: "Mod+D", onclose: () => closed++ });
+		const k = keyEvent({ code: "KeyD", key: "d", ctrlKey: true });
+		toggleLayer(k.e, l);
+		expect(k.prevented).toBe(true);
+		expect(closed).toBe(1);
+	});
+
+	test("still triggers Mod+D while IME is composing (Korean syllable right before shortcut)", () => {
+		let shortcutClosed = 0;
+		const l = layer({ closeBinding: "Mod+D", onshortcutclose: () => shortcutClosed++ });
+		const k = keyEvent({ code: "KeyD", key: "Process", ctrlKey: true, isComposing: true, keyCode: 229 });
+		toggleLayer(k.e, l);
+		expect(k.prevented).toBe(true);
+		expect(shortcutClosed).toBe(1);
+	});
+
+	test("ignores bare key while IME is composing", () => {
+		let closed = 0;
+		const l = layer({ closeBinding: "D", onclose: () => closed++ });
+		const k = keyEvent({ code: "KeyD", key: "Process", isComposing: true, keyCode: 229 });
+		toggleLayer(k.e, l);
+		expect(k.prevented).toBe(false);
+		expect(closed).toBe(0);
+	});
+
+	test("ignores repeat, empty binding, and non-dismissible layer", () => {
+		let closed = 0;
+		const l = layer({ closeBinding: "Mod+D", onshortcutclose: () => closed++ });
+		const rep = keyEvent({ code: "KeyD", key: "d", ctrlKey: true, repeat: true });
+		toggleLayer(rep.e, l);
+		expect(rep.prevented).toBe(true);
+		expect(closed).toBe(0);
+
+		const empty = layer({ closeBinding: "", onshortcutclose: () => closed++ });
+		const k2 = keyEvent({ code: "KeyD", key: "d", ctrlKey: true });
+		toggleLayer(k2.e, empty);
+		expect(k2.prevented).toBe(false);
+		expect(closed).toBe(0);
+
+		const locked = layer({ closeBinding: "Mod+D", dismissible: false, onshortcutclose: () => closed++ });
+		const k3 = keyEvent({ code: "KeyD", key: "d", ctrlKey: true });
+		toggleLayer(k3.e, locked);
+		expect(k3.prevented).toBe(true);
+		expect(closed).toBe(0);
 	});
 });
