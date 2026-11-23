@@ -10,7 +10,7 @@ import { fingerprint, readListCache, readShape, toCache, writeListCache } from "
 import type { Server } from "./store-model";
 import type { TerminalInfo, TerminalSupport } from "./terminal";
 import type {
-	CompactionSettings, CustomProvider, DefaultModelSelection, SystemModelSettings, Group, ModelInfo, PipayaEvent, ProviderInfo, Session, ToolInfo, ToolsInfo, WorkdirInfo, WorkspaceInfo,
+	CompactionSettings, CustomProvider, DefaultModelSelection, FallbackModelSettings, SystemModelSettings, Group, ModelInfo, PipayaEvent, ProviderInfo, Session, ToolInfo, ToolsInfo, WorkdirInfo, WorkspaceInfo,
 } from "./types";
 
 export type NetState = "idle" | "connecting" | "online" | "offline" | "unauthorized" | "incompatible";
@@ -111,12 +111,13 @@ export class ServerLink {
 	/** The connections the owner added (address, API format, key), from `/configuration`; empty on a server without it. */
 	customProviders = $state<CustomProvider[]>([]);
 	terminalSupport = $state<TerminalSupport | null>(null);
-	/** The compaction and system models, kept to flag the ones that stopped working (see settings-problems). */
+	/** The compaction, system and fallback models, kept to flag the ones that stopped working (see settings-problems). */
 	compaction = $state<CompactionSettings | null>(null);
 	systemModel = $state<SystemModelSettings | null>(null);
+	fallbackModel = $state<FallbackModelSettings | null>(null);
 	/** Settings of this server that no longer work. Empty until the lists were read. */
 	problems: SettingsProblem[] = $derived(
-		this.loaded ? settingsProblems({ defaults: this.serverDefault, compaction: this.compaction, system: this.systemModel, models: this.models, providers: this.providers }) : [],
+		this.loaded ? settingsProblems({ defaults: this.serverDefault, compaction: this.compaction, system: this.systemModel, fallback: this.fallbackModel, models: this.models, providers: this.providers }) : [],
 	);
 
 	private unsubscribe: (() => void) | null = null;
@@ -630,12 +631,17 @@ export class ServerLink {
 		}
 	}
 
-	/** Reread which models compaction and the system jobs use. A server without them keeps null (no problem to flag). */
+	/** Reread which models compaction, system jobs and fallback use. A server without them keeps null (no problem to flag). */
 	async refreshModelSettings(): Promise<void> {
 		const api = this.boundedApi(10_000);
-		const [c, s] = await Promise.all([api.compactionSettings().catch(() => null), api.systemModelSettings().catch(() => null)]);
+		const [c, s, f] = await Promise.all([
+			api.compactionSettings().catch(() => null),
+			api.systemModelSettings().catch(() => null),
+			api.fallbackModelSettings?.().catch(() => null) ?? null,
+		]);
 		this.compaction = c?.settings ?? null;
 		this.systemModel = s?.settings ?? null;
+		this.fallbackModel = f?.settings ?? null;
 	}
 
 	async refreshWorkspace(): Promise<void> {

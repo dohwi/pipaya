@@ -38,6 +38,7 @@ import { afterTurn, FORCE_STOP_ERROR, isEmptyFailedReply, RESTART_RUN_ERROR, RES
 import { chooseModel, DelegateLimits, finalText, freeRole, repeatedReadSignature, runDelegateWithinDeadline, subagentReport, subagentReportReserveMs, subagentUsage, loadSubagents, SUBAGENT_NAME, SUBAGENT_TIMEOUT_MS, SUBAGENT_WRAP_UP, subagentSystem, type SubagentDef, type SubagentLimit } from "./subagents.ts";
 import { classifyUpstreamError, COMPLETION_RETRY, completeWithUpstreamRetry, DEFAULT_UPSTREAM_RETRY, isZeroOutputError, logUnknownUpstreamError, retryReason, sleepAbortable, STREAM_RETRY, withUpstreamRetry } from "./upstream-retry.ts";
 import { autoTitle, DESCRIBE_MAX_TOKENS, DESCRIBE_SYSTEM, describeRequest, parseDescription, type SystemModelSettings } from "./system-model.ts";
+import type { FallbackModelSettings } from "./fallback-model.ts";
 import type { GuardSettings } from "./guard.ts";
 import { runPromptTemplate } from "./templates.ts";
 
@@ -120,6 +121,8 @@ export class SessionManager {
 		private guard?: GuardSettings,
 		/** Deadline for runs to settle during `shutdown()` before being forcibly finalized as errors. */
 		private shutdownStopMs = SHUTDOWN_STOP_MS,
+		/** Optional automatic fallback model used when the primary model repeatedly fails with zero output. */
+		private fallbackModel?: FallbackModelSettings,
 	) {
 		this.sweeper = setInterval(() => this.evictIdle(), 5 * 60_000);
 		this.sweeper.unref?.();
@@ -1090,7 +1093,10 @@ export class SessionManager {
 				for (let attempt = 1, unknownUsed = false; !error && !live.forceStopped && live.stopCause !== "shutdown" && attempt <= STREAM_RETRY.maxRetries; attempt++) {
 					const kind = this.droppedMidStream(live);
 					if (!kind || (kind === "unknown" && unknownUsed)) break;
-					let maxRetries = STREAM_RETRY.maxRetries;
+					const zero = isZeroOutputError(this.lastErrorMessage(live));
+					const zeroCap = STREAM_RETRY.maxZeroOutputRetries !== undefined ? Math.min(STREAM_RETRY.maxRetries, STREAM_RETRY.maxZeroOutputRetries) : STREAM_RETRY.maxRetries;
+					if (zero && attempt > zeroCap) break;
+					let maxRetries = zero ? zeroCap : STREAM_RETRY.maxRetries;
 					if (kind === "unknown") {
 						unknownUsed = true;
 						maxRetries = attempt;
@@ -1113,6 +1119,13 @@ export class SessionManager {
 					} catch (e) {
 						error = e instanceof Error ? e.message : String(e);
 					}
+				}
+				// When the primary model stalls repeatedly with zero output, switch to the configured fallback model for this run.
+				if (!error && !interrupted && !live.forceStopped && !live.stopCause) {
+					const fb = await this.recoverWithFallbackModel(id, live);
+					if (live.forceStopped) return;
+					if (fb.interrupted) interrupted = true;
+					if (fb.error !== undefined && fb.error !== null) error = fb.error;
 				}
 				// Repeated zero-output failures on a large transcript (e.g. 300k+ tokens where Gemini/CLIProxyAPI stalls
 				// deterministically even after pre-commit / mid-stream retries): compact once and continue.
@@ -1298,6 +1311,51 @@ export class SessionManager {
 		const window = live.agent.state.model?.contextWindow;
 		if (!isContextOverflow(last, window)) return false;
 		return this.compactAndDropFailedReply(id, live);
+	}
+
+	/**
+	 * When the primary model repeatedly terminates with zero output, retries the failed turn on the configured fallback
+	 * model for the remainder of this run without altering the session's saved primary model.
+	 */
+	private async recoverWithFallbackModel(id: string, live: Live): Promise<{ attempted: boolean; interrupted?: boolean; error?: string | null }> {
+		if (!this.fallbackModel) return { attempted: false };
+		const messages = live.agent.state.messages;
+		const last = messages[messages.length - 1];
+		if (last?.role !== "assistant" || last.stopReason !== "error" || !isZeroOutputError(last.errorMessage)) return { attempted: false };
+		const activeModel = live.agent.state.model;
+		const currentRecord = this.store.get(id);
+		const primary = { provider: activeModel?.provider ?? currentRecord?.provider ?? "", model: activeModel?.id ?? currentRecord?.model ?? "" };
+		const fb = this.fallbackModel.resolve(primary);
+		if (!fb) return { attempted: false };
+		const fbModel = this.registry.models.getModel(fb.provider, fb.model);
+		if (!fbModel || !(await this.registry.models.checkAuth(fb.provider))) return { attempted: false };
+
+		const delayMs = 1000;
+		const reason = retryReason(`${last.errorMessage ?? "zero output"} → ${fb.provider}/${fb.model}`);
+		this.bus.publish(id, "run_retrying", { attempt: 1, maxRetries: 1, delayMs, ...(last.content.length ? { restart: true } : {}), ...(reason ? { reason } : {}) }, { ephemeral: true });
+		const wait = new AbortController();
+		live.retryWait = wait;
+		await sleepAbortable(delayMs, wait.signal);
+		live.retryWait = undefined;
+		if (live.forceStopped) return { attempted: false };
+		if (wait.signal.aborted) return { attempted: true, interrupted: (live.stopCause as RunStopCause | undefined) !== "shutdown" };
+
+		this.dropLastReply(id, live);
+		const prevModel = live.agent.state.model;
+		const prevThinking = live.agent.state.thinkingLevel;
+		live.agent.state.model = fbModel;
+		live.agent.state.thinkingLevel = fb.thinkingLevel ?? this.defaultThinkingLevel(fb.provider, fb.model);
+		let error: string | null = null;
+		try {
+			await live.agent.continue();
+		} catch (e) {
+			error = e instanceof Error ? e.message : String(e);
+		} finally {
+			const latest = this.store.get(id);
+			live.agent.state.model = (latest && this.registry.models.getModel(latest.provider, latest.model)) ?? prevModel;
+			live.agent.state.thinkingLevel = latest?.thinkingLevel ?? prevThinking;
+		}
+		return { attempted: true, error };
 	}
 
 	/**
@@ -1507,11 +1565,15 @@ export class SessionManager {
 			};
 		}
 		ctx.canSeeImages = () => {
+			const liveModel = this.live.get(sessionId)?.agent.state.model;
+			if (liveModel) return liveModel.input.includes("image");
 			const rec = this.store.get(sessionId);
 			const model = rec && this.registry.models.getModel(rec.provider, rec.model);
 			return model ? model.input.includes("image") : true;
 		};
 		ctx.imageLimits = () => {
+			const liveModel = this.live.get(sessionId)?.agent.state.model;
+			if (liveModel) return liveModel.inputLimits?.images?.resize;
 			const rec = this.store.get(sessionId);
 			return rec ? this.registry.models.getModel(rec.provider, rec.model)?.inputLimits?.images?.resize : undefined;
 		};
@@ -1569,7 +1631,7 @@ export class SessionManager {
 		let startedAt = 0, stopping = false;
 		const agent = new Agent({
 			initialState: { systemPrompt: subagentSystem(def, workDirOf(rec)) + (oneCall ? `\n\n${SUBAGENT_WRAP_UP}` : ""), model, thinkingLevel: this.subagentThinking(rec, def.thinking, provider, modelId), tools: oneCall ? [] : tools, messages: [] },
-			streamFn: withUpstreamRetry((m, ctx, opts) => streamAtTier(this.registry, m, ctx, opts, tier), DEFAULT_UPSTREAM_RETRY),
+			streamFn: withUpstreamRetry((m, ctx, opts) => streamAtTier(this.registry, m, ctx, opts, m.provider === provider && m.id === modelId ? tier : this.subagentTier(rec, m.provider, m.id)), DEFAULT_UPSTREAM_RETRY),
 			prepareRequest: (_request, requestSignal) => { requestSignal?.throwIfAborted(); turns++; },
 			prepareNextTurnWithContext: (turn) => {
 				if (repeatCount >= MAX_REPEATED_CALLS) limit = "repeatedTools";
@@ -1613,6 +1675,7 @@ export class SessionManager {
 						if (last?.role !== "assistant" || last.stopReason !== "error" || !last.content.length) break;
 						const kind = classifyUpstreamError(last);
 						if (kind === "permanent" || (kind === "unknown" && unknownUsed)) break;
+						if (isZeroOutputError(last.errorMessage) && attempt > (STREAM_RETRY.maxZeroOutputRetries ?? STREAM_RETRY.maxRetries)) break;
 						if (kind === "unknown") {
 							unknownUsed = true;
 							logUnknownUpstreamError(last.errorMessage ?? "");
@@ -1623,6 +1686,22 @@ export class SessionManager {
 						agent.state.messages = agent.state.messages.slice(0, -1);
 						turns = Math.max(0, turns - 1);
 						await agent.continue();
+					}
+					const afterRetry = agent.state.messages[agent.state.messages.length - 1];
+					if (!stopping && !retrySignal.aborted && afterRetry?.role === "assistant" && afterRetry.stopReason === "error" && isZeroOutputError(afterRetry.errorMessage) && this.fallbackModel) {
+						const active = agent.state.model;
+						const fb = this.fallbackModel.resolve({ provider: active.provider, model: active.id });
+						const fbModel = fb && this.registry.models.getModel(fb.provider, fb.model);
+						if (fb && fbModel && (await this.registry.models.checkAuth(fb.provider))) {
+							await sleepAbortable(1000, retrySignal);
+							if (!stopping && !retrySignal.aborted) {
+								agent.state.messages = agent.state.messages.slice(0, -1);
+								turns = Math.max(0, turns - 1);
+								agent.state.model = fbModel;
+								agent.state.thinkingLevel = fb.thinkingLevel ?? this.subagentThinking(rec, def.thinking, fb.provider, fb.model);
+								await agent.continue();
+							}
+						}
 					}
 				} finally { release(); }
 			},
@@ -1635,7 +1714,8 @@ export class SessionManager {
 		const { text: answer, error } = finalText(messages);
 		if (error && !limit) throw new Error(`subagent ${def.name} failed: ${error}`);
 		const text = limit ? subagentReport(messages, limit, { turns, maxRepeated: MAX_REPEATED_CALLS, timeoutMs: this.delegateTimeoutMs, timedOut }) : answer || "(the subagent returned no text)";
-		return { content: [{ type: "text" as const, text }], details: { role: def.name, model: `${provider}/${modelId}`, thinking: agent.state.thinkingLevel, turns, durationMs: Math.round(performance.now() - startedAt), limited: !!limit, ...(limit && { limit }), usage: subagentUsage(messages), task: input.task.slice(0, 500) } };
+		const usedModel = agent.state.model;
+		return { content: [{ type: "text" as const, text }], details: { role: def.name, model: `${usedModel.provider}/${usedModel.id}`, thinking: agent.state.thinkingLevel, turns, durationMs: Math.round(performance.now() - startedAt), limited: !!limit, ...(limit && { limit }), usage: subagentUsage(messages), task: input.task.slice(0, 500) } };
 	}
 
 	/** Stops a run that has gone past the turn budget or keeps issuing the identical tool call. */
