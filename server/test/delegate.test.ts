@@ -269,7 +269,13 @@ describe("delegate tool", () => {
 		const other = (await api("POST", "/sessions", {})).json.id as string;
 		expect(await level(other, { role: "anysubagent", task: "c", model: "think/think-model" })).toBe("high"); // the model's own default
 		expect(await level(other, { role: "pinned", task: "d", model: "think/think-model" })).toBe("minimal"); // the role wins
+		expect(await level(other, { role: "pinned", task: "e", model: "think/think-model", thinking: "high" })).toBe("high"); // explicit thinking beats the role
+		expect(await level(other, { role: "pinned", task: "f", model: "think/think-model", thinking: "off" })).toBe("off"); // explicit "off" beats the role
+		expect(await level(id, { role: "anysubagent", task: "g", model: "think/plain-think", thinking: "xhigh" })).toBe("xhigh"); // explicit model + thinking
+		expect(await call(other, { role: "pinned", task: "bad1", thinking: "invalid" })).toMatch(/thinking|Validation failed/i);
+		expect(await call(other, { role: "pinned", task: "bad2", thinking: "" })).toMatch(/thinking|Validation failed/i);
 		await api("PUT", "/configuration/delegate", { roles: "defined", policy: "defined", models: [], maxConcurrent: 4, maxCalls: 12, maxTurns: 30 });
+		expect(await level(other, { role: "pinned", task: "h", thinking: "medium" })).toBe("medium"); // works even when model policy is "defined"
 		await api("DELETE", "/configuration/providers/think");
 	});
 
@@ -512,6 +518,8 @@ describe("delegate tool", () => {
 		expect(props(make("any")).model.description).toContain("any configured model");
 		expect(props(make("defined")).model).toBeUndefined();
 		expect(make("defined").description).not.toContain("`model`");
+		expect(props(make("defined")).thinking).toBeDefined();
+		expect(props(make("any")).thinking.anyOf.map((x: any) => x.const)).toEqual(["off", "minimal", "low", "medium", "high", "xhigh", "max"]);
 	});
 
 	test("peer and delegate list the models a session can run on, grouped by provider", async () => {
