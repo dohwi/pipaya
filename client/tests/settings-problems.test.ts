@@ -17,14 +17,15 @@ describe("settings problems", () => {
 		expect(modelProblem({ provider: "a", model: "gone" }, models, providers)).toBe("missing");
 		expect(modelProblem({ provider: "z", model: "x" }, models, providers)).toBe("missing");
 	});
-	test("each of the three roles is listed on its own", () => {
+	test("each of the roles is listed on its own", () => {
 		const list = settingsProblems({
 			defaults: { provider: "b", model: "x" },
 			compaction: { model: { provider: "a", model: "gone" } },
 			system: { model: null },
+			fallback: { model: { provider: "b", model: "x" } },
 			models,
 			providers,
 		});
-		expect(list.map((p) => [p.role, p.kind])).toEqual([["default", "no-key"], ["compaction", "missing"]]);
+		expect(list.map((p) => [p.role, p.kind])).toEqual([["default", "no-key"], ["compaction", "missing"], ["fallback", "no-key"]]);
 	});
 });

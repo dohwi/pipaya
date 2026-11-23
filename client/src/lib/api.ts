@@ -1,7 +1,7 @@
 import { EVENT_TYPES } from "@shared/events";
 import type { ExtensionSaveResult, StoredExtensionSettings } from "./extensions/settings-store";
 import type { DelegateRun } from "./graph";
-import type { CatalogInfo, CompactionSettings, CompactionSettingsInfo, DefaultModelSelection, ImageModelSettings, ImageModelSettingsInfo, RetentionInfo, RetentionSettings, Goal, GoalInput, GoalPatch, Schedule, ScheduleInput, SchedulePatch, SystemModelSettings, SystemModelSettingsInfo,
+import type { CatalogInfo, CompactionSettings, CompactionSettingsInfo, DefaultModelSelection, FallbackModelSettings, FallbackModelSettingsInfo, ImageModelSettings, ImageModelSettingsInfo, RetentionInfo, RetentionSettings, Goal, GoalInput, GoalPatch, Schedule, ScheduleInput, SchedulePatch, SystemModelSettings, SystemModelSettingsInfo,
 	AgentMessage,
 	Question,
 	ActivityInfo,
@@ -459,6 +459,8 @@ export class Api {
 	setImageModelSettings = (settings: ImageModelSettings) => this.req<ImageModelSettingsInfo>("PUT", "/image-model", settings);
 	systemModelSettings = () => this.req<SystemModelSettingsInfo>("GET", "/system-model");
 	setSystemModelSettings = (settings: SystemModelSettings) => this.req<SystemModelSettingsInfo>("PUT", "/system-model", settings);
+	fallbackModelSettings = () => this.req<FallbackModelSettingsInfo>("GET", "/fallback-model");
+	setFallbackModelSettings = (settings: FallbackModelSettings) => this.req<FallbackModelSettingsInfo>("PUT", "/fallback-model", settings);
 
 	/** A legacy server returns only nextBefore; newer servers also disambiguate equal timestamps by id. */
 	listSessions = (limit = 100, closed?: boolean, before?: number, beforeId?: string) => {
@@ -739,6 +741,7 @@ const RAW_NETWORK = /^(failed to fetch|load failed|networkerror|network request 
 const ROLE_LABELS: Record<string, string> = {
 	compaction: msg("컨텍스트 압축 모델"),
 	system: msg("시스템 모델"),
+	fallback: msg("폴백 모델"),
 	image: msg("이미지 모델"),
 };
 

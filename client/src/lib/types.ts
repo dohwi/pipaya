@@ -58,6 +58,11 @@ export interface SystemModelSettings {
 	model: ModelChoice | null;
 }
 export interface SystemModelSettingsInfo { settings: SystemModelSettings; defaults: SystemModelSettings }
+export interface FallbackModelSettings {
+	/** Automatic fallback model used after repeated zero-output upstream failures; null = off */
+	model: ModelChoice | null;
+}
+export interface FallbackModelSettingsInfo { settings: FallbackModelSettings; defaults: FallbackModelSettings }
 
 
 export interface Session {

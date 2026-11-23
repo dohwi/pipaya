@@ -12,6 +12,7 @@
 	import ConnectionForm, { localPresets } from "./ConnectionForm.svelte";
 	import CompactionSection from "./CompactionSection.svelte";
 	import SystemModelSection from "./SystemModelSection.svelte";
+	import FallbackModelSection from "./FallbackModelSection.svelte";
 	import ImageModelSection from "./ImageModelSection.svelte";
 	import ProviderAccounts from "./ProviderAccounts.svelte";
 	import ConnectModal from "../server/ConnectModal.svelte";
@@ -34,7 +35,7 @@
 	const server = $derived(app.servers.find((s) => s.id === serverId));
 	const problems = $derived(app.problemsOf(serverId));
 	/** A problem's row jumps to the broken field so it can be fixed without hunting for it. */
-	const sections: Record<Exclude<ProblemRole, "default"> | ProblemRole, HTMLElement | undefined> = $state({ default: undefined, compaction: undefined, system: undefined });
+	const sections: Record<Exclude<ProblemRole, "default"> | ProblemRole, HTMLElement | undefined> = $state({ default: undefined, compaction: undefined, system: undefined, fallback: undefined });
 	function goto(role: ProblemRole) {
 		const el = sections[role];
 		if (el) flash(el);
@@ -355,6 +356,8 @@
 		<div bind:this={sections.compaction}><CompactionSection {serverId} models={chatModels} providers={providerList} /></div>
 
 		<div bind:this={sections.system}><SystemModelSection {serverId} models={chatModels} providers={providerList} /></div>
+
+		<div bind:this={sections.fallback}><FallbackModelSection {serverId} models={chatModels} providers={providerList} /></div>
 
 		<ImageModelSection {serverId} {models} providers={providerList} />
 

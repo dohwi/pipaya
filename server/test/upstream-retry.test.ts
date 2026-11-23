@@ -242,3 +242,72 @@ test("completeWithUpstreamRetry retries transient 502 zero-output errors and ret
 	expect(permCalls).toBe(1);
 	expect(noWaits).toEqual([]);
 });
+
+test("maxZeroOutputRetries caps consecutive zero-output retries, announces the capped max, and resets on model change", async () => {
+	const zeroErr = '502: {"message":"upstream stream closed with zero output","type":"server_error","code":"internal_server_error"}';
+	const announced: [number, number][] = [];
+	const fn = withUpstreamRetry((() => failing(zeroErr)) as any, {
+		maxRetries: 6,
+		maxZeroOutputRetries: 2,
+		baseDelayMs: 5,
+		maxDelayMs: 20,
+		sleep: async () => {},
+		onRetry: (attempt, maxRetries) => void announced.push([attempt, maxRetries]),
+	});
+
+	const ctx = { messages: [{ role: "user" as const, content: "hi", timestamp: 1 }] } as unknown as Context;
+	const modelA = { provider: "p", id: "model-a" };
+	const modelB = { provider: "p", id: "model-b" };
+
+	expect((await (fn as any)(modelA, ctx, {}).result()).stopReason).toBe("error");
+	expect(announced).toEqual([[1, 2], [2, 2]]);
+
+	// Switching to a different model resets the zero-output streak on the exact same context.
+	announced.length = 0;
+	let bCalls = 0;
+	const fn2 = withUpstreamRetry(((m: { id: string }) => (m.id === "model-a" ? failing(zeroErr) : ++bCalls < 3 ? failing(zeroErr) : ok())) as any, {
+		maxRetries: 6,
+		maxZeroOutputRetries: 2,
+		baseDelayMs: 5,
+		maxDelayMs: 20,
+		sleep: async () => {},
+		onRetry: (attempt, maxRetries) => void announced.push([attempt, maxRetries]),
+	});
+	expect((await (fn2 as any)(modelA, ctx, {}).result()).stopReason).toBe("error");
+	expect((await (fn2 as any)(modelB, ctx, {}).result()).stopReason).toBe("stop");
+	expect(bCalls).toBe(3);
+
+	// Non-zero-output transient errors still use the full maxRetries budget; maxZeroOutputRetries=0 skips zero-output retries.
+	const fiveOhThree: [number, number][] = [];
+	let sCalls = 0;
+	const fn503 = withUpstreamRetry((() => (++sCalls < 5 ? failing("503 Service Unavailable") : ok())) as any, {
+		maxRetries: 6,
+		maxZeroOutputRetries: 2,
+		baseDelayMs: 5,
+		maxDelayMs: 20,
+		sleep: async () => {},
+		onRetry: (attempt, maxRetries) => void fiveOhThree.push([attempt, maxRetries]),
+	});
+	expect((await (fn503 as any)(modelA, ctx, {}).result()).stopReason).toBe("stop");
+	expect(fiveOhThree).toEqual([[1, 6], [2, 6], [3, 6], [4, 6]]);
+
+	let zeroCapCalls = 0;
+	const fnZero = withUpstreamRetry((() => (zeroCapCalls++, failing(zeroErr))) as any, {
+		maxRetries: 6,
+		maxZeroOutputRetries: 0,
+		baseDelayMs: 5,
+		maxDelayMs: 20,
+		sleep: async () => {},
+	});
+	expect((await (fnZero as any)(modelA, ctx, {}).result()).stopReason).toBe("error");
+	expect(zeroCapCalls).toBe(1);
+
+	let compCalls = 0;
+	const compReply = await completeWithUpstreamRetry(
+		async () => (compCalls++, msg({ stopReason: "error", errorMessage: zeroErr })),
+		ctx,
+		{ maxRetries: 5, maxZeroOutputRetries: 1, baseDelayMs: 5, maxDelayMs: 20, sleep: async () => {} },
+	);
+	expect(compReply.stopReason).toBe("error");
+	expect(compCalls).toBe(2);
+});

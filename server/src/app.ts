@@ -18,6 +18,8 @@ import { GoalManager } from "./goals.ts";
 import { registerGoalRoutes } from "./goals-routes.ts";
 import { GROUP_NAME_SYSTEM, groupNameRequest, parseGroupName, SystemModelSettings } from "./system-model.ts";
 import { registerSystemModelRoutes } from "./system-model-routes.ts";
+import { FallbackModelSettings } from "./fallback-model.ts";
+import { registerFallbackModelRoutes } from "./fallback-model-routes.ts";
 import { TOGGLEABLE_TOOLS } from "./tools.ts";
 import { IMAGE_TOOL, ImageModelSettings } from "./image-generation.ts";
 import { registerImageModelRoutes } from "./image-model-routes.ts";
@@ -149,6 +151,7 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 	const modelRoles = new ModelRoles(db, registry);
 	const compactionSettings = new CompactionSettings(db, registry);
 	const systemModel = new SystemModelSettings(db, registry);
+	const fallbackModel = new FallbackModelSettings(db, registry);
 	const imageModel = new ImageModelSettings(db, registry);
 	const voice = new VoiceSettings(db);
 	// Above the Configuration that asks them: a provider delete says what still uses it instead of a bare conflict.
@@ -158,6 +161,7 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 		for (const [role, m] of [
 			["compaction", compactionSettings.get().model],
 			["system", systemModel.get().model],
+			["fallback", fallbackModel.get().model],
 			["image", imageModel.get().model],
 		] as const) if (m?.provider) used.push({ role, provider: m.provider, model: m.model });
 		return used;
@@ -173,7 +177,7 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 	const mcp = new McpManager(db, () => bus.publish(null, "mcp_updated", {}));
 	// Seed once from an older copy's saved settings when the built-in setting is not yet in SQLite.
 	const guard = new GuardSettings(db, join(cfg.dataDir, "extensions", "guard", "settings.json"));
-	const sessions = new SessionManager(cfg, store, bus, registry, () => configuration.defaultWorkdir(), skills, questions, compactionSettings, extensions, () => configuration.disabledTools(), systemModel, imageModel, mcp, opts.home, () => configuration.delegatePolicy(), () => configuration.disabledSubagents(), opts.delegateTimeoutMs, guard, opts.shutdownStopMs);
+	const sessions = new SessionManager(cfg, store, bus, registry, () => configuration.defaultWorkdir(), skills, questions, compactionSettings, extensions, () => configuration.disabledTools(), systemModel, imageModel, mcp, opts.home, () => configuration.delegatePolicy(), () => configuration.disabledSubagents(), opts.delegateTimeoutMs, guard, opts.shutdownStopMs, fallbackModel);
 	const busy = (id: string) => sessions.isRunning(id) || questions.list(id).length > 0;
 	const info = (r: NonNullable<ReturnType<typeof store.get>>) => ({
 		id: r.id, name: r.name, title: r.title, purpose: r.purpose, cwd: r.cwd, provider: r.provider, model: r.model, thinkingLevel: r.thinkingLevel,
@@ -420,6 +424,7 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 	registerGoalRoutes(server, goals);
 	sessions.setGoals(goals);
 	registerSystemModelRoutes(server, systemModel, bus, () => sessions.describeAll());
+	registerFallbackModelRoutes(server, fallbackModel, bus);
 	registerImageModelRoutes(server, imageModel, bus);
 	// Realtime voice input: its own address and key (Settings > Voice), so any OpenAI-compatible Realtime server works.
 	const realtimeTarget = async (rt: RealtimeSettingsValue): Promise<RealtimeTarget | { error: string }> => {

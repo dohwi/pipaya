@@ -5,6 +5,8 @@ type Stream<A extends unknown[]> = (...args: A) => AssistantMessageEventStream |
 export interface UpstreamRetryOptions {
 	/** Retries after the first attempt (0 = off). */
 	maxRetries: number;
+	/** Cap on consecutive zero-output retries on the same model/context (defaults to `maxRetries`). */
+	maxZeroOutputRetries?: number;
 	/** Wait before the first retry; doubles each time (capped at maxDelayMs). */
 	baseDelayMs: number;
 	maxDelayMs: number;
@@ -14,18 +16,21 @@ export interface UpstreamRetryOptions {
 	onUnknown?: (errorMessage: string) => void;
 }
 
-/** 2s, 4s, 8s, 16s, 30s, 30s: about 90 seconds of patience for a gateway that drops for a moment (502/503/504, reset, timeout). */
-export const DEFAULT_UPSTREAM_RETRY: UpstreamRetryOptions = { maxRetries: 6, baseDelayMs: 2000, maxDelayMs: 30_000 };
+/**
+ * 2s, 4s, 8s, 16s, 30s, 30s: about 90 seconds of patience for a gateway that drops for a moment (502/503/504, reset, timeout).
+ * Zero-output failures are capped at 2 retries (2s, 4s) because deterministic empty generations waste ~10-18s per attempt.
+ */
+export const DEFAULT_UPSTREAM_RETRY: UpstreamRetryOptions = { maxRetries: 6, maxZeroOutputRetries: 2, baseDelayMs: 2000, maxDelayMs: 30_000 };
 
 /**
  * A stream that broke after part of the reply had already been sent (a proxy or gateway closed the socket mid-answer).
  * The partial reply cannot be resumed, so the whole request is repeated: fewer tries than DEFAULT_UPSTREAM_RETRY
  * (2s, 4s, 8s) because the user is already waiting on an answer that disappeared.
  */
-export const STREAM_RETRY: UpstreamRetryOptions = { maxRetries: 3, baseDelayMs: 2000, maxDelayMs: 10_000 };
+export const STREAM_RETRY: UpstreamRetryOptions = { maxRetries: 3, maxZeroOutputRetries: 2, baseDelayMs: 2000, maxDelayMs: 10_000 };
 
 /** 1s, 2s, 4s: short backoff for one-shot completions (/compact, /llm/complete, session titles). */
-export const COMPLETION_RETRY: UpstreamRetryOptions = { maxRetries: 3, baseDelayMs: 1000, maxDelayMs: 8000 };
+export const COMPLETION_RETRY: UpstreamRetryOptions = { maxRetries: 3, maxZeroOutputRetries: 2, baseDelayMs: 1000, maxDelayMs: 8000 };
 
 /**
  * A short, safe reason for the "retrying" notice: one line, at most 200 characters, with URL queries/credentials,
@@ -130,6 +135,12 @@ function tailContentLength(content: unknown): number {
 	return n;
 }
 
+function modelKey(model: unknown): string {
+	if (!model || typeof model !== "object") return "";
+	const m = model as { provider?: unknown; id?: unknown };
+	return `${String(m.provider ?? "")}:${String(m.id ?? "")}`;
+}
+
 function contextTailKey(ctx: unknown): string {
 	const messages = ctx && typeof ctx === "object" ? (ctx as { messages?: unknown }).messages : undefined;
 	if (!Array.isArray(messages) || messages.length === 0) return "";
@@ -171,23 +182,31 @@ export function nudgeZeroOutputContext<C>(ctx: C, attempt: number): C {
 export function withUpstreamRetry<A extends [unknown, unknown, { signal?: AbortSignal }?]>(inner: Stream<A>, opts: UpstreamRetryOptions = DEFAULT_UPSTREAM_RETRY): Stream<A> {
 	const wait = opts.sleep ?? sleepAbortable;
 	let tailKey = "";
+	let currentModelKey = "";
 	let zeroOutputStreak = 0;
 	return (...args: A) => {
 		const signal = args[2]?.signal;
 		const key = contextTailKey(args[1]);
-		if (key !== tailKey) {
+		const mKey = modelKey(args[0]);
+		if (key !== tailKey || mKey !== currentModelKey) {
 			tailKey = key;
+			currentModelKey = mKey;
 			zeroOutputStreak = 0;
 		}
 		const out = createAssistantMessageEventStream();
 		void (async () => {
 			let attempt = 0;
 			let unknownUsed = false;
+			const zeroCap = opts.maxZeroOutputRetries !== undefined ? Math.min(opts.maxRetries, opts.maxZeroOutputRetries) : opts.maxRetries;
 			// Worth another try: transient errors while the budget lasts, an unclassified one only once per call.
 			const retryable = (m: AssistantMessage) => {
 				if (attempt >= opts.maxRetries || signal?.aborted) return undefined;
 				const kind = classifyUpstreamError(m);
-				return kind === "transient" || (kind === "unknown" && !unknownUsed) ? kind : undefined;
+				if (kind === "transient") {
+					if (isZeroOutputError(m.errorMessage) && attempt >= zeroCap) return undefined;
+					return kind;
+				}
+				return kind === "unknown" && !unknownUsed ? kind : undefined;
 			};
 			for (;;) {
 				let kind: UpstreamErrorKind | undefined;
@@ -226,8 +245,11 @@ export function withUpstreamRetry<A extends [unknown, unknown, { signal?: AbortS
 					(opts.onUnknown ?? logUnknownUpstreamError)(failure.errorMessage ?? "");
 				}
 				// An unclassified error waits the shortest step and is announced as the last try.
+				const maxAnnounced = kind === "unknown"
+					? attempt
+					: (isZeroOutputError(failure.errorMessage) && opts.maxZeroOutputRetries !== undefined ? zeroCap : opts.maxRetries);
 				const delay = kind === "unknown" ? opts.baseDelayMs : retryDelayMs({ baseDelayMs: opts.baseDelayMs, maxAgentDelayMs: opts.maxDelayMs }, attempt);
-				opts.onRetry?.(attempt, kind === "unknown" ? attempt : opts.maxRetries, delay, failure.errorMessage ?? "");
+				opts.onRetry?.(attempt, maxAnnounced, delay, failure.errorMessage ?? "");
 				await wait(delay, signal);
 				if (signal?.aborted) {
 					// Cancelled while waiting: report it like any other abort.
@@ -258,6 +280,7 @@ export async function completeWithUpstreamRetry(
 	signal?: AbortSignal,
 ): Promise<AssistantMessage> {
 	const wait = opts.sleep ?? sleepAbortable;
+	const zeroCap = opts.maxZeroOutputRetries !== undefined ? Math.min(opts.maxRetries, opts.maxZeroOutputRetries) : opts.maxRetries;
 	let attempt = 0;
 	let zeroOutputStreak = 0;
 	for (;;) {
@@ -270,10 +293,13 @@ export async function completeWithUpstreamRetry(
 			const message = e instanceof Error ? e.message : String(e);
 			const probe = { role: "assistant", stopReason: "error", errorMessage: message } as AssistantMessage;
 			if (classifyUpstreamError(probe) !== "transient") throw e;
-			zeroOutputStreak = isZeroOutputError(message) ? zeroOutputStreak + 1 : 0;
+			const zero = isZeroOutputError(message);
+			if (zero && attempt >= zeroCap) throw e;
+			zeroOutputStreak = zero ? zeroOutputStreak + 1 : 0;
 			attempt++;
+			const maxAnnounced = zero && opts.maxZeroOutputRetries !== undefined ? zeroCap : opts.maxRetries;
 			const delay = retryDelayMs({ baseDelayMs: opts.baseDelayMs, maxAgentDelayMs: opts.maxDelayMs }, attempt);
-			opts.onRetry?.(attempt, opts.maxRetries, delay, message);
+			opts.onRetry?.(attempt, maxAnnounced, delay, message);
 			await wait(delay, signal);
 			if (signal?.aborted) throw e;
 			continue;
@@ -281,10 +307,13 @@ export async function completeWithUpstreamRetry(
 		if (reply.stopReason !== "error" || signal?.aborted || attempt >= opts.maxRetries || classifyUpstreamError(reply) !== "transient") {
 			return reply;
 		}
-		zeroOutputStreak = isZeroOutputError(reply.errorMessage) ? zeroOutputStreak + 1 : 0;
+		const zero = isZeroOutputError(reply.errorMessage);
+		if (zero && attempt >= zeroCap) return reply;
+		zeroOutputStreak = zero ? zeroOutputStreak + 1 : 0;
 		attempt++;
+		const maxAnnounced = zero && opts.maxZeroOutputRetries !== undefined ? zeroCap : opts.maxRetries;
 		const delay = retryDelayMs({ baseDelayMs: opts.baseDelayMs, maxAgentDelayMs: opts.maxDelayMs }, attempt);
-		opts.onRetry?.(attempt, opts.maxRetries, delay, reply.errorMessage ?? "");
+		opts.onRetry?.(attempt, maxAnnounced, delay, reply.errorMessage ?? "");
 		await wait(delay, signal);
 		if (signal?.aborted) {
 			const { errorMessage: _drop, ...rest } = reply;

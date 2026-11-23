@@ -40,6 +40,7 @@ export const SETTINGS_ITEMS: { tab: SettingsTabId; label: string; words: string 
 	{ tab: "general", label: msg("앱 단축키 우선"), words: "terminal shortcut priority keybinding 터미널 단축키 우선 먹히지" }, // i18n-ok: search words in either language
 	{ tab: "general", label: msg("업데이트"), words: "update version 버전" }, // i18n-ok: search words in either language
 	{ tab: "models", label: msg("모델 연결"), words: "model provider key api 모델 연결 키 프로바이더" }, // i18n-ok: search words in either language
+	{ tab: "models", label: msg("폴백 모델"), words: "fallback retry zero output model 폴백 모델 대체 우회 재시도 무응답" }, // i18n-ok: search words in either language
 	{ tab: "models", label: msg("이미지 모델"), words: "image model picture draw generate 이미지 모델 그림 생성" }, // i18n-ok: search words in either language
 	{ tab: "voice", label: msg("변환 서버"), words: "voice stt speech transcribe whisper dictation 음성 받아쓰기 변환 서버 주소 경로 모델 언어 키" }, // i18n-ok: search words in either language
 	{ tab: "voice", label: msg("음성 입력 사용"), words: "voice mic microphone dictation 음성 마이크 받아쓰기 켜기" }, // i18n-ok: search words in either language
