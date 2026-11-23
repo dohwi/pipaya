@@ -5,7 +5,7 @@
 	import { onMount } from "svelte";
 	import ConfirmButton from "../ui/ConfirmButton.svelte";
 	import { t } from "../../lib/i18n";
-	import { Api, errorText } from "../../lib/api";
+	import { Api, ApiError, errorText } from "../../lib/api";
 	import { app } from "../../lib/store.svelte";
 	import { fullTime, tilde } from "../../lib/format";
 	import { livePast } from "../../lib/minute-clock.svelte";
@@ -114,6 +114,7 @@
 			picked = next;
 			await load();
 		} catch (e) {
+			if (e instanceof ApiError && e.status === 0) void app.links[serverId]?.probe();
 			error = errorText(e);
 		} finally {
 			busy = false;
@@ -125,6 +126,20 @@
 	const canClose = (s: Session) => !s.closed;
 	const any = () => true;
 
+	const dropFromLink = (ids: string[]) => {
+		const link = app.links[serverId];
+		if (!link || !ids.length) return;
+		const gone = new Set(ids);
+		link.data.sessions = link.data.sessions.filter((x) => !gone.has(x.id));
+		for (const id of gone) {
+			link.data.running[id] = false;
+			delete link.data.compacting[id];
+			link.data.awaiting[id] = 0;
+			delete link.data.unread[id];
+			delete link.data.failed[id];
+		}
+	};
+
 	/** Reopen what is ticked in one folder; the open ones are left as they are. */
 	const restore = (list: Session[]) =>
 		bulk(list, canRestore, async (ids) => {
@@ -135,18 +150,22 @@
 	const close = (list: Session[]) =>
 		bulk(list, canClose, async (ids) => {
 			for (const id of ids) await api!.patchSession(id, { closed: true });
+			dropFromLink(ids);
 			return t("{n}개를 닫았습니다.", { n: ids.length });
 		});
 	/** Delete what is ticked in one folder. Ticks in other folders stay untouched. */
 	const remove = (list: Session[]) =>
 		bulk(list, any, async (ids) => {
 			let deleted = 0, skipped = 0;
+			const gone: string[] = [];
 			// the server takes up to 500 at a time
 			for (let i = 0; i < ids.length; i += 500) {
 				const r = await api!.deleteSessions(ids.slice(i, i + 500));
 				deleted += r.deleted.length;
 				skipped += r.skipped.length;
+				gone.push(...r.deleted);
 			}
+			dropFromLink(gone);
 			return skipped ? t("{n}개를 지웠습니다. {s}개는 실행 중이거나 답을 기다려 남겨 두었습니다.", { n: deleted, s: skipped }) : t("{n}개를 지웠습니다.", { n: deleted });
 		});
 

@@ -450,9 +450,10 @@ export class ChatState {
 	async catchUp(): Promise<void> {
 		if (!this.ready || this.syncing) return;
 		const token = this.token;
+		const api = typeof this.api.scoped === "function" ? this.api.scoped(AbortSignal.timeout(10_000)) : this.api;
 		let detail: Awaited<ReturnType<Api["getSession"]>>;
 		try {
-			detail = await this.api.getSession(this.id);
+			detail = await api.getSession(this.id);
 		} catch {
 			return; // offline again: the next wake tries
 		}
@@ -475,9 +476,9 @@ export class ChatState {
 		this.queued = (st.queuedMessages ?? []).map((q) => ({ mode: q.mode, text: q.text, ...(q.deferred ? { deferred: true } : {}) }));
 		const partial = st.streamingMessage as AssistantMessage | null;
 		if (st.running && partial && partial.role === "assistant") this.catchUpStream(partial);
-		if (wasRunning && !st.running && typeof this.api.messagesAfter === "function") {
+		if (wasRunning && !st.running && typeof api.messagesAfter === "function") {
 			try {
-				const missed = await this.api.messagesAfter(this.id, this.lastSeq, 100);
+				const missed = await api.messagesAfter(this.id, this.lastSeq, 100);
 				if (token !== this.token || !this.ready) return;
 				for (const row of missed) {
 					this.reduce({ id: 0, sessionId: this.id, type: "message_end", ts: row.createdAt, data: { seq: row.seq, message: row.message } });

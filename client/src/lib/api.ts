@@ -136,11 +136,22 @@ export const normalizeUrl = (url: string): string => {
 	return u;
 };
 
+export const DEFAULT_REQUEST_TIMEOUT_MS = 15_000;
+export const DEFAULT_STREAM_OPEN_TIMEOUT_MS = 10_000;
+
+export interface ApiOptions {
+	/** Default per-request deadline when the caller passes no AbortSignal (0 disables). */
+	timeoutMs?: number;
+	/** How long EventSource may stay in CONNECTING before counting as failed (0 disables). */
+	streamOpenTimeoutMs?: number;
+}
+
 export class Api {
 	constructor(
 		private conn: Connection,
 		/** Cancels every request of this instance (see `scoped`). */
 		private readonly bound?: AbortSignal,
+		private readonly opts?: ApiOptions,
 	) {}
 
 	/**
@@ -149,18 +160,22 @@ export class Api {
 	 * minutes later, and the browser's few connections per host stay taken, so the next attempt queues behind them.
 	 */
 	scoped(signal: AbortSignal): Api {
-		return new Api(this.conn, signal);
+		return new Api(this.conn, signal, this.opts);
 	}
 
-	private signalFor(signal: AbortSignal | undefined): AbortSignal | undefined {
-		if (!this.bound || !signal) return signal ?? this.bound;
-		if (typeof AbortSignal.any === "function") return AbortSignal.any([signal, this.bound]);
+	private combineSignals(a: AbortSignal | undefined, b: AbortSignal | undefined): AbortSignal | undefined {
+		if (!a || !b) return a ?? b;
+		if (typeof AbortSignal.any === "function") return AbortSignal.any([a, b]);
 		const ctl = new AbortController();
-		for (const s of [signal, this.bound]) {
+		for (const s of [a, b]) {
 			if (s.aborted) ctl.abort(s.reason);
 			else s.addEventListener("abort", () => ctl.abort(s.reason), { once: true });
 		}
 		return ctl.signal;
+	}
+
+	private signalFor(signal: AbortSignal | undefined): AbortSignal | undefined {
+		return this.combineSignals(signal, this.bound);
 	}
 
 	get baseUrl() {
@@ -194,10 +209,15 @@ export class Api {
 		return new ApiError(res.status, code ?? "http_error", message ?? res.statusText, Object.keys(data).length ? data : undefined);
 	}
 
-	private async req<T>(method: string, path: string, body?: unknown, signal?: AbortSignal): Promise<T> {
+	private defaultTimeout(override?: number): AbortSignal | undefined {
+		const ms = override ?? this.opts?.timeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
+		return ms > 0 ? AbortSignal.timeout(ms) : undefined;
+	}
+
+	private async req<T>(method: string, path: string, body?: unknown, signal?: AbortSignal, timeoutMs?: number): Promise<T> {
 		const res = await this.sendFetch(path, {
 			method,
-			signal: this.signalFor(signal),
+			signal: this.signalFor(signal ?? this.defaultTimeout(timeoutMs)),
 			headers: this.authHeaders(body !== undefined ? { "Content-Type": "application/json" } : undefined),
 			body: body !== undefined ? JSON.stringify(body) : undefined,
 		});
@@ -305,13 +325,13 @@ export class Api {
 		return { status: res.status, body: json };
 	}
 	installServerExtension = (src: { id: string; repo: string; dir?: string; ref: string; commit: string }, signal?: AbortSignal) =>
-		this.req<{ extensions: unknown[] }>("POST", "/server-extensions/install", src, signal);
+		this.req<{ extensions: unknown[] }>("POST", "/server-extensions/install", src, signal, 120_000);
 	/** The client half a server extension carries in its folder (`pipaya.client`); unvalidated JSON. */
 	serverExtensionClient = (extension: string, signal?: AbortSignal) =>
 		this.req<{ package: unknown }>("GET", `/server-extensions/${encodeURIComponent(extension)}/client`, undefined, signal).then((r) => r.package);
 	removeServerExtension = (extension: string, keepSettings: boolean, signal?: AbortSignal) =>
-		this.req<{ extensions: unknown[] }>("DELETE", `/server-extensions/${encodeURIComponent(extension)}${keepSettings ? "?keepSettings=true" : ""}`, undefined, signal);
-	reloadServerExtensions = (signal?: AbortSignal) => this.req<{ extensions: unknown[] }>("POST", "/server-extensions/reload", {}, signal);
+		this.req<{ extensions: unknown[] }>("DELETE", `/server-extensions/${encodeURIComponent(extension)}${keepSettings ? "?keepSettings=true" : ""}`, undefined, signal, 60_000);
+	reloadServerExtensions = (signal?: AbortSignal) => this.req<{ extensions: unknown[] }>("POST", "/server-extensions/reload", {}, signal, 60_000);
 
 	/* ---------- settings that belong to this server ---------- */
 	clientSettings = (signal?: AbortSignal) =>
@@ -334,10 +354,10 @@ export class Api {
 		return (await this.upload<{ text: string }>("/voice/transcribe", form, signal)).text;
 	}
 	/** The connection test: the server sends a second of silence and reports what came back. */
-	testVoice = (signal?: AbortSignal) => this.req<{ text: string; status: number }>("POST", "/voice/test", {}, signal);
+	testVoice = (signal?: AbortSignal) => this.req<{ text: string; status: number }>("POST", "/voice/test", {}, signal, 60_000);
 	/** A multipart upload: the browser sets the boundary, so no Content-Type is written here. */
 	private async upload<T>(path: string, body: FormData, signal?: AbortSignal): Promise<T> {
-		const res = await this.sendFetch(path, { method: "POST", body, signal, headers: this.authHeaders() });
+		const res = await this.sendFetch(path, { method: "POST", body, signal: this.signalFor(signal ?? this.defaultTimeout(60_000)), headers: this.authHeaders() });
 		const json = await res.json().catch(() => undefined);
 		if (!res.ok) throw this.toApiError(res, json);
 		return json as T;
@@ -368,14 +388,14 @@ export class Api {
 	configuration = () => this.req<ConfigurationInfo>("GET", "/configuration");
 	/** The OpenRouter catalog the model picker autocompletes from; `refresh` asks OpenRouter again now. */
 	catalogTiers = (model: string) => this.req<{ tiers: ServiceTier[] }>("GET", `/configuration/catalog/tiers?model=${encodeURIComponent(model)}`);
-	catalog = (refresh = false) => this.req<CatalogInfo>("GET", `/configuration/catalog${refresh ? "?refresh=1" : ""}`);
+	catalog = (refresh = false) => this.req<CatalogInfo>("GET", `/configuration/catalog${refresh ? "?refresh=1" : ""}`, undefined, undefined, 60_000);
 	discoverModels = (input: { baseUrl: string; api: ApiFormat; providerId?: string; apiKey?: string }) =>
-		this.req<{ models: { id: string; name?: string }[] }>("POST", "/configuration/discover", input);
+		this.req<{ models: { id: string; name?: string }[] }>("POST", "/configuration/discover", input, undefined, 60_000);
 	saveCustomProvider = (id: string, input: CustomProviderInput) =>
 		this.req<CustomProvider>("PUT", `/configuration/providers/${encodeURIComponent(id)}`, input);
 	/** Re-read the connection's model list from its upstream now; resolves with the updated connection. */
 	refreshCustomProvider = (id: string) =>
-		this.req<CustomProvider>("POST", `/configuration/providers/${encodeURIComponent(id)}/refresh`);
+		this.req<CustomProvider>("POST", `/configuration/providers/${encodeURIComponent(id)}/refresh`, undefined, undefined, 60_000);
 	deleteCustomProvider = (id: string) =>
 		this.req<{ ok: boolean }>("DELETE", `/configuration/providers/${encodeURIComponent(id)}`);
 	setDefaultModel = (sel: DefaultModelSelection | null) =>
@@ -396,7 +416,7 @@ export class Api {
 	/** The git repository of each folder (null outside one). A server from before projects answers 404 (`isUnsupportedRoute`). */
 	repos = (paths: string[], signal?: AbortSignal) => this.req<{ repos: Record<string, RepoInfo | null> }>("POST", "/fs/repos", { paths }, signal);
 	makeDir = (parent: string, name: string) => this.req<{ path: string }>("POST", "/fs/dirs", { parent, name });
-	testModel = (sel: ModelSelection) => this.req<ConnectionResult>("POST", "/configuration/test", sel);
+	testModel = (sel: ModelSelection) => this.req<ConnectionResult>("POST", "/configuration/test", sel, undefined, 60_000);
 
 	compactionSettings = () => this.req<CompactionSettingsInfo>("GET", "/compaction");
 	setCompactionSettings = (settings: CompactionSettings) => this.req<CompactionSettingsInfo>("PUT", "/compaction", settings);
@@ -404,10 +424,10 @@ export class Api {
 	createSchedule = (input: ScheduleInput) => this.req<Schedule>("POST", "/schedules", input);
 	patchSchedule = (id: string, patch: SchedulePatch) => this.req<Schedule>("PATCH", `/schedules/${encodeURIComponent(id)}`, patch);
 	deleteSchedule = (id: string) => this.req<{ ok: boolean }>("DELETE", `/schedules/${encodeURIComponent(id)}`);
-	runSchedule = (id: string) => this.req<Schedule>("POST", `/schedules/${encodeURIComponent(id)}/run`);
+	runSchedule = (id: string) => this.req<Schedule>("POST", `/schedules/${encodeURIComponent(id)}/run`, undefined, undefined, 60_000);
 	retention = () => this.req<RetentionInfo>("GET", "/retention");
 	setRetention = (settings: RetentionSettings) => this.req<RetentionInfo>("PUT", "/retention", settings);
-	runRetention = () => this.req<{ deleted: number }>("POST", "/retention/run");
+	runRetention = () => this.req<{ deleted: number }>("POST", "/retention/run", undefined, undefined, 60_000);
 	imageModelSettings = () => this.req<ImageModelSettingsInfo>("GET", "/image-model");
 	setImageModelSettings = (settings: ImageModelSettings) => this.req<ImageModelSettingsInfo>("PUT", "/image-model", settings);
 	systemModelSettings = () => this.req<SystemModelSettingsInfo>("GET", "/system-model");
@@ -459,8 +479,8 @@ export class Api {
 	deleteSkill = (name: string, cwd?: string) => this.req<SkillList>("DELETE", `/skills/${encodeURIComponent(name)}${cwd ? `?${new URLSearchParams({ cwd })}` : ""}`);
 	mcp = (signal?: AbortSignal) => this.req<McpInfo>("GET", "/mcp", undefined, signal);
 	/** Saves the whole list. A secret sent back as the mask keeps its stored value. */
-	setMcp = (servers: McpServer[]) => this.req<McpInfo>("PUT", "/mcp", { servers });
-	reloadMcp = (name?: string) => this.req<McpInfo>("POST", "/mcp/reload", name ? { name } : {});
+	setMcp = (servers: McpServer[]) => this.req<McpInfo>("PUT", "/mcp", { servers }, undefined, 60_000);
+	reloadMcp = (name?: string) => this.req<McpInfo>("POST", "/mcp/reload", name ? { name } : {}, undefined, 60_000);
 	/** Commands server extensions find at run time (`/prefix:name`), for `cwd`. */
 	commandFamilies = (cwd?: string, signal?: AbortSignal) =>
 		this.req<{ cwd: string; families: CommandFamily[] }>("GET", `/server-extensions/commands${cwd ? `?cwd=${encodeURIComponent(cwd)}` : ""}`, undefined, signal);
@@ -482,7 +502,7 @@ export class Api {
 	sessionWorkdirs = (id: string) => this.req<{ workdirs: { path: string; branch: string | null; home: boolean; current: boolean }[] }>("GET", `/sessions/${encodeURIComponent(id)}/workdirs`);
 	deleteSession = (id: string) => this.req<void>("DELETE", `/sessions/${id}`);
 	/** Delete several at once. Ones running or waiting for the user are skipped and come back in `skipped`. */
-	deleteSessions = (ids: string[]) => this.req<{ deleted: string[]; skipped: string[] }>("POST", "/sessions/delete", { ids });
+	deleteSessions = (ids: string[]) => this.req<{ deleted: string[]; skipped: string[] }>("POST", "/sessions/delete", { ids }, undefined, 60_000);
 	forkSession = (id: string, atSeq?: number, title?: string) =>
 		this.req<Session>("POST", `/sessions/${id}/fork`, { atSeq, title });
 	usage = (id: string) => this.req<Usage>("GET", `/sessions/${id}/usage`);
@@ -514,7 +534,7 @@ export class Api {
 			mode,
 			...(images?.length ? { images } : {}),
 			...(files?.length ? { files: files.map((f) => ({ name: f.name, data: f.data })) } : {}),
-		});
+		}, undefined, 30_000);
 	/** Upload an image (base64) to use as a model icon; returns the value for a model's `icon`. */
 	uploadIcon = (data: string) => this.req<{ icon: string }>("POST", "/configuration/icons", { data });
 	/** Icon values of the images already uploaded to this server, newest first. */
@@ -545,7 +565,7 @@ export class Api {
 	compactSession = (id: string, customInstructions?: string) =>
 		this.req<CompactionResult>("POST", `/sessions/${id}/compact`, {
 			...(customInstructions?.trim() ? { customInstructions: customInstructions.trim() } : {}),
-		});
+		}, undefined, 5 * 60_000);
 
 	/* ---------- session groups ---------- */
 	groups = () => this.req<{ groups: Group[] }>("GET", "/groups").then((r) => r.groups);
@@ -602,9 +622,20 @@ export class Api {
 	): () => void {
 		let dead = false;
 		let es: EventSource | null = null;
+		let openTimer: ReturnType<typeof setTimeout> | undefined;
+		const ctl = new AbortController();
+		const openTimeoutMs = this.opts?.streamOpenTimeoutMs ?? DEFAULT_STREAM_OPEN_TIMEOUT_MS;
+		const clearOpenTimer = () => {
+			if (openTimer !== undefined) {
+				clearTimeout(openTimer);
+				openTimer = undefined;
+			}
+		};
 		const fail = () => {
 			if (dead) return;
 			dead = true;
+			clearOpenTimer();
+			ctl.abort();
 			es?.close();
 			handlers.onError?.();
 		};
@@ -615,15 +646,22 @@ export class Api {
 				/* ignore malformed frame */
 			}
 		};
-		void this.streamCredential().then((credential) => {
+		void this.streamCredential(this.combineSignals(ctl.signal, AbortSignal.timeout(8000))).then((credential) => {
 			if (dead) return;
 			es = new EventSource(`${this.conn.baseUrl}/events?after=${after}&${PROTOCOL_QUERY}=${PROTOCOL_VERSION}&${credential}`);
-			es.onopen = () => handlers.onOpen?.();
+			if (openTimeoutMs > 0) openTimer = setTimeout(fail, openTimeoutMs);
+			es.onopen = () => {
+				if (dead) return;
+				clearOpenTimer();
+				handlers.onOpen?.();
+			};
 			es.onerror = fail;
 			for (const t of EVENT_TYPES) es.addEventListener(t, onMessage as EventListener);
 		}, fail);
 		return () => {
 			dead = true;
+			clearOpenTimer();
+			ctl.abort();
 			es?.close();
 		};
 	}

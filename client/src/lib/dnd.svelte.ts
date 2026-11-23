@@ -225,12 +225,13 @@ export function dragSource(node: HTMLElement, initial: SourceOpts) {
 	/** The hold is up: with a menu, a buzz says so and the finger decides (let go: the menu; move on: the session is picked up); without one, picked up at once. */
 	function hold() {
 		if (!st) return;
-		if (!opts.menu || opts.disabled) return activate();
+		if (!opts.menu) return opts.disabled ? undefined : activate();
 		st.held = true;
 		buzz();
 	}
 	function down(e: PointerEvent) {
-		if (opts.disabled || st || drag.id || !e.isPrimary || (e.pointerType === "mouse" && e.button !== 0) || taken.has(e)) return;
+		if ((opts.disabled && !opts.menu) || st || drag.id || !e.isPrimary || (e.pointerType === "mouse" && e.button !== 0) || taken.has(e)) return;
+		if (opts.disabled && e.pointerType !== "touch") return; // mouse clicks stay normal clicks when drag is disabled; contextmenu handles right click
 		taken.add(e);
 		const touch = e.pointerType === "touch";
 		st = { pid: e.pointerId, touch, x: e.clientX, y: e.clientY, ox: e.clientX, oy: e.clientY, timer: 0, held: false };
@@ -253,7 +254,7 @@ export function dragSource(node: HTMLElement, initial: SourceOpts) {
 			return;
 		}
 		if (Math.hypot(e.clientX - from.x, e.clientY - from.y) <= (st.touch ? SLOP_TOUCH : SLOP_MOUSE)) return;
-		if (st.touch && !st.held) return cleanup(); // moved before the hold was up: the user is scrolling
+		if ((st.touch && !st.held) || opts.disabled) return cleanup(); // scrolling, not dragging (or drag disabled)
 		st.x = e.clientX;
 		st.y = e.clientY;
 		activate();
@@ -275,7 +276,7 @@ export function dragSource(node: HTMLElement, initial: SourceOpts) {
 	}
 	/** Once picked up (or held for the menu, so moving on can still pick it up), the finger moves the session, not the page. */
 	function block(e: TouchEvent) {
-		if ((active || st?.held) && e.cancelable) e.preventDefault();
+		if ((active || (st?.held && !opts.disabled)) && e.cancelable) e.preventDefault();
 	}
 	/** The long-press that picks a session up must not also open the browser's context menu. */
 	function menu(e: Event) {
@@ -300,7 +301,7 @@ export function dragSource(node: HTMLElement, initial: SourceOpts) {
 	/** Images and links inside would start a native drag of their own. */
 	const native = (e: Event) => e.preventDefault();
 	const ctx = (e: MouseEvent) => {
-		if (opts.disabled || taken.has(e)) return;
+		if (!opts.menu || taken.has(e)) return;
 		taken.add(e);
 		contextAt(e, node, opts.menu);
 	};

@@ -105,4 +105,41 @@ describe("the event stream", () => {
 		expect(errors).toBe(1);
 		expect(opened[0]!.closed).toBe(true);
 	});
+	test("an EventSource that never opens times out and reports an error once", async () => {
+		serve(() => Response.json({ ticket: "tk", expiresAt: 1 }));
+		const opened = sources();
+		let errors = 0;
+		new Api({ baseUrl: "http://srv", token: "secret" }, undefined, { streamOpenTimeoutMs: 40 }).subscribe({ onEvent() {}, onError: () => errors++ }, 0);
+		await tick();
+		expect(opened.length).toBe(1);
+		expect(errors).toBe(0);
+		await Bun.sleep(70);
+		expect(errors).toBe(1);
+		expect(opened[0]!.closed).toBe(true);
+	});
+	test("opening in time disarms the EventSource open timeout", async () => {
+		serve(() => Response.json({ ticket: "tk", expiresAt: 1 }));
+		const opened: { url: string; closed: boolean; onopen?: () => void; onerror?: () => void }[] = [];
+		globalThis.EventSource = class {
+			closed = false;
+			onopen?: () => void;
+			onerror?: () => void;
+			constructor(public url: string) { opened.push(this); }
+			addEventListener() {}
+			close() { this.closed = true; }
+		} as unknown as typeof EventSource;
+		let opens = 0;
+		let errors = 0;
+		const stop = new Api({ baseUrl: "http://srv", token: "secret" }, undefined, { streamOpenTimeoutMs: 40 }).subscribe(
+			{ onEvent() {}, onOpen: () => opens++, onError: () => errors++ },
+			0,
+		);
+		await tick();
+		opened[0]!.onopen?.();
+		await Bun.sleep(70);
+		expect(opens).toBe(1);
+		expect(errors).toBe(0);
+		expect(opened[0]!.closed).toBe(false);
+		stop();
+	});
 });

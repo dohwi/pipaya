@@ -44,4 +44,10 @@ describe("Api.scoped", () => {
 		expect(err).toBe("AbortError");
 		expect(open).toBe(before);
 	});
+	test("default request timeout turns a hung mutation into a network ApiError instead of hanging forever", async () => {
+		const api = new Api({ baseUrl: `http://127.0.0.1:${server.port}`, token: "t" }, undefined, { timeoutMs: 60 });
+		const err = await api.patchSession("s1", { closed: true }).catch((e) => e);
+		expect(err).toMatchObject({ status: 0, code: "network" });
+		expect(await until(() => open === 0)).toBe(true);
+	});
 });

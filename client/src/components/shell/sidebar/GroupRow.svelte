@@ -33,11 +33,12 @@
 	const folded = $derived(sb.isFolded(groupKey(g.id)));
 	const pinned = $derived(app.sidebar.isTabPinned(n.server.id, g.id));
 	const gstate = $derived(mostUrgent(members.map((m) => sb.stateOfId(n, m.id))));
+	const interactive = $derived(n.state === "online" && !n.stale);
 </script>
 
 <RowShell
 	id={g.id}
-	current={n.current}
+	{n}
 	renaming={sb.groupRename.is(g.id)}
 	draft={sb.groupRename.draft}
 	ondraft={(v) => (sb.groupRename.draft = v)}
@@ -51,7 +52,7 @@
 	<button class="gfold" onclick={() => app.sidebar.toggleFolded(groupKey(g.id))} aria-expanded={!folded} aria-label={folded ? t("펼치기") : t("접기")} title={folded ? t("펼치기") : t("접기")}>
 		<span class="chev" class:folded><Icon name="chevron-down" /></span>
 	</button>
-	<RowOpen renaming={n.current && sb.groupRename.is(g.id)} onopen={() => (n.current ? app.openTab(g.id) : app.openIn(n.server.id, { session: members[0]!.id }))} title={g.name}>
+	<RowOpen renaming={interactive && sb.groupRename.is(g.id)} onopen={() => (n.current ? app.openTab(g.id) : app.openIn(n.server.id, { session: members[0]!.id }))} title={g.name}>
 		<span class="lead"><Icon name="group" />{#if pinned}<PinMark />{/if}</span>
 		<RowTitle text={g.name} />
 		{#if folded}<span class="cbadge tint {ACTIVITY_TONE[gstate]}" title={t("{n}개", { n: members.length }) + (gstate !== "idle" ? ` · ${ACTIVITY_LABEL[gstate]}` : "")}>{members.length}</span>{/if}

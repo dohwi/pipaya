@@ -4,7 +4,7 @@
 	import type { ClassValue } from "svelte/elements";
 	import { t } from "../../../lib/i18n";
 	import { drag, dragSource, dropTarget, type DropOpts } from "../../../lib/dnd.svelte";
-	import { getSidebarCtx, type MenuTarget } from "../../../lib/sidebar-ctx";
+	import { getSidebarCtx, type MenuTarget, type SidebarNode } from "../../../lib/sidebar-ctx";
 	import Icon from "../../ui/Icon.svelte";
 	import { ROW_RENAME, type RowRename } from "./row-rename";
 
@@ -14,18 +14,19 @@
 	 * "more" button that appears on hover. What goes inside the row is the caller's (`children`).
 	 *
 	 *  id       the thing this row stands for (a session, terminal or group id)
-	 *  current  its server is the open one: only then can it be dragged, renamed or have a menu
+	 *  n        the server node this row belongs to: `n.current` allows dragging, while any live (`online && !stale`)
+	 *           server supports row menus, closing and renaming without switching servers
 	 *  renaming this row is being renamed: the content is replaced by the field
 	 *  draft / ondraft / oncommit / oncancel  the rename field's value and its handlers
 	 *  target   what the "more" menu acts on
 	 *  maxlength limit for the rename field
- *  member   a pane of a split tab (its menu offers taking it out)
- *  Right click or a long press opens the same menu where the pointer is (a long press that moves on drags the row).
+	 *  member   a pane of a split tab (its menu offers taking it out)
+	 *  Right click or a long press opens the same menu where the pointer is (a long press that moves on drags the row).
 	 *  class    the row's own marker classes (`active`, `cur`, `term`, `member`, `grprow`) for the caller's rules
 	 */
 	let {
 		id,
-		current,
+		n,
 		renaming,
 		draft,
 		ondraft,
@@ -40,7 +41,7 @@
 		children,
 	}: {
 		id: string;
-		current: boolean;
+		n: SidebarNode;
 		renaming: boolean;
 		draft: string;
 		ondraft: (v: string) => void;
@@ -57,9 +58,11 @@
 	} = $props();
 
 	const sb = getSidebarCtx();
+	const current = $derived(n.current);
+	const interactive = $derived(n.state === "online" && !n.stale);
 	/** The row keeps its icon and its place while renamed: only its `RowTitle` turns into the field (read there) */
 	setContext<RowRename>(ROW_RENAME, {
-		get active() { return current && renaming; },
+		get active() { return interactive && renaming; },
 		get draft() { return draft; },
 		ondraft: (v) => ondraft(v),
 		oncommit: () => oncommit(),
@@ -68,10 +71,10 @@
 	});
 	/** F2 renames the focused row, as in a file manager. */
 	function keys(e: KeyboardEvent) {
-		if (e.key !== RENAME_KEY || !current || renaming || (e.target as Element).closest("input")) return;
+		if (e.key !== RENAME_KEY || !interactive || renaming || (e.target as Element).closest("input")) return;
 		e.preventDefault();
-		if (target.kind === "group") sb.startGroupRename(target.g);
-		else sb.startRename(target.x.id, target.x.title);
+		if (target.kind === "group") sb.startGroupRename(target.g, n.server.id);
+		else sb.startRename(target.x.id, target.x.title, n.server.id);
 	}
 </script>
 
@@ -85,15 +88,15 @@
 	class:carried={drag.id === id}
 	class:grabbable={current && !renaming}
 	class:menuopen={sb.menuId === id}
-	use:dragSource={{ id, disabled: !current || renaming, menu: current ? (pt) => sb.rowMenuAt(pt, target, member) : undefined }}
+	use:dragSource={{ id, disabled: !current || renaming, menu: interactive && !renaming ? (pt) => sb.rowMenuAt(pt, n, target, member) : undefined }}
 	use:dropTarget={drop}
 	onkeydown={keys}
 >
 	{@render children()}
-	{#if !(current && renaming)}
+	{#if !(interactive && renaming)}
 		<div class="acts">
-			{#if current}
-				<button class="more" class:on={sb.menuId === id} onpointerenter={(e) => sb.hoverMenu(e, target, member)} onpointerleave={(e) => sb.leaveMenu(e)} onclick={(e) => sb.clickMenu(e, target, member)} aria-label={t("더 보기")} aria-haspopup="menu" aria-expanded={sb.menuId === id}><Icon name="more" /></button>
+			{#if interactive}
+				<button class="more" class:on={sb.menuId === id} onpointerenter={(e) => sb.hoverMenu(e, n, target, member)} onpointerleave={(e) => sb.leaveMenu(e)} onclick={(e) => sb.clickMenu(e, n, target, member)} aria-label={t("더 보기")} aria-haspopup="menu" aria-expanded={sb.menuId === id}><Icon name="more" /></button>
 			{/if}
 		</div>
 	{/if}
