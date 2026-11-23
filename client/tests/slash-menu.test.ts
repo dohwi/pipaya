@@ -17,6 +17,17 @@ describe("recommendation menu rows", () => {
 				accent: true, group: "Snippets" },
 		]);
 	});
+	test("already selected skills get a selected badge in slashRows", () => {
+		const rows = slashRows(
+			[
+				{ skill: { name: "alpha", description: "first" } },
+				{ skill: { name: "beta", description: "second" } },
+			],
+			new Set(["beta"]),
+		);
+		expect(rows[0]!.badge).toBeUndefined();
+		expect(rows[1]!.badge).toBe("선택됨");
+	});
 	test("images come before files, and a folder is labelled", () => {
 		const rows = fileRows([{ n: 2, name: "a.png" }], [{ path: "src", dir: true }, { path: "a.ts", dir: false }]);
 		expect(rows.map((r) => [r.id, r.text, r.group, r.desc])).toEqual([

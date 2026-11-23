@@ -192,3 +192,58 @@ export function mergeReturned(current: string, imagesBefore: number, back: { tex
 	const shifted = imagesBefore ? back.text.replace(IMG_TOKEN, (m, n) => (Number(n) >= 1 && Number(n) <= back.images ? `#image${Number(n) + imagesBefore}` : m)) : back.text;
 	return current.trim() ? `${shifted.replace(/\s+$/, "")}\n${current}` : shifted;
 }
+
+const SKILL_TOKEN_RE = /(?:^|\s)\/skill:([a-z0-9]+(?:-[a-z0-9]+)*)(?![A-Za-z0-9_/-])/g;
+
+/** Names written as `/skill:name` in a message, in order of appearance, without repeats. Matches the server's parser. */
+export function extractSkillNames(text: string, knownNames?: readonly string[]): string[] {
+	if (!text.includes("/skill:")) return [];
+	const out: string[] = [];
+	for (const m of text.matchAll(SKILL_TOKEN_RE)) {
+		const name = m[1]!;
+		if (knownNames && !knownNames.includes(name)) continue;
+		if (!out.includes(name)) out.push(name);
+	}
+	return out;
+}
+
+/** Drop every `/skill:<name>` token from `text`, tidying adjacent spaces without disturbing newlines. */
+export function removeSkillToken(text: string, name: string): string {
+	if (!name || !text.includes(`/skill:${name}`)) return text;
+	const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+	const re = new RegExp(`(^|[\\t ]|\\r?\\n)\\/skill:${escaped}(?![A-Za-z0-9_/-])([\\t ]?)`, "g");
+	return text.replace(re, (_m, lead: string, trail: string) => {
+		if (lead === "") return "";
+		if (lead.includes("\n")) return lead;
+		return trail ? " " : "";
+	});
+}
+
+/** Prepend selected skills that are not already written inline as `/skill:name` in `text`. */
+export function composeSkillMessage(selected: readonly string[], text: string): string {
+	if (!selected.length) return text;
+	const inline = extractSkillNames(text);
+	const missing: string[] = [];
+	for (const name of selected) {
+		if (!name || inline.includes(name) || missing.includes(name)) continue;
+		missing.push(name);
+	}
+	if (!missing.length) return text;
+	const prefix = missing.map((n) => `/skill:${n}`).join(" ");
+	if (!text.trim()) return prefix;
+	return `${prefix} ${text.replace(/^[ \t]+/, "")}`;
+}
+
+/** Toggle a skill in the composer: turns it off from both the picker selection and inline `/skill:` tokens, or adds it. */
+export function toggleSkillSelection(selected: readonly string[], text: string, name: string): { selected: string[]; text: string } {
+	if (!name) return { selected: [...selected], text };
+	const inSelected = selected.includes(name);
+	const inInline = extractSkillNames(text).includes(name);
+	if (inSelected || inInline) {
+		return {
+			selected: inSelected ? selected.filter((s) => s !== name) : [...selected],
+			text: inInline ? removeSkillToken(text, name) : text,
+		};
+	}
+	return { selected: [...selected, name], text };
+}
