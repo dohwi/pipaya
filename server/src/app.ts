@@ -16,7 +16,8 @@ import { Scheduler } from "./scheduler.ts";
 import { registerSchedulerRoutes } from "./scheduler-routes.ts";
 import { GoalManager } from "./goals.ts";
 import { registerGoalRoutes } from "./goals-routes.ts";
-import { GROUP_NAME_SYSTEM, groupNameRequest, parseGroupName, SystemModelSettings } from "./system-model.ts";
+import { SystemModelSettings } from "./system-model.ts";
+import { autoNameGroup, groupInfo, parseThinkingLevel, sessionInfo, TeardownStack } from "./app-helpers.ts";
 import { registerSystemModelRoutes } from "./system-model-routes.ts";
 import { FallbackModelSettings } from "./fallback-model.ts";
 import { registerFallbackModelRoutes } from "./fallback-model-routes.ts";
@@ -37,7 +38,7 @@ import { registerFsRoutes } from "./fs-routes.ts";
 import { registerFileRoutes } from "./file-routes.ts";
 import { assistantMessageText, SessionMedia } from "./session-media.ts";
 import { workDirOf } from "./work-tree.ts";
-import { GroupManager, panesOf, peerGroupOps, type GroupRecord } from "./groups.ts";
+import { GroupManager, panesOf, peerGroupOps } from "./groups.ts";
 import { registerGroupRoutes } from "./groups-routes.ts";
 import { isTerminalId, TerminalManager } from "./terminals.ts";
 import { registerTerminalRoutes } from "./terminal-routes.ts";
@@ -56,7 +57,7 @@ import { registerTemplateRoutes } from "./templates-routes.ts";
 import { SkillService } from "./skills.ts";
 import { registerSkillRoutes } from "./skills-routes.ts";
 import { AgentsWatcher } from "./agents-watch.ts";
-import { SessionStore, SqliteCredentialStore, THINKING_LEVELS, type ThinkingLevel } from "./store.ts";
+import { SessionStore, SqliteCredentialStore } from "./store.ts";
 import { makeSerializerCompiler, validatorCompiler } from "./typebox-provider.ts";
 import { registerWebSocket, type WebSocketOptions } from "./ws.ts";
 import { NotificationService, type PushTransports } from "./notifications.ts";
@@ -131,10 +132,34 @@ export const CORS_MAX_AGE_S = 7200;
 
 export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<App> {
 	const startedAt = Date.now();
+	const teardown = new TeardownStack();
 	const db = openDb(cfg.dbPath);
+	teardown.onClose(() => db.close());
+	const server = Fastify({
+		logger: cfg.logLevel === "silent" ? false : {
+			level: cfg.logLevel,
+			// SSE/WebSocket clients pass ?ticket= (or ?token=, older ones); keep both out of request logs.
+			serializers: {
+				req: (req) => ({
+					method: req.method,
+					url: redactUrl(req.url),
+					host: req.host,
+					remoteAddress: req.ip,
+					remotePort: req.socket?.remotePort,
+				}),
+			},
+		},
+		// Small by default; only a message with pasted images (below) may be large.
+		bodyLimit: DEFAULT_BODY_LIMIT,
+		// Close every socket on shutdown, open SSE streams and upgraded WebSockets included: under Bun an upgraded socket
+		// still counts as an HTTP connection, and without this `close()` (restart, tests) waits on it forever.
+		forceCloseConnections: true,
+	});
+	teardown.onClose(() => server.close());
 	const bus = new EventBus(db);
 	const store = new SessionStore(db);
 	const push = await createPushTransports(opts.pushTransports === undefined && cfg.pushEnabled === true);
+	teardown.onClose(() => push.close());
 	const clientSettings = new ClientSettings(db);
 	let goalActive = (_id: string) => false;
 	const notifications = new NotificationService(db, bus, opts.pushTransports ?? push.transports, Date.now, opts.mobileDelayMs, () => clientSettings.escalateMs(), {
@@ -143,7 +168,9 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 		quietPeers: () => clientSettings.quietPeers(),
 		isGoalActive: (id) => goalActive(id),
 	});
+	teardown.onClose(() => notifications.close());
 	const unread = new UnreadTracker(db, bus, (id) => notifications.watching(id), () => clientSettings.quietPeers(), (id) => goalActive(id));
+	teardown.onClose(() => unread.dispose());
 	notifications.onLook = (ids) => unread.read(ids);
 	const credentials = new SqliteCredentialStore(db);
 	const registry = createModelRegistry(credentials);
@@ -175,20 +202,18 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 		home: opts.home,
 		log: (m) => server.log.warn(m),
 	});
+	teardown.onClose(() => extensions.shutdown());
 	const mcp = new McpManager(db, () => bus.publish(null, "mcp_updated", {}));
+	teardown.onClose(() => mcp.close());
 	// Seed once from an older copy's saved settings when the built-in setting is not yet in SQLite.
 	const guard = new GuardSettings(db, join(cfg.dataDir, "extensions", "guard", "settings.json"));
 	const sessions = new SessionManager(cfg, store, bus, registry, () => configuration.defaultWorkdir(), skills, questions, compactionSettings, extensions, () => configuration.disabledTools(), systemModel, imageModel, mcp, opts.home, () => configuration.delegatePolicy(), () => configuration.disabledSubagents(), opts.delegateTimeoutMs, guard, opts.shutdownStopMs, fallbackModel);
-	const busy = (id: string) => sessions.isRunning(id) || questions.list(id).length > 0;
-	const info = (r: NonNullable<ReturnType<typeof store.get>>) => ({
-		id: r.id, name: r.name, title: r.title, purpose: r.purpose, cwd: r.cwd, provider: r.provider, model: r.model, thinkingLevel: r.thinkingLevel,
-		tools: r.tools, closed: r.closed, parentId: r.parentId, createdAt: r.createdAt, updatedAt: r.updatedAt, running: sessions.isRunning(r.id), busy: busy(r.id),
+	teardown.onClose(async () => {
+		sessions.shutdown();
+		await sessions.idle();
 	});
-	const groupInfo = (g: GroupRecord) => ({ id: g.id, name: g.name, sessionIds: panesOf(g.layout).filter((id) => !isTerminalId(id)), terminalIds: panesOf(g.layout).filter(isTerminalId), layout: g.layout, createdAt: g.createdAt, updatedAt: g.updatedAt });
-	const thinking = (v: string | undefined) => {
-		if (v !== undefined && !(THINKING_LEVELS as readonly string[]).includes(v)) throw badRequest(`unknown thinking level "${v}"`);
-		return v as ThinkingLevel | undefined;
-	};
+	const busy = (id: string) => sessions.isRunning(id) || questions.list(id).length > 0;
+	const info = (r: NonNullable<ReturnType<typeof store.get>>) => sessionInfo(r, { running: sessions.isRunning(r.id), busy: busy(r.id) });
 	const llm = new Llm(registry, modelRoles);
 	extensions.attach({
 		cwd: (id) => { const r = store.get(id); return r ? workDirOf(r) : undefined; },
@@ -244,10 +269,10 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 				await sessions.send(id, { text, mode: mode ?? (sessions.isRunning(id) ? "follow_up" : "prompt") });
 			},
 			create: async (o = {}) => {
-				const r = await sessions.create({ title: o.title, cwd: o.cwd, provider: o.provider, model: o.model, thinkingLevel: thinking(o.thinkingLevel), systemPrompt: o.systemPrompt, tools: o.tools }, o.parentId && store.get(o.parentId) ? o.parentId : null);
+				const r = await sessions.create({ title: o.title, cwd: o.cwd, provider: o.provider, model: o.model, thinkingLevel: parseThinkingLevel(o.thinkingLevel), systemPrompt: o.systemPrompt, tools: o.tools }, o.parentId && store.get(o.parentId) ? o.parentId : null);
 				return info(r);
 			},
-			update: (id, c) => info(sessions.update(id, { ...c, thinkingLevel: thinking(c.thinkingLevel) })),
+			update: (id, c) => info(sessions.update(id, { ...c, thinkingLevel: parseThinkingLevel(c.thinkingLevel) })),
 			fork: async (id, o) => info(await sessions.fork(id, o?.atSeq, o?.title)),
 			abort: (id) => sessions.abort(id),
 			compact: async (id, instructions) => {
@@ -272,6 +297,8 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 		defaultWorkdir: () => configuration.defaultWorkdir(),
 		confineTo: cfg.restrictWorkspace ? cfg.workspaceRoot : undefined,
 	});
+	teardown.onClose(() => terminals.shutdown());
+	teardown.onClose(() => configuration.close());
 	// A group pane shows a session or a terminal; terminal ids carry their own prefix so the two never clash.
 	// generate_image can be switched off like an extension tool, while an image model makes it exist at all.
 	configuration.setSwitchableSource(() => [...TOGGLEABLE_TOOLS, ...extensions.switchableTools(), ...(imageModel.resolve() ? [IMAGE_TOOL] : [])]);
@@ -279,26 +306,6 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 	groups.evictWhere(isTerminalId);
 	sessions.setGroupSource(() => groups.list().map((g) => ({ name: g.name, sessionIds: panesOf(g.layout).filter((id) => !isTerminalId(id)) })));
 	sessions.setGroupOps(peerGroupOps(groups));
-	const server = Fastify({
-		logger: cfg.logLevel === "silent" ? false : {
-			level: cfg.logLevel,
-			// SSE/WebSocket clients pass ?ticket= (or ?token=, older ones); keep both out of request logs.
-			serializers: {
-				req: (req) => ({
-					method: req.method,
-					url: redactUrl(req.url),
-					host: req.host,
-					remoteAddress: req.ip,
-					remotePort: req.socket?.remotePort,
-				}),
-			},
-		},
-		// Small by default; only a message with pasted images (below) may be large.
-		bodyLimit: DEFAULT_BODY_LIMIT,
-		// Close every socket on shutdown, open SSE streams and upgraded WebSockets included: under Bun an upgraded socket
-		// still counts as an HTTP connection, and without this `close()` (restart, tests) waits on it forever.
-		forceCloseConnections: true,
-	});
 	// Voice input uploads the browser's own recording as multipart; the runtime's FormData parser reads it (no plugin).
 	// Bun ignores keepAliveTimeout: sockets left by sleeping or vanished devices are closed here instead.
 	const idleSockets = new IdleSockets();
@@ -452,23 +459,7 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 	});
 	registerFileRoutes(server, sessionDirs, (id, path) => sessionMedia.resolve(id, path));
 	// A group the client named by default gets a better name from the system model, unless someone renamed it meanwhile.
-	registerGroupRoutes(server, groups, (rec) => {
-		if (!systemModel.resolve()) return;
-		const members = panesOf(rec.layout).flatMap((id) => {
-			const r = store.get(id);
-			return r ? [{ cwd: r.cwd, title: r.title, purpose: r.purpose }] : [];
-		});
-		if (!members.length) return;
-		void (async () => {
-			const name = parseGroupName((await systemModel.complete(GROUP_NAME_SYSTEM, groupNameRequest(members), 60)) ?? "");
-			if (!name || name === rec.name) return;
-			try {
-				if (groups.get(rec.id).name === rec.name) groups.update(rec.id, { name });
-			} catch {
-				/* the group is gone */
-			}
-		})();
-	});
+	registerGroupRoutes(server, groups, (rec) => autoNameGroup(rec, { systemModel, store, groups }));
 	registerSkillRoutes(server, skills, bus);
 	registerTemplateRoutes(server, () => configuration.defaultWorkdir(), bus, opts.home);
 	registerGuardRoutes(server, guard, bus);
@@ -487,6 +478,7 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 	// Skills, AGENTS.md and whatever extensions read from those folders live in plain files: tell open clients when they change on disk.
 	const agentsWatch = new AgentsWatcher(bus, { home: opts.home, workdirs: () => [configuration.defaultWorkdir(), ...store.workdirs().filter((w) => w.active > 0).map((w) => w.cwd)] });
 	agentsWatch.start();
+	teardown.onClose(() => agentsWatch.stop());
 	// The events table holds a copy of every message (the messages table is the record), so it is the bulk of the database. Clients
 	// resume from the latest id, not from old ones: keep a few days for reconnects. Also at startup: a server restarted more often
 	// than the 6 hour timer would otherwise never prune.
@@ -494,32 +486,19 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 	pruneEvents();
 	const prune = setInterval(pruneEvents, 6 * 3600_000);
 	prune.unref?.();
+	teardown.onClose(() => clearInterval(prune));
 	// Finalize any runs left active by a previous crash / SIGKILL / sudden reboot before scheduled tasks or clients act on them.
 	sessions.recoverInterruptedRuns();
-	idleSockets.start();
-	retention.start();
+	teardown.onClose(() => goals.stop());
 	scheduler.start();
+	teardown.onClose(() => scheduler.stop());
+	retention.start();
+	teardown.onClose(() => retention.stop());
+	idleSockets.start();
+	teardown.onClose(() => idleSockets.stop());
 	// Read every connection's model list once at startup, in the background, so a fresh start already shows what the upstreams offer.
 	void configuration.refreshStale();
 	// Same for OpenRouter's own catalog: refreshed when it is stale, so the model picker opens on a current list.
 	void configuration.refreshCatalog();
-	return { server, sessions, bus, async close() {
-		clearInterval(prune);
-		idleSockets.stop();
-		retention.stop();
-		scheduler.stop();
-		goals.stop();
-		configuration.close();
-		agentsWatch.stop();
-		terminals.shutdown();
-		sessions.shutdown();
-		await sessions.idle();
-		await mcp.close();
-		unread.dispose();
-		await notifications.close();
-		await push.close();
-		await extensions.shutdown();
-		await server.close();
-		db.close();
-	} };
+	return { server, sessions, bus, close: () => teardown.close() };
 }

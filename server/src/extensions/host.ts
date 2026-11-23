@@ -10,6 +10,7 @@ import type { ModelRegistry } from "../models.ts";
 import { DEFAULT_TOOLS, TOOL_DEFS, type ToolContext, type ToolDef } from "../tools.ts";
 import { RETIRED_EXTENSIONS } from "./retired.ts";
 import { markExtensionImports } from "./loader.ts";
+import { ExtensionStore } from "./store.ts";
 import type {
 	ApiMethod, AskRequest, EventHandler, EventName, CommandResult, ExtensionAPI, ExtensionCommand, ExtensionCommandFamily, ExtensionContext, MessageNote, ExtensionFactory, ExtensionFlag, ExtensionPanelEvent, ExtensionPanelNode, ExtensionGroups, ExtensionServerInfo, ExtensionModels, ExtensionTerminals, ExtensionSessions, ExtensionSessionData, ExtensionTool, PromptMode, RouteContext, RouteMethod, ServerEvent, ToolResult,
 } from "./types.ts";
@@ -285,7 +286,6 @@ export const RESERVED_COMMANDS = Object.freeze(["new", "clear", "model", "resume
 /** A method a client waits on must answer: the client gives up after 15 s, so the server stops waiting a little later. */
 const METHOD_TIMEOUT_MS = 20_000;
 const API_METHODS: readonly ApiMethod[] = ["GET", "POST", "PUT", "PATCH", "DELETE"];
-const MAX_ENTRY_PAGE = 1000;
 
 const str = (v: unknown, max: number): string | undefined => (typeof v === "string" && v.trim() && v.length <= max ? v : undefined);
 
@@ -340,9 +340,11 @@ export class ExtensionHost {
 	private version = 0;
 	readonly errors: { at: number; extension: string; where: string; message: string }[] = [];
 	private log: (msg: string) => void;
+	private store: ExtensionStore;
 
 	constructor(private opts: ExtensionHostOptions) {
 		this.log = opts.log ?? (() => {});
+		this.store = new ExtensionStore(opts.db);
 	}
 
 	attach(bridge: SessionBridge): void {
@@ -543,22 +545,7 @@ export class ExtensionHost {
 			if (!this.bridge) throw new Error(`${what} are not ready`);
 			return this.bridge;
 		};
-		const sessionData: ExtensionSessionData = {
-			get: (sid, key) => {
-				const row = this.opts.db.query("SELECT value FROM extension_session_data WHERE session_id = $sid AND extension = $ext AND key = $key").get({ sid, ext: ext.name, key }) as { value: string } | null;
-				return row ? JSON.parse(row.value) : undefined;
-			},
-			set: (sid, key, value) => {
-				const text = JSON.stringify(value ?? null);
-				if (text.length > 4000) throw new Error("a session value is at most 4000 characters");
-				if (typeof key !== "string" || !key || key.length > 80) throw new Error("key must be 1-80 characters");
-				try {
-					this.opts.db.query("INSERT INTO extension_session_data (session_id, extension, key, value) VALUES ($sid, $ext, $key, $value) ON CONFLICT (session_id, extension, key) DO UPDATE SET value = excluded.value").run({ sid, ext: ext.name, key, value: text });
-				} catch { throw new Error("unknown session"); }
-			},
-			delete: (sid, key) => void this.opts.db.query("DELETE FROM extension_session_data WHERE session_id = $sid AND extension = $ext AND key = $key").run({ sid, ext: ext.name, key }),
-			list: (key) => Object.fromEntries((this.opts.db.query("SELECT session_id, value FROM extension_session_data WHERE extension = $ext AND key = $key").all({ ext: ext.name, key }) as { session_id: string; value: string }[]).map((r) => [r.session_id, JSON.parse(r.value)])),
-		};
+		const sessionData = this.store.sessionData(ext.name);
 		const own = (what: string, name: string, has: boolean) => { if (has) throw new Error(`${what} "${name}" is already registered by this extension`); };
 		return {
 			Type: Type as ExtensionAPI["Type"],
@@ -724,23 +711,14 @@ export class ExtensionHost {
 
 	context(sessionId: string, extension: string, cwdOverride?: string): ExtensionContext {
 		const bridge = this.bridge;
-		const db = this.opts.db;
 		return {
 			sessionId,
 			cwd: cwdOverride ?? bridge?.cwd(sessionId) ?? "",
 			appendEntry: (type, data) => {
-				const createdAt = Date.now();
-				const res = db.query("INSERT INTO extension_entries (session_id, extension, type, data, created_at) VALUES ($sid, $ext, $type, $data, $t)")
-					.run({ sid: sessionId, ext: extension, type, data: JSON.stringify(data ?? null), t: createdAt });
-				this.opts.bus.publish(sessionId, "extension_entry", { id: Number(res.lastInsertRowid), extension, type, data: data ?? null, createdAt });
+				const entry = this.store.appendEntry(sessionId, extension, type, data);
+				this.opts.bus.publish(sessionId, "extension_entry", entry);
 			},
-			entries: (type) => {
-				const rows = (type
-					? db.query("SELECT id, type, data, created_at FROM extension_entries WHERE session_id = $sid AND extension = $ext AND type = $type ORDER BY id").all({ sid: sessionId, ext: extension, type })
-					: db.query("SELECT id, type, data, created_at FROM extension_entries WHERE session_id = $sid AND extension = $ext ORDER BY id").all({ sid: sessionId, ext: extension })) as
-					{ id: number; type: string; data: string; created_at: number }[];
-				return rows.map((r) => ({ id: r.id, type: r.type, data: JSON.parse(r.data), createdAt: r.created_at }));
-			},
+			entries: (type) => this.store.entries(sessionId, extension, type),
 			sendUserMessage: async (text, mode) => {
 				if (!bridge) throw new Error("sessions are not ready");
 				await bridge.send(sessionId, text, mode ?? (bridge.isRunning(sessionId) ? "follow_up" : "prompt"));
@@ -988,14 +966,7 @@ export class ExtensionHost {
 	 * session can hold thousands); `after` (an entry id) and `limit` page through them.
 	 */
 	allEntries(sessionId: string, extension?: string, type?: string, page: { after?: number; limit?: number } = {}): { id: number; extension: string; type: string; data: unknown; createdAt: number }[] {
-		const limit = Math.min(Math.max(1, Math.floor(page.limit ?? MAX_ENTRY_PAGE)), MAX_ENTRY_PAGE);
-		const rows = this.opts.db.query(
-			`SELECT id, extension, type, data, created_at FROM extension_entries
-			 WHERE session_id = $sid AND ($ext IS NULL OR extension = $ext) AND ($type IS NULL OR type = $type) AND id > $after
-			 ORDER BY id LIMIT $limit`,
-		).all({ sid: sessionId, ext: extension || null, type: type || null, after: page.after ?? 0, limit }) as
-			{ id: number; extension: string; type: string; data: string; created_at: number }[];
-		return rows.map((r) => ({ id: r.id, extension: r.extension, type: r.type, data: JSON.parse(r.data), createdAt: r.created_at }));
+		return this.store.allEntries(sessionId, extension, type, page);
 	}
 
 	/** The sources of the Svelte components a server extension carries for its own page; undefined when it has none. */
