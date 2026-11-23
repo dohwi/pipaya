@@ -61,15 +61,15 @@ describe("which menu the typing asks for", () => {
 describe("which slash entries apply for the cursor and attachments", () => {
 	test("empty draft at the start allows every category and shows even when nothing matches", () => {
 		expect(slashScopeOf({ atStart: true, hasTrailing: false, attachments: 0 })).toEqual({
-			commands: "all",
+			commands: true,
 			skills: true,
 			startMacros: true,
 			onlyWhenMatched: false,
 		});
 	});
-	test("start of an existing draft keeps only args-taking commands, skills and start macros", () => {
+	test("start of an existing draft omits commands so picking never turns the draft into an invalid command argument", () => {
 		expect(slashScopeOf({ atStart: true, hasTrailing: true, attachments: 0 })).toEqual({
-			commands: "args",
+			commands: false,
 			skills: true,
 			startMacros: true,
 			onlyWhenMatched: true,
@@ -77,13 +77,13 @@ describe("which slash entries apply for the cursor and attachments", () => {
 	});
 	test("mid-message offers only inline skills and opens only on a match", () => {
 		expect(slashScopeOf({ atStart: false, hasTrailing: false, attachments: 0 })).toEqual({
-			commands: "none",
+			commands: false,
 			skills: true,
 			startMacros: false,
 			onlyWhenMatched: true,
 		});
 		expect(slashScopeOf({ atStart: false, hasTrailing: true, attachments: 2 })).toEqual({
-			commands: "none",
+			commands: false,
 			skills: true,
 			startMacros: false,
 			onlyWhenMatched: true,
@@ -91,7 +91,7 @@ describe("which slash entries apply for the cursor and attachments", () => {
 	});
 	test("with attached images at the start, only message-carrying skills and start macros apply", () => {
 		expect(slashScopeOf({ atStart: true, hasTrailing: false, attachments: 1 })).toEqual({
-			commands: "none",
+			commands: false,
 			skills: true,
 			startMacros: true,
 			onlyWhenMatched: true,

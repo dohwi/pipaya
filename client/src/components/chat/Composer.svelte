@@ -318,11 +318,7 @@
 	const slashToken = $derived(cdArg === null && !argSuggestions ? slashAt(text, caret) : null);
 	const slashQuery = $derived(slashToken?.query ?? null);
 	const slashScope = $derived(slashToken ? slashScopeOf({ atStart: slashToken.atStart, hasTrailing: slashToken.hasTrailing, attachments: attached.images.length }) : null);
-	const commandList = $derived(
-		slashQuery !== null && slashScope && slashScope.commands !== "none"
-			? matchCommands(slashQuery).filter((c) => slashScope.commands === "all" || !!(c.args || c.argumentOptions))
-			: [],
-	);
+	const commandList = $derived(slashQuery !== null && slashScope?.commands ? matchCommands(slashQuery) : []);
 	// Skills sit in the same menu after the commands, as `/skill:name`, tagged so they are not mistaken for commands.
 	let skillList = $state<{ name: string; description: string }[]>([]);
 	const skillMatches = $derived(slashQuery !== null && slashScope?.skills ? matchSkills(skillList, slashQuery) : []);
@@ -883,7 +879,7 @@
 	{#if chat?.retrying}<RetryNotice retrying={chat.retrying} />{/if}
 	<div class="box" data-part="composer.box" class:glow-working={running || compacting} class:glow-compacting={compacting} class:disabled={app.net !== "online"} data-level={running && !compacting && app.effectiveModelOf(pane.id)?.reasoning ? app.effectiveOf(pane.id).thinkingLevel : undefined}>
 		{#if slashOpen}
-			<SlashMenu items={menuItems} index={slashIndex} label={menuKind === "cd" ? msg("폴더") : menuKind === "file" ? msg("파일") : menuKind === "mention" ? msg("멘션") : argSuggestions ? t("{cmd} 값 선택", { cmd: commandText(argSuggestions.cmd) }) : slashScope && slashScope.commands === "none" && !slashScope.startMacros ? msg("스킬") : msg("명령")} empty={menuKind === "cd" ? msg("일치하는 폴더가 없습니다") : menuKind === "file" ? msg("일치하는 파일이 없습니다") : argSuggestions?.empty} listId={menuListId} optionId={menuOptionId} onpick={pickRecommendation} onhover={(i) => (slashIndex = i)} />
+			<SlashMenu items={menuItems} index={slashIndex} label={menuKind === "cd" ? msg("폴더") : menuKind === "file" ? msg("파일") : menuKind === "mention" ? msg("멘션") : argSuggestions ? t("{cmd} 값 선택", { cmd: commandText(argSuggestions.cmd) }) : slashScope && !slashScope.commands && !slashScope.startMacros ? msg("스킬") : msg("명령")} empty={menuKind === "cd" ? msg("일치하는 폴더가 없습니다") : menuKind === "file" ? msg("일치하는 파일이 없습니다") : argSuggestions?.empty} listId={menuListId} optionId={menuOptionId} onpick={pickRecommendation} onhover={(i) => (slashIndex = i)} />
 		{/if}
 		{#if chat?.waiting.length || ((scheduled.length || goal) && app.serverId && pane.id)}
 			<!-- keyed by session: a height pulled in one conversation does not carry over when the pane switches to another.

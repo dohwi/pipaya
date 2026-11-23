@@ -58,8 +58,8 @@ export function slashRows(entries: readonly SlashEntry[]): MenuRow[] {
 
 /** Which slash categories fit the cursor position and attachment state. */
 export interface SlashScope {
-	/** Built-in/client/server commands: all (empty draft), args-taking only (trailing text), or none (inline / images attached). */
-	commands: "all" | "args" | "none";
+	/** Built-in/client/server commands: only on a fresh draft with no attachments (otherwise `/model <draft>` etc. fail). */
+	commands: boolean;
 	/** `/skill:name` entries (the server detects them anywhere in a message, and with attachments). */
 	skills: boolean;
 	/** `/prompt:name` and `/prefix:name` entries (the server runs them at the start of a message, with trailing text or attachments). */
@@ -69,10 +69,9 @@ export interface SlashScope {
 }
 
 export function slashScopeOf(s: { atStart: boolean; hasTrailing: boolean; attachments: number }): SlashScope {
-	if (!s.atStart) return { commands: "none", skills: true, startMacros: false, onlyWhenMatched: true };
-	if (s.attachments > 0) return { commands: "none", skills: true, startMacros: true, onlyWhenMatched: true };
-	if (s.hasTrailing) return { commands: "args", skills: true, startMacros: true, onlyWhenMatched: true };
-	return { commands: "all", skills: true, startMacros: true, onlyWhenMatched: false };
+	if (!s.atStart) return { commands: false, skills: true, startMacros: false, onlyWhenMatched: true };
+	if (s.attachments > 0 || s.hasTrailing) return { commands: false, skills: true, startMacros: true, onlyWhenMatched: true };
+	return { commands: true, skills: true, startMacros: true, onlyWhenMatched: false };
 }
 
 /** What the input is asking the menu for: nothing, a /command (or its argument), a folder for /cd, a #file or an @mention. */
