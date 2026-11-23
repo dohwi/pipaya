@@ -11,6 +11,7 @@ import type { ManageAction, ManageArgs, PeerCreateInput } from "./peers.ts";
 import { goalTool, type GoalOps } from "./goal-tool.ts";
 import { scheduleTool, type ScheduleOps } from "./schedule-tool.ts";
 import { LEFT_TO_AGENT } from "./questions.ts";
+import { THINKING_LEVELS, type ThinkingLevel } from "./shared/thinking.ts";
 
 const MAX_OUTPUT_BYTES = 50 * 1024;
 const MAX_READ_LINES = 2000;
@@ -35,7 +36,7 @@ export interface ToolContext {
 	/** Ask the user and wait for the answer (`ask_user`). Rejects when the run is aborted. */
 	ask?(toolCallId: string, req: AskRequest, signal?: AbortSignal): Promise<string>;
 	/** Run a one-off subagent and return its answer (`delegate`). Rejects with a conflict when a limit is hit; the signal stops the subagent. */
-	delegate?(toolCallId: string, input: { role: string; task: string; model?: string }, signal: AbortSignal | undefined, progress: (line: string) => void): Promise<AgentToolResult<any>>;
+	delegate?(toolCallId: string, input: { role: string; task: string; model?: string; thinking?: ThinkingLevel }, signal: AbortSignal | undefined, progress: (line: string) => void): Promise<AgentToolResult<any>>;
 	/** The role policy of `delegate` now: `any` lets `role` name a role with no file (read in `create`, so the tool text matches it). */
 	delegateRoles?(): "defined" | "any";
 	/** The model policy of `delegate` now (read in `create`, so the tool text lists the models a call may name). */
@@ -648,7 +649,7 @@ const DELEGATE_DESCRIPTION_FREE =
 	"The subagent does not see this conversation: put the goal, paths and the exact question in `task`. It runs once, is not a session (nothing appears in the session list; use peer (action create) for a lasting chat) and cannot delegate further or ask the user. " +
 	"Use it like a tool, to save your own context on searches or noisy commands, when only the result matters; if the user may want to open the work, or it edits files or runs long, use peer (action create) instead. Limits apply (model calls, concurrent subagents, calls per run and elapsed time).";
 
-const MODEL_HINT = "Pick a fast, cheap model for searches, summaries and simple checks, a strong one for root-cause analysis or design judgement; the subagent thinks at that model's default level. Omit `model` to use the role's own model, else this session's.";
+const MODEL_HINT = "Pick a fast, cheap model for searches, summaries and simple checks, a strong one for root-cause analysis or design judgement. Omit `model` to use the role's own model, else this session's.";
 /** What the tool text says about `model` under the model policy (the ids only in the parameter, not twice); `null` = the argument is not offered (the role decides). */
 export function delegateModelText(p: { policy: "defined" | "allowlist" | "any"; models: string[] } | undefined, available: readonly string[] = []): { tool: string; param: string } | null {
 	if (!p || p.policy === "defined") return null;
@@ -670,10 +671,11 @@ const delegateTool: ToolDef = {
 				role: Type.String({ minLength: 1, maxLength: 60, description: free ? "Subagent role: the name of a role file (without .md, e.g. explore, runner), or any short name for a general read-only subagent" : "Subagent role, the file name without .md (e.g. explore, runner)" }),
 				task: Type.String({ minLength: 1, maxLength: 12000, description: "Everything the subagent needs: goal, paths, symbols, the question, and the answer format you want" }),
 				...(models ? { model: Type.Optional(Type.String({ minLength: 3, maxLength: 200, description: models.param })) } : {}),
+				thinking: Type.Optional(Type.Union(THINKING_LEVELS.map((l) => Type.Literal(l)), { description: "Reasoning strength: off, minimal, low, medium, high, xhigh or max. Omit to use the role's own level, else the session's (same model) or the model's default" })),
 			}),
 			async execute(id, p, signal, onUpdate) {
 				if (!ctx?.delegate) throw new Error("delegate is not available in this session");
-				return ctx.delegate(id, { role: p.role, task: p.task, model: (p as { model?: string }).model }, signal, (t) => onUpdate?.(text(t, { running: true })));
+				return ctx.delegate(id, { role: p.role, task: p.task, model: (p as { model?: string }).model, thinking: p.thinking }, signal, (t) => onUpdate?.(text(t, { running: true })));
 			},
 		});
 	},

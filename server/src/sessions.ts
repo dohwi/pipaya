@@ -16,7 +16,7 @@ import { checkServiceTier, modelDefaultTier, modelDefaultLevel, reasoningOption,
 import { streamAtTier } from "./served-tier.ts";
 import type { ServiceTier } from "./openrouter-catalog.ts";
 import { contextTokens, estimateTokens, pickCut, SUMMARY_MAX_TOKENS, SUMMARY_SYSTEM, summaryMessage, summaryRequest, thresholdFor, type CompactionSettings } from "./compaction.ts";
-import { type DelegateCall, type SessionPatch, type SessionRecord, type SessionStore, type ThinkingLevel } from "./store.ts";
+import { THINKING_LEVELS, type DelegateCall, type SessionPatch, type SessionRecord, type SessionStore, type ThinkingLevel } from "./store.ts";
 import type { McpManager } from "./mcp.ts";
 import { ALWAYS_TOOLS, buildTools, DEFAULT_TOOLS, DELEGATE_TOOL, isInside, PEER_TOOLS, TOOL_DEFS, WORKDIR_TOOL, type ToolContext, type ToolDef } from "./tools.ts";
 import { isGone, movedNote, placeText, resolveMove, stayHint, touchedDir, workDirOf, workTargets } from "./work-tree.ts";
@@ -1635,10 +1635,11 @@ export class SessionManager {
 
 
 	/**
-	 * How hard a subagent thinks: its role's level, else the calling session's own level when it runs on the same model,
+	 * How hard a subagent thinks: the call's `thinking` argument, else its role's level, else the calling session's own level when it runs on the same model,
 	 * else that model's default (its connection setting, "auto" = the rules of a new chat). A model without reasoning ignores it.
 	 */
-	private subagentThinking(rec: SessionRecord, role: ThinkingLevel | undefined, provider: string, modelId: string): ThinkingLevel {
+	private subagentThinking(rec: SessionRecord, requested: ThinkingLevel | undefined, role: ThinkingLevel | undefined, provider: string, modelId: string): ThinkingLevel {
+		if (requested) return requested;
 		if (role) return role;
 		if (provider === rec.provider && modelId === rec.model) return this.live.get(rec.id)?.agent.state.thinkingLevel ?? rec.thinkingLevel ?? this.defaultThinkingLevel(provider, modelId);
 		return this.defaultThinkingLevel(provider, modelId);
@@ -1648,9 +1649,14 @@ export class SessionManager {
 	 * `delegate`: a one-off subagent run. The subagent is a bare Agent that is never stored, so it is no session and shows in no list;
 	 * only its final text goes back to the parent. Limits are enforced here and reported as conflicts, never dropped silently.
 	 */
-	private async delegate(sessionId: string, input: { role: string; task: string; model?: string }, signal: AbortSignal | undefined, progress: (line: string) => void) {
+	private async delegate(sessionId: string, input: { role: string; task: string; model?: string; thinking?: ThinkingLevel }, signal: AbortSignal | undefined, progress: (line: string) => void) {
 		const rec = this.store.get(sessionId);
 		if (!rec) throw notFound("session");
+		let requestedThinking: ThinkingLevel | undefined;
+		if (input.thinking !== undefined) {
+			if (!THINKING_LEVELS.includes(input.thinking)) throw badRequest(`thinking must be one of: ${THINKING_LEVELS.join(", ")}`);
+			requestedThinking = input.thinking;
+		}
 		const name = input.role.replace(/\.md$/, "");
 		const defs = loadSubagents(rec.cwd, this.home, this.disabledSubagents());
 		const pol = this.delegatePolicy();
@@ -1683,7 +1689,7 @@ export class SessionManager {
 		let lastRead: string | undefined, limit: SubagentLimit | undefined;
 		let startedAt = 0, stopping = false;
 		const agent = new Agent({
-			initialState: { systemPrompt: subagentSystem(def, workDirOf(rec)) + (oneCall ? `\n\n${SUBAGENT_WRAP_UP}` : ""), model, thinkingLevel: this.subagentThinking(rec, def.thinking, provider, modelId), tools: oneCall ? [] : tools, messages: [] },
+			initialState: { systemPrompt: subagentSystem(def, workDirOf(rec)) + (oneCall ? `\n\n${SUBAGENT_WRAP_UP}` : ""), model, thinkingLevel: this.subagentThinking(rec, requestedThinking, def.thinking, provider, modelId), tools: oneCall ? [] : tools, messages: [] },
 			streamFn: withUpstreamRetry((m, ctx, opts) => streamAtTier(this.registry, m, ctx, opts, m.provider === provider && m.id === modelId ? tier : this.subagentTier(rec, m.provider, m.id)), DEFAULT_UPSTREAM_RETRY),
 			prepareRequest: (_request, requestSignal) => { requestSignal?.throwIfAborted(); turns++; },
 			prepareNextTurnWithContext: (turn) => {
@@ -1751,7 +1757,7 @@ export class SessionManager {
 								agent.state.messages = agent.state.messages.slice(0, -1);
 								turns = Math.max(0, turns - 1);
 								agent.state.model = fbModel;
-								agent.state.thinkingLevel = fb.thinkingLevel ?? this.subagentThinking(rec, def.thinking, fb.provider, fb.model);
+								agent.state.thinkingLevel = fb.thinkingLevel ?? this.subagentThinking(rec, requestedThinking, def.thinking, fb.provider, fb.model);
 								await agent.continue();
 							}
 						}
