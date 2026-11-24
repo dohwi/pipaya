@@ -91,4 +91,36 @@ describe("SessionCloseGuard (multi-server)", () => {
 		expect(await p).toBe(false);
 		expect(guard.ask).toBeNull();
 	});
+
+	test("pinned conversation and terminal holds prompt and cancelTarget cancels only the matching tab", async () => {
+		const holds: Record<string, CloseHold> = {
+			"srv-a:s1": "pinned",
+			"srv-a:term-1": "pinned-terminal",
+		};
+		const titles: Record<string, string> = {
+			"srv-a:s1": "Pinned chat",
+			"srv-a:term-1": "zsh",
+		};
+		const guard = new SessionCloseGuard(
+			(id, sid) => holds[`${sid}:${id}`] ?? null,
+			(id, sid) => titles[`${sid}:${id}`] ?? "",
+		);
+
+		const p1 = guard.request("s1", "srv-a");
+		expect(guard.ask?.hold).toBe("pinned");
+		expect(guard.ask?.title).toBe("Pinned chat");
+		guard.cancelTarget("srv-b", "s1");
+		guard.cancelTarget("srv-a", "other");
+		expect(guard.ask).not.toBeNull();
+		guard.cancelTarget("srv-a", "s1");
+		expect(await p1).toBe(false);
+		expect(guard.ask).toBeNull();
+
+		const p2 = guard.request("term-1", "srv-a");
+		expect(guard.ask?.hold).toBe("pinned-terminal");
+		expect(guard.ask?.title).toBe("zsh");
+		guard.ask!.confirm();
+		expect(await p2).toBe(true);
+		expect(guard.ask).toBeNull();
+	});
 });

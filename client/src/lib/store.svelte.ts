@@ -740,18 +740,22 @@ class AppStore {
   /** Resolves true when the window may close now (nothing running, or the user confirmed and the work was stopped). */
   requestClose(): Promise<boolean> { return this.closing.request(); }
 
-  /** Closing one conversation that is still at work (running, compacting or asking): the confirmation. */
+  /** Closing a tab that needs confirmation (working/asking conversation, or a pinned conversation/terminal). */
   private readonly sessionClosing = new SessionCloseGuard(
     (id, serverId) => {
       const link = this.links[serverId];
       if (!link) return null;
-      return (link.data.awaiting[id] ?? 0) > 0
-        ? "asking"
-        : link.data.running[id] || (serverId === this.serverId && this.chatOf(id)?.compacting)
-          ? "working"
-          : null;
+      const isMember = link.data.groups.some((g) => layoutHas(g.layout, id));
+      const pinned = !isMember && this.sidebar.isTabPinned(serverId, id);
+      if (isTerminalId(id)) return pinned ? "pinned-terminal" : null;
+      if ((link.data.awaiting[id] ?? 0) > 0) return "asking";
+      if (link.data.running[id] || (serverId === this.serverId && this.chatOf(id)?.compacting)) return "working";
+      return pinned ? "pinned" : null;
     },
-    (id, serverId) => sessionTitle(this.links[serverId]?.sessionById.get(id)?.title),
+    (id, serverId) =>
+      isTerminalId(id)
+        ? (this.links[serverId]?.data.terminals.find((x) => x.id === id)?.title || t("터미널"))
+        : sessionTitle(this.links[serverId]?.sessionById.get(id)?.title),
   );
   get sessionCloseConfirm() { return this.sessionClosing.ask; }
 
@@ -1638,6 +1642,7 @@ class AppStore {
   /** Unpin a closed session so resuming it later starts unpinned, and drop its manual graph pin. */
   cleanupClosedSession(serverId: string, id: string) {
     if (!serverId || !id) return;
+    this.sessionClosing.cancelTarget(serverId, id);
     this.sidebar.unpinTab(serverId, id);
     forgetGraphPin(serverId, id);
   }
@@ -1645,6 +1650,7 @@ class AppStore {
   /** Drop every persisted and in-memory trace of a permanently deleted session. */
   cleanupDeletedSession(serverId: string, id: string) {
     if (!serverId || !id) return;
+    this.sessionClosing.cancelTarget(serverId, id);
     this.sidebar.forgetTab(serverId, id);
     forgetGraphPin(serverId, id);
     forgetDraft(id);
@@ -1678,6 +1684,7 @@ class AppStore {
   /** Drop sidebar state of a closed terminal (terminals cannot be resumed). */
   cleanupClosedTerminal(serverId: string, id: string) {
     if (!serverId || !id) return;
+    this.sessionClosing.cancelTarget(serverId, id);
     this.sidebar.forgetTab(serverId, id);
   }
 
@@ -2776,11 +2783,13 @@ class AppStore {
     }
   }
 
-  /** End the shell. The terminal leaves its group and the sidebar (the server confirms with terminal_closed). */
-  async closeTerminal(id: string, serverId?: string | null): Promise<void> {
+  /** End the shell. A pinned terminal asks first (`sessionCloseConfirm`); `force` skips that. */
+  async closeTerminal(id: string, serverId?: string | null, force = false): Promise<void> {
     const link = this.linkOf(serverId);
     if (!link) return;
     const sid = link.id;
+    if (!force && !(await this.sessionClosing.request(id, sid))) return;
+    if (this.links[sid] !== link) return;
     try {
       await link.api.closeTerminal(id);
     } catch (e) {
