@@ -247,6 +247,8 @@ export const CancelQueuedBody = Type.Object({
 	deferred: Type.Optional(Type.Boolean({ description: "Take back an item the server holds until the run ends (a /compact and what was queued after it). Absent: the first match in either place" })),
 });
 
+export const MAX_IMAGES = 16;
+
 export const SendBody = Type.Object({
 	text: Type.String({ minLength: 1, maxLength: 1_000_000 }),
 	mode: Type.Optional(PromptMode),
@@ -254,7 +256,7 @@ export const SendBody = Type.Object({
 	images: Type.Optional(
 		Type.Array(
 			Type.Object({ type: Type.Literal("image"), data: Type.String({ description: "base64" }), mimeType: Type.String() }),
-			{ maxItems: 8 },
+			{ maxItems: MAX_IMAGES },
 		),
 	),
 	files: Type.Optional(

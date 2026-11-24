@@ -4,8 +4,9 @@ import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { buildApp, type App } from "../src/app.ts";
 import { MAX_FILE_BYTES } from "../src/file-routes.ts";
+import { MAX_IMAGES } from "../src/schemas.ts";
 import type { Config } from "../src/config.ts";
-import { ECHO_MODEL, echoProviderBody, startEchoUpstream, type EchoUpstream } from "./support/openai-upstream.ts";
+import { ECHO_MODEL, ECHO_PNG, echoProviderBody, startEchoUpstream, type EchoUpstream } from "./support/openai-upstream.ts";
 
 let app: App;
 let base: string;
@@ -744,6 +745,16 @@ describe("request size limits", () => {
 		const made = await api("POST", "/sessions", {});
 		const sent = await api("POST", `/sessions/${made.json.id}/messages`, { text: "hi", images: [{ type: "image", data: large, mimeType: "image/png" }] });
 		expect(sent.status).not.toBe(413);
+	});
+	test("a message accepts up to MAX_IMAGES (16) inline images and rejects the 17th", async () => {
+		expect(MAX_IMAGES).toBe(16);
+		const made = await api("POST", "/sessions", {});
+		const img = { type: "image" as const, data: ECHO_PNG, mimeType: "image/png" };
+		const ok = await api("POST", `/sessions/${made.json.id}/messages`, { text: "sixteen", images: Array.from({ length: MAX_IMAGES }, () => img) });
+		expect(ok.status).toBe(202);
+		await untilIdle(made.json.id);
+		const tooMany = await api("POST", `/sessions/${made.json.id}/messages`, { text: "seventeen", images: Array.from({ length: MAX_IMAGES + 1 }, () => img) });
+		expect(tooMany.status).toBe(400);
 	});
 });
 

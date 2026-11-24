@@ -123,7 +123,7 @@ export const en: Record<string, string> = {
 	/* ---- composer ---- */
 	"{cmd} 실패: {error}": "{cmd} failed: {error}",
 	"알 수 없는 명령입니다. /를 입력해 목록을 확인하세요": "Unknown command. Type / to see the list",
-	"이미지는 최대 8장까지 첨부할 수 있습니다": "You can attach up to 8 images",
+	"이미지는 최대 {n}장까지 첨부할 수 있습니다": "You can attach up to {n} images",
 	"{name}을(를) 읽지 못했습니다": "Couldn't read {name}",
 	"이미지": "image",
 	"새 대화가 작업할 폴더 (눌러서 바꾸기)": "Folder new chats work in (click to change)",

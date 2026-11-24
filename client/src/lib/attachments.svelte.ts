@@ -48,7 +48,7 @@ export class Attachments {
 		for (const f of picked) {
 			if (isInlineImage(f, this.host.vision())) {
 				if (this.images.length >= MAX_IMAGES) {
-					this.host.error(t("이미지는 최대 8장까지 첨부할 수 있습니다"));
+					this.host.error(t("이미지는 최대 {n}장까지 첨부할 수 있습니다", { n: MAX_IMAGES }));
 					continue;
 				}
 				try {

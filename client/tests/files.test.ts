@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { cleanWorkdirPath, fileRejection, filePathOf, isImagePath, isInlineImage, MAX_FILE_BYTES, MAX_FILES, MAX_FILES_TOTAL, isLocalFilePath, isWorkdirPath, parseTable, previewKind, sizeLabel } from "../src/lib/files";
+import { cleanWorkdirPath, fileRejection, filePathOf, isImagePath, isInlineImage, MAX_FILE_BYTES, MAX_FILES, MAX_FILES_TOTAL, MAX_IMAGES, isLocalFilePath, isWorkdirPath, parseTable, previewKind, sizeLabel } from "../src/lib/files";
 
 import { readFileSync } from "node:fs";
 import { extname } from "node:path";
@@ -101,6 +101,10 @@ describe("previews", () => {
 });
 
 describe("attaching files to a message", () => {
+	test("inline image limit is 16 while plain file limit stays 8", () => {
+		expect(MAX_IMAGES).toBe(16);
+		expect(MAX_FILES).toBe(8);
+	});
 	test("only pictures a vision model can see go in as images", () => {
 		expect(isInlineImage({ type: "image/png" }, true)).toBe(true);
 		expect(isInlineImage({ type: "image/png" }, false)).toBe(false);
