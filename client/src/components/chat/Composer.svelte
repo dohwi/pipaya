@@ -1097,7 +1097,9 @@
 		color: transparent;
 		-webkit-box-decoration-break: clone;
 		box-decoration-break: clone;
-		border-radius: var(--radius-sm); /* the same corners as the sent message's chips (TokenText) */
+		/* compensates for Manrope Input's descent-override (app.css @font-face) so descenders clear the bottom ring without shifting line-height or caret */
+		padding: 1px 0 2px;
+		border-radius: var(--radius-xs); /* 4px inline mark, matching the sent message's chips (TokenText) */
 	}
 	.mirror :global(mark.img) {
 		background: color-mix(in srgb, var(--mark-img) 32%, transparent);

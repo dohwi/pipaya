@@ -354,7 +354,7 @@
 		gap: 4px;
 		max-width: 100%;
 		padding: 1px 8px;
-		border-radius: var(--radius-sm);
+		border-radius: var(--radius-xs);
 		background: color-mix(in srgb, var(--hue) 12%, transparent);
 		box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--hue) 22%, transparent);
 		color: inherit;

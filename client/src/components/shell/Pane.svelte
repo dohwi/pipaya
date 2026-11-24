@@ -381,7 +381,7 @@
 		place-items: center;
 		width: 24px;
 		height: 24px;
-		border-radius: var(--radius-sm);
+		border-radius: var(--radius-xs);
 		color: var(--text-faint);
 	}
 	@media (hover: hover) {
@@ -404,7 +404,7 @@
 		align-items: center;
 		gap: 8px;
 		padding-left: 8px;
-		border-radius: var(--radius-sm);
+		border-radius: var(--radius-xs);
 		background: color-mix(in srgb, var(--bg) 85%, transparent);
 		backdrop-filter: blur(4px);
 	}

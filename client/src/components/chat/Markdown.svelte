@@ -380,7 +380,7 @@
 		font-family: var(--mono);
 		font-size: 0.88em;
 		padding: 0.15em 0.4em; /* inline code: sized with the surrounding text (a heading's code grows with it) */
-		border-radius: var(--radius-sm);
+		border-radius: var(--radius-xs);
 		background: var(--bg-elev);
 		border: 1px solid var(--border);
 		-webkit-box-decoration-break: clone;
@@ -496,7 +496,7 @@
 		gap: 4px;
 		max-width: 100%;
 		padding: 1px 0.4em; /* em sides scale with the text, like inline code and TokenText */
-		border-radius: var(--radius-sm);
+		border-radius: var(--radius-xs);
 		background: color-mix(in srgb, var(--mark-file) 12%, transparent);
 		box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--mark-file) 22%, transparent);
 		color: inherit;
@@ -555,7 +555,7 @@
 			background: color-mix(in srgb, var(--mark-file) 22%, transparent);
 		}
 	}
-	/* Matches TokenText's `.tok.mention` and `.tok.skill` chips: amber @session / @group and accent /skill: & /prompt: pills. */
+	/* Matches TokenText's `.tok.mention` and `.tok.skill` chips: amber @session / @group and accent /skill: & /prompt: marks. */
 	.md :global(button.wd-mention),
 	.md :global(button.wd-skill),
 	.md :global(button.wd-prompt) {
@@ -565,7 +565,7 @@
 		gap: 4px;
 		max-width: 100%;
 		padding: 1px 0.4em; /* em sides scale with the text, like inline code and TokenText */
-		border-radius: var(--radius-sm);
+		border-radius: var(--radius-xs);
 		background: color-mix(in srgb, var(--hue) 12%, transparent);
 		box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--hue) 22%, transparent);
 		color: inherit;

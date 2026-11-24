@@ -287,7 +287,7 @@
 		width: 24px;
 		height: 24px;
 		padding: 0;
-		border-radius: var(--radius-sm);
+		border-radius: var(--radius-xs);
 		color: var(--text-faint);
 	}
 	/* the count is display only: it neither takes focus nor a click (a click on it falls through to the row's section button). A fixed 20px

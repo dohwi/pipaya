@@ -86,7 +86,7 @@
 		flex: 1;
 		height: 24px;
 		padding: 0 4px;
-		border-radius: var(--radius-sm);
+		border-radius: var(--radius-xs);
 		font-weight: 600;
 	}
 	.inline-rename.tab {

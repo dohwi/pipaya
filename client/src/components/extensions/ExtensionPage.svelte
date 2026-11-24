@@ -78,7 +78,7 @@
 	.who { display: flex; flex-direction: column; min-width: 0; line-height: 1.35; flex: 1; gap: 4px; }
 	.top { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 8px; min-width: 0; }
 	h4 { margin: 0; font-size: var(--fs-lg); font-weight: 600; overflow-wrap: anywhere; }
-	.back { align-self: flex-start; display: inline-flex; align-items: center; gap: 4px; padding: 4px 8px 4px 4px; border-radius: var(--radius-sm); color: var(--text-dim); font-size: var(--fs-sm); }
+	.back { align-self: flex-start; display: inline-flex; align-items: center; gap: 4px; padding: 4px 8px 4px 4px; border-radius: var(--radius-control); color: var(--text-dim); font-size: var(--fs-sm); }
 	@media (hover: hover) {
 		.back:hover { color: var(--text); }
 	}
@@ -86,7 +86,7 @@
 	@media (min-width: 761px) { .back { display: none; } }
 	@media (max-width: 760px) {
 		.page { gap: 12px; }
-		.back { padding: 4px 12px 4px 4px; border: 1px solid var(--border); border-radius: var(--radius-pill); background: var(--bg-elev); }
+		.back { padding: 4px 12px 4px 4px; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--bg-elev); }
 		.line { padding: 12px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg-elev); }
 	}
 	.back:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
