@@ -344,23 +344,29 @@
 		color: var(--text-faint);
 	}
 
+	/* borderless page-tinted surfaces inside .set-group (no box-in-box, matching ListItem) */
 	.restore {
 		display: flex;
+		flex-wrap: wrap;
 		align-items: center;
 		justify-content: space-between;
-		gap: 12px;
-		padding: 12px 12px;
-		border: 1px solid var(--border);
-		border-radius: var(--radius);
+		gap: 8px 12px;
+		padding: 12px;
+		background: var(--item-bg, var(--bg));
+		border-radius: var(--radius-sm);
+	}
+	@media (max-width: 640px) {
+		.restore > :global(.btn) {
+			width: 100%;
+		}
 	}
 	.confirm {
 		display: flex;
 		flex-direction: column;
 		gap: 8px;
-		padding: 12px 12px;
-		border: 1px solid var(--border-strong);
-		border-radius: var(--radius);
-		background: var(--bg-elev);
+		padding: 12px;
+		background: var(--item-bg, var(--bg));
+		border-radius: var(--radius-sm);
 	}
 	.confirm p {
 		margin: 0;

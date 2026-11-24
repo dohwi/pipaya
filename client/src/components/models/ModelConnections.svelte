@@ -348,11 +348,12 @@
 		flex-direction: column;
 		gap: 24px;
 	}
+	/* borderless page-tinted surface inside .set-group (no box-in-box, matching ListItem) */
 	.plist {
 		display: flex;
 		flex-direction: column;
-		border: 1px solid var(--border);
-		border-radius: var(--radius);
+		background: var(--item-bg, var(--bg));
+		border-radius: var(--radius-sm);
 		overflow: hidden;
 	}
 	section {

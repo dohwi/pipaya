@@ -108,7 +108,7 @@
 			</div>
 		{/if}
 		{#if note}<p class="hint" role="status">{note}</p>{/if}
-		{#if error}<Notice tone="danger" size="sm">{error}</Notice>{/if}
+		{#if error}<Notice tone="danger" size="sm" raised>{error}</Notice>{/if}
 	</section>
 {/if}
 
@@ -120,9 +120,19 @@
 	}
 	.status {
 		display: flex;
+		flex-wrap: wrap;
 		align-items: center;
 		justify-content: space-between;
-		gap: 12px;
+		gap: 8px 12px;
+	}
+	.status > :global(.btn) {
+		flex: none;
+		white-space: nowrap;
+	}
+	@media (max-width: 640px) {
+		.status > :global(.btn) {
+			width: 100%;
+		}
 	}
 	.hint {
 		margin: 0;

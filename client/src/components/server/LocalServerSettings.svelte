@@ -76,7 +76,7 @@
 	<div class="actions">
 		<Button size="sm" {busy} disabled={!dirty || badPort} onclick={apply}>{busy ? t("적용 중…") : t("적용")}</Button>
 	</div>
-	{#if error}<Notice tone="danger" size="sm" animated>{error}</Notice>{/if}
+	{#if error}<Notice tone="danger" size="sm" raised animated>{error}</Notice>{/if}
 	<p class="hint">{t("적용하면 내장 서버가 다시 시작됩니다. 진행 중인 작업은 중지됩니다")}</p>
 </div>
 {/if}

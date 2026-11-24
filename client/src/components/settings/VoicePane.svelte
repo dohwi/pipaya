@@ -232,8 +232,8 @@
 		<textarea class="field area" rows="2" maxlength="300" placeholder={t("예: 한국어로 말하는 개발 작업 지시")} value={rt.prompt} oninput={(e) => setRt({ prompt: e.currentTarget.value })} aria-label={t("문맥")}></textarea>
 	</label>
 	<div class="actions">
-		<Button size="sm" disabled={!dirty || saving || keywords.length > 20} onclick={save}>{t("저장")}</Button>
-		<Button size="sm" variant="ghost" disabled={target.testing || target.loading} onclick={test}>{target.testing ? t("확인 중…") : t("연결 확인")}</Button>
+		<Button size="sm" variant="primary" disabled={!dirty || saving || keywords.length > 20} onclick={save}>{t("저장")}</Button>
+		<Button size="sm" disabled={target.testing || target.loading} onclick={test}>{target.testing ? t("확인 중…") : t("연결 확인")}</Button>
 		{#if dirty}<Button size="sm" variant="ghost" disabled={saving} onclick={revert}>{t("변경 취소")}</Button>{/if}
 	</div>
 	{#if dirty && !message}<span class="note" role="status">{t("저장하지 않은 변경이 있습니다. 다른 화면에 다녀와도 남아 있습니다.")}</span>{/if}
@@ -279,8 +279,8 @@
 	</label>
 	<span class="hint">{t("비우면 서버가 알아서 판단합니다. 두 글자 언어 코드를 넣으면 인식이 안정됩니다.")}</span>
 	<div class="actions">
-		<Button size="sm" disabled={!dirty || saving} onclick={save}>{t("저장")}</Button>
-		<Button size="sm" variant="ghost" disabled={target.testing || target.loading} onclick={test}>{target.testing ? t("확인 중…") : t("연결 확인")}</Button>
+		<Button size="sm" variant="primary" disabled={!dirty || saving} onclick={save}>{t("저장")}</Button>
+		<Button size="sm" disabled={target.testing || target.loading} onclick={test}>{target.testing ? t("확인 중…") : t("연결 확인")}</Button>
 		{#if dirty}<Button size="sm" variant="ghost" disabled={saving} onclick={revert}>{t("변경 취소")}</Button>{/if}
 	</div>
 	{#if dirty && !message}<span class="note" role="status">{t("저장하지 않은 변경이 있습니다. 다른 화면에 다녀와도 남아 있습니다.")}</span>{/if}
@@ -317,7 +317,13 @@
 	}
 	.actions {
 		display: flex;
+		flex-wrap: wrap;
 		gap: 8px;
+	}
+	@media (max-width: 640px) {
+		.actions > :global(.btn:not(.ghost)) {
+			flex: 1 1 0;
+		}
 	}
 	.note {
 		font-size: var(--fs-xs);
