@@ -141,11 +141,11 @@
 		what={t("입력창에 /prompt:이름 을 입력해 자주 쓰는 프롬프트를 빠르게 불러오는 템플릿입니다.")}
 		how={t("템플릿마다 파일 하나(.md)이며, 본문의 $ARGUMENTS 자리에 뒤에 적은 내용이 들어갑니다. 같은 이름이면 프로젝트 템플릿이 우선합니다.")}
 	/>
-	{#if loadError}<Notice tone="warn">{loadError}</Notice>{/if}
-	{#if error}<Notice tone="warn">{error}</Notice>{/if}
+	{#if loadError}<Notice tone="warn" raised={!bare}>{loadError}</Notice>{/if}
+	{#if error}<Notice tone="warn" raised={!bare} animated>{error}</Notice>{/if}
 	{#if list?.warnings.length}
 		{#each list.warnings as w (w.path + w.message)}
-			<Notice tone="warn"><span class="mono">{tilde(w.path)}</span><br />{w.message}</Notice>
+			<Notice tone="warn" raised={!bare}><span class="mono">{tilde(w.path)}</span><br />{w.message}</Notice>
 		{/each}
 	{/if}
 

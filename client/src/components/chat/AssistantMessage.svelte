@@ -172,16 +172,14 @@
 
 		{#if actions.cut}
 			<div class="cut">
-				{#if actions.resume}
-					<Notice tone="warn" size="sm" role="status">
-						{t("최대 출력 길이에 도달해 답변이 중간에 끊겼습니다.")}
-						{#snippet action()}
+				<Notice tone="warn" role="status">
+					{t("최대 출력 길이에 도달해 답변이 중간에 끊겼습니다.")}
+					{#snippet action()}
+						{#if actions.resume}
 							<Button size="sm" disabled={app.isSending(paneId)} onclick={() => void app.continueCut(paneId)}>{t("이어서 작성")}</Button>
-						{/snippet}
-					</Notice>
-				{:else}
-					<Notice tone="warn" size="sm" role="status">{t("최대 출력 길이에 도달해 답변이 중간에 끊겼습니다.")}</Notice>
-				{/if}
+						{/if}
+					{/snippet}
+				</Notice>
 			</div>
 		{/if}
 

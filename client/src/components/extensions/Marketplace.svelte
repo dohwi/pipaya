@@ -183,7 +183,7 @@
 			<p class="hint">{t("일부 확장은 서버의 모든 권한으로 실행됩니다. 코드를 읽어 본 뒤 설치하세요.")}</p>
 		</div>
 		<SearchField label={t("확장 검색")} bind:value={query} />
-		{#if error}<Notice tone="danger" size="sm" role="alert">{error}</Notice>{/if}
+		{#if error}<Notice tone="danger" animated role="alert">{error}</Notice>{/if}
 		{#if loading && !catalog}<p class="hint" role="status">{t("목록을 불러오는 중…")}</p>{/if}
 		<ul class="list">
 			{#each shown as entry (entry.id)}

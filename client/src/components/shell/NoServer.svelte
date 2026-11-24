@@ -25,9 +25,12 @@
 	/** Desktop app only: the bundled server normally starts by itself; this is the retry when it did not. */
 	async function startHere() {
 		starting = true;
+		error = "";
 		try {
 			await app.ensureLocalServer();
 			if (app.servers.length === 0) error = t("이 컴퓨터에서 서버를 시작하지 못했습니다. 주소와 토큰으로 연결해 주세요.");
+		} catch (e) {
+			error = errorText(e);
 		} finally {
 			starting = false;
 		}
@@ -87,8 +90,8 @@
 					<li><b>{t("아래 버튼으로 카메라를 열어 QR을 스캔합니다")}</b></li>
 				</ol>
 				<Button variant="primary" class="add" onclick={scan} disabled={scanning}><Icon name="phone" /> {t("QR 스캔")}</Button>
-				{#if error}<Notice tone="danger" size="sm">{error}</Notice>{/if}
 			{/if}
+			{#if error}<Notice tone="danger" animated>{error}</Notice>{/if}
 			<Button variant={ways[0] === "manual" ? "primary" : "default"} class="add" onclick={() => (app.serverForm = "new")}>{#if ways[0] === "manual"}<Icon name="plus" /> {/if}{t("주소와 토큰으로 연결")}</Button>
 		</div>
 		<details class="need">

@@ -37,12 +37,11 @@
 		{ key: "keybindings", title: msg("단축키"), sub: msg("기본값에서 바꾼 것만 담깁니다") },
 	] as const;
 
-	let exported = $state<string | null>(null);
 	function exportFile() {
 		try {
 			const doc = extensions.exportConfiguration(parts);
 			download(doc, `pipaya-settings-${fileStamp()}.json`, true);
-			exported = t("서버 {servers}개 · 단축키 {keys}개를 파일로 저장했습니다", { servers: doc.servers.length, keys: Object.keys(doc.keybindings ?? {}).length });
+			app.toast(t("서버 {servers}개 · 단축키 {keys}개를 파일로 저장했습니다", { servers: doc.servers.length, keys: Object.keys(doc.keybindings ?? {}).length }), "ok");
 		} catch (e) {
 			app.toast(errorText(e, t("내보내지 못했습니다")), "error");
 		}
@@ -88,17 +87,16 @@
 		void readFile(event.dataTransfer?.files?.[0]);
 	}
 
-	let applied = $state<string[] | null>(null);
-	let restoredNote = $state("");
 	function applyLoaded() {
 		if (!loaded || loaded.plan.blocked) return;
 		const { doc, plan } = loaded;
 		try {
 			extensions.importConfiguration(doc);
-			applied = planSummary(plan);
+			const summary = planSummary(plan).join(" · ") || t("변경 사항이 없습니다.");
 			loaded = null;
 			savedAt = backupSavedAt();
 			canRestore = hasBackup();
+			app.toast(`${t("가져왔습니다.")} ${summary}`, "ok");
 		} catch (e) {
 			app.toast(errorText(e, t("가져오지 못했습니다")), "error");
 		}
@@ -112,8 +110,7 @@
 		try {
 			extensions.restoreConfiguration();
 			confirmingRestore = false;
-			applied = null;
-			restoredNote = t("가져오기 전 상태로 되돌렸습니다. 확장은 모두 꺼진 상태입니다.");
+			app.toast(t("가져오기 전 상태로 되돌렸습니다. 확장은 모두 꺼진 상태입니다."), "ok");
 		} catch (e) {
 			app.toast(errorText(e, t("되돌리지 못했습니다")), "error");
 		}
@@ -138,7 +135,6 @@
 	<div class="actions">
 		<Button variant="primary" disabled={nothing} onclick={exportFile}><Icon name="download" /> {t("파일로 내보내기")}</Button>
 	</div>
-	{#if exported}<Notice tone="ok" size="sm" raised role="status">{exported}</Notice>{/if}
 	<p class="note"><Icon name="shield" /><span>{t("토큰·비밀번호는 빠지지만, 공유하기 전에 한 번 확인하세요.")}</span></p>
 </section>
 
@@ -161,17 +157,10 @@
 			<span class="dt">{reading ? t("파일을 읽는 중…") : t("설정 파일을 끌어다 놓거나 눌러서 고르세요")}</span>
 			<span class="ds">{t("pipaya에서 내보낸 JSON · 최대 4MiB")}</span>
 		</label>
-		{#if loadError}<Notice tone="danger" size="sm" raised role="alert">{loadError}</Notice>{/if}
+		{#if loadError}<Notice tone="danger" size="sm" raised animated role="alert">{loadError}</Notice>{/if}
 	{:else}
 		<ImportReview filename={loaded.filename} plan={loaded.plan} oncancel={() => (loaded = null)} onapply={applyLoaded} />
 	{/if}
-
-	{#if applied}
-		<Notice tone="ok" size="sm" raised>
-			<strong>{t("가져왔습니다.")}</strong> {applied.join(" · ") || t("변경 사항이 없습니다.")}
-		</Notice>
-	{/if}
-	{#if restoredNote}<Notice tone="ok" size="sm" raised role="status">{restoredNote}</Notice>{/if}
 </section>
 
 <section class="set-group" aria-labelledby="bk-restore">

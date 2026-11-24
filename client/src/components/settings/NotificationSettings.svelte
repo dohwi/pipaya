@@ -58,15 +58,16 @@
   <Button size="sm" onclick={runTest} disabled={testing || !app.api}>{testing ? t("보내는 중…") : t("시험")}</Button>
 </SettingRow>
 {#if outcome}
-  <p class="result" class:ok={outcome.step === "shown"} role="status" in:collapseIn out:collapseOut>{verdict(outcome)}</p>
-  {#if outcome.server}
-    <p class="hint">{t("모바일 푸시: 서버 {server} · 이 기기 토큰 {token}", { server: outcome.server.pushConfigured ? t("준비됨") : t("꺼짐"), token: outcome.server.hasToken ? t("있음") : t("없음") })}</p>
-  {/if}
+  <div class="outcome" in:collapseIn out:collapseOut>
+    <Notice tone={outcome.step === "shown" ? "ok" : "danger"} size="sm" raised role="status">{verdict(outcome)}</Notice>
+    {#if outcome.server}
+      <p class="hint">{t("모바일 푸시: 서버 {server} · 이 기기 토큰 {token}", { server: outcome.server.pushConfigured ? t("준비됨") : t("꺼짐"), token: outcome.server.hasToken ? t("있음") : t("없음") })}</p>
+    {/if}
+  </div>
 {/if}
 <style>
   /* the parent .set-group section already spaces its children 12px apart (GeneralPane): no margins on top of that,
      or this card gets 24px under its label and above "시험" while every other card has 12 */
   .hint { line-height: 20px; margin: 0; word-break: keep-all; }
-  .result { font-size: var(--fs-xs); line-height: 20px; margin: 0; color: var(--danger); word-break: keep-all; }
-  .result.ok { color: var(--text-dim); }
+  .outcome { display: flex; flex-direction: column; gap: 8px; }
 </style>

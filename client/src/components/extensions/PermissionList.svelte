@@ -6,7 +6,7 @@
 	import Notice from "../ui/Notice.svelte";
 
 	/** What a package asks for, in the sentences the consent dialog and the extension's detail page both show. */
-	let { pkg }: { pkg: ExtensionPackage } = $props();
+	let { pkg, raised = false }: { pkg: ExtensionPackage; raised?: boolean } = $props();
 </script>
 
 {#if pkg.manifest.permissions.length}
@@ -20,11 +20,11 @@
 {/if}
 <p class="hint">{t("확장은 자신의 설정을 읽을 수 있습니다.")}</p>
 {#if pkg.manifest.permissions.includes("ui-components")}
-	<Notice tone="danger" size="sm">{t("격리 없이 앱 안에서 직접 실행되어 대화와 서버 토큰을 포함한 모든 데이터에 접근합니다. 신뢰하는 패키지만 켜세요.")}</Notice>
+	<Notice tone="danger" size="sm" {raised}>{t("격리 없이 앱 안에서 직접 실행되어 대화와 서버 토큰을 포함한 모든 데이터에 접근합니다. 신뢰하는 패키지만 켜세요.")}</Notice>
 {:else if pkg.manifest.permissions.includes("server-api")}
-	<Notice tone="danger" size="sm">{t("격리된 환경에서 실행되지만 서버 API를 사용자 권한으로 호출해 대화를 읽고 설정을 바꿀 수 있습니다. 신뢰하는 패키지만 켜세요.")}</Notice>
+	<Notice tone="danger" size="sm" {raised}>{t("격리된 환경에서 실행되지만 서버 API를 사용자 권한으로 호출해 대화를 읽고 설정을 바꿀 수 있습니다. 신뢰하는 패키지만 켜세요.")}</Notice>
 {:else}
-	<Notice tone="warn" size="sm">{t("격리된 환경에서 실행되지만 안전과 자원 사용은 보장되지 않습니다. 신뢰하는 패키지만 켜세요.")}</Notice>
+	<Notice tone="warn" size="sm" {raised}>{t("격리된 환경에서 실행되지만 안전과 자원 사용은 보장되지 않습니다. 신뢰하는 패키지만 켜세요.")}</Notice>
 {/if}
 
 <style>

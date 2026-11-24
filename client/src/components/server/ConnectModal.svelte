@@ -77,6 +77,7 @@
 	async function load() {
 		const a = api();
 		if (!a) return;
+		error = "";
 		try {
 			providers = await a.providers();
 		} catch (e) {
@@ -235,7 +236,7 @@
 			</div>
 		{:else}
 		<div class="body">
-			{#if error}<Notice tone="danger" size="sm">{error}</Notice>{/if}
+			{#if error}<Notice tone="danger" animated>{error}</Notice>{/if}
 
 			{#if login}
 				<div class="flow" role="status" aria-live="polite">
@@ -291,7 +292,7 @@
 								{/if}
 							</div>
 						{/if}
-						{#if login.error}<Notice tone="danger" size="sm">{login.error}</Notice>{/if}
+						{#if login.error}<Notice tone="danger" animated>{login.error}</Notice>{/if}
 						{#if login.status === "cancelled"}<p class="hint">{t("취소됨")}</p>{/if}
 					{/if}
 				</div>

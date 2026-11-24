@@ -101,7 +101,7 @@
 	{:else if !error}
 		<EmptyState loading />
 	{/if}
-	{#if error}<Notice tone="danger" size="sm" raised>{error}</Notice>{/if}
+	{#if error}<Notice tone="danger" size="sm" raised animated>{error}</Notice>{/if}
 </section>
 
 {#if shown}
