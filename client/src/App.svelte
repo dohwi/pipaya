@@ -47,6 +47,9 @@
 	import { updater } from "./lib/updater.svelte";
 	import ExtensionPanels from "./components/extensions/ExtensionPanels.svelte";
 	import ExtensionDock from "./components/extensions/ExtensionDock.svelte";
+	import WorkspaceViewer from "./components/workspace/WorkspaceViewer.svelte";
+	import { workspaceViewer } from "./lib/workspace-viewer.svelte";
+	import { workDir } from "./lib/nav";
 	import ExtensionFloating from "./components/extensions/ExtensionFloating.svelte";
 	import CloseConfirm from "./components/shell/CloseConfirm.svelte";
 	import SessionCloseConfirm from "./components/shell/SessionCloseConfirm.svelte";
@@ -237,6 +240,17 @@
 		void app.serverVersions?.version;
 		void app.voiceTick;
 		if (serverId && (online || !untrack(() => voice.loaded))) void voice.load(api, serverId);
+	});
+
+	// Keep the read-only workspace file viewer bound to the active session's working directory.
+	$effect(() => {
+		const api = app.api;
+		const s = app.current;
+		const online = app.net === "online";
+		workspaceViewer.bind(api, s?.id ?? null, s ? workDir(s) : "", (id) => app.chatOf(id));
+		if (api && online && s) {
+			void workspaceViewer.refreshTree();
+		}
 	});
 
 	onMount(() => {
@@ -433,6 +447,7 @@
 							{/if}
 						{/if}
 					</div>
+					{#if app.filesOpen && !app.graphOpen}<WorkspaceViewer />{/if}
 					<ExtensionDock />
 				</div>
 			</div>

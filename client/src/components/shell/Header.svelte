@@ -11,6 +11,7 @@
 	import ExtensionMount from "../extensions/ExtensionMount.svelte";
 	import ExtensionPart from "../extensions/ExtensionPart.svelte";
 	import { app } from "../../lib/store.svelte";
+	import { workspaceViewer } from "../../lib/workspace-viewer.svelte";
 	import { panesOf } from "../../lib/layout";
 	import { workDir } from "../../lib/nav";
 	import { viewport } from "../../lib/viewport.svelte";
@@ -111,6 +112,22 @@
 		</ExtensionPart>
 
 		{#if !app.graphOpen}
+			{#if s}
+				{@const changed = workspaceViewer.sessionId === s.id ? workspaceViewer.changes.length : 0}
+				<button
+					class="tool filesbtn"
+					class:on={app.filesOpen}
+					onclick={() => app.toggleFiles()}
+					aria-label={t("파일 뷰어")}
+					aria-pressed={app.filesOpen}
+					title={t("파일 뷰어 (현재 폴더 · 실시간 변경 확인)")}
+				>
+					<Icon name="folder" />
+					{#if changed > 0}
+						<span class="filescnt">{changed > 99 ? "99+" : changed}</span>
+					{/if}
+				</button>
+			{/if}
 			<NavbarItems />
 			<ExtensionMount slot="header.end" />
 		{/if}
@@ -246,6 +263,29 @@
 	}
 	.menu {
 		display: none;
+	}
+	.filesbtn {
+		position: relative;
+	}
+	.filesbtn.on {
+		background: var(--bg-active);
+		color: var(--text);
+	}
+	.filescnt {
+		position: absolute;
+		top: 4px;
+		right: 2px;
+		min-width: 16px;
+		height: 16px;
+		padding: 0 4px;
+		border-radius: var(--radius-xs);
+		background: var(--accent);
+		color: var(--accent-fg);
+		font-size: var(--fs-2xs);
+		font-weight: 600;
+		line-height: 16px;
+		text-align: center;
+		pointer-events: none;
 	}
 	/* a phone only: the tab strip folds away there for a lone tab, so "+" and the count live where the thumb always finds
 	   them, like a mobile browser's buttons beside its address bar */

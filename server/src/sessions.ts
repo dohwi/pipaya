@@ -1892,6 +1892,12 @@ export class SessionManager {
 	private async afterSessionTool(sessionId: string, c: Parameters<SessionManager["extensionToolResult"]>[1]) {
 		const out = await this.extensionToolResult(sessionId, c);
 		const failed = out?.isError ?? c.isError;
+		if (!failed && (c.toolCall.name === "write" || c.toolCall.name === "edit" || c.toolCall.name === "bash")) {
+			const touched = c.args && typeof c.args === "object" && typeof (c.args as { path?: unknown }).path === "string"
+				? (c.args as { path: string }).path
+				: null;
+			this.bus.publish(sessionId, "workspace_changed", { tool: c.toolCall.name, path: touched }, { ephemeral: true });
+		}
 		// the worktree it worked in was removed (by this very call, often): home, and the result says so
 		this.workdirOps.homeIfGone(sessionId);
 		let note = this.workdirOps.takeNote(sessionId) ?? null;

@@ -1,4 +1,5 @@
 import type { ChatState } from "../chat.svelte";
+import { workspaceViewer } from "../workspace-viewer.svelte";
 import { appEventsOf, serverEventOf } from "../extensions/event-forward";
 import { extensions } from "../extensions/host.svelte";
 import { announces } from "../feedback.svelte";
@@ -80,6 +81,7 @@ export interface OpenEventContext {
 /** Dispatch an event belonging to the currently viewed server, updating reactive state and triggering side effects. */
 export function handleOpenServerEvent(ctx: OpenEventContext, e: PipayaEvent): void {
   const sid = e.sessionId;
+  workspaceViewer.onEvent(e);
   for (const ev of appEventsOf(e)) extensions.emit(ev);
   const fromServer = serverEventOf(e);
   if (fromServer) {

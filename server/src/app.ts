@@ -36,6 +36,7 @@ import { Pairing } from "./pairing.ts";
 import { registerPairingRoutes } from "./routes/pairing-routes.ts";
 import { registerFsRoutes } from "./routes/fs-routes.ts";
 import { registerFileRoutes } from "./routes/file-routes.ts";
+import { registerWorkspaceViewerRoutes } from "./routes/workspace-viewer-routes.ts";
 import { assistantMessageText, SessionMedia } from "./session-media.ts";
 import { workDirOf } from "./work-tree.ts";
 import { GroupManager, panesOf, peerGroupOps } from "./groups.ts";
@@ -468,6 +469,7 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 		}
 	});
 	registerFileRoutes(server, sessionDirs, (id, path) => sessionMedia.resolve(id, path));
+	registerWorkspaceViewerRoutes(server, { store });
 	// A group the client named by default gets a better name from the system model, unless someone renamed it meanwhile.
 	registerGroupRoutes(server, groups, (rec) => autoNameGroup(rec, { systemModel, store, groups }));
 	registerSkillRoutes(server, skills, bus);
