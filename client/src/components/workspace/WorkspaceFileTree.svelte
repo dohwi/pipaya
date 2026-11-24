@@ -11,6 +11,8 @@
 	import Segmented from "../ui/Segmented.svelte";
 	import FileIcon from "./FileIcon.svelte";
 
+	let { open = false }: { open?: boolean } = $props();
+
 	const session = $derived(app.current);
 	const sessionId = $derived(session?.id ?? workspaceViewer.sessionId);
 	const folderName = $derived(
@@ -23,6 +25,11 @@
 	let dragging = $state(false);
 	let searchTimer: ReturnType<typeof setTimeout> | null = null;
 
+	// Mobile right-drawer touch swipe-to-dismiss state (follows the finger 1:1, closes past 25% or on quick flick).
+	let drawerEl = $state<HTMLElement>();
+	let swipeX = $state<number | null>(null);
+	let touchStart: { x: number; y: number; t: number; locked: "h" | "v" | null } | null = null;
+
 	const filterOptions = $derived([
 		{ id: "all", label: t("전체") },
 		{
@@ -33,9 +40,61 @@
 
 	// Refresh tree when drawer opens or bound session changes.
 	$effect(() => {
-		if (!app.filesOpen || !sessionId) return;
+		if (!open || !sessionId) return;
 		void workspaceViewer.refreshTree({ preserveOpenDirs: true });
 	});
+
+	// Avoid stacking left sidebar drawer and right file drawer on narrow viewports.
+	$effect(() => {
+		if (app.sidebar.open && open && typeof window !== "undefined" && window.innerWidth <= 900) {
+			app.filesOpen = false;
+		}
+	});
+
+	// Close mobile drawer on Escape.
+	$effect(() => {
+		if (!open) return;
+		const onKey = (e: KeyboardEvent) => {
+			if (e.key === "Escape" && typeof window !== "undefined" && window.innerWidth <= 900) {
+				e.preventDefault();
+				app.filesOpen = false;
+			}
+		};
+		window.addEventListener("keydown", onKey);
+		return () => window.removeEventListener("keydown", onKey);
+	});
+
+	function onDrawerTouchStart(e: TouchEvent) {
+		if (!open || e.touches.length !== 1 || typeof window === "undefined" || window.innerWidth > 900) return;
+		const pt = e.touches[0]!;
+		touchStart = { x: pt.clientX, y: pt.clientY, t: Date.now(), locked: null };
+	}
+
+	function onDrawerTouchMove(e: TouchEvent) {
+		if (!touchStart || e.touches.length !== 1) return;
+		const pt = e.touches[0]!;
+		const dx = pt.clientX - touchStart.x;
+		const dy = pt.clientY - touchStart.y;
+		if (!touchStart.locked) {
+			if (Math.hypot(dx, dy) < 10) return;
+			touchStart.locked = Math.abs(dx) > Math.abs(dy) && dx > 0 ? "h" : "v";
+		}
+		if (touchStart.locked !== "h") return;
+		swipeX = Math.max(0, dx);
+	}
+
+	function onDrawerTouchEnd() {
+		if (!touchStart) return;
+		const moved = swipeX ?? 0;
+		const dt = Math.max(1, Date.now() - touchStart.t);
+		const w = drawerEl?.offsetWidth || 300;
+		const fastFlick = moved > 40 && moved / dt > 0.35;
+		touchStart = null;
+		swipeX = null;
+		if (moved > w * 0.25 || fastFlick) {
+			app.filesOpen = false;
+		}
+	}
 
 	function onSearchInput(e: Event) {
 		const val = (e.currentTarget as HTMLInputElement).value;
@@ -49,7 +108,7 @@
 
 	async function pickFile(path: string, mode?: "file" | "diff") {
 		await workspaceViewer.openFile(path, mode);
-		// On narrow screens, close the drawer right away so the opened file tab takes focus cleanly.
+		// On narrow screens, slide the drawer away right away so the opened file tab takes focus cleanly.
 		if (typeof window !== "undefined" && window.innerWidth <= 900) {
 			app.filesOpen = false;
 		}
@@ -88,6 +147,12 @@
 		e.dataTransfer.setData("text/plain", dir ? `${path}/` : path);
 		e.dataTransfer.effectAllowed = "copy";
 	}
+
+	const scrimOpacity = $derived.by(() => {
+		if (swipeX === null) return undefined;
+		const w = drawerEl?.offsetWidth || 300;
+		return Math.max(0, 1 - swipeX / w);
+	});
 </script>
 
 {#snippet treeNodes(entries: WorkspaceEntry[], depth: number)}
@@ -102,7 +167,7 @@
 				class="trow dir"
 				draggable="true"
 				ondragstart={(e) => startFileDrag(e, entry.path, true)}
-				style:padding-left="{8 + depth * 12}px"
+				style:padding-left="{12 + depth * 14}px"
 				onclick={() => workspaceViewer.toggleDir(entry.path)}
 				title={entry.path}
 			>
@@ -123,7 +188,7 @@
 				class:on={workspaceViewer.activeFile === entry.path}
 				class:opened={workspaceViewer.openFiles.includes(entry.path) && workspaceViewer.activeFile !== entry.path}
 				class:recent
-				style:padding-left="{20 + depth * 12}px"
+				style:padding-left="{28 + depth * 14}px"
 				onclick={() => pickFile(entry.path)}
 				title={entry.path}
 			>
@@ -137,12 +202,31 @@
 	{/each}
 {/snippet}
 
+<!-- Mobile scrim backdrop: fades in with the right drawer, tapping outside dismisses cleanly -->
+<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
+<div
+	class="fscrim"
+	class:show={open}
+	class:swiping={swipeX !== null}
+	style:opacity={scrimOpacity}
+	onclick={() => (app.filesOpen = false)}
+></div>
+
 <aside
+	bind:this={drawerEl}
 	class="ftree"
+	class:open
 	class:dragging
+	class:swiping={swipeX !== null}
+	inert={!open}
 	data-part="workspace-tree"
 	style:--wv-w="{panelWidth}px"
+	style:translate={swipeX !== null ? `${swipeX}px 0` : undefined}
 	aria-label={t("파일 뷰어")}
+	ontouchstart={onDrawerTouchStart}
+	ontouchmove={onDrawerTouchMove}
+	ontouchend={onDrawerTouchEnd}
+	ontouchcancel={onDrawerTouchEnd}
 >
 	<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
 	<div class="grip" role="separator" aria-orientation="vertical" aria-label={t("파일 뷰어 너비 조절")} onpointerdown={startResize}></div>
@@ -262,6 +346,9 @@
 </aside>
 
 <style>
+	.fscrim {
+		display: none;
+	}
 	.ftree {
 		position: relative;
 		flex: 0 0 var(--wv-w, 260px);
@@ -272,6 +359,11 @@
 		flex-direction: column;
 		background: var(--bg-side);
 		border-left: 1px solid var(--border);
+	}
+	@media (min-width: 901px) {
+		.ftree:not(.open) {
+			display: none;
+		}
 	}
 	.ftree.dragging {
 		user-select: none;
@@ -330,7 +422,7 @@
 		display: flex;
 		flex-direction: column;
 		gap: 8px;
-		padding: 8px;
+		padding: 8px 12px;
 		border-bottom: 1px solid var(--border);
 	}
 	.search {
@@ -348,14 +440,15 @@
 		flex: 1;
 		min-height: 0;
 		overflow-y: auto;
-		padding: 4px 0;
+		padding: 4px 0 12px;
 	}
 	.trow {
 		width: 100%;
+		min-height: 28px;
 		display: flex;
 		align-items: center;
 		gap: 4px;
-		padding: 4px 8px;
+		padding: 4px 12px;
 		border: 0;
 		background: transparent;
 		color: var(--text-dim);
@@ -383,7 +476,7 @@
 	}
 	.changed-row,
 	.search-row {
-		padding-left: 8px;
+		padding-left: 12px;
 		gap: 8px;
 	}
 	.chev {
@@ -404,17 +497,13 @@
 		height: 12px;
 	}
 	.fico {
-		width: 14px;
-		height: 14px;
+		width: 16px;
+		height: 16px;
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
 		flex: none;
 		color: var(--text-faint);
-	}
-	.fico :global(svg) {
-		width: 14px;
-		height: 14px;
 	}
 	.tname {
 		flex: 1;
@@ -464,7 +553,7 @@
 		align-items: center;
 		justify-content: space-between;
 		gap: 8px;
-		padding: 4px 8px;
+		padding: 4px 12px;
 		line-height: 16px;
 	}
 	.chcap {
@@ -496,21 +585,52 @@
 		padding: 16px;
 	}
 	.pad-sm {
-		padding: 8px;
+		padding: 8px 12px;
 	}
 
 	@media (max-width: 900px) {
+		.fscrim {
+			display: block;
+			position: fixed;
+			inset: 0;
+			z-index: var(--z-drawer-scrim);
+			background: var(--scrim);
+			opacity: 0;
+			pointer-events: none;
+			transition: opacity var(--motion-normal) var(--ease-std);
+		}
+		.fscrim.show {
+			opacity: 1;
+			pointer-events: auto;
+		}
+		.fscrim.swiping {
+			transition: none; /* follow the finger 1:1 */
+		}
 		.ftree {
 			position: fixed;
 			top: 0;
 			right: 0;
 			bottom: 0;
-			width: min(82vw, 300px);
+			width: min(max(296px, 82vw), 360px);
 			max-width: 100%;
-			z-index: var(--z-dock);
+			padding-top: var(--sat);
+			padding-right: var(--sar);
+			padding-bottom: var(--sab);
+			z-index: var(--z-drawer);
+			translate: 102% 0;
+			transition: translate var(--motion-normal) var(--ease);
+		}
+		.ftree.open {
+			translate: 0 0;
+		}
+		.ftree.swiping {
+			transition: none; /* follow the finger 1:1 */
 		}
 		.grip {
 			display: none;
+		}
+		.trow {
+			min-height: 36px; /* comfortable touch target on phones */
 		}
 	}
 </style>

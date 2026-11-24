@@ -4,8 +4,9 @@
 	import { errorText } from "../../lib/api";
 	import { copyText } from "../../lib/clipboard";
 	import { highlightCode, onHighlightReady } from "../../lib/code-highlight";
-	import { baseName, extOf, parseTable, previewKind, sizeLabel, type PreviewKind } from "../../lib/files";
+	import { baseName, extOf, parseTable, previewKind, sizeLabel, splitFilePath, type PreviewKind } from "../../lib/files";
 	import { t } from "../../lib/i18n";
+	import { surfaceIn, surfaceOut } from "../../lib/motion";
 	import { saveFile } from "../../lib/save-file";
 	import { app } from "../../lib/store.svelte";
 	import { closeVideoView, videoPlayer } from "../../lib/video-view";
@@ -24,6 +25,7 @@
 	const sessionId = $derived(app.current?.id ?? workspaceViewer.sessionId);
 	const selectedPath = $derived(workspaceViewer.activeFile ?? workspaceViewer.selectedPath);
 	const fileName = $derived(selectedPath ? baseName(selectedPath) : "");
+	const pathParts = $derived(selectedPath ? splitFilePath(selectedPath) : null);
 	const selectedChange = $derived(selectedPath ? workspaceViewer.changeFor(selectedPath) : undefined);
 
 	// Only treat `fileData` as valid for the currently active tab (prevents stale content from another tab).
@@ -365,6 +367,35 @@
 	let commentText = $state("");
 	let sending = $state(false);
 	let popoverEl = $state<HTMLElement>();
+	let draggingPopover = $state(false);
+
+	function startPopoverDrag(e: PointerEvent) {
+		if (e.button !== 0 || !popoverEl) return;
+		const target = e.target as HTMLElement | null;
+		if (target?.closest("button, textarea, input")) return;
+		e.preventDefault();
+		draggingPopover = true;
+		const rect = popoverEl.getBoundingClientRect();
+		const offsetX = e.clientX - rect.left;
+		const offsetY = e.clientY - rect.top;
+		const onMove = (ev: PointerEvent) => {
+			const w = popoverEl?.offsetWidth || rect.width;
+			const h = popoverEl?.offsetHeight || rect.height;
+			const margin = 8;
+			const left = Math.max(margin, Math.min(ev.clientX - offsetX, window.innerWidth - w - margin));
+			const top = Math.max(margin, Math.min(ev.clientY - offsetY, window.innerHeight - h - margin));
+			popoverPos = { top: Math.round(top), left: Math.round(left) };
+		};
+		const onUp = () => {
+			draggingPopover = false;
+			window.removeEventListener("pointermove", onMove);
+			window.removeEventListener("pointerup", onUp);
+			window.removeEventListener("pointercancel", onUp);
+		};
+		window.addEventListener("pointermove", onMove);
+		window.addEventListener("pointerup", onUp);
+		window.addEventListener("pointercancel", onUp);
+	}
 
 	function clearSelection() {
 		selection = null;
@@ -375,13 +406,14 @@
 	}
 
 	/** Place the floating popover/pill right below an anchor rect, clamped safely within the viewport. */
-	function positionBelow(rect: DOMRect, estimatedW = 460, estimatedH = 190) {
+	function positionBelow(rect: DOMRect, estimatedW = 460, estimatedH = 190, align: "left" | "right" = "left") {
 		if (typeof window === "undefined") return;
 		const margin = 12;
 		const vw = window.innerWidth;
 		const vh = window.innerHeight;
 		const width = Math.min(estimatedW, vw - margin * 2);
-		let left = Math.max(margin, Math.min(rect.left, vw - width - margin));
+		const rawLeft = vw <= 600 ? (vw - width) / 2 : align === "right" ? rect.right - width : rect.left;
+		const left = Math.max(margin, Math.min(rawLeft, vw - width - margin));
 		let top = rect.bottom + 8;
 		if (top + estimatedH > vh - margin) {
 			top = Math.max(margin, rect.top - estimatedH - 8);
@@ -592,7 +624,7 @@
 		commentText = "";
 		popoverOpen = true;
 		const btn = e.currentTarget as HTMLElement | null;
-		if (btn) positionBelow(btn.getBoundingClientRect(), 460, 186);
+		if (btn) positionBelow(btn.getBoundingClientRect(), 460, 186, "right");
 		requestAnimationFrame(() => popoverEl?.querySelector<HTMLTextAreaElement>("textarea.cta")?.focus());
 	}
 
@@ -604,14 +636,14 @@
 		requestAnimationFrame(() => popoverEl?.querySelector<HTMLTextAreaElement>("textarea.cta")?.focus());
 	}
 
-	function commentHeaderLabel(): string {
-		if (!selection) return "";
-		if (selection.kind === "file") return selection.path;
-		if (!selectedLineInfo) return selection.path;
+	const commentParts = $derived.by<{ path: string; suffix: string }>(() => {
+		if (!selection) return { path: "", suffix: "" };
+		if (selection.kind === "file") return { path: selection.path, suffix: "" };
+		if (!selectedLineInfo) return { path: selection.path, suffix: "" };
 		const count = selectedLineInfo.sorted.length;
-		if (count === 1) return `${selectedLineInfo.path}:${selectedLineInfo.spec}`;
-		return `${selectedLineInfo.path}:${selectedLineInfo.spec} (${t("{n}줄", { n: count })})`;
-	}
+		if (count === 1) return { path: selectedLineInfo.path, suffix: `:${selectedLineInfo.spec}` };
+		return { path: selectedLineInfo.path, suffix: `:${selectedLineInfo.spec} (${t("{n}줄", { n: count })})` };
+	});
 
 	function formatCommentText(note: string): string {
 		const trimmed = note.trim();
@@ -720,9 +752,11 @@
 <section class="fpane" data-part="workspace-file-pane" aria-label={selectedPath ?? t("파일 뷰어")}>
 	{#if selectedPath}
 		<div class="fbar">
-			<div class="fmeta">
+			<div class="fmeta" title={selectedPath}>
 				<FileIcon name={fileName} />
-				<span class="fpath mono" title={selectedPath}>{selectedPath}</span>
+				<span class="fpath mono">
+					{#if pathParts}<span class="fdir">{pathParts.dir}</span><span class="fname">{pathParts.base}</span>{:else}<span class="fname">{selectedPath}</span>{/if}
+				</span>
 				{#if editDirty}
 					<span class="edirty">{t("수정됨")}</span>
 				{/if}
@@ -767,36 +801,33 @@
 								onchange={onModeChange}
 							/>
 						</div>
+						<span class="fsep" aria-hidden="true"></span>
 					{/if}
-					{#if canEditText}
-						<IconButton
-							icon="pencil"
-							size="sm"
-							label={t("직접 수정 (더블클릭)")}
-							tip
-							onclick={() => startEdit()}
-						/>
-					{/if}
-					<span data-file-comment-btn="true">
-						<IconButton
-							icon="chat"
-							size="sm"
-							label={t("이 파일에 코멘트")}
-							tip
-							class={{ on: selection?.kind === "file" }}
-							onclick={toggleFileComment}
-						/>
-					</span>
-					{#if currentFileData && !currentFileData.binary && !isMediaKind}
-						<IconButton icon={copied ? "check" : "copy"} size="sm" label={t("복사")} tip onclick={copyFileText} />
-					{/if}
-					<IconButton icon="download" size="sm" label={t("저장")} tip disabled={saving} onclick={downloadCurrentFile} />
-					<IconButton
-						icon="retry"
-						size="sm"
-						label={t("새로고침")}
-						onclick={() => void workspaceViewer.selectFile(selectedPath, workspaceViewer.viewMode)}
-					/>
+					<div class="fact">
+						{#if canEditText}
+							<IconButton
+								icon="pencil"
+								size="sm"
+								label={t("직접 수정 (더블클릭)")}
+								tip
+								onclick={() => startEdit()}
+							/>
+						{/if}
+						<span data-file-comment-btn="true">
+							<IconButton
+								icon="chat"
+								size="sm"
+								label={t("이 파일에 코멘트")}
+								tip
+								class={{ on: selection?.kind === "file" }}
+								onclick={toggleFileComment}
+							/>
+						</span>
+						{#if currentFileData && !currentFileData.binary && !isMediaKind}
+							<IconButton icon={copied ? "check" : "copy"} size="sm" label={t("복사")} tip onclick={copyFileText} />
+						{/if}
+						<IconButton icon="download" size="sm" label={t("저장")} tip disabled={saving} onclick={downloadCurrentFile} />
+					</div>
 				{/if}
 			</div>
 		</div>
@@ -997,23 +1028,38 @@
 		<div
 			class="float-pop"
 			class:pill={!popoverOpen}
+			class:moving={draggingPopover}
 			bind:this={popoverEl}
 			style:top="{popoverPos.top}px"
 			style:left="{popoverPos.left}px"
 			role="dialog"
 			aria-label={t("이 파일에 코멘트")}
+			in:surfaceIn={{ y: 6 }}
+			out:surfaceOut={{ y: 6 }}
 		>
 			{#if !popoverOpen && selection.kind === "lines"}
 				<div class="fpill">
-					<span class="cloc mono">{commentHeaderLabel()}</span>
+					<span class="cloc mono" title="{commentParts.path}{commentParts.suffix}">
+						<span class="cpath">{baseName(commentParts.path)}</span>{#if commentParts.suffix}<span class="clines">{commentParts.suffix}</span>{/if}
+					</span>
 					<Button size="sm" variant="primary" onclick={expandFloatingPill}>{t("코멘트")}</Button>
 					<Button size="sm" variant="default" onclick={insertToComposer}>{t("입력창에 넣기")}</Button>
 					<IconButton icon="x" size="sm" label={t("닫기")} onclick={clearSelection} />
 				</div>
 			{:else}
 				<div class="fcard">
-					<div class="chead">
-						<span class="cloc mono">{commentHeaderLabel()}</span>
+					<!-- svelte-ignore a11y_no_static_element_interactions -->
+					<div class="chead" onpointerdown={startPopoverDrag} title={t("드래그하여 이동")}>
+						<span class="cgrip" aria-hidden="true">
+							<svg viewBox="0 0 10 14" fill="currentColor">
+								<circle cx="2.5" cy="3" r="1.2" /><circle cx="7.5" cy="3" r="1.2" />
+								<circle cx="2.5" cy="7" r="1.2" /><circle cx="7.5" cy="7" r="1.2" />
+								<circle cx="2.5" cy="11" r="1.2" /><circle cx="7.5" cy="11" r="1.2" />
+							</svg>
+						</span>
+						<span class="cloc mono" title="{commentParts.path}{commentParts.suffix}">
+							<span class="cpath">{commentParts.path}</span>{#if commentParts.suffix}<span class="clines">{commentParts.suffix}</span>{/if}
+						</span>
 						<IconButton icon="x" size="sm" label={t("닫기")} onclick={clearSelection} />
 					</div>
 					<!-- svelte-ignore a11y_autofocus -->
@@ -1058,8 +1104,8 @@
 		align-items: center;
 		justify-content: space-between;
 		gap: 8px;
-		padding: 4px 12px;
-		min-height: 40px;
+		padding: 0 12px;
+		min-height: 44px;
 		border-bottom: 1px solid var(--border);
 		background: var(--bg-side);
 	}
@@ -1072,13 +1118,25 @@
 	}
 	.fpath {
 		min-width: 0;
+		display: inline-flex;
+		align-items: baseline;
 		font-size: var(--fs-xs);
-		font-weight: 500;
 		color: var(--text);
+		line-height: 20px;
+	}
+	.fdir {
+		flex: 0 1 auto;
+		min-width: 0;
+		color: var(--text-faint);
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
-		line-height: 20px;
+	}
+	.fname {
+		flex: 0 0 auto;
+		font-weight: 600;
+		color: var(--text);
+		white-space: nowrap;
 	}
 	.edirty {
 		font-size: var(--fs-2xs);
@@ -1108,8 +1166,36 @@
 	.ftools {
 		display: flex;
 		align-items: center;
+		gap: 8px;
+		flex: none;
+	}
+	.fsep {
+		width: 1px;
+		height: 16px;
+		background: var(--border-strong);
+		flex: none;
+	}
+	.fact {
+		display: inline-flex;
+		align-items: center;
 		gap: 4px;
 		flex: none;
+	}
+	@media (max-width: 640px) {
+		.fbar {
+			flex-wrap: wrap;
+			padding: 8px 12px;
+		}
+		.fmeta {
+			flex: 1 1 100%;
+		}
+		.ftools {
+			flex: 1 1 100%;
+			justify-content: space-between;
+		}
+		.fsep {
+			display: none;
+		}
 	}
 	.cnav {
 		display: inline-flex;
@@ -1435,6 +1521,10 @@
 		background: var(--bg-elev);
 		box-shadow: var(--shadow-overlay);
 	}
+	.float-pop.moving {
+		user-select: none;
+		-webkit-user-select: none;
+	}
 	.float-pop.pill {
 		width: auto;
 		max-width: calc(100vw - 24px);
@@ -1454,18 +1544,48 @@
 	.chead {
 		display: flex;
 		align-items: center;
-		justify-content: space-between;
 		gap: 8px;
 		line-height: 20px;
+		cursor: grab;
+		user-select: none;
+		-webkit-user-select: none;
+	}
+	.float-pop.moving .chead {
+		cursor: grabbing;
+	}
+	.cgrip {
+		width: 10px;
+		height: 14px;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		color: var(--text-faint);
+		flex: none;
+	}
+	.cgrip svg {
+		width: 10px;
+		height: 14px;
 	}
 	.cloc {
+		flex: 1;
+		min-width: 0;
+		display: inline-flex;
+		align-items: baseline;
 		font-size: var(--fs-xs);
 		font-weight: 600;
 		color: var(--accent);
+		line-height: 16px;
+	}
+	.cpath {
+		flex: 0 1 auto;
+		min-width: 0;
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
-		line-height: 16px;
+	}
+	.clines {
+		flex: 0 0 auto;
+		white-space: nowrap;
 	}
 	.cfoot {
 		display: flex;

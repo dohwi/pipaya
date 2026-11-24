@@ -473,7 +473,7 @@
 							{/if}
 						{/if}
 					</div>
-					{#if app.filesOpen && !app.graphOpen}<WorkspaceFileTree />{/if}
+					<WorkspaceFileTree open={app.filesOpen && !app.graphOpen} />
 					<ExtensionDock />
 				</div>
 			</div>

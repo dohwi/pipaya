@@ -2258,6 +2258,7 @@ export const en: Record<string, string> = {
 	"수정됨": "Modified",
 	"직접 수정 (더블클릭)": "Edit file (double-click)",
 	"코멘트": "Comment",
+	"드래그하여 이동": "Drag to move",
 	"이전 변경": "Previous change",
 	"다음 변경": "Next change",
 	"{line}번 줄에 코멘트 달기": "Comment on line {line}",
