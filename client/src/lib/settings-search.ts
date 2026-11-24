@@ -3,35 +3,49 @@ import { msg, t } from "./i18n";
 /**
  * The settings window's sections. `server: false` ones are common to every server (the nav's top group, "내 설정" first); `server: true` ones belong to the chosen server (the group below).
  *
- * Server sections are grouped by mental model with subtle dividers (`cluster`):
- *  1. server: connection identity & paired devices (info, devices)
- *  2. agent: models, built-in tools, command guard & MCP servers (models, tools, guard, mcp)
- *  3. workflow: conversations, scheduled tasks, prompt templates & voice input (sessions, schedules, templates, voice)
- *  4. ext: extensions marketplace & installed packages (srvext)
+ * Kept intentionally lean so every item fits in the desktop sidebar without scrolling:
+ *  - Common (3): 내 설정, 단축키, 백업
+ *  - Server (7):
+ *      - server: 서버 (연결 정보 · 버전 · 접속 기기)
+ *      - agent: 모델 (모델 연결 · 기본/이미지 모델), 에이전트 (도구 · 서브에이전트 · 명령 보호), MCP
+ *      - workflow: 대화 (기본 폴더 · 자동 삭제 · 프롬프트 템플릿 · 음성 입력), 예약 작업
+ *      - ext: 확장 (마켓플레이스 · 설치 · 권한 · 설정)
  */
 export const SETTINGS_TABS = [
 	{ id: "general", label: msg("내 설정"), icon: "settings", sub: msg("언어 · 테마 · 알림 · 터미널"), server: false, cluster: "common" },
 	{ id: "keys", label: msg("단축키"), icon: "keyboard", sub: msg("키 지정과 초기화"), server: false, cluster: "common" },
 	{ id: "backup", label: msg("백업"), icon: "download", sub: msg("설정 내보내기 · 가져오기"), server: false, cluster: "common" },
-	{ id: "info", label: msg("정보"), icon: "server", sub: msg("이름 · 주소 · 버전"), server: true, cluster: "server" },
-	{ id: "devices", label: msg("기기"), icon: "phone", sub: msg("접속한 기기 · 폰 연결"), server: true, cluster: "server" },
+	{ id: "info", label: msg("서버"), icon: "server", sub: msg("연결 정보 · 버전 · 접속 기기"), server: true, cluster: "server" },
 	{ id: "models", label: msg("모델"), icon: "key", sub: msg("모델 연결 · 기본 모델 · 이미지 모델"), server: true, cluster: "agent" },
-	{ id: "tools", label: msg("에이전트 도구"), icon: "widgets", sub: msg("도구 허용 · 서브에이전트 위임"), server: true, cluster: "agent" },
-	{ id: "guard", label: msg("명령 보호"), icon: "shield", sub: msg("위험한 셸 명령 실행 차단"), server: true, cluster: "agent" },
+	{ id: "tools", label: msg("에이전트"), icon: "widgets", sub: msg("도구 · 서브에이전트 · 명령 보호"), server: true, cluster: "agent" },
 	{ id: "mcp", label: msg("MCP"), icon: "plug", sub: msg("MCP 서버 연결"), server: true, cluster: "agent" },
-	{ id: "sessions", label: msg("대화"), icon: "chat", sub: msg("기본 작업 폴더 · 자동 삭제"), server: true, cluster: "workflow" },
+	{ id: "sessions", label: msg("대화"), icon: "chat", sub: msg("작업 폴더 · 자동 삭제 · 템플릿 · 음성 입력"), server: true, cluster: "workflow" },
 	{ id: "schedules", label: msg("예약 작업"), icon: "clock", sub: msg("정해진 때에 대화로 프롬프트 보내기"), server: true, cluster: "workflow" },
-	{ id: "templates", label: msg("프롬프트 템플릿"), icon: "prompt", sub: msg("자주 쓰는 /prompt 명령 관리"), server: true, cluster: "workflow" },
-	{ id: "voice", label: msg("음성 입력"), icon: "mic", sub: msg("말해서 입력하기"), server: true, cluster: "workflow" },
 	{ id: "srvext", label: msg("확장"), icon: "bolt", sub: msg("마켓플레이스 · 설치 · 권한 · 설정"), server: true, cluster: "ext" },
 ] as const;
 export type SettingsTabId = (typeof SETTINGS_TABS)[number]["id"];
 
-/** A server's own sections need the server to answer; only "정보" (address, token) stays open while it is offline. */
+/** Legacy / sub-tab ids accepted by `openSettings(...)` and routed into their parent section. */
+export type SettingsSectionAlias = "servers" | "agent" | "devices" | "guard" | "templates" | "voice";
+
+export function resolveSettingsTab(raw: string): { tab: SettingsTabId; sub?: string } {
+	switch (raw) {
+		case "servers": return { tab: "info" };
+		case "devices": return { tab: "info", sub: "devices" };
+		case "agent": return { tab: "models" };
+		case "guard": return { tab: "tools", sub: "guard" };
+		case "templates": return { tab: "sessions", sub: "templates" };
+		case "voice": return { tab: "sessions", sub: "voice" };
+		default:
+			return { tab: (SETTINGS_TABS.some((x) => x.id === raw) ? raw : "general") as SettingsTabId };
+	}
+}
+
+/** A server's own sections need the server to answer; only "서버" (info: address, token) stays open while it is offline. */
 export const needsOnlineServer = (id: string) => SETTINGS_TABS.some((x) => x.id === id && x.server) && id !== "info";
 
 /** Settings that are not a tab of their own; `words` are what a person may type to find them (any language). */
-export const SETTINGS_ITEMS: { tab: SettingsTabId; label: string; words: string }[] = [
+export const SETTINGS_ITEMS: { tab: SettingsTabId; sub?: string; label: string; words: string }[] = [
 	{ tab: "general", label: msg("언어"), words: "language 한국어 english" }, // i18n-ok: search words in either language
 	{ tab: "general", label: msg("테마"), words: "theme dark light 다크 라이트 어둡게 밝게" }, // i18n-ok: search words in either language
 	{ tab: "general", label: msg("화면 배율"), words: "zoom scale size 배율 확대 축소 크기" }, // i18n-ok: search words in either language
@@ -40,20 +54,20 @@ export const SETTINGS_ITEMS: { tab: SettingsTabId; label: string; words: string 
 	{ tab: "general", label: msg("터미널"), words: "terminal font size 글꼴 폰트 글자 크기 maple mono" }, // i18n-ok: search words in either language
 	{ tab: "general", label: msg("앱 단축키 우선"), words: "terminal shortcut priority keybinding 터미널 단축키 우선 먹히지" }, // i18n-ok: search words in either language
 	{ tab: "general", label: msg("업데이트"), words: "update version 버전" }, // i18n-ok: search words in either language
+	{ tab: "info", sub: "devices", label: msg("접속 기기"), words: "device phone qr pair mobile 기기 폰 모바일 페어링 연결 링크" }, // i18n-ok: search words in either language
 	{ tab: "models", label: msg("모델 연결"), words: "model provider key api 모델 연결 키 프로바이더" }, // i18n-ok: search words in either language
 	{ tab: "models", label: msg("폴백 모델"), words: "fallback retry zero output model 폴백 모델 대체 우회 재시도 무응답" }, // i18n-ok: search words in either language
 	{ tab: "models", label: msg("이미지 모델"), words: "image model picture draw generate 이미지 모델 그림 생성" }, // i18n-ok: search words in either language
-	{ tab: "voice", label: msg("변환 서버"), words: "voice stt speech transcribe whisper dictation 음성 받아쓰기 변환 서버 주소 경로 모델 언어 키" }, // i18n-ok: search words in either language
-	{ tab: "voice", label: msg("음성 입력 사용"), words: "voice mic microphone dictation 음성 마이크 받아쓰기 켜기" }, // i18n-ok: search words in either language
 	{ tab: "tools", label: msg("에이전트 도구"), words: "tools agent permission 도구 에이전트" }, // i18n-ok: search words in either language
 	{ tab: "tools", label: msg("서브에이전트 위임"), words: "subagent sub-agent delegate helper role 서브에이전트 위임 역할 도우미" }, // i18n-ok: search words in either language; "helper / 도우미" was the old name
-	{ tab: "guard", label: msg("위험 명령 차단"), words: "guard bash rm find delete mkfs wipefs blkdiscard sgdisk dd tee fork bomb chmod chown chgrp 차단 보호 보안 안전 삭제 디스크 포크 권한" }, // i18n-ok: search words in either language
-	{ tab: "guard", label: msg("추가 명령 보호"), words: "curl wget sh remote script shutdown reboot poweroff halt systemctl init git push force --force -f 원격 스크립트 종료 재부팅 강제 푸시" }, // i18n-ok: search words in either language
+	{ tab: "tools", sub: "guard", label: msg("명령 보호"), words: "guard bash rm find delete mkfs wipefs blkdiscard sgdisk dd tee fork bomb chmod chown chgrp 명령 보호 차단 보안 안전 삭제 디스크 포크 권한" }, // i18n-ok: search words in either language
+	{ tab: "tools", sub: "guard", label: msg("추가 명령 보호"), words: "curl wget sh remote script shutdown reboot poweroff halt systemctl init git push force --force -f 원격 스크립트 종료 재부팅 강제 푸시" }, // i18n-ok: search words in either language
 	{ tab: "mcp", label: msg("MCP 서버"), words: "mcp server tool 도구 서버 연결" }, // i18n-ok: search words in either language
 	{ tab: "sessions", label: msg("기본 작업 폴더"), words: "folder workdir directory workspace cwd default 기본 폴더 작업 폴더 작업 디렉터리 워크스페이스" }, // i18n-ok: search words in either language
 	{ tab: "sessions", label: msg("자동 삭제"), words: "retention delete cleanup old auto 보관 자동 삭제 정리 오래된" }, // i18n-ok: search words in either language
+	{ tab: "sessions", sub: "templates", label: msg("프롬프트 템플릿"), words: "prompt template slash command /prompt: 프롬프트 템플릿 명령 상용구" }, // i18n-ok: search words in either language
+	{ tab: "sessions", sub: "voice", label: msg("음성 입력"), words: "voice stt speech transcribe whisper dictation mic microphone 음성 마이크 받아쓰기 변환 서버 주소 경로 모델 언어 키" }, // i18n-ok: search words in either language
 	{ tab: "schedules", label: msg("예약 작업"), words: "schedule scheduled task timer cron repeat interval later 예약 반복 정기 주기 자동 실행 알람" }, // i18n-ok: search words in either language
-	{ tab: "templates", label: msg("프롬프트 템플릿"), words: "prompt template slash command /prompt: 프롬프트 템플릿 명령 상용구" }, // i18n-ok: search words in either language
 ];
 
 const norm = (s: string) => s.toLowerCase();
@@ -67,7 +81,7 @@ export interface Hit {
 	title: string;
 	where: string;
 	combo?: string;
-	target: { tab: SettingsTabId; keyFilter?: string };
+	target: { tab: SettingsTabId; sub?: string; keyFilter?: string };
 }
 
 export interface ShortcutEntry {
@@ -90,8 +104,10 @@ export function searchSettings(words: readonly string[], opts: { hasServer: bool
 		if (matches(words, `${t(x.label)} ${x.label} ${x.sub ? t(x.sub) : ""}`)) out.push({ key: `tab:${x.id}`, title: t(x.label), where: x.sub ? t(x.sub) : t("설정"), target: { tab: x.id } });
 	}
 	for (const x of SETTINGS_ITEMS) {
-		if (opts.serverOnline === false && needsOnlineServer(x.tab)) continue;
-		if (matches(words, `${t(x.label)} ${x.label} ${x.words}`)) out.push({ key: `item:${x.label}`, title: t(x.label), where: tabName(x.tab), target: { tab: x.tab } });
+		const isServer = SETTINGS_TABS.find((tab) => tab.id === x.tab)?.server;
+		if (isServer && !opts.hasServer) continue;
+		if (opts.serverOnline === false && (needsOnlineServer(x.tab) || x.sub === "devices")) continue;
+		if (matches(words, `${t(x.label)} ${x.label} ${x.words}`)) out.push({ key: `item:${x.label}`, title: t(x.label), where: tabName(x.tab), target: { tab: x.tab, ...(x.sub ? { sub: x.sub } : {}) } });
 	}
 	for (const a of opts.shortcuts) {
 		if (matches(words, `${t(a.label)} ${a.label} ${a.hint ? t(a.hint) : ""} ${a.combo} ${a.shown}`))

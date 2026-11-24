@@ -22,7 +22,7 @@
 	import { connectionState, orderServers, unreachable } from "../../lib/sidebar-model";
 	import { app } from "../../lib/store.svelte";
 	import { serverUpdater } from "../../lib/server-update.svelte";
-	import { SETTINGS_TABS, needsOnlineServer, queryWords, searchSettings, type Hit, type SettingsTabId } from "../../lib/settings-search";
+	import { SETTINGS_TABS, needsOnlineServer, queryWords, resolveSettingsTab, searchSettings, type Hit, type SettingsTabId } from "../../lib/settings-search";
 	import { t } from "../../lib/i18n";
 	import { backLayer } from "../../lib/dialog";
 	import { viewport } from "../../lib/viewport.svelte";
@@ -31,7 +31,14 @@
 
 	// App.svelte mounts this only while open, so the tab requested at open time is read once.
 	// svelte-ignore state_referenced_locally
-	let tab = $state<string>(app.settingsTab === "servers" ? "info" : app.settingsTab === "agent" ? "models" : app.settingsTab); // "agent" (extensions, older links) is now "models"
+	const initial = resolveSettingsTab(app.settingsTab);
+	let tab = $state<string>(initial.tab);
+	/** Sub-tabs inside grouped sections ("info": info|devices, "tools": tools|guard, "sessions": sessions|templates|voice). */
+	let infoSub = $state<"info" | "devices">(initial.tab === "info" && initial.sub === "devices" ? "devices" : "info");
+	let toolsSub = $state<"tools" | "guard">(initial.tab === "tools" && initial.sub === "guard" ? "guard" : "tools");
+	let sessionsSub = $state<"sessions" | "templates" | "voice">(
+		initial.tab === "sessions" && (initial.sub === "templates" || initial.sub === "voice") ? initial.sub : "sessions",
+	);
 
 	/**
 	 * Phone (≤600px): two steps. "list" shows every section (and the search), "detail" one section under a back arrow.
@@ -208,20 +215,68 @@
 				<Extensions serverId={server?.id ?? null} bind:selected={extId} bind:marketFor bind:installFor />
 			{:else if tab === "backup"}
 				<Backup />
-			{:else if tab === "voice" && server}
-				{#key server.id}<VoicePane serverId={server.id} />{/key}
 			{:else if tab === "schedules" && server}
 				{#key server.id}<SchedulesPane serverId={server.id} />{/key}
-			{:else if tab === "guard" && server}
-				{#key server.id}<GuardPane serverId={server.id} />{/key}
-			{:else if tab === "templates" && server}
-				{#key server.id}<TemplatesPane serverId={server.id} />{/key}
 			{:else if tab === "keys"}
 				<Shortcuts bind:filter={keyFilter} />
 			{:else if tab === "general"}
 				<GeneralPane />
+			{:else if tab === "info" && server}
+				{#if serverOnline}
+					<div class="subtabs">
+						<Segmented
+							tabs
+							variant="underline"
+							label={t("서버 세부 구역")}
+							value={infoSub}
+							onchange={(v) => (infoSub = v)}
+							options={[{ id: "info" as const, label: t("연결 정보") }, { id: "devices" as const, label: t("접속 기기") }]}
+						/>
+					</div>
+				{/if}
+				{#key `${server.id}:${infoSub}`}
+					<ServerForm target={server.id} embedded section={serverOnline ? infoSub : "info"} />
+				{/key}
+			{:else if tab === "tools" && server}
+				<div class="subtabs">
+					<Segmented
+						tabs
+						variant="underline"
+						label={t("에이전트 세부 구역")}
+						value={toolsSub}
+						onchange={(v) => (toolsSub = v)}
+						options={[{ id: "tools" as const, label: t("도구 · 위임") }, { id: "guard" as const, label: t("명령 보호") }]}
+					/>
+				</div>
+				{#if toolsSub === "guard"}
+					{#key server.id}<GuardPane serverId={server.id} />{/key}
+				{:else}
+					{#key server.id}<ServerForm target={server.id} embedded section="tools" />{/key}
+				{/if}
+			{:else if tab === "sessions" && server}
+				<div class="subtabs">
+					<Segmented
+						tabs
+						variant="underline"
+						label={t("대화 세부 구역")}
+						value={sessionsSub}
+						onchange={(v) => (sessionsSub = v)}
+						options={[
+							{ id: "sessions" as const, label: t("기본 설정") },
+							{ id: "templates" as const, label: t("프롬프트 템플릿") },
+							{ id: "voice" as const, label: t("음성 입력") },
+						]}
+					/>
+				</div>
+				{#if sessionsSub === "templates"}
+					{#key server.id}<TemplatesPane serverId={server.id} />{/key}
+				{:else if sessionsSub === "voice"}
+					{#key server.id}<VoicePane serverId={server.id} />{/key}
+				{:else}
+					{#key server.id}<ServerForm target={server.id} embedded section="sessions" />{/key}
+				{/if}
 			{:else if current.server && server}
-				{#key server.id}<ServerForm target={server.id} embedded section={current.id as "info"} only={current.id === "mcp" && extId?.startsWith("mcp:") ? extId.slice(4) : null} onselectmcp={(name) => (extId = name ? `mcp:${name}` : null)} />{/key}
+				{#key server.id}<ServerForm target={server.id} embedded section={current.id as "models" | "mcp"} only={current.id === "mcp" && extId?.startsWith("mcp:") ? extId.slice(4) : null} onselectmcp={(name) => (extId = name ? `mcp:${name}` : null)} />{/key}
 			{/if}
 			</div>
 			{/key}

@@ -3,7 +3,7 @@
  * Separated from domain server/session data in `AppStore` so transient UI visibility has one clear owner.
  */
 import type { SettingsFocus } from "../settings-focus";
-import type { SettingsTabId } from "../settings-search";
+import type { SettingsSectionAlias, SettingsTabId } from "../settings-search";
 import type { PaletteSpec } from "../store-model";
 
 export interface ViewerImage {
@@ -17,7 +17,7 @@ export interface ViewerState {
   index: number;
 }
 
-export type SettingsTargetTab = SettingsTabId | "servers" | "agent";
+export type SettingsTargetTab = SettingsTabId | SettingsSectionAlias;
 
 export class UiOverlayState {
   /** Add-server / edit-server dialog: `null` = closed, `"new"` = add, otherwise the id being edited. */
