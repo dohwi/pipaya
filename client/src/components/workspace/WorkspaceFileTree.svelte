@@ -205,22 +205,30 @@
 						<EmptyState compact>{t("변경된 파일이 없습니다. 에이전트가 파일을 수정하면 실시간으로 표시됩니다.")}</EmptyState>
 					</div>
 				{:else}
+					<div class="chhead">
+						<span class="chcap">{t("방금 수정한 파일")}</span>
+						<button type="button" class="chclr" onclick={() => workspaceViewer.clearChanges()}>{t("비우기")}</button>
+					</div>
 					{#each workspaceViewer.changes as ch (ch.path)}
 						<button
 							type="button"
 							class="trow file changed-row"
 							class:on={workspaceViewer.activeFile === ch.path}
 							class:opened={workspaceViewer.openFiles.includes(ch.path) && workspaceViewer.activeFile !== ch.path}
-							class:recent={workspaceViewer.isRecent(ch.path)}
+							class:recent={workspaceViewer.isRecent(ch.path) || ch.pending}
 							onclick={() => pickFile(ch.path, "diff")}
 							title={ch.path}
 						>
 							<span class="st mono {statusClass(ch.status)}">{ch.status}</span>
 							<span class="tname mono">{ch.path}</span>
-							<span class="cstat mono">
-								{#if ch.additions > 0}<span class="add">+{ch.additions}</span>{/if}
-								{#if ch.deletions > 0}<span class="del">-{ch.deletions}</span>{/if}
-							</span>
+							{#if ch.pending}
+								<span class="pend">{t("수정 중")}</span>
+							{:else}
+								<span class="cstat mono">
+									{#if ch.additions > 0}<span class="add">+{ch.additions}</span>{/if}
+									{#if ch.deletions > 0}<span class="del">-{ch.deletions}</span>{/if}
+								</span>
+							{/if}
 						</button>
 					{/each}
 				{/if}
@@ -432,6 +440,39 @@
 	}
 	.del {
 		color: var(--danger);
+	}
+	.chhead {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 8px;
+		padding: 4px 8px;
+		line-height: 16px;
+	}
+	.chcap {
+		font-size: var(--fs-2xs);
+		color: var(--text-faint);
+		line-height: 16px;
+	}
+	.chclr {
+		border: 0;
+		background: transparent;
+		padding: 0 4px;
+		font-size: var(--fs-2xs);
+		color: var(--text-dim);
+		cursor: pointer;
+		line-height: 16px;
+	}
+	@media (hover: hover) {
+		.chclr:hover {
+			color: var(--text);
+		}
+	}
+	.pend {
+		font-size: var(--fs-2xs);
+		color: var(--warn);
+		flex: none;
+		line-height: 16px;
 	}
 	.pad {
 		padding: 16px;

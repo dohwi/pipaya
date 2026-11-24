@@ -2,156 +2,36 @@ import type { Api } from "./api";
 import { errorText, isUnsupportedRoute } from "./api";
 import type { ChatState } from "./chat.svelte";
 import type { PipayaEvent } from "./types";
+import {
+	buildEditHunk,
+	deriveLatestTurnEdits,
+	normalizeRelPath,
+	type DiffHunk,
+	type DiffLine,
+	type WorkspaceChange,
+	type WorkspaceDiffData,
+	type WorkspaceEntry,
+	type WorkspaceFileData,
+} from "./workspace-edits";
 
-export interface WorkspaceEntry {
-	name: string;
-	path: string;
-	dir: boolean;
-}
-
-export interface WorkspaceChange {
-	path: string;
-	oldPath?: string;
-	status: "M" | "A" | "D" | "R" | "?" | "U";
-	additions: number;
-	deletions: number;
-}
-
-export interface DiffLine {
-	type: "context" | "add" | "del" | "meta";
-	oldLine: number | null;
-	newLine: number | null;
-	text: string;
-}
-
-export interface DiffHunk {
-	header: string;
-	oldStart: number;
-	newStart: number;
-	lines: DiffLine[];
-}
-
-export interface WorkspaceFileData {
-	path: string;
-	content: string;
-	binary: boolean;
-	truncated: boolean;
-	size: number;
-	lineCount: number;
-}
-
-export interface WorkspaceDiffData {
-	path: string;
-	isRepo: boolean;
-	hunks: DiffHunk[];
-	additions: number;
-	deletions: number;
-	binary: boolean;
-	truncated: boolean;
-}
+export {
+	buildEditHunk,
+	deriveLatestTurnEdits,
+	normalizeRelPath,
+	type DiffHunk,
+	type DiffLine,
+	type WorkspaceChange,
+	type WorkspaceDiffData,
+	type WorkspaceEntry,
+	type WorkspaceFileData,
+};
 
 const RECENT_HIGHLIGHT_MS = 10_000;
 const FALLBACK_MAX_BYTES = 256 * 1024;
 
-function buildFallbackHunk(oldText: string, newText: string): { hunk: DiffHunk; additions: number; deletions: number } {
-	const oldLines = oldText ? oldText.replace(/\r?\n$/, "").split(/\r?\n/) : [];
-	const newLines = newText ? newText.replace(/\r?\n$/, "").split(/\r?\n/) : [];
-	let prefix = 0;
-	while (prefix < oldLines.length && prefix < newLines.length && oldLines[prefix] === newLines[prefix]) prefix++;
-	let suffix = 0;
-	while (
-		suffix < oldLines.length - prefix &&
-		suffix < newLines.length - prefix &&
-		oldLines[oldLines.length - 1 - suffix] === newLines[newLines.length - 1 - suffix]
-	) {
-		suffix++;
-	}
-	const ctxStart = Math.max(0, prefix - 2);
-	const oldEnd = oldLines.length - suffix;
-	const newEnd = newLines.length - suffix;
-	const ctxEnd = Math.min(oldLines.length, oldEnd + 2);
-	const lines: DiffLine[] = [];
-	let ol = ctxStart + 1;
-	let nl = ctxStart + 1;
-	for (let i = ctxStart; i < prefix; i++) lines.push({ type: "context", oldLine: ol++, newLine: nl++, text: oldLines[i]! });
-	let deletions = 0;
-	for (let i = prefix; i < oldEnd; i++) {
-		deletions++;
-		lines.push({ type: "del", oldLine: ol++, newLine: null, text: oldLines[i]! });
-	}
-	let additions = 0;
-	for (let i = prefix; i < newEnd; i++) {
-		additions++;
-		lines.push({ type: "add", oldLine: null, newLine: nl++, text: newLines[i]! });
-	}
-	for (let i = oldEnd; i < ctxEnd; i++) lines.push({ type: "context", oldLine: ol++, newLine: nl++, text: oldLines[i]! });
-	return {
-		hunk: { header: `@@ -${ctxStart + 1} +${ctxStart + 1} @@`, oldStart: ctxStart + 1, newStart: ctxStart + 1, lines },
-		additions,
-		deletions,
-	};
-}
-
-/** Extract modified files & hunks from chat transcript when connected to an older server without `/workspace/*` routes. */
-function deriveChatEdits(chat: ChatState | null | undefined): {
-	changes: WorkspaceChange[];
-	diffs: Map<string, WorkspaceDiffData>;
-} {
-	const changesMap = new Map<string, WorkspaceChange>();
-	const diffs = new Map<string, WorkspaceDiffData>();
-	if (!chat) return { changes: [], diffs };
-
-	for (const item of chat.items) {
-		if (item.kind !== "assistant") continue;
-		for (const block of item.blocks) {
-			if (block.type !== "tool" || (block.name !== "edit" && block.name !== "write")) continue;
-			const rawPath = typeof block.args.path === "string" ? block.args.path.trim() : "";
-			if (!rawPath) continue;
-			const path = rawPath.replace(/^\.\//, "");
-			let change = changesMap.get(path);
-			if (!change) {
-				change = { path, status: block.name === "write" ? "A" : "M", additions: 0, deletions: 0 };
-				changesMap.set(path, change);
-			}
-			let diff = diffs.get(path);
-			if (!diff) {
-				diff = { path, isRepo: false, hunks: [], additions: 0, deletions: 0, binary: false, truncated: false };
-				diffs.set(path, diff);
-			}
-			if (block.name === "edit") {
-				const oldText = typeof block.args.oldText === "string" ? block.args.oldText : "";
-				const newText = typeof block.args.newText === "string" ? block.args.newText : "";
-				const built = buildFallbackHunk(oldText, newText);
-				change.additions += built.additions;
-				change.deletions += built.deletions;
-				diff.additions += built.additions;
-				diff.deletions += built.deletions;
-				diff.hunks.push(built.hunk);
-			} else {
-				const content = typeof block.args.content === "string" ? block.args.content : "";
-				const rows = content ? content.replace(/\r?\n$/, "").split(/\r?\n/) : [];
-				const clipped = rows.slice(0, 300);
-				change.additions += rows.length;
-				diff.additions += rows.length;
-				diff.truncated = rows.length > 300;
-				diff.hunks = clipped.length
-					? [{
-						header: `@@ -0,0 +1,${rows.length} @@`,
-						oldStart: 0,
-						newStart: 1,
-						lines: clipped.map((text, idx) => ({ type: "add", oldLine: null, newLine: idx + 1, text })),
-					}]
-					: [];
-			}
-		}
-	}
-	return { changes: [...changesMap.values()], diffs };
-}
-
 /**
  * Reactive store for the read-only workspace file viewer & live agent modification tracker.
- * Works natively with `/sessions/:id/workspace/*` and gracefully falls back to `/fs/files` + `/sessions/:id/files`
- * plus transcript edits when connected to an older server.
+ * Tracks only recent / in-flight edits from the active session's latest editing turn (not unrelated dirty git files).
  */
 export class WorkspaceViewerStore {
 	supported = $state(true);
@@ -189,7 +69,10 @@ export class WorkspaceViewerStore {
 
 	private api: Api | null = null;
 	private getChat: ((id: string) => ChatState | null | undefined) | null = null;
-	private fallbackDiffs = new Map<string, WorkspaceDiffData>();
+	private recentDiffs = new Map<string, WorkspaceDiffData>();
+	private liveTurnPaths = new Set<string>();
+	private latestTurnKey: string | null = null;
+	private dismissedTurnKey: string | null = null;
 	private refreshTimer: ReturnType<typeof setTimeout> | null = null;
 	private clearRecentTimer: ReturnType<typeof setTimeout> | null = null;
 	private seq = { tree: 0, search: 0, file: 0, diff: 0 };
@@ -220,20 +103,67 @@ export class WorkspaceViewerStore {
 			this.diffData = null;
 			this.treeError = null;
 			this.fileError = null;
-			this.fallbackDiffs.clear();
+			this.recentDiffs.clear();
+			this.liveTurnPaths.clear();
+			this.latestTurnKey = null;
+			this.dismissedTurnKey = null;
 			this.seq.tree++;
 			this.seq.search++;
 			this.seq.file++;
 			this.seq.diff++;
 		} else if (sessionChanged) {
-			// Same workDir, different session: keep open file tabs & expanded folders intact.
+			// Same workDir, different session: keep open file tabs & expanded folders intact, re-sync that session's recent edits.
 			this.sessionId = sessionId;
+			this.liveTurnPaths.clear();
+			this.dismissedTurnKey = null;
 		}
+		this.syncRecentChanges();
+	}
+
+	/** Recompute recent/pending changes from the active session's latest editing turn + live workspace events. */
+	syncRecentChanges() {
+		const sid = this.sessionId;
+		const chat = sid ? this.getChat?.(sid) : null;
+		const contentFor = (p: string) => (this.fileData?.path === p && !this.fileData.binary ? this.fileData.content : undefined);
+		const derived = deriveLatestTurnEdits(chat, this.workDir, contentFor);
+		this.latestTurnKey = derived.turnKey;
+
+		if (derived.turnKey && derived.turnKey === this.dismissedTurnKey && this.liveTurnPaths.size === 0) {
+			this.changes = [];
+			this.recentDiffs.clear();
+			return;
+		}
+
+		const nextChanges = [...derived.changes];
+		const seen = new Set(nextChanges.map((c) => c.path));
+		for (const livePath of this.liveTurnPaths) {
+			if (!seen.has(livePath)) {
+				seen.add(livePath);
+				nextChanges.push({ path: livePath, status: "M", additions: 0, deletions: 0 });
+			}
+		}
+
+		this.changes = nextChanges;
+		this.recentDiffs = derived.diffs;
+
+		// If the user is currently looking at the diff of a recently edited file, keep it freshly anchored.
+		const cur = this.selectedPath;
+		if (cur && this.recentDiffs.has(cur)) {
+			this.diffData = this.recentDiffs.get(cur) ?? null;
+		}
+	}
+
+	/** Acknowledge/clear the current list of recent changes until a newer edit arrives. */
+	clearChanges() {
+		this.dismissedTurnKey = this.latestTurnKey;
+		this.liveTurnPaths.clear();
+		this.changes = [];
+		this.recentDiffs.clear();
 	}
 
 	/** Open a file in the TabBar for the current workDir and focus it. */
 	async openFile(path: string, preferredMode?: "file" | "diff") {
-		const clean = path.replace(/^\.\//, "");
+		const clean = normalizeRelPath(path, this.workDir);
 		if (!clean) return;
 		if (!this.openFiles.includes(clean)) {
 			this.openFiles = [...this.openFiles, clean];
@@ -244,7 +174,7 @@ export class WorkspaceViewerStore {
 
 	/** Switch focus to an already-open file tab. */
 	async activateFile(path: string) {
-		const clean = path.replace(/^\.\//, "");
+		const clean = normalizeRelPath(path, this.workDir);
 		if (!this.openFiles.includes(clean)) return;
 		this.activeFile = clean;
 		if (this.selectedPath !== clean || !this.fileData) {
@@ -281,7 +211,7 @@ export class WorkspaceViewerStore {
 		return this.changes.find((c) => c.path === path);
 	}
 
-	/** True when any changed file lives under directory `dirPath`. */
+	/** True when any recently changed file lives under directory `dirPath`. */
 	dirHasChanges(dirPath: string): boolean {
 		const prefix = `${dirPath}/`;
 		return this.changes.some((c) => c.path.startsWith(prefix));
@@ -292,7 +222,7 @@ export class WorkspaceViewerStore {
 	}
 
 	markTouched(path: string) {
-		const clean = path.replace(/^\.\//, "");
+		const clean = normalizeRelPath(path, this.workDir);
 		if (!clean) return;
 		this.recentTouched = { ...this.recentTouched, [clean]: Date.now() + RECENT_HIGHLIGHT_MS };
 		if (this.clearRecentTimer) clearTimeout(this.clearRecentTimer);
@@ -322,7 +252,7 @@ export class WorkspaceViewerStore {
 				this.isRepo = res.isRepo;
 				this.branch = res.branch;
 				this.rootEntries = res.entries;
-				this.changes = res.changes;
+				this.syncRecentChanges();
 				if (opts.preserveOpenDirs) {
 					const openDirs = Object.keys(this.expandedDirs).filter((k) => this.expandedDirs[k]);
 					await Promise.all(openDirs.map((d) => this.loadDir(d)));
@@ -335,9 +265,10 @@ export class WorkspaceViewerStore {
 				this.supported = false;
 			} else {
 				this.treeError = errorText(e);
-				this.treeLoading = false;
 				return;
 			}
+		} finally {
+			if (this.seq.tree === ticket && this.supported) this.treeLoading = false;
 		}
 
 		// Graceful fallback for older servers without `/sessions/:id/workspace/tree`.
@@ -361,9 +292,7 @@ export class WorkspaceViewerStore {
 			}
 			const list = [...topMap.values()].sort((a, b) => Number(b.dir) - Number(a.dir) || a.name.localeCompare(b.name));
 			this.rootEntries = list;
-			const derived = deriveChatEdits(this.getChat?.(sid));
-			this.changes = derived.changes;
-			this.fallbackDiffs = derived.diffs;
+			this.syncRecentChanges();
 		} catch (e) {
 			if (this.seq.tree === ticket) this.treeError = errorText(e);
 		} finally {
@@ -439,14 +368,17 @@ export class WorkspaceViewerStore {
 	}
 
 	async selectFile(path: string, preferredMode?: "file" | "diff") {
-		const clean = path.replace(/^\.\//, "");
+		const clean = normalizeRelPath(path, this.workDir);
 		this.selectedPath = clean;
+		this.syncRecentChanges();
 		const hasChange = !!this.changeFor(clean);
 		this.viewMode = preferredMode ?? (hasChange && this.filter === "changed" ? "diff" : "file");
-		await Promise.all([
-			this.loadFile(clean),
-			hasChange || this.viewMode === "diff" ? this.loadDiff(clean) : Promise.resolve(),
-		]);
+		await this.loadFile(clean);
+		if (hasChange || this.viewMode === "diff") {
+			await this.loadDiff(clean);
+		} else {
+			this.diffData = null;
+		}
 	}
 
 	async loadFile(path: string) {
@@ -472,6 +404,8 @@ export class WorkspaceViewerStore {
 				const lineCount = content ? content.split(/\r?\n/).length : 0;
 				this.fileData = { path, content, binary, truncated, size: blob.size, lineCount };
 			}
+			// Re-anchor recent diff hunks using actual file content so diff line numbers match the file.
+			this.syncRecentChanges();
 		} catch (e) {
 			if (this.seq.file === ticket) {
 				this.fileData = null;
@@ -487,16 +421,23 @@ export class WorkspaceViewerStore {
 		const sid = this.sessionId;
 		if (!api || !sid) return;
 		const ticket = ++this.seq.diff;
+		this.syncRecentChanges();
+
+		// Prefer the exact recent-turn edit hunks (only what was just edited in this turn).
+		const recent = this.recentDiffs.get(path);
+		if (recent && recent.hunks.length > 0) {
+			this.diffData = recent;
+			return;
+		}
+
+		// Fallback to server git diff only for paths explicitly touched via live events without a chat edit/write hunk.
 		try {
 			if (this.supported) {
 				const data = await api.workspaceDiff(sid, path);
 				if (this.seq.diff !== ticket || this.selectedPath !== path) return;
 				this.diffData = data;
 			} else {
-				const derived = deriveChatEdits(this.getChat?.(sid));
-				this.changes = derived.changes;
-				this.fallbackDiffs = derived.diffs;
-				this.diffData = this.fallbackDiffs.get(path) ?? {
+				this.diffData = {
 					path,
 					isRepo: false,
 					hunks: [],
@@ -511,21 +452,35 @@ export class WorkspaceViewerStore {
 		}
 	}
 
-	/** Live updates whenever the agent writes/edits files or runs shell commands. */
+	/** Live updates whenever the agent edits/writes files or starts/finishes a run. */
 	onEvent(e: PipayaEvent) {
 		const sid = e.sessionId;
 		if (!sid || sid !== this.sessionId) return;
 
-		if (e.type === "workspace_changed") {
+		if (e.type === "run_started") {
+			this.liveTurnPaths.clear();
+		} else if (e.type === "workspace_changed") {
 			const data = e.data as { path?: string | null; tool?: string } | null;
-			if (data?.path) this.markTouched(data.path);
+			if (data?.path) {
+				const clean = normalizeRelPath(data.path, this.workDir);
+				if (clean) {
+					this.liveTurnPaths.add(clean);
+					this.markTouched(clean);
+				}
+			}
+			this.syncRecentChanges();
 			this.scheduleLiveRefresh();
+		} else if (e.type === "tool_execution_start" || e.type === "message_update") {
+			// Immediately surface in-flight / pending edits in "변경됨" even before tool_result finishes.
+			this.syncRecentChanges();
 		} else if (e.type === "tool_execution_end") {
 			const data = e.data as { toolName?: string } | null;
+			this.syncRecentChanges();
 			if (data?.toolName === "write" || data?.toolName === "edit" || data?.toolName === "bash") {
 				this.scheduleLiveRefresh();
 			}
-		} else if (e.type === "run_finished") {
+		} else if (e.type === "run_finished" || e.type === "message_end") {
+			this.syncRecentChanges();
 			this.scheduleLiveRefresh();
 		}
 	}

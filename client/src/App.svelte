@@ -266,6 +266,17 @@
 		}
 	});
 
+	// Keep recent/pending edits in sync whenever the active session's transcript or tool states change.
+	$effect(() => {
+		const sid = workspaceViewer.sessionId;
+		const chat = sid ? app.chatOf(sid) : null;
+		if (!chat) return;
+		void chat.items;
+		void chat.tools;
+		void chat.running;
+		workspaceViewer.syncRecentChanges();
+	});
+
 	onMount(() => {
 		armSound();
 		const stopApp = app.init();
