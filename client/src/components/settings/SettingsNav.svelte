@@ -55,6 +55,13 @@
 	const order = (id: string) => SETTINGS_TABS.findIndex((x) => x.id === id);
 	/** Sections whose extensions the user folded away; "MCP" and "확장" start folded, then the last choice is kept (see `settings-fold`). */
 	let collapsed = $state<Record<string, boolean>>(initialFolded());
+	// Selecting an MCP server from the list (e.g. clicking "수정") unfolds the MCP tree so the child tab is visible and focused.
+	$effect(() => {
+		if (extId?.startsWith("mcp:") && collapsed.mcp) {
+			collapsed.mcp = false;
+			saveFolded(collapsed);
+		}
+	});
 	/** Extensions running inside the chosen server (read-only); listed under "서버 확장" like installed ones. */
 	let serverSide = $state<{ id: string; names: { name: string; title?: string; companion?: string }[] } | null>(null);
 	$effect(() => {

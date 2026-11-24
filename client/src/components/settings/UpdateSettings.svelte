@@ -6,7 +6,6 @@
 	import { notificationPlatform } from "../../lib/notifications";
 	import Switch from "../ui/Switch.svelte";
 	import SettingRow from "../ui/SettingRow.svelte";
-	import UpdateHeader from "../server/UpdateHeader.svelte";
 	import Badge from "../ui/Badge.svelte";
 	import { collapseIn, collapseOut } from "../../lib/motion";
 
@@ -20,7 +19,7 @@
 
 {#if updater.supported}
 	{@const appNew = updater.phase === "available" || downloading}
-	<UpdateHeader label={t("앱 업데이트")} {checking} disabled={checking || downloading} onclick={checkAll} />
+	<div class="section-label head">{t("앱 업데이트")}</div>
 	<SettingRow label={t("시작할 때 새 버전 확인")}>
 		<Switch checked={updater.auto} label={t("시작할 때 새 버전 확인")} onchange={(on) => updater.setAuto(on)} />
 	</SettingRow>
@@ -37,6 +36,11 @@
 			{/if}
 			{#if updater.phase === "available"}
 				<Button size="sm" variant="update" onclick={() => updater.install()}>{t("업데이트")}</Button>
+			{:else if !downloading}
+				<Button size="sm" disabled={checking} onclick={checkAll}>
+					<svg class:spin={checking} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-3-6.7" /><path d="M21 3v6h-6" /></svg>
+					{checking ? t("확인하는 중…") : t("업데이트 확인")}
+				</Button>
 			{/if}
 		</div>
 		{#if downloading}

@@ -1,4 +1,4 @@
-import { HISTORY_KEEP_MS, MAX_EVERY_MS, MAX_PROMPT, MAX_TASKS, MAX_TITLE, MIN_EVERY_MS } from "@shared/schedules";
+import { DEFAULT_HISTORY_DAYS, HISTORY_KEEP_MS, MAX_EVERY_MS, MAX_PROMPT, MAX_TASKS, MAX_TITLE, MIN_EVERY_MS } from "@shared/schedules";
 import { clockMinutes, fmt } from "./format";
 import { localeTag, t } from "./i18n";
 import type { Schedule, ScheduleStatus } from "./types";
@@ -7,7 +7,7 @@ import type { Schedule, ScheduleStatus } from "./types";
  * Helpers of the scheduled-tasks page. Plain TypeScript (no runes), so they are unit-tested directly.
  * Limits are shared directly from `server/src/shared/schedules.ts` (`@shared/schedules`).
  */
-export { HISTORY_KEEP_MS, MAX_EVERY_MS, MAX_PROMPT, MAX_TASKS, MAX_TITLE, MIN_EVERY_MS };
+export { DEFAULT_HISTORY_DAYS, HISTORY_KEEP_MS, MAX_EVERY_MS, MAX_PROMPT, MAX_TASKS, MAX_TITLE, MIN_EVERY_MS };
 
 export type EveryUnit = "minute" | "hour" | "day";
 export const UNIT_MS: Record<EveryUnit, number> = { minute: 60_000, hour: 3_600_000, day: 86_400_000 };
@@ -93,8 +93,8 @@ export function splitSchedules(list: readonly Schedule[]): { pending: Schedule[]
 	return { pending: sortSchedules(list.filter((s) => !isUsedUp(s))), finished };
 }
 
-/** When the server deletes a finished task. */
-export const purgeAt = (s: Pick<Schedule, "lastRunAt" | "updatedAt">): number => (s.lastRunAt ?? s.updatedAt) + HISTORY_KEEP_MS;
+/** When the server deletes a finished task (uses custom `keepMs` when provided). */
+export const purgeAt = (s: Pick<Schedule, "lastRunAt" | "updatedAt">, keepMs: number = HISTORY_KEEP_MS): number => (s.lastRunAt ?? s.updatedAt) + keepMs;
 
 /** Soonest first; switched-off ones last, in the order they were made. */
 export function sortSchedules(list: readonly Schedule[]): Schedule[] {

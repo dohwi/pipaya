@@ -3,9 +3,9 @@ import { randomUUID } from "node:crypto";
 import Type, { type Static, type TSchema } from "typebox";
 import { badRequest, conflict, HttpError, notFound } from "./errors.ts";
 import { DAY_MS } from "./retention.ts";
-import { HISTORY_KEEP_MS, MAX_EVERY_MS, MAX_PROMPT, MAX_TASKS, MAX_TITLE, MIN_EVERY_MS } from "./shared/schedules.ts";
+import { DEFAULT_HISTORY_DAYS, HISTORY_KEEP_MS, MAX_EVERY_MS, MAX_HISTORY_DAYS, MAX_PROMPT, MAX_TASKS, MAX_TITLE, MIN_EVERY_MS } from "./shared/schedules.ts";
 
-export { HISTORY_KEEP_MS, MAX_EVERY_MS, MAX_PROMPT, MAX_TASKS, MAX_TITLE, MIN_EVERY_MS };
+export { DEFAULT_HISTORY_DAYS, HISTORY_KEEP_MS, MAX_EVERY_MS, MAX_HISTORY_DAYS, MAX_PROMPT, MAX_TASKS, MAX_TITLE, MIN_EVERY_MS };
 
 /**
  * Scheduled tasks: a prompt sent to an existing session once, or every so often.
@@ -62,7 +62,18 @@ export const ScheduleSchema = Type.Object({
 	updatedAt: Type.Integer(),
 });
 export type ScheduleRecord = Static<typeof ScheduleSchema>;
-export const ScheduleList = Type.Object({ schedules: Type.Array(ScheduleSchema) });
+export const ScheduleList = Type.Object({
+	schedules: Type.Array(ScheduleSchema),
+	historyDays: Type.Optional(Type.Integer({ minimum: 0, maximum: MAX_HISTORY_DAYS })),
+});
+
+export const ScheduleSettingsBody = Type.Object(
+	{
+		historyDays: Type.Integer({ minimum: 0, maximum: MAX_HISTORY_DAYS, description: "Days to keep finished one-time tasks (0 = never auto-delete)" }),
+	},
+	{ additionalProperties: false },
+);
+export type ScheduleSettingsInput = Static<typeof ScheduleSettingsBody>;
 
 export const CreateScheduleBody = Type.Object({
 	sessionId: Type.String(),
@@ -316,12 +327,40 @@ export class Scheduler {
 		this.changed(null, "deleted");
 	}
 
-	/** Deletes finished one-time tasks whose last run is more than HISTORY_KEEP_MS ago. Returns how many went. */
+	private static readonly HISTORY_DAYS_KEY = "schedule_history_days";
+
+	/** Days to keep finished one-time tasks before automatic deletion (0 = never auto-delete). */
+	historyDays(): number {
+		const row = this.db.query("SELECT data FROM settings WHERE key = $key").get({ key: Scheduler.HISTORY_DAYS_KEY }) as { data: string } | null;
+		if (!row) return DEFAULT_HISTORY_DAYS;
+		try {
+			const parsed = JSON.parse(row.data);
+			if (typeof parsed === "number" && Number.isInteger(parsed) && parsed >= 0 && parsed <= MAX_HISTORY_DAYS) return parsed;
+		} catch {
+			// fall back to default on malformed value
+		}
+		return DEFAULT_HISTORY_DAYS;
+	}
+
+	/** Updates finished-task retention days (0 = keep forever) and prunes immediately when shortened. */
+	setHistoryDays(days: number): number {
+		if (!Number.isInteger(days) || days < 0 || days > MAX_HISTORY_DAYS) throw badRequest(`historyDays must be an integer between 0 and ${MAX_HISTORY_DAYS}`);
+		this.db
+			.query("INSERT INTO settings (key, data) VALUES ($key, $data) ON CONFLICT(key) DO UPDATE SET data = $data")
+			.run({ key: Scheduler.HISTORY_DAYS_KEY, data: JSON.stringify(days) });
+		if (days > 0) this.prune();
+		this.changed(null, "updated");
+		return days;
+	}
+
+	/** Deletes finished one-time tasks whose last run is more than `historyDays()` ago. Returns how many went. */
 	prune(): number {
 		const now = this.now();
 		this.lastPruneAt = now;
-		const n = this.db.query(`DELETE FROM scheduled_tasks WHERE ${FINISHED} AND COALESCE(last_run_at, updated_at) < $before`).run({ before: now - HISTORY_KEEP_MS }).changes;
-		if (n) this.log(`scheduler: deleted ${n} finished task(s) older than ${HISTORY_KEEP_MS / DAY_MS} days`);
+		const days = this.historyDays();
+		if (days === 0) return 0;
+		const n = this.db.query(`DELETE FROM scheduled_tasks WHERE ${FINISHED} AND COALESCE(last_run_at, updated_at) < $before`).run({ before: now - days * DAY_MS }).changes;
+		if (n) this.log(`scheduler: deleted ${n} finished task(s) older than ${days} days`);
 		return n;
 	}
 

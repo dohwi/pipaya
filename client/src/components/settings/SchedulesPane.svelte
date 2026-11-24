@@ -13,20 +13,21 @@
 	import Notice from "../ui/Notice.svelte";
 	import Segmented from "../ui/Segmented.svelte";
 	import Select from "../ui/Select.svelte";
+	import SettingRow from "../ui/SettingRow.svelte";
 	import Switch from "../ui/Switch.svelte";
 	import { abortable } from "../../lib/abortable";
 	import { recentreOn } from "../../lib/dialog";
-	import { Api, errorText } from "../../lib/api";
+	import { Api, ApiError, errorText } from "../../lib/api";
 	import { keepDraft } from "../../lib/settings-drafts.svelte";
 	import { t } from "../../lib/i18n";
 	import { fullTime, shortDate } from "../../lib/format";
 	import { nameInLang } from "../../lib/member-names";
 	import { reflow, rowIn, rowOut } from "../../lib/motion";
 	import {
+		DEFAULT_HISTORY_DAYS,
 		MAX_PROMPT,
 		MAX_TASKS,
 		MAX_TITLE,
-		HISTORY_KEEP_MS,
 		cadence,
 		everyMs,
 		everyProblem,
@@ -60,6 +61,8 @@
 	const sessionOf = (id: string) => sessions.find((x) => x.id === id);
 
 	let list = $state<Schedule[] | null>(null);
+	let historyDays = $state(DEFAULT_HISTORY_DAYS);
+	let savingHistory = $state(false);
 	let loading = $state(true);
 	let error = $state("");
 	let busy = $state(false);
@@ -71,11 +74,49 @@
 		if (!a) return;
 		untrack(() => { if (!list) loading = true; });
 		return abortable((signal) => a.schedules(undefined, signal), {
-			ok: (r) => { list = r.schedules; error = ""; },
+			ok: (r) => {
+				list = r.schedules;
+				if (typeof r.historyDays === "number") historyDays = r.historyDays;
+				error = "";
+			},
 			fail: (e) => (error = errorText(e)),
 			done: () => (loading = false),
 		});
 	});
+
+	const historyOptions = $derived([
+		{ value: "1", label: t("1일 뒤") },
+		{ value: "3", label: t("3일 뒤") },
+		{ value: "7", label: t("7일 뒤") },
+		{ value: "14", label: t("14일 뒤") },
+		{ value: "30", label: t("30일 뒤") },
+		{ value: "0", label: t("자동 삭제 안 함") },
+	]);
+	const historyKeepMs = $derived(historyDays * 86_400_000);
+
+	async function changeHistoryDays(raw: string) {
+		const next = Number(raw);
+		const a = api;
+		if (!a || savingHistory || !Number.isInteger(next) || next === historyDays) return;
+		const prev = historyDays;
+		historyDays = next;
+		savingHistory = true;
+		error = "";
+		try {
+			const res = await a.setScheduleSettings({ historyDays: next });
+			historyDays = res.historyDays;
+			app.schedulesTick++;
+		} catch (e) {
+			historyDays = prev;
+			if (e instanceof ApiError && e.status === 404) {
+				app.toast(t("서버를 업데이트하면 자동 삭제 기간을 저장할 수 있습니다"), "info");
+			} else {
+				error = errorText(e);
+			}
+		} finally {
+			savingHistory = false;
+		}
+	}
 
 	async function reload() {
 		if (!api) return;
@@ -286,7 +327,9 @@
 	{#if error}<Notice tone="warn">{error}</Notice>{/if}
 	<ExtrasIntro
 		what={t("정해진 때나 일정한 간격으로 기존 대화에 프롬프트를 자동으로 보냅니다.")}
-		how={t("대화가 그때 실행 중이거나 닫혀 있으면 보내지 않고 건너뜁니다. 서버가 꺼져 있던 동안 놓친 반복은 한 번만 실행하고, 하루 넘게 지난 한 번짜리는 실행하지 않습니다. 연속 5번 실패하면 꺼집니다. 실행을 마친 한 번짜리는 지난 작업으로 옮겨지고 {days}일 뒤 지워집니다.", { days: HISTORY_KEEP_MS / 86_400_000 })}
+		how={historyDays > 0
+			? t("대화가 그때 실행 중이거나 닫혀 있으면 보내지 않고 건너뜁니다. 서버가 꺼져 있던 동안 놓친 반복은 한 번만 실행하고, 하루 넘게 지난 한 번짜리는 실행하지 않습니다. 연속 5번 실패하면 꺼집니다. 실행을 마친 한 번짜리는 지난 작업으로 옮겨지고 {days}일 뒤 지워집니다.", { days: historyDays })
+			: t("대화가 그때 실행 중이거나 닫혀 있으면 보내지 않고 건너뜁니다. 서버가 꺼져 있던 동안 놓친 반복은 한 번만 실행하고, 하루 넘게 지난 한 번짜리는 실행하지 않습니다. 연속 5번 실패하면 꺼집니다. 실행을 마친 한 번짜리는 지난 작업으로 옮겨지며 자동으로 지워지지 않습니다.")}
 	/>
 
 	{#if form}
@@ -366,12 +409,25 @@
 		{:else}
 			<Button variant="dashed" onclick={() => add()}><Icon name="plus" /> {t("예약 추가")}</Button>
 		{/if}
+		<section class="set-group">
+			<SettingRow label={t("지난 작업 자동 삭제")} hint={t("실행을 마친 한 번짜리 작업의 보관 기간입니다.")}>
+				<div class="keep-select">
+					<Select label={t("지난 작업 자동 삭제")} value={String(historyDays)} options={historyOptions} disabled={savingHistory} onchange={changeHistoryDays} />
+				</div>
+			</SettingRow>
+		</section>
 		{#if finished.length}
 			<!-- "text", not "line": the line variant pads its body 4px and would pull these cards off the gutter of the cards above -->
 			<Accordion variant="text" bind:open={historyOpen}>
 				{#snippet head()}<span class="hhead">{t("지난 작업")}</span><span class="hhead count">{t("{n}개", { n: finished.length })}</span>{/snippet}
 				<div class="history">
-					<p class="hint">{t("실행을 마친 한 번짜리 작업입니다. 마지막 실행 {days}일 뒤 자동으로 지워집니다.", { days: HISTORY_KEEP_MS / 86_400_000 })}</p>
+					<p class="hint">
+						{#if historyDays > 0}
+							{t("실행을 마친 한 번짜리 작업입니다. 마지막 실행 {days}일 뒤 자동으로 지워집니다.", { days: historyDays })}
+						{:else}
+							{t("실행을 마친 한 번짜리 작업입니다. 자동으로 지워지지 않습니다.")}
+						{/if}
+					</p>
 					<ul class="list">
 						{#each finished as s (s.id)}
 							{@const result = resultOf(s)}
@@ -388,8 +444,12 @@
 									<p class="desc">{s.prompt}</p>
 									<p class="meta">{sessionLabel(s.sessionId)}</p>
 									<p class="meta">
-										{#if s.lastRunAt}<span title={fullTime(s.lastRunAt)}>{s.lastStatus?.startsWith("skipped") ? t("{when} 건너뜀 · {day}에 지워짐", { when: livePast(s.lastRunAt), day: shortDate(purgeAt(s)) }) : t("{when} 실행 · {day}에 지워짐", { when: livePast(s.lastRunAt), day: shortDate(purgeAt(s)) })}</span>
-										{:else}{t("{day}에 지워짐", { day: shortDate(purgeAt(s)) })}{/if}
+										{#if historyDays > 0}
+											{#if s.lastRunAt}<span title={fullTime(s.lastRunAt)}>{s.lastStatus?.startsWith("skipped") ? t("{when} 건너뜀 · {day}에 지워짐", { when: livePast(s.lastRunAt), day: shortDate(purgeAt(s, historyKeepMs)) }) : t("{when} 실행 · {day}에 지워짐", { when: livePast(s.lastRunAt), day: shortDate(purgeAt(s, historyKeepMs)) })}</span>
+											{:else}{t("{day}에 지워짐", { day: shortDate(purgeAt(s, historyKeepMs)) })}{/if}
+										{:else if s.lastRunAt}
+											<span title={fullTime(s.lastRunAt)}>{s.lastStatus?.startsWith("skipped") ? t("{when} 건너뜀", { when: livePast(s.lastRunAt) }) : t("{when} 실행", { when: livePast(s.lastRunAt) })}</span>
+										{/if}
 									</p>
 									{#if s.lastStatus === "error" && s.lastError}<p class="meta err">{s.lastError}</p>{/if}
 								</ListItem>
@@ -423,6 +483,7 @@
 	/* whole-pixel line box: the inherited body line-height made the fold's header 18.59px tall */
 	.hhead { line-height: 20px; }
 	.history { display: flex; flex-direction: column; gap: 8px; }
+	.keep-select { width: 152px; }
 	/* pinned to the bottom of the scrolling settings page while a delete can still be undone; above the cards (a local layer) */
 	.undo { position: sticky; bottom: 16px; z-index: 1; }
 	.form { display: flex; flex-direction: column; gap: var(--dlg-gap); }
