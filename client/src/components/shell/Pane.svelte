@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { sessionTitle } from "../../lib/session-title";
+	import { mouseNavDirection } from "../../lib/back-trail";
 	import { RENAME_KEY } from "../../lib/keys";
 	import ExtensionMount from "../extensions/ExtensionMount.svelte";
 	import { extensions } from "../../lib/extensions/host.svelte";
@@ -100,11 +101,15 @@
 	function focus() {
 		if (grouped && id && id !== app.activeId) void app.openSession(id);
 	}
+	function focusPointer(e: PointerEvent) {
+		if (mouseNavDirection(e.button)) return;
+		focus();
+	}
 </script>
 
 <!-- Only listens (capture) to move focus to this pane when something inside it is pressed or focused; it is not itself a control. -->
 <!-- svelte-ignore a11y_no_static_element_interactions -->
-<section class="pane" data-part="pane" data-pane={id ?? undefined} class:grouped class:focused={grouped && focused} class:finished={grouped && state === "done"} onpointerdowncapture={focus} onfocusincapture={focus}>
+<section class="pane" data-part="pane" data-pane={id ?? undefined} class:grouped class:focused={grouped && focused} class:finished={grouped && state === "done"} onpointerdowncapture={focusPointer} onfocusincapture={focus}>
 	<!-- zoomed: the session strip above carries the title, path and shrink button, so this bar would only repeat it -->
 	{#if grouped && id && (!zoomed || viewport.narrow)}
 		<header

@@ -5,7 +5,7 @@
 	import { isTouch } from "./lib/format";
 	import { warmMarkdown } from "./lib/markdown";
 	import { backLayer, handleBack } from "./lib/dialog";
-	import { BackTrail } from "./lib/back-trail";
+	import { mouseNavDirection } from "./lib/back-trail";
 	import { OVERLAY_SELECTOR } from "./lib/keys";
 	import { fadeIn, fadeOut } from "./lib/motion";
 	import Icon from "./components/ui/Icon.svelte";
@@ -16,7 +16,21 @@
 	import { SidebarResizeController } from "./lib/shell/sidebar-resize.svelte";
 	import { DrawerSwipeController } from "./lib/shell/drawer-swipe.svelte";
 	import { createExtensionHostAdapter } from "./lib/extensions/adapter";
-	import { cancelChord, endExtensionHold, notePress, onShortcut, onShortcutCapture, onShortcutUp, onShortcutUpCapture, resetKeyboard } from "./lib/actions";
+	import {
+		cancelChord,
+		endExtensionHold,
+		notePress,
+		onMouseNavAuxClick,
+		onMouseNavDown,
+		onMouseNavUp,
+		onShortcut,
+		onShortcutCapture,
+		onShortcutUp,
+		onShortcutUpCapture,
+		recordSessionVisit,
+		resetKeyboard,
+		stepSessionHistory,
+	} from "./lib/actions";
 	import Header from "./components/shell/Header.svelte";
 	import Pane from "./components/shell/Pane.svelte";
 	import GroupView from "./components/shell/GroupView.svelte";
@@ -189,23 +203,12 @@
 		if (!(mobile || viewport.narrow) || !app.graphOpen) return;
 		return backLayer({ onclose: () => app.toggleGraph(false) });
 	});
-	// With nothing left to close, back goes to the conversation seen before (any server) rather than leaving the app.
+	// Record visited conversations across all platforms (phone back button, mouse Back/Forward buttons, and shortcuts).
 	// The graph and its quick look are not pages: what they open while up is not remembered.
-	const trail = new BackTrail();
 	$effect(() => {
-		if (!mobile || !app.serverId || app.graphOpen) return;
-		trail.visit({ server: app.serverId, session: app.activeId });
+		if (!app.serverId || app.graphOpen) return;
+		recordSessionVisit(app.serverId, app.activeId);
 	});
-	function goBack(): boolean {
-		const page = trail.back((p) => {
-			const l = app.links[p.server];
-			return !!l && !!p.session && (l.sessionById.has(p.session) || l.data.terminals.some((x) => x.id === p.session));
-		});
-		if (!page?.session) return false;
-		if (page.server === app.serverId && app.net !== "idle") void app.openSession(page.session);
-		else app.openIn(page.server, { session: page.session });
-		return true;
-	}
 	onMount(() => {
 		if (!mobile) return;
 		let off: (() => void) | undefined;
@@ -213,7 +216,7 @@
 		// plugin-process is desktop only; the app module's exit() finishes the Android activity (core:app:allow-exit).
 		void import("@tauri-apps/api/app").then(async ({ onBackButtonPress, exit }) => {
 			const l = await onBackButtonPress(async () => {
-				if (handleBack() || goBack()) return;
+				if (handleBack() || stepSessionHistory("back")) return;
 				await exit(0);
 			});
 			if (gone) void l.unregister();
@@ -324,7 +327,19 @@
 	onkeydown={onShortcut}
 	onkeyup={onShortcutUp}
 	onkeyupcapture={onShortcutUpCapture}
-	onpointerdowncapture={(e) => (notePress(e), cancelChord())}
+	onmousedowncapture={onMouseNavDown}
+	onmouseupcapture={onMouseNavUp}
+	onauxclickcapture={onMouseNavAuxClick}
+	onpointerdowncapture={(e) => {
+		if (mouseNavDirection(e.button)) {
+			// Keep mouse Back/Forward buttons from focusing panes or starting drags while still letting mousedown fire.
+			cancelChord();
+			e.stopPropagation();
+			return;
+		}
+		notePress(e);
+		cancelChord();
+	}}
 	onblur={resetKeyboard}
 />
 

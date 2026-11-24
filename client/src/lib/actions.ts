@@ -9,12 +9,21 @@ import { projectKey } from "./projects";
 import { stepFrom, tabPanes } from "./nav";
 import { appTakesKey } from "./terminal";
 import {
+  BackTrail,
+  browserNavKeyDirection,
+  MouseNavController,
+  mouseNavDirection,
+  type NavDirection,
+  type Page,
+} from "./back-trail";
+import {
   actionFor,
   buildCombo,
   escapeShouldStop,
   escapeShouldUnzoom,
   hasLongerBinding,
   isBareCombo,
+  isMac,
   keyName,
   MAX_KEYS,
   nextChord,
@@ -25,7 +34,7 @@ import {
   tabComboYieldsFocus,
   type ActionId,
 } from "./keys";
-import { topLayer } from "./dialog";
+import { handleBack, hasBackLayer, topLayer } from "./dialog";
 import { renameNow } from "./rename-places";
 import { chord } from "./chord.svelte";
 import { extensions } from "./extensions/host.svelte";
@@ -134,6 +143,74 @@ function stepTab(step: 1 | -1) {
   else app.toast(t("이동할 다른 탭이 없습니다"), "info");
 }
 
+/**
+ * Shared conversation visit history across desktop, web, and mobile (mouse Back/Forward buttons, BrowserBack/Forward
+ * keys, Mod+[ / Mod+], Windows/Linux Alt+ArrowLeft/Right, and the phone back button).
+ */
+const sessionTrail = new BackTrail();
+
+export function recordSessionVisit(server: string, session: string | null) {
+  sessionTrail.visit({ server, session });
+}
+
+function isPageUsable(p: Page): boolean {
+  const l = app.links[p.server];
+  return !!l && !!p.session && (l.sessionById.has(p.session) || l.data.terminals.some((x) => x.id === p.session));
+}
+
+/** Step backward or forward through visited conversations/terminals (across servers). Returns true when a page opened. */
+export function stepSessionHistory(dir: NavDirection): boolean {
+  const page = dir === "back" ? sessionTrail.back(isPageUsable) : sessionTrail.forward(isPageUsable);
+  if (!page?.session) return false;
+  if (page.server === app.serverId && app.net !== "idle") focusPane(page.session);
+  else {
+    app.zoomId = null;
+    app.openIn(page.server, { session: page.session });
+  }
+  return true;
+}
+
+/**
+ * Handle a Back/Forward gesture from a mouse side button, BrowserBack/Forward key, or history shortcut.
+ * Never switches conversations behind an open modal, context menu, or while recording a shortcut.
+ */
+export function handleNavGesture(dir: NavDirection) {
+  if (app.prefs.recordingKey) return;
+  if (dir === "back") {
+    if (handleBack()) return;
+    if (document.querySelector(OVERLAY_SELECTOR)) return;
+    if (app.graphOpen) {
+      app.toggleGraph(false);
+      return;
+    }
+    stepSessionHistory("back");
+    return;
+  }
+  if (hasBackLayer() || topLayer() || app.graphOpen || document.querySelector(OVERLAY_SELECTOR)) return;
+  stepSessionHistory("forward");
+}
+
+const mouseNav = new MouseNavController((dir) => {
+  cancelChord();
+  handleNavGesture(dir);
+});
+
+export const onMouseNavDown = (e: MouseEvent) => {
+  mouseNav.down(e);
+};
+
+export const onMouseNavUp = (e: MouseEvent) => {
+  mouseNav.up(e);
+};
+
+export const onMouseNavAuxClick = (e: MouseEvent) => {
+  mouseNav.auxClick(e);
+};
+
+export const resetMouseNav = () => {
+  mouseNav.reset();
+};
+
 /** Back to the pane focused before this one, also on another server. */
 function lastSession() {
   const id = app.previousId;
@@ -238,6 +315,8 @@ const RUN: Record<ActionId, () => void | Promise<void>> = {
   nextWorkspace: () => stepWorkspace(1),
   prevTab: () => stepTab(-1),
   nextTab: () => stepTab(1),
+  navBack: () => handleNavGesture("back"),
+  navForward: () => handleNavGesture("forward"),
   tabOverview: () => {
     // Only where the tab-count button shows: a server, and a folder with at least one tab.
     if (app.tabOverview) app.tabOverview = false;
@@ -333,6 +412,7 @@ function typingTarget(e: KeyboardEvent) {
 let pressed: Element | null = null;
 
 export function notePress(e: PointerEvent) {
+  if (mouseNavDirection(e.button)) return;
   pressed = e.target instanceof Element ? e.target : null;
 }
 
@@ -371,6 +451,18 @@ function armPrefixAction(id: ActionId) {
  * completes the shortcut or, when nothing is bound to it, ends the wait. There is no time limit.
  */
 export function onShortcutCapture(e: KeyboardEvent) {
+  // Mouse macros and multimedia keyboards often emit BrowserBack / BrowserForward: always block browser page navigation
+  // and walk conversation history even when focus is inside a terminal, text field, or IME composition.
+  const browserNav = browserNavKeyDirection(e);
+  if (browserNav) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!e.repeat && !app.prefs.recordingKey) {
+      cancelChord();
+      handleNavGesture(browserNav);
+    }
+    return;
+  }
   const prefix = chord.prefix;
   if (!prefix || topLayer() || app.prefs.recordingKey || e.isComposing) return;
   if (MODIFIER_CODE.test(e.code)) return;
@@ -519,6 +611,13 @@ export function onShortcut(e: KeyboardEvent) {
     }
     return;
   }
+  // Windows/Linux: browser-standard Alt+ArrowLeft / Alt+ArrowRight (also sent by mouse macros) walk conversation
+  // history when unbound, without disturbing macOS Option+Arrow word navigation or terminal shells.
+  if (!isMac && !fromTerminal && e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey && (e.code === "ArrowLeft" || e.code === "ArrowRight")) {
+    e.preventDefault();
+    fired = true;
+    handleNavGesture(e.code === "ArrowLeft" ? "back" : "forward");
+  }
 }
 
 function extensionShortcutFailed(cause: unknown) {
@@ -566,6 +665,7 @@ export function clearHeldKeys() {
 export function resetKeyboard() {
   clearHeldKeys();
   cancelChord();
+  resetMouseNav();
   endExtensionHold("blur");
   // The keyup of a held voice recording will not arrive either: stop it rather than leave the microphone open.
   voiceKeyPress.cancel();

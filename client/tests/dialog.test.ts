@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { backLayer, handleBack, modalCount, modalLayer, onModalStackChange, toggleLayer, trapTab, type LayerOpts } from "../src/lib/dialog";
+import { backLayer, handleBack, hasBackLayer, modalCount, modalLayer, onModalStackChange, toggleLayer, trapTab, type LayerOpts } from "../src/lib/dialog";
 
 /** Just enough DOM for the Tab trap: focusable children with a layout box, and a document focus pointer. */
 type Fake = { name: string; tabIndex: number; focus: () => void; getClientRects: () => unknown[]; closest: () => null };
@@ -90,6 +90,7 @@ describe("handleBack (native back button)", () => {
 
 	test("nothing open: returns false, so the app may exit", () => {
 		fakeBrowser();
+		expect(hasBackLayer()).toBe(false);
 		expect(handleBack()).toBe(false);
 	});
 
@@ -97,6 +98,7 @@ describe("handleBack (native back button)", () => {
 		fakeBrowser();
 		const closed: string[] = [];
 		const drawer = backLayer({ onclose: () => closed.push("drawer") });
+		expect(hasBackLayer()).toBe(true);
 		const modal = backLayer({ onclose: () => closed.push("modal") });
 		expect(handleBack()).toBe(true);
 		expect(closed).toEqual(["modal"]);
@@ -104,6 +106,7 @@ describe("handleBack (native back button)", () => {
 		expect(handleBack()).toBe(true);
 		expect(closed).toEqual(["modal", "drawer"]);
 		drawer();
+		expect(hasBackLayer()).toBe(false);
 		expect(handleBack()).toBe(false);
 	});
 

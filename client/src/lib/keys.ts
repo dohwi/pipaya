@@ -20,6 +20,8 @@ export type ActionId =
   | "nextWorkspace"
   | "prevTab"
   | "nextTab"
+  | "navBack"
+  | "navForward"
   | "lastSession"
   | "nextAttention"
   | "findChat"
@@ -150,6 +152,18 @@ const BASE: Omit<ActionDef, "group">[] = [
     label: msg("다음 탭으로 이동"),
     hint: msg("탭 바에서 오른쪽 탭으로 (끝에서는 반대쪽 끝으로)"),
     default: "Mod+Shift+BracketRight",
+  },
+  {
+    id: "navBack",
+    label: msg("이전 대화로 이동 (뒤로 가기)"),
+    hint: msg("방문 기록에서 바로 전에 보던 대화로 돌아갑니다. 마우스 뒤로 가기 버튼과 같습니다"),
+    default: "Mod+BracketLeft",
+  },
+  {
+    id: "navForward",
+    label: msg("다음 대화로 이동 (앞으로 가기)"),
+    hint: msg("방문 기록에서 뒤로 간 뒤 다시 다음 대화로 이동합니다. 마우스 앞으로 가기 버튼과 같습니다"),
+    default: "Mod+BracketRight",
   },
   {
     id: "tabOverview",
@@ -375,6 +389,8 @@ const GROUP: Partial<Record<ActionId, ActionDef["group"]>> = {
   nextWorkspace: "nav",
   prevTab: "nav",
   nextTab: "nav",
+  navBack: "nav",
+  navForward: "nav",
   tabOverview: "nav",
   lastSession: "nav",
   nextAttention: "nav",
