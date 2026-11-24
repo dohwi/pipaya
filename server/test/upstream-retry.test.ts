@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { createAssistantMessageEventStream, type AssistantMessage, type Context } from "@earendil-works/pi-ai";
-import { classifyUpstreamError, completeWithUpstreamRetry, isTransientUpstreamError, isZeroOutputError, retryReason, withUpstreamRetry } from "../src/upstream-retry.ts";
+import { classifyUpstreamError, completeWithUpstreamRetry, isProxyWarmupError, isTransientUpstreamError, isZeroOutputError, retryReason, withUpstreamRetry } from "../src/upstream-retry.ts";
 
 const msg = (over: Partial<AssistantMessage>): AssistantMessage =>
 	({ role: "assistant", content: [], stopReason: "stop", timestamp: 0, ...over }) as AssistantMessage;
@@ -110,9 +110,10 @@ test("classifyUpstreamError sorts errors into transient, permanent and unknown",
 		"upstream stream closed before any chunk carried finish_reason",
 		"upstream stream closed before [DONE]",
 		"upstream stream closed before message_stop",
+		'400: {"message":"unknown provider for model gemini-4-neon","type":"invalid_request_error","code":"model_not_found","param":"model"}',
 	])
 		expect([m, kind(m)]).toEqual([m, "transient"]);
-	for (const m of ["401 invalid api key", "403 Forbidden", "400 invalid_request_error: messages: field required", "404 model not found", "insufficient_quota", "quota exceeded: 500", "claude refusal (cyber): Cyber safeguards flagged this message", "prompt is too long: 250000 tokens > 200000 maximum"])
+	for (const m of ["401 invalid api key", "403 Forbidden", "400 invalid_request_error: messages: field required", "404 model not found", '400: {"message":"The model `gpt-99` does not exist","type":"invalid_request_error","code":"model_not_found"}', "insufficient_quota", "quota exceeded: 500", "claude refusal (cyber): Cyber safeguards flagged this message", "prompt is too long: 250000 tokens > 200000 maximum"])
 		expect([m, kind(m)]).toEqual([m, "permanent"]);
 	for (const m of ["something odd happened", ""])
 		expect([m, kind(m)]).toEqual([m, "unknown"]);
@@ -310,4 +311,85 @@ test("maxZeroOutputRetries caps consecutive zero-output retries, announces the c
 	);
 	expect(compReply.stopReason).toBe("error");
 	expect(compCalls).toBe(2);
+});
+
+test("proxy warm-up errors retry through restarts and respect maxWarmupRetries", async () => {
+	const warmupErr = '400: {"message":"unknown provider for model gemini-4-neon","type":"invalid_request_error","code":"model_not_found","param":"model"}';
+	expect(isProxyWarmupError(warmupErr)).toBe(true);
+	expect(isProxyWarmupError(undefined)).toBe(false);
+	expect(isProxyWarmupError("")).toBe(false);
+	expect(isProxyWarmupError("404 model not found")).toBe(false);
+
+	// Pure warm-up failures stop at maxWarmupRetries and announce the capped total.
+	const announced: [number, number][] = [];
+	let calls = 0;
+	const fn = withUpstreamRetry((() => (calls++, failing(warmupErr))) as any, {
+		maxRetries: 6,
+		maxWarmupRetries: 2,
+		baseDelayMs: 5,
+		maxDelayMs: 20,
+		sleep: async () => {},
+		onRetry: (attempt, maxRetries) => void announced.push([attempt, maxRetries]),
+	});
+	expect((await call(fn).result()).stopReason).toBe("error");
+	expect(calls).toBe(3);
+	expect(announced).toEqual([[1, 2], [2, 2]]);
+
+	// Realistic CLIProxy restart: ECONNREFUSED while down, then 400 "unknown provider for model" while loading providers, then ok.
+	// Warm-up retries have their own counter so prior ECONNREFUSED attempts do not exhaust maxWarmupRetries before the proxy even boots.
+	const restartAnnounced: [number, number][] = [];
+	const seq = [
+		"connect ECONNREFUSED 127.0.0.1:8317",
+		"connect ECONNREFUSED 127.0.0.1:8317",
+		"connect ECONNREFUSED 127.0.0.1:8317",
+		warmupErr,
+		warmupErr,
+	];
+	let idx = 0;
+	const fnRestart = withUpstreamRetry((() => (idx < seq.length ? failing(seq[idx++]!) : ok())) as any, {
+		maxRetries: 6,
+		maxWarmupRetries: 2,
+		baseDelayMs: 5,
+		maxDelayMs: 20,
+		sleep: async () => {},
+		onRetry: (attempt, maxRetries) => void restartAnnounced.push([attempt, maxRetries]),
+	});
+	expect((await call(fnRestart).result()).stopReason).toBe("stop");
+	expect(idx).toBe(5);
+	expect(restartAnnounced).toEqual([[1, 6], [2, 6], [3, 6], [4, 5], [5, 5]]);
+
+	// maxWarmupRetries=0 disables warm-up retries completely.
+	let disabledCalls = 0;
+	const fnDisabled = withUpstreamRetry((() => (disabledCalls++, failing(warmupErr))) as any, {
+		maxRetries: 6,
+		maxWarmupRetries: 0,
+		baseDelayMs: 5,
+		maxDelayMs: 20,
+		sleep: async () => {},
+	});
+	expect((await call(fnDisabled).result()).stopReason).toBe("error");
+	expect(disabledCalls).toBe(1);
+
+	// completeWithUpstreamRetry handles both returned error replies and thrown warm-up errors with the cap.
+	const ctx = { messages: [{ role: "user" as const, content: "hi", timestamp: 1 }] } as unknown as Context;
+	let compCalls = 0;
+	const compReply = await completeWithUpstreamRetry(
+		async () => (compCalls++, msg({ stopReason: "error", errorMessage: warmupErr })),
+		ctx,
+		{ maxRetries: 5, maxWarmupRetries: 2, baseDelayMs: 5, maxDelayMs: 20, sleep: async () => {} },
+	);
+	expect(compReply.stopReason).toBe("error");
+	expect(compCalls).toBe(3);
+
+	let throwCalls = 0;
+	const compRecovered = await completeWithUpstreamRetry(
+		async () => {
+			if (++throwCalls < 3) throw new Error(warmupErr);
+			return msg({ stopReason: "stop", content: [{ type: "text", text: "ok" }] });
+		},
+		ctx,
+		{ maxRetries: 5, maxWarmupRetries: 2, baseDelayMs: 5, maxDelayMs: 20, sleep: async () => {} },
+	);
+	expect(compRecovered.stopReason).toBe("stop");
+	expect(throwCalls).toBe(3);
 });

@@ -82,6 +82,33 @@ describe("retryDroppedMidStream", () => {
 		]);
 	});
 
+	test("enforces maxWarmupRetries cap for proxy startup warm-up errors", async () => {
+		const warmupErr = '400: {"message":"unknown provider for model gemini-4-neon","type":"invalid_request_error","code":"model_not_found"}';
+		const messages: AgentMessage[] = [partialError(warmupErr)];
+		const notices: RetryNotice[] = [];
+		let continues = 0;
+
+		const res = await retryDroppedMidStream({
+			getLastMessage: () => messages[messages.length - 1],
+			shouldStop: () => false,
+			sleep: async () => ({ aborted: false }),
+			dropLastReply: () => { messages.pop(); },
+			continueRun: async () => {
+				continues++;
+				messages.push(partialError(warmupErr));
+			},
+			onRetry: (n) => notices.push(n),
+			retryOpts: { maxRetries: 5, maxWarmupRetries: 2, baseDelayMs: 10, maxDelayMs: 100 },
+		});
+
+		expect(res).toEqual({ attempts: 2, aborted: false, forceStopped: false, error: null });
+		expect(continues).toBe(2);
+		expect(notices.map((n) => [n.attempt, n.maxRetries])).toEqual([
+			[1, 2],
+			[2, 2],
+		]);
+	});
+
 	test("gives unclassified errors at most a single retry", async () => {
 		const messages: AgentMessage[] = [partialError("weird bespoke proxy glitch xyz")];
 		let continues = 0;
