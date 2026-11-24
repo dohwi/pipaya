@@ -770,6 +770,7 @@ export class ChatState {
 					const opt = this.items.find((x): x is UserItem => x.kind === "user" && x.seq === null);
 					if (opt) {
 						opt.seq = seq;
+						if (m.timestamp) opt.ts = m.timestamp;
 						// A command typed short but stored expanded (with a note) or with `/skill:` hints: show what was really sent.
 						const full = userFields(m);
 						if (full.note) Object.assign(opt, { text: full.text, note: full.note });

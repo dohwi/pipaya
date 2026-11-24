@@ -6,6 +6,7 @@
 	import ExtensionMount from "../extensions/ExtensionMount.svelte";
 	import ExtensionPart from "../extensions/ExtensionPart.svelte";
 	import type { AssistantItem, UserItem } from "../../lib/types";
+	import type { PromptDuration } from "../../lib/prompt-duration";
 
 	/**
 	 * One row of the transcript. `turn`: for an assistant row, every consecutive assistant message answering one prompt
@@ -18,7 +19,8 @@
 		last = false,
 		live = false,
 		working = false,
-	}: { item: UserItem | AssistantItem; turn?: AssistantItem[]; last?: boolean; live?: boolean; working?: boolean } = $props();
+		elapsed,
+	}: { item: UserItem | AssistantItem; turn?: AssistantItem[]; last?: boolean; live?: boolean; working?: boolean; elapsed?: PromptDuration } = $props();
 
 	const pane = getPane();
 	const session = $derived(app.session(pane.id));
@@ -28,7 +30,7 @@
 
 {#if item.kind === "user"}
 	<ExtensionPart part="message.user" props={{ item, working, paneId: pane.id }}>
-		<UserMessage {item} {session} {working} {level} onreply={(text, who) => (app.replyTo = { text, who })} />
+		<UserMessage {item} {session} {working} {level} {elapsed} onreply={(text, who) => (app.replyTo = { text, who })} />
 	</ExtensionPart>
 	<ExtensionMount slot="message.user.after" props={{ item, paneId: pane.id }} />
 {:else}

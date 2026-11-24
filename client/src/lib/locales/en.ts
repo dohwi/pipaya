@@ -215,6 +215,7 @@ export const en: Record<string, string> = {
 	"완료": "Done",
 	"{n}개 실패": "{n} failed",
 	"{when} 완료": "Finished {when}",
+	"{time} 소요": "Took {time}",
 	"저장되지 않은 변경이 있습니다.": "You have unsaved changes.",
 	"계속 편집": "Keep editing",
 	"저장하지 않고 닫기": "Close without saving",
