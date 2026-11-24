@@ -1,6 +1,19 @@
 import { describe, expect, test } from "bun:test";
-import { clockMinutes, dayLabel, nextChange, pastChange, dayStart, fileStamp, fullTime, messageTime, pastLabel, shortDate, shortDateTime, timeOfDay } from "../src/lib/format";
+import { clockMinutes, dayLabel, duration, nextChange, pastChange, dayStart, fileStamp, fullTime, messageTime, pastLabel, shortDate, shortDateTime, timeOfDay } from "../src/lib/format";
 import { setLang } from "../src/lib/i18n";
+
+describe("duration", () => {
+	test("formats ms, seconds, minutes+seconds without 60s rollover, and hours", () => {
+		expect(duration(420)).toBe("420ms");
+		expect(duration(3_450)).toBe("3.5s");
+		expect(duration(59_949)).toBe("59.9s");
+		expect(duration(59_950)).toBe("1m");
+		expect(duration(119_600)).toBe("2m");
+		expect(duration(125_000)).toBe("2m 5s");
+		expect(duration(3_600_000)).toBe("1h");
+		expect(duration(3_900_000)).toBe("1h 5m");
+	});
+});
 
 describe("fileStamp", () => {
 	test("local date and time, zero padded", () => {

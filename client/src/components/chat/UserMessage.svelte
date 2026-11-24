@@ -1,8 +1,9 @@
 <script lang="ts">
 	import IconButton from "../ui/IconButton.svelte";
 	import { t } from "../../lib/i18n";
-	import { fullTime } from "../../lib/format";
+	import { duration, fullTime } from "../../lib/format";
 	import { liveMessageTime } from "../../lib/minute-clock.svelte";
+	import type { PromptDuration } from "../../lib/prompt-duration";
 	import { parsePeer } from "../../lib/peers";
 	import Icon from "../ui/Icon.svelte";
 	import FileChip from "./FileChip.svelte";
@@ -28,8 +29,9 @@
 		session,
 		working = false,
 		level,
+		elapsed,
 		onreply,
-	}: { item: UserItem; session: Session | undefined; working?: boolean; level?: string; onreply: (text: string, who?: string) => void } = $props();
+	}: { item: UserItem; session: Session | undefined; working?: boolean; level?: string; elapsed?: PromptDuration; onreply: (text: string, who?: string) => void } = $props();
 
 	/** Set when an extension recognises the first line of the message (`sdk.messages.setHeader`): a label for where it came from. */
 	const header = $derived(parsePeer(item.text) ?? extensions.headerOf(item.text));
@@ -43,6 +45,7 @@
 	};
 	/** A prompt a scheduled task sent: the bubble is labelled "예약" like a message from another session is labelled with its sender. */
 	const scheduled = $derived(!!item.scheduled && !header);
+	const headed = $derived(!!header || scheduled);
 	const shown = $derived(splitQuote(header ? header.body : item.text));
 	const copied = new CopyFlag();
 	onDestroy(() => copied.dispose());
@@ -123,7 +126,18 @@
 		{#if item.seq !== null && session && item.text}
 			<IconButton icon="fork" label={t("여기서 분기해 다시 쓰기")} tip size="sm" onclick={() => app.branchEdit(session.id, item.seq!, item.text)} />
 		{/if}
-		{#if item.ts}<time class="when" use:tapTitle datetime={new Date(item.ts).toISOString()} title={fullTime(item.ts)}>{liveMessageTime(item.ts)}</time>{/if}
+		{#if item.ts || elapsed}
+			<span class="meta">
+				{#if elapsed}
+					<span class="elapsed" use:tapTitle title={t("{when} 완료", { when: fullTime(elapsed.endedAt) })}>
+						{#if headed && item.ts}<span class="sep" aria-hidden="true">·</span>{/if}
+						{t("{time} 소요", { time: duration(elapsed.elapsedMs) })}
+						{#if !headed && item.ts}<span class="sep" aria-hidden="true">·</span>{/if}
+					</span>
+				{/if}
+				{#if item.ts}<time class="when" use:tapTitle datetime={new Date(item.ts).toISOString()} title={fullTime(item.ts)}>{liveMessageTime(item.ts)}</time>{/if}
+			</span>
+		{/if}
 	</div>
 </div>
 
@@ -291,25 +305,42 @@
 		/* 8px glyph inset less the 2px the last box is pulled in: the last glyph's right edge lands on the content's right edge */
 		margin-right: -6px;
 	}
-	/* when it was sent, last in the row so it ends on the bubble's right line whether or not the buttons show: the row
-	   bleeds 6px for a last glyph (below), which the time takes back; 8px from the glyph before it (its box bleeds 2px) */
-	.when {
-		margin-left: 6px;
-		margin-right: 6px;
+	/* when it was sent (and, on hover after completion, how long the task took), last in the row so the time ends on the
+	   bubble's right line whether or not the buttons show: the row bleeds 6px for a last glyph (above), which this takes
+	   back; 8px from the glyph before it (its box bleeds 2px) */
+	.meta {
+		display: inline-flex;
+		align-items: center;
+		margin-left: 6px; /* 8px from the glyph before it (its box bleeds 2px) */
+		margin-right: 6px; /* takes back the row's 6px right bleed so the time ends on the bubble's right line */
 		font-size: var(--fs-2xs);
 		line-height: 20px;
 		color: var(--text-faint);
 		white-space: nowrap;
+	}
+	.sep {
+		margin-inline: 4px;
+	}
+	/* total elapsed time for this prompt's completed work: waits for hover/focus/tap with the buttons so the row stays
+	   quiet at rest and the timestamp never shifts */
+	.elapsed {
+		display: inline-flex;
+		align-items: center;
+		opacity: 0;
+		transition: opacity var(--motion-fast) var(--ease-std);
 	}
 	/* a message from another session or a scheduled task sits on the left: the row mirrors the answer's foot, the time
 	   first on the bubble's left line and the buttons after it, so the hidden buttons no longer push the time inwards */
 	.row.user.headed .actions {
 		margin-right: 0;
 	}
-	.row.user.headed .when {
+	.row.user.headed .meta {
 		order: -1;
 		margin-left: 0;
 		margin-right: 4px; /* the next box overlaps 2px and holds its 14px glyph 9px in: 11px to the ink, as the answer's stats */
+	}
+	.row.user.headed .elapsed {
+		order: 1;
 	}
 	/* copy / reply / branch are lighter than the app's other buttons: a 14px glyph at 1.75 in the time's faint colour,
 	   so they read as part of the time's line instead of three dark marks after it (16px at stroke 2 did). Hover brings the text colour */
@@ -336,21 +367,25 @@
 		transition: opacity var(--motion-fast) var(--ease-std);
 	}
 	/* the buttons are IconButton's markup: `:global`, or the compiler drops the rule and Tab never reveals them */
-	.actions:has(:global(:focus-visible)) :global(.iconbtn) {
+	.actions:has(:global(:focus-visible)) :global(.iconbtn),
+	.actions:has(:global(:focus-visible)) .elapsed {
 		opacity: 1;
 	}
 	/* hover only where it is a real pointer: a tap leaves :hover stuck on the row (see AssistantMessage) */
 	@media (hover: hover) {
-		.row.user:hover .actions :global(.iconbtn) {
+		.row.user:hover .actions :global(.iconbtn),
+		.row.user:hover .elapsed {
 			opacity: 1;
 		}
 	}
 	/* no hover on a phone: a tap on the message shows its buttons (the answer's do the same); hidden ones take no taps */
 	@media (pointer: coarse) {
-		.actions :global(.iconbtn) {
+		.actions :global(.iconbtn),
+		.elapsed {
 			pointer-events: none;
 		}
-		.row.user.shown .actions :global(.iconbtn) {
+		.row.user.shown .actions :global(.iconbtn),
+		.row.user.shown .elapsed {
 			opacity: 1;
 			pointer-events: auto;
 		}

@@ -20,6 +20,7 @@
 	import { skeletonGate } from "../../lib/skeleton-gate.svelte";
 	import ChatSkeleton from "./ChatSkeleton.svelte";
 	import { uniqueBy } from "../../lib/unique";
+	import { promptDurations } from "../../lib/prompt-duration";
 
 	/** `held`: the conversation kept on screen (dimmed) while the pane's newly opened one loads; it must not record scroll */
 	/** `late`: the pane already waited on this conversation (it held the previous one), so its skeleton shows at once */
@@ -364,6 +365,9 @@
 		return undefined;
 	});
 
+	/** Total wall-clock time from each completed prompt to the end of its work (including goal continuations). */
+	const elapsedOf = $derived(promptDurations(units, chat.tools, chat.running));
+
 </script>
 
 <svelte:window onpointerup={onPointerUp} onpointercancel={onPointerUp} onkeydown={onKeyDown} />
@@ -413,7 +417,7 @@
 						<!-- a turn the goal started by itself: no bubble (the person did not write it), a line like the day heading -->
 						<div class="cont" role="separator" aria-label={t("목표를 이어서 진행")} title={fullTime(u.item.ts)}><span class="cl"><Icon name="target" />{t("목표를 이어서 진행")}</span></div>
 					{:else if u.kind === "user"}
-						<Message item={u.item} working={u.item.key === lastUserKey} />
+						<Message item={u.item} working={u.item.key === lastUserKey} elapsed={elapsedOf[n]} />
 					{:else}
 						{@const end = n === units.length - 1}
 						<Message item={u.items[u.items.length - 1]!} turn={u.items} last={end} live={end && chat.running} />

@@ -7,12 +7,16 @@ export const compact = (n: number): string =>
       ? `${(n / 1000).toFixed(n >= 10_000 ? 0 : 1)}k`
       : String(n);
 
-export const duration = (ms: number): string =>
-  ms < 1000
-    ? `${Math.round(ms)}ms`
-    : ms < 60_000
-      ? `${(ms / 1000).toFixed(1)}s`
-      : `${Math.floor(ms / 60_000)}m ${Math.round((ms % 60_000) / 1000)}s`;
+export const duration = (ms: number): string => {
+  if (ms < 1000) return `${Math.round(ms)}ms`;
+  if (ms < 59_950) return `${(ms / 1000).toFixed(1)}s`;
+  const totalSec = Math.round(ms / 1000);
+  const h = Math.floor(totalSec / 3600);
+  const m = Math.floor((totalSec % 3600) / 60);
+  const s = totalSec % 60;
+  if (h > 0) return m > 0 ? `${h}h ${m}m` : `${h}h`;
+  return s > 0 ? `${m}m ${s}s` : `${m}m`;
+};
 
 export const clip = (s: string, n: number): string =>
   s.length > n ? `${s.slice(0, n - 1)}…` : s;
