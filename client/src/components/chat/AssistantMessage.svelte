@@ -365,7 +365,7 @@
 	.fell {
 		color: var(--text-dim);
 	}
-	/* the line at rest is "time · model · level/speed"; tokens and duration show with the buttons. Nothing to its left
+	/* the line at rest is "time · model · level · speed"; tokens and duration show with the buttons. Nothing to its left
 	   moves when it appears, and the buttons were invisible until then, so their shift goes unseen */
 	.more {
 		display: none;
