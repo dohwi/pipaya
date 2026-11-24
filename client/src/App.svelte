@@ -3,6 +3,7 @@
 	import { onMount, untrack } from "svelte";
 	import { installFocusRescue } from "./lib/focus-rescue";
 	import { isTouch } from "./lib/format";
+	import { warmMarkdown } from "./lib/markdown";
 	import { backLayer, handleBack } from "./lib/dialog";
 	import { BackTrail } from "./lib/back-trail";
 	import { OVERLAY_SELECTOR } from "./lib/keys";
@@ -134,7 +135,7 @@
 	// Cold markdown code is what the first reply stalls on (lib/markdown.ts): warm it once the first paint is done.
 	onMount(() => {
 		const run = () => {
-			void import("./lib/markdown").then((m) => m.warmMarkdown());
+			warmMarkdown();
 			// Settings is the dialog people open most: fetched on the first click, its sheet arrived ~0.6s late on a phone.
 			void preload(load.settings).catch(() => {});
 		};

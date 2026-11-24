@@ -104,13 +104,16 @@ export function streamSplit(src: string): number {
  * would add a line that vanishes once the third arrives, bouncing the height (and the pinned scroll) by a line every
  * block. Hide that unfinished fence until it is complete.
  */
+const FENCE_TAIL = /\n[ \t]*(`{1,2}|~{1,2})$/;
+
 export function hideFenceTail(src: string): string {
 	// any indent: a fence inside an indented block is a fence too (see NO_INDENTED_CODE)
-	const m = /\n[ \t]*(`{1,2}|~{1,2})$/.exec(src);
+	const m = FENCE_TAIL.exec(src);
 	if (!m) return src;
 	const last = lastBlock(src);
 	// the indented block's code has its indent taken off, so match the fence characters on their own line
-	if (last?.type !== "code" || !new RegExp(`\\n[ \\t]*${m[1]}$`).test(last.raw)) return src;
+	const tail = last?.type === "code" ? FENCE_TAIL.exec(last.raw) : null;
+	if (!tail || tail[1] !== m[1]) return src;
 	return src.slice(0, m.index);
 }
 

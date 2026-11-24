@@ -2,7 +2,8 @@ import { clip, firstLine } from "./format";
 
 export type ToolIcon = "file" | "pencil" | "folder" | "search" | "terminal" | "bolt" | "chat" | "skill" | "fork" | "brain" | "list" | "sparkles";
 
-const str = (v: unknown) => (typeof v === "string" ? v : v == null ? "" : JSON.stringify(v));
+export const toolArgStr = (v: unknown): string => (typeof v === "string" ? v : v == null ? "" : JSON.stringify(v));
+const str = toolArgStr;
 
 /** What a tool call really is. A `read` of a SKILL.md is a skill being loaded gets its own look. */
 export type ToolKind = "read" | "write" | "edit" | "ls" | "grep" | "bash" | "skill" | "think" | "image" | "other";

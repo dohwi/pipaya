@@ -59,9 +59,20 @@ export const dayStart = (ts: number): number => {
  * this year's. Korean keeps the weekday in brackets with or without the year: Intl writes "10월 13일 (화)" but
  * "2025년 10월 18일 토", and the two stood one above the other in a long transcript.
  */
+const rtfCache = new Map<string, Intl.RelativeTimeFormat>();
+function rtf(locale?: string): Intl.RelativeTimeFormat {
+  const key = locale ?? "";
+  let cached = rtfCache.get(key);
+  if (!cached) {
+    cached = new Intl.RelativeTimeFormat(locale, { numeric: "auto" });
+    rtfCache.set(key, cached);
+  }
+  return cached;
+}
+
 export function dayLabel(ts: number, locale?: string, now: number = Date.now()): string {
   const days = Math.round((dayStart(now) - dayStart(ts)) / 86_400_000); // round: a DST day is 23 or 25 hours
-  if (days === 0 || days === 1) return new Intl.RelativeTimeFormat(locale, { numeric: "auto" }).format(-days, "day");
+  if (days === 0 || days === 1) return rtf(locale).format(-days, "day");
   const year = new Date(ts).getFullYear() !== new Date(now).getFullYear();
   if (year && (locale ?? localeTag()).startsWith("ko"))
     return `${fmt(locale, { year: "numeric", month: "long", day: "numeric" }).format(ts)} (${fmt(locale, { weekday: "short" }).format(ts)})`;
