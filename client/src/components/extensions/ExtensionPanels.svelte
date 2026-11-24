@@ -218,7 +218,7 @@
 	.nav-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--fs-xs); font-weight: 600; }
 	.owner { font-size: var(--fs-2xs); color: var(--text-faint); overflow-wrap: anywhere; }
 	.railowner { flex: none; max-width: 90px; padding-left: 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; border-left: 1px solid var(--border); }
-	.panel-body { flex: 1; min-width: 0; min-height: 0; padding: 24px; overflow-y: auto; overscroll-behavior: contain; }
+	.panel-body { flex: 1; min-width: 0; min-height: 0; padding: 24px; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; }
 	.panel-body > .feedback { margin-bottom: 16px; }
 	.surface-heading { margin-bottom: 24px; padding-bottom: 20px; border-bottom: 1px solid var(--border); }
 	.eyebrow { font-family: var(--mono); font-size: var(--fs-2xs); color: var(--text-faint); overflow-wrap: anywhere; }
@@ -227,11 +227,29 @@
 	.composer-panels { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
 	.summary-title { flex: 1; min-width: 0; color: var(--text-dim); font-size: var(--fs-xs); font-weight: 600; overflow-wrap: anywhere; }
 	.composer-panels .owner { max-width: 40%; }
-	.composer-panels.in-sidebar { max-height: calc(var(--dvh) * 0.45); overflow-y: auto; padding: 0 8px 8px; }
+	.composer-panels.in-sidebar { max-height: calc(var(--dvh) * 0.45); overflow-x: hidden; overflow-y: auto; padding: 0 8px 8px; }
 	@media (max-width: 640px) {
 		.tabbar { padding: 8px 12px; }
 		:global(.iconbtn.step) { display: none; }
 		.panel-body { flex: 1; padding: 20px 16px; }
 		.surface-heading { margin-bottom: 20px; }
+	}
+
+	/* persistent side panel: the scrollbar thumb shows only while hovered or focused (no layout shift) */
+	@media (hover: hover) and (pointer: fine) {
+		.composer-panels.in-sidebar {
+			scrollbar-color: transparent transparent;
+		}
+		.composer-panels.in-sidebar:hover,
+		.composer-panels.in-sidebar:focus-within {
+			scrollbar-color: var(--border-strong) transparent;
+		}
+		.composer-panels.in-sidebar::-webkit-scrollbar-thumb {
+			background: transparent;
+		}
+		.composer-panels.in-sidebar:hover::-webkit-scrollbar-thumb,
+		.composer-panels.in-sidebar:focus-within::-webkit-scrollbar-thumb {
+			background: var(--border-strong);
+		}
 	}
 </style>

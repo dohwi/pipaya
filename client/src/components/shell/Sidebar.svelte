@@ -609,6 +609,7 @@
 		--band: color-mix(in srgb, var(--text) 3.5%, var(--bg-side));
 		position: relative;
 		flex: 1;
+		overflow-x: hidden;
 		overflow-y: auto;
 		padding: 8px 0 16px; /* 8 below the brand row, 16 above the window edge */
 		scroll-padding-block: 8px;
@@ -826,6 +827,24 @@
 		}
 		.navbtn {
 			height: 40px;
+		}
+	}
+
+	/* persistent side panel: the scrollbar thumb shows only while hovered or focused (no layout shift) */
+	@media (hover: hover) and (pointer: fine) {
+		.list {
+			scrollbar-color: transparent transparent;
+		}
+		.list:hover,
+		.list:focus-within {
+			scrollbar-color: var(--border-strong) transparent;
+		}
+		.list::-webkit-scrollbar-thumb {
+			background: transparent;
+		}
+		.list:hover::-webkit-scrollbar-thumb,
+		.list:focus-within::-webkit-scrollbar-thumb {
+			background: var(--border-strong);
 		}
 	}
 </style>

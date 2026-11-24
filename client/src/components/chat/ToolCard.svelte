@@ -277,7 +277,8 @@
 		margin: 0;
 		padding: 8px 12px;
 		max-height: 320px;
-		overflow: auto;
+		overflow-x: hidden;
+		overflow-y: auto;
 		border-radius: var(--radius-sm);
 		background: var(--bg-code);
 		font-size: var(--fs-xs);
@@ -299,7 +300,8 @@
 		white-space: pre-wrap;
 		word-break: break-all;
 		max-height: 200px;
-		overflow: auto;
+		overflow-x: hidden;
+		overflow-y: auto;
 	}
 	.del {
 		background: var(--danger-soft);

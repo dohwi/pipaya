@@ -437,6 +437,7 @@
 		align-self: stretch;
 		padding: 12px; /* 12 + the rows' 12 + the dialog's 1px border = 25: the icons and group labels start on the title's and search field's line */
 		border-right: 1px solid var(--border);
+		overflow-x: hidden;
 		overflow-y: auto;
 		scroll-padding-block: 8px;
 	}
@@ -578,6 +579,24 @@
 		.nav .go :global(svg) {
 			width: 16px;
 			height: 16px;
+		}
+	}
+
+	/* persistent side panel: the scrollbar thumb shows only while hovered or focused (no layout shift) */
+	@media (hover: hover) and (pointer: fine) {
+		.nav {
+			scrollbar-color: transparent transparent;
+		}
+		.nav:hover,
+		.nav:focus-within {
+			scrollbar-color: var(--border-strong) transparent;
+		}
+		.nav::-webkit-scrollbar-thumb {
+			background: transparent;
+		}
+		.nav:hover::-webkit-scrollbar-thumb,
+		.nav:focus-within::-webkit-scrollbar-thumb {
+			background: var(--border-strong);
 		}
 	}
 </style>

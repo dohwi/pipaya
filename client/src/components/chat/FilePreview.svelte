@@ -182,12 +182,14 @@
 
 <style>
 	.body {
-		overflow: auto;
+		overflow-x: hidden;
+		overflow-y: auto;
 		padding: 12px;
 		min-height: 120px;
 	}
 	.pic {
 		display: block;
+		max-width: 100%;
 		margin: 0 auto;
 		padding: 0;
 		cursor: zoom-in;

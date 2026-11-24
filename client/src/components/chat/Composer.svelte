@@ -1022,7 +1022,7 @@
 
 <style>
 	/* Floats in the gap above the box (4px clear of it) so showing or hiding it never moves the chat or the input */
-	.extension-widgets { max-height: min(40dvh, 320px); overflow-y: auto; overscroll-behavior: contain; }
+	.extension-widgets { max-height: min(40dvh, 320px); overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; }
 	.extension-widgets:not(:empty) { margin-bottom: 8px; }
 	.extension-actions { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
 	.wrap {
@@ -1194,6 +1194,24 @@
 			.prompt-hint {
 				font-size: var(--fs-md);
 			}
+		}
+	}
+
+	/* persistent side panel: the scrollbar thumb shows only while hovered or focused (no layout shift) */
+	@media (hover: hover) and (pointer: fine) {
+		.extension-widgets {
+			scrollbar-color: transparent transparent;
+		}
+		.extension-widgets:hover,
+		.extension-widgets:focus-within {
+			scrollbar-color: var(--border-strong) transparent;
+		}
+		.extension-widgets::-webkit-scrollbar-thumb {
+			background: transparent;
+		}
+		.extension-widgets:hover::-webkit-scrollbar-thumb,
+		.extension-widgets:focus-within::-webkit-scrollbar-thumb {
+			background: var(--border-strong);
 		}
 	}
 </style>

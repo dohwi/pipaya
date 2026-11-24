@@ -344,6 +344,7 @@
 		flex-direction: column;
 		gap: var(--dlg-gap);
 		padding: var(--dlg-body-t) var(--dlg-px) 8px;
+		overflow-x: hidden;
 		overflow-y: auto;
 		scroll-padding-block: 12px;
 	}

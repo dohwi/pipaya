@@ -93,6 +93,24 @@
 	header { flex: none; display: flex; align-items: center; gap: 4px; padding: 0 4px 0 0; box-shadow: inset 0 -1px 0 var(--border); }
 	.tabs { flex: 1; min-width: 0; }
 	.tabs :global(.utabs > button) { max-width: 180px; overflow: hidden; text-overflow: ellipsis; }
-	.body { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 12px; }
+	.body { flex: 1; min-height: 0; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; padding: 12px; }
 	.desc { margin: 0 0 12px; font-size: var(--fs-xs); color: var(--text-dim); line-height: 1.6; overflow-wrap: anywhere; }
+
+	/* persistent side panel: the scrollbar thumb shows only while hovered or focused (no layout shift) */
+	@media (hover: hover) and (pointer: fine) {
+		.body {
+			scrollbar-color: transparent transparent;
+		}
+		.body:hover,
+		.body:focus-within {
+			scrollbar-color: var(--border-strong) transparent;
+		}
+		.body::-webkit-scrollbar-thumb {
+			background: transparent;
+		}
+		.body:hover::-webkit-scrollbar-thumb,
+		.body:focus-within::-webkit-scrollbar-thumb {
+			background: var(--border-strong);
+		}
+	}
 </style>

@@ -134,6 +134,7 @@
 		display: flex;
 		flex-direction: column;
 		flex: 1;
+		overflow-x: hidden;
 		overflow-y: auto;
 		margin: 0 -4px; /* 4px of room for the rows' focus ring, taken back so the rows stay on the gutter */
 		padding: 0 4px;

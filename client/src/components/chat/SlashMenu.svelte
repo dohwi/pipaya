@@ -63,6 +63,7 @@
 		right: 0;
 		bottom: calc(100% + 8px);
 		max-height: min(300px, calc(var(--dvh) * 0.40));
+		overflow-x: hidden;
 		overflow-y: auto;
 		background: var(--bg-elev);
 		border: 1px solid var(--border-strong);

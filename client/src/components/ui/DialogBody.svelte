@@ -14,6 +14,7 @@
 
 <style>
 	.dbody {
+		overflow-x: hidden;
 		overflow-y: auto;
 		padding: var(--dlg-body-t) var(--dlg-px) var(--dlg-body-b);
 		min-height: 80px;
