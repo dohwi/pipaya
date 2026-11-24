@@ -71,6 +71,11 @@
 	.actions { display: flex; justify-content: flex-end; margin-left: auto; }
 	.actions :global(.btn) { flex: none; white-space: nowrap; }
 	.actions :global(.btn svg) { width: 14px; height: 14px; }
+	/* phones: stretch wrapped action full-width instead of floating right with dead left space */
+	@media (max-width: 640px) {
+		.actions { width: 100%; margin-left: 0; }
+		.actions :global(.btn) { width: 100%; }
+	}
 	.bar { height: 3px; background: var(--border); }
 	.bar span { display: block; height: 100%; background: var(--accent); transition: width var(--motion-fast) var(--ease-std); }
 	.err-gap { padding-top: 8px; }

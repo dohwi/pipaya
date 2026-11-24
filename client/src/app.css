@@ -326,18 +326,18 @@
 	--lv-max: #dc2626;
 	--mark-img: #71717a;
 	--mark-file: #71717a;
-	--mark-header: #b45309; /* amber-700: the peer header label and tint on light surfaces (dark uses #fcd34d) */
-	--mark-mention: #b45309;
+	--mark-header: #92400e; /* amber-800: 4.5:1+ even over tinted chips on --user-bg #f5f5f7 (dark uses #fcd34d) */
+	--mark-mention: #92400e;
 	/* The four status colours are text as often as fills (badges, chips, the who/@name, notices, errors), so each is set
 	   for 4.5:1 or better as text on every light surface, its own soft tint included (worst case: on --bg-active under
 	   the tint). They were 2.5 (ok) to 3.6 (danger): "사용 가능", "오류", "꺼짐" read faint. The soft tints keep the old,
 	   brighter hue, which only tints. White text on each is 5.9:1 or better. */
-	--info: #1960c2;
+	--info: #175cb8;
 	--pinned: #000000;
-	--ok: #0d734b;
+	--ok: #0b6e47;
 	--ok-fg: #ffffff;
 	--warn: #905600;
-	--danger: #bd2531;
+	--danger: #b5212d;
 	--info-soft: rgba(29, 111, 224, 0.1);
 	--ok-soft: rgba(18, 163, 106, 0.1);
 	--warn-soft: rgba(184, 110, 0, 0.1);
@@ -805,7 +805,7 @@ kbd {
 }
 .cbadge.danger {
 	background: var(--danger);
-	color: #fff;
+	color: var(--accent-fg);
 }
 /* the failed tint is as soft as the others: the solid red above is for the extension panel's "!" */
 .cbadge.tint.danger {

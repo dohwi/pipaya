@@ -102,11 +102,15 @@
 		position: relative;
 		z-index: 1;
 		flex: none;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
 		height: 40px;
 		padding: 0 12px;
 		border-bottom: 2px solid transparent; /* the selected tab's bar covers the hairline */
 		color: var(--text-dim);
 		font-size: var(--fs-sm);
+		line-height: 20px;
 		font-weight: 550;
 		white-space: nowrap;
 		transition: color var(--motion-fast) var(--ease-std);
@@ -170,6 +174,12 @@
 	.cards > button.on[data-tone="warn"] {
 		color: var(--warn);
 		background: var(--warn-soft);
+	}
+	/* Declared after .on and tone variants so disabled cards never keep active fills/borders. */
+	.cards > button:disabled {
+		background: var(--disabled-bg);
+		border-color: var(--disabled-border);
+		color: var(--disabled-fg);
 	}
 	/* the sliding ring (drawn over the card) replaces the card's own border; the fill still cross-fades */
 	.cards:global([data-indicator-ready]) > button.on {

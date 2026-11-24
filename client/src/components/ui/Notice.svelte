@@ -69,7 +69,7 @@
 		align-items: flex-start;
 		padding: 8px 12px;
 		border-radius: var(--radius);
-		background: var(--bg-elev);
+		background: var(--bg-active); /* distinct from --bg, --bg-elev and --bg-set in both themes */
 		color: var(--text-dim);
 		font-size: var(--fs-sm);
 		line-height: 20px; /* whole-pixel line: 1.5 (19.5px) put the text's ink 1.4px off the 17px icon */

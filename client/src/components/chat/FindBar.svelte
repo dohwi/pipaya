@@ -220,6 +220,8 @@
 		min-width: 44px;
 		text-align: right;
 		font-size: var(--fs-xs, 12px);
+		line-height: 16px;
+		font-variant-numeric: tabular-nums;
 		color: var(--text-dim);
 	}
 	.n.none {
@@ -237,6 +239,9 @@
 		.b:hover:not(:disabled) {
 			background: var(--accent-soft);
 		}
+	}
+	.b:disabled {
+		color: var(--disabled-fg);
 	}
 	.b:disabled {
 		color: var(--disabled-fg);

@@ -592,14 +592,14 @@
 	.control:focus-visible { outline: 2px solid var(--accent); outline-offset: -1px; border-color: var(--accent); }
 	.control[aria-invalid="true"] { border-color: var(--danger); }
 	.control[aria-invalid="true"]:focus-visible { outline-color: var(--danger); }
-	.control:disabled, .btn:disabled { background: var(--disabled-bg); border-color: var(--disabled-border); color: var(--disabled-fg); cursor: not-allowed; }
+	.control:disabled { background: var(--disabled-bg); border-color: var(--disabled-border); color: var(--disabled-fg); cursor: not-allowed; }
 	.check { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-width: 0; }
 	.checklabel { font-size: var(--fs-sm); font-weight: 450; line-height: 20px; color: var(--text); overflow-wrap: anywhere; }
 	.error { margin: 0; font-size: var(--fs-xs); line-height: 1.45; color: var(--danger); }
 	.error:empty { display: none; }
 
 	.button-wrap { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; min-width: 0; }
-	.btn { height: auto; min-height: var(--control-h-sm); max-width: 100%; padding: 4px 12px; border-radius: var(--radius-control); font-size: var(--fs-sm); line-height: 1.3; font-weight: 600; white-space: normal; overflow-wrap: anywhere; }
+	.btn { height: auto; min-height: var(--control-h-sm); max-width: 100%; padding: 4px 12px; border-radius: var(--radius-control); font-size: var(--fs-sm); line-height: 20px; font-weight: 600; white-space: normal; overflow-wrap: anywhere; }
 	.btn.primary { background: var(--accent); color: var(--accent-fg); }
 	@media (hover: hover) {
 		.btn.primary:hover:not(:disabled) { background: var(--accent-hover); }
@@ -612,6 +612,8 @@
 	@media (hover: hover) {
 		.btn.danger:hover:not(:disabled) { background: var(--danger); color: var(--accent-fg); }
 	}
+	/* Declared after all .btn variants so disabled buttons never keep active variant fills/colors. */
+	.btn:disabled { background: var(--disabled-bg); border-color: var(--disabled-border); color: var(--disabled-fg); cursor: not-allowed; }
 
 	@media (prefers-reduced-motion: reduce) {
 		.control { transition: none; }

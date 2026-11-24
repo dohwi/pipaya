@@ -415,11 +415,13 @@
 		padding: 0 8px;
 		border-radius: var(--radius-sm);
 		font-size: var(--fs-lg); /* same size as the md trigger: no jump when it opens */
+		line-height: 20px;
 		color: var(--text);
 		cursor: pointer;
 		transition: background-color var(--motion-fast) var(--ease-std);
 	}
 	.list.sm .opt { font-size: var(--fs-md); }
+	.list.mono .opt { font-size: var(--fs-sm); }
 	.opt.act {
 		background: var(--bg-hover);
 	}

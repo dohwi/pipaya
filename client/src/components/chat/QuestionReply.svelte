@@ -286,6 +286,12 @@
 		width: 16px;
 		height: 16px;
 	}
+	@media (hover: hover) {
+		.nav:hover:not(:disabled) {
+			background: var(--bg-hover);
+			color: var(--text);
+		}
+	}
 	.nav:disabled {
 		color: var(--disabled-fg);
 	}
@@ -293,6 +299,7 @@
 		min-width: 48px;
 		text-align: center;
 		font-size: var(--fs-xs);
+		line-height: 16px;
 		font-variant-numeric: tabular-nums;
 		color: var(--text);
 	}
