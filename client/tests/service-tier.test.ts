@@ -15,19 +15,19 @@ describe("replySpeed", () => {
 			kind: "tier",
 			tier: "priority",
 			confirmed: false,
-			label: "Fast",
+			label: "fast",
 		});
 		expect(replySpeed([{ requestedTier: "ultrafast" }], { requestedTier: "ultrafast" })).toEqual({
 			kind: "tier",
 			tier: "ultrafast",
 			confirmed: false,
-			label: "Ultrafast",
+			label: "ultrafast",
 		});
 		expect(replySpeed([{ requestedTier: "flex" }], { requestedTier: "flex" })).toEqual({
 			kind: "tier",
 			tier: "flex",
 			confirmed: false,
-			label: "Flex",
+			label: "flex",
 		});
 	});
 
@@ -36,13 +36,13 @@ describe("replySpeed", () => {
 			kind: "tier",
 			tier: "priority",
 			confirmed: true,
-			label: "Fast",
+			label: "fast",
 		});
 		expect(replySpeed([{ servedTier: "priority" }], { servedTier: "priority" })).toEqual({
 			kind: "tier",
 			tier: "priority",
 			confirmed: true,
-			label: "Fast",
+			label: "fast",
 		});
 	});
 
@@ -59,19 +59,19 @@ describe("replySpeed", () => {
 			kind: "fell",
 			asked: "priority",
 			served: "default",
-			label: "Fast → 표준",
+			label: "fast → 표준",
 		});
 		expect(replySpeed([{ requestedTier: "ultrafast", servedTier: "priority" }], { requestedTier: "ultrafast", servedTier: "priority" })).toEqual({
 			kind: "fell",
 			asked: "ultrafast",
 			served: "priority",
-			label: "Ultrafast → Fast",
+			label: "ultrafast → fast",
 		});
 		expect(replySpeed([{ requestedTier: "default", servedTier: "priority" }], { requestedTier: "default", servedTier: "priority" })).toEqual({
 			kind: "fell",
 			asked: "default",
 			served: "priority",
-			label: "표준 → Fast",
+			label: "표준 → fast",
 		});
 	});
 });

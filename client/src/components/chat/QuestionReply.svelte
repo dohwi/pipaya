@@ -5,7 +5,6 @@
 	import Icon from "../ui/Icon.svelte";
 	import Ladder from "../ui/Ladder.svelte";
 	import { THINKING_LEVELS, type Question } from "../../lib/types";
-	import { thinkingLabel } from "../../lib/thinking";
 	import { unique } from "../../lib/unique";
 
 	let { id, paneId, question }: { id: string; paneId: string | null; question: Pick<Question, "question" | "options" | "recommended" | "scale" | "multiple" | "descriptions" | "allowFreeText" | "items"> } = $props();
@@ -136,7 +135,7 @@
 	{#if ladder}
 		<Ladder
 			label={cur.question}
-			options={options.map((o) => ({ id: o, label: isLevel(o) ? thinkingLabel(o) : o, level: isLevel(o) ? o : undefined, marked: cur.recommended === o, title: cur.recommended === o ? t("추천") : undefined }))}
+			options={options.map((o) => ({ id: o, label: o, level: isLevel(o) ? o : undefined, marked: cur.recommended === o, title: cur.recommended === o ? t("추천") : undefined }))}
 			value={items && typeof answers[tab] === "string" ? (answers[tab] as string) : null}
 			onchange={reply}
 		/>

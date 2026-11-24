@@ -1,7 +1,7 @@
 import { t } from "./i18n";
 import type { ServiceTier } from "./types";
 
-export const tierLabel = (tier: ServiceTier) => tier === "default" ? t("표준") : ({ flex: "Flex", priority: "Fast", ultrafast: "Ultrafast" })[tier];
+export const tierLabel = (tier: ServiceTier) => tier === "default" ? t("표준") : ({ flex: "flex", priority: "fast", ultrafast: "ultrafast" })[tier];
 
 export type TierMeta = { requestedTier?: ServiceTier; servedTier?: ServiceTier };
 
