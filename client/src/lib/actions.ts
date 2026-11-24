@@ -1,5 +1,6 @@
 import { errorText } from "./api";
 import { app } from "./store.svelte";
+import { workspaceViewer } from "./workspace-viewer.svelte";
 import { isTauri } from "./tauri";
 import { findChat, runCommand } from "./commands";
 import { chooseGroupLayout } from "./layout-picker";
@@ -138,10 +139,21 @@ function stepWorkspace(step: 1 | -1) {
  * pane. From a new chat (nothing focused) forward starts at the first tab, back at the last.
  */
 function stepTab(step: 1 | -1) {
-  const order = app.stripDirs.flatMap((d) => d.tabs.flatMap((x) => tabPanes(x))).filter((id) => app.shows(id));
-  const id = stepFrom(order, app.activeId, step);
-  if (id && id !== app.activeId) focusPane(id);
-  else app.toast(t("이동할 다른 탭이 없습니다"), "info");
+  const paneIds = app.stripDirs.flatMap((d) => d.tabs.flatMap((x) => tabPanes(x))).filter((id) => app.shows(id));
+  const fileKeys = workspaceViewer.openFiles.map((p) => `file:${p}`);
+  const order = [...paneIds, ...fileKeys];
+  const current = workspaceViewer.activeFile ? `file:${workspaceViewer.activeFile}` : app.activeId;
+  const next = stepFrom(order, current, step);
+  if (!next || next === current) {
+    app.toast(t("이동할 다른 탭이 없습니다"), "info");
+    return;
+  }
+  if (next.startsWith("file:")) {
+    void workspaceViewer.activateFile(next.slice(5));
+  } else {
+    workspaceViewer.deactivateFile();
+    focusPane(next);
+  }
 }
 
 /**
@@ -321,7 +333,13 @@ const RUN: Record<ActionId, () => void | Promise<void>> = {
   },
   newChat: () => app.newChatInPane(),
   clearChat: () => app.clearChatInPane(),
-  closeSession: () => app.closeActive(),
+  closeSession: () => {
+    if (workspaceViewer.activeFile) {
+      workspaceViewer.closeFile(workspaceViewer.activeFile);
+      return;
+    }
+    void app.closeActive();
+  },
   prevRow: () => stepRow(-1),
   nextRow: () => stepRow(1),
   prevWorkspace: () => stepWorkspace(-1),

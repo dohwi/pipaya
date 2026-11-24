@@ -352,10 +352,14 @@
 					{@render tabItem(x, on, st)}
 				{/if}
 			{/each}
+			{#if tabs.length > 0 && fileTabs.length > 0}
+				<span class="fdiv" aria-hidden="true"></span>
+			{/if}
 			{#each fileTabs as fp (fp)}
 				{@const on = fp === activeFile}
 				{@const ch = workspaceViewer.changeFor(fp)}
 				{@const base = fp.split("/").pop() ?? fp}
+				{@const fCloseTip = t("닫기") + (on && app.prefs.bindings.closeSession ? ` · ${formatCombo(app.prefs.bindings.closeSession)}` : "")}
 				<!-- svelte-ignore a11y_no_static_element_interactions -->
 				<div
 					class="tab filetab"
@@ -393,7 +397,7 @@
 							workspaceViewer.closeFile(fp);
 						}}
 						aria-label={t("닫기")}
-						title={t("닫기")}
+						title={fCloseTip}
 					>
 						<Icon name="x" />
 					</button>
@@ -907,6 +911,14 @@
 		}
 	}
 
+	.fdiv {
+		flex: none;
+		width: 1px;
+		height: 16px;
+		margin: 0 4px;
+		background: var(--tabbar-line);
+		align-self: center;
+	}
 	.fdot {
 		flex: none;
 		width: 6px; /* optical 6px indicator matching sidebar status dots */

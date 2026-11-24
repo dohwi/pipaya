@@ -421,18 +421,14 @@
 		popoverPos = { top: Math.round(top), left: Math.round(left) };
 	}
 
-	function positionBelowRow(mode: "file" | "diff", idx: number, openFull: boolean) {
+	function positionBelowRow(mode: "file" | "diff", idx: number) {
 		const attr = mode === "diff" ? `[data-drow="${idx}"]` : `[data-frow="${idx}"]`;
 		const row = scrollHost?.querySelector<HTMLElement>(attr);
 		if (!row) return;
 		const rect = row.getBoundingClientRect();
 		const paneRect = scrollHost?.getBoundingClientRect();
-		const anchorLeft = Math.max(paneRect ? paneRect.left + 56 : rect.left + 56, 24);
-		positionBelow(
-			new DOMRect(anchorLeft, rect.top, rect.width, rect.height),
-			openFull ? 480 : 240,
-			openFull ? 196 : 44,
-		);
+		const anchorLeft = Math.max(paneRect ? paneRect.left + 64 : rect.left + 64, 24);
+		positionBelow(new DOMRect(anchorLeft, rect.top, rect.width, rect.height), 480, 196);
 	}
 
 	const selectedIndexSet = $derived.by(() => {
@@ -486,7 +482,7 @@
 			if (selection?.kind === "lines" && selection.indices.length > 0) {
 				const last = Math.max(...selection.indices);
 				popoverOpen = true;
-				positionBelowRow(selection.mode, last, true);
+				positionBelowRow(selection.mode, last);
 				requestAnimationFrame(() => {
 					popoverEl?.querySelector<HTMLTextAreaElement>("textarea.cta")?.focus();
 				});
@@ -500,7 +496,7 @@
 		};
 	});
 
-	// Close floating popover when clicking outside (unless clicking a line number or comment trigger).
+	// Close floating popover when clicking outside (unless clicking the left gutter or file comment trigger).
 	$effect(() => {
 		if (!selection) return;
 		const onDocDown = (e: PointerEvent) => {
@@ -509,7 +505,6 @@
 			if (popoverEl?.contains(target)) return;
 			if (target.closest(".lnbtn, [data-file-comment-btn]")) return;
 			if (draggingRange) return;
-			if (target.closest('[data-part="workspace-file-pane"] .lines') && !popoverOpen) return;
 			clearSelection();
 		};
 		window.addEventListener("pointerdown", onDocDown);
@@ -539,7 +534,7 @@
 			}
 			selection = { kind: "lines", mode, path: selectedPath, indices: next, anchorIdx: idx };
 			popoverOpen = true;
-			positionBelowRow(mode, idx, true);
+			positionBelowRow(mode, idx);
 			requestAnimationFrame(() => popoverEl?.querySelector<HTMLTextAreaElement>("textarea.cta")?.focus());
 			return;
 		}
@@ -549,7 +544,7 @@
 			const next = rangeArray(cur.anchorIdx, idx);
 			selection = { ...cur, indices: next };
 			popoverOpen = true;
-			positionBelowRow(mode, Math.max(cur.anchorIdx, idx), true);
+			positionBelowRow(mode, Math.max(cur.anchorIdx, idx));
 			requestAnimationFrame(() => popoverEl?.querySelector<HTMLTextAreaElement>("textarea.cta")?.focus());
 			return;
 		}
@@ -585,33 +580,8 @@
 			commentText = "";
 		}
 		popoverOpen = true;
-		positionBelowRow(mode, idx, true);
+		positionBelowRow(mode, idx);
 		requestAnimationFrame(() => popoverEl?.querySelector<HTMLTextAreaElement>("textarea.cta")?.focus());
-	}
-
-	/** Allow drag-selecting directly across code text (without even touching the line-number gutter!) */
-	function onCodeMouseUp(mode: "file" | "diff") {
-		if (draggingRange || !selectedPath) return;
-		const winSel = window.getSelection();
-		if (!winSel || winSel.isCollapsed || !winSel.toString().trim()) return;
-		const range = winSel.rangeCount > 0 ? winSel.getRangeAt(0) : null;
-		if (!range) return;
-		const attr = mode === "diff" ? "data-drow" : "data-frow";
-		const findRowIdx = (node: Node | null): number | null => {
-			let el: HTMLElement | null = node instanceof HTMLElement ? node : node?.parentElement ?? null;
-			while (el && !el.hasAttribute(attr)) el = el.parentElement;
-			if (!el) return null;
-			const n = Number(el.getAttribute(attr));
-			return Number.isFinite(n) ? n : null;
-		};
-		const a = findRowIdx(range.startContainer);
-		const b = findRowIdx(range.endContainer);
-		if (a === null || b === null) return;
-		const indices = rangeArray(a, b);
-		selection = { kind: "lines", mode, path: selectedPath, indices, anchorIdx: a };
-		popoverOpen = false;
-		const rect = range.getBoundingClientRect();
-		positionBelow(rect, 260, 44);
 	}
 
 	function toggleFileComment(e: MouseEvent) {
@@ -625,14 +595,6 @@
 		popoverOpen = true;
 		const btn = e.currentTarget as HTMLElement | null;
 		if (btn) positionBelow(btn.getBoundingClientRect(), 460, 186, "right");
-		requestAnimationFrame(() => popoverEl?.querySelector<HTMLTextAreaElement>("textarea.cta")?.focus());
-	}
-
-	function expandFloatingPill() {
-		if (!selection || selection.kind !== "lines") return;
-		popoverOpen = true;
-		const last = Math.max(...selection.indices);
-		positionBelowRow(selection.mode, last, true);
 		requestAnimationFrame(() => popoverEl?.querySelector<HTMLTextAreaElement>("textarea.cta")?.focus());
 	}
 
@@ -864,8 +826,7 @@
 						{#if currentFileData?.truncated}
 							<div class="trunc">{t("파일이 커서 앞부분만 표시합니다 (읽기 전용).")}</div>
 						{/if}
-						<!-- svelte-ignore a11y_no_static_element_interactions -->
-						<div class="lines mono" class:selecting={draggingRange} onmouseup={() => onCodeMouseUp("diff")}>
+						<div class="lines mono" class:selecting={draggingRange}>
 							{#each fullDiffRows as dl, idx (idx)}
 								{@const html = highlightedDiffLines?.[idx]}
 								{@const inRange = selection?.kind === "lines" && selection.mode === "diff" && selectedIndexSet.has(idx)}
@@ -985,8 +946,7 @@
 							</table>
 						</div>
 					{:else}
-						<!-- svelte-ignore a11y_no_static_element_interactions -->
-						<div class="lines mono" class:selecting={draggingRange} onmouseup={() => onCodeMouseUp("file")}>
+						<div class="lines mono" class:selecting={draggingRange}>
 							{#each rawLines as line, idx (idx)}
 								{@const ln = idx + 1}
 								{@const html = highlightedLines?.[idx]}
@@ -1023,11 +983,10 @@
 		{/if}
 	{/if}
 
-	<!-- Floating Comment Popover / Pill anchored right below the clicked line, range, text drag, or file button -->
-	{#if selection && !editing}
+	<!-- Draggable Floating Comment Popover anchored below the clicked left-gutter line/range or file comment button -->
+	{#if selection && popoverOpen && !editing}
 		<div
 			class="float-pop"
-			class:pill={!popoverOpen}
 			class:moving={draggingPopover}
 			bind:this={popoverEl}
 			style:top="{popoverPos.top}px"
@@ -1037,53 +996,42 @@
 			in:surfaceIn={{ y: 6 }}
 			out:surfaceOut={{ y: 6 }}
 		>
-			{#if !popoverOpen && selection.kind === "lines"}
-				<div class="fpill">
-					<span class="cloc mono" title="{commentParts.path}{commentParts.suffix}">
-						<span class="cpath">{baseName(commentParts.path)}</span>{#if commentParts.suffix}<span class="clines">{commentParts.suffix}</span>{/if}
+			<div class="fcard">
+				<!-- svelte-ignore a11y_no_static_element_interactions -->
+				<div class="chead" onpointerdown={startPopoverDrag} title={t("드래그하여 이동")}>
+					<span class="cgrip" aria-hidden="true">
+						<svg viewBox="0 0 10 14" fill="currentColor">
+							<circle cx="2.5" cy="3" r="1.2" /><circle cx="7.5" cy="3" r="1.2" />
+							<circle cx="2.5" cy="7" r="1.2" /><circle cx="7.5" cy="7" r="1.2" />
+							<circle cx="2.5" cy="11" r="1.2" /><circle cx="7.5" cy="11" r="1.2" />
+						</svg>
 					</span>
-					<Button size="sm" variant="primary" onclick={expandFloatingPill}>{t("코멘트")}</Button>
-					<Button size="sm" variant="default" onclick={insertToComposer}>{t("입력창에 넣기")}</Button>
+					<span class="cloc mono" title="{commentParts.path}{commentParts.suffix}">
+						<span class="cpath">{commentParts.path}</span>{#if commentParts.suffix}<span class="clines">{commentParts.suffix}</span>{/if}
+					</span>
 					<IconButton icon="x" size="sm" label={t("닫기")} onclick={clearSelection} />
 				</div>
-			{:else}
-				<div class="fcard">
-					<!-- svelte-ignore a11y_no_static_element_interactions -->
-					<div class="chead" onpointerdown={startPopoverDrag} title={t("드래그하여 이동")}>
-						<span class="cgrip" aria-hidden="true">
-							<svg viewBox="0 0 10 14" fill="currentColor">
-								<circle cx="2.5" cy="3" r="1.2" /><circle cx="7.5" cy="3" r="1.2" />
-								<circle cx="2.5" cy="7" r="1.2" /><circle cx="7.5" cy="7" r="1.2" />
-								<circle cx="2.5" cy="11" r="1.2" /><circle cx="7.5" cy="11" r="1.2" />
-							</svg>
-						</span>
-						<span class="cloc mono" title="{commentParts.path}{commentParts.suffix}">
-							<span class="cpath">{commentParts.path}</span>{#if commentParts.suffix}<span class="clines">{commentParts.suffix}</span>{/if}
-						</span>
-						<IconButton icon="x" size="sm" label={t("닫기")} onclick={clearSelection} />
+				<!-- svelte-ignore a11y_autofocus -->
+				<textarea
+					class="cta"
+					rows="2"
+					autofocus
+					bind:value={commentText}
+					onkeydown={onCommentKey}
+					placeholder={t("수정 요청을 입력하거나 비우고 Enter로 줄 위치만 입력창에 넣으세요…")}
+				></textarea>
+				<div class="cfoot">
+					<div class="cact">
+						<Button size="sm" variant="primary" onclick={insertToComposer}>{t("입력창에 넣기")}</Button>
+						<Button size="sm" variant="default" disabled={sending || !commentText.trim()} onclick={sendNow}>{t("바로 보내기")}</Button>
 					</div>
-					<!-- svelte-ignore a11y_autofocus -->
-					<textarea
-						class="cta"
-						rows="2"
-						autofocus
-						bind:value={commentText}
-						onkeydown={onCommentKey}
-						placeholder={t("수정 요청을 입력하거나 비우고 Enter로 줄 위치만 입력창에 넣으세요…")}
-					></textarea>
-					<div class="cfoot">
-						<div class="cact">
-							<Button size="sm" variant="primary" onclick={insertToComposer}>{t("입력창에 넣기")}</Button>
-							<Button size="sm" variant="default" disabled={sending || !commentText.trim()} onclick={sendNow}>{t("바로 보내기")}</Button>
-						</div>
-						<span class="chint">
-							{selection.kind === "lines"
-								? t("Shift·Ctrl+클릭·드래그로 다중 선택")
-								: t("Enter 입력창에 넣기 · Ctrl+Enter 바로 보내기")}
-						</span>
-					</div>
+					<span class="chint">
+						{selection.kind === "lines"
+							? t("Shift·Ctrl+클릭·드래그로 다중 선택")
+							: t("Enter 입력창에 넣기 · Ctrl+Enter 바로 보내기")}
+					</span>
 				</div>
-			{/if}
+			</div>
 		</div>
 	{/if}
 </section>
@@ -1306,9 +1254,10 @@
 	}
 	.lnbtn {
 		position: relative;
-		width: 48px;
-		padding: 0 8px 0 4px;
+		width: 56px;
+		padding: 0 8px 0 16px;
 		border: 0;
+		border-right: 1px solid var(--border);
 		background: transparent;
 		color: var(--text-faint);
 		font: inherit;
@@ -1318,13 +1267,19 @@
 		user-select: none;
 		line-height: 20px;
 	}
+	@media (hover: hover) {
+		.lnbtn:hover {
+			background: var(--bg-active);
+			color: var(--text);
+		}
+	}
 	.lnbtn.diff-ln {
-		width: 84px;
+		width: 88px;
 		display: inline-flex;
 		align-items: center;
 		justify-content: flex-end;
 		gap: 4px;
-		padding: 0 4px 0 16px;
+		padding: 0 8px 0 16px;
 	}
 	.dln {
 		width: 30px;
@@ -1524,16 +1479,6 @@
 	.float-pop.moving {
 		user-select: none;
 		-webkit-user-select: none;
-	}
-	.float-pop.pill {
-		width: auto;
-		max-width: calc(100vw - 24px);
-	}
-	.fpill {
-		display: flex;
-		align-items: center;
-		gap: 8px;
-		padding: 4px 8px;
 	}
 	.fcard {
 		display: flex;
