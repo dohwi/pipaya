@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { buildApp, type App } from "../src/app.ts";
 import type { Config } from "../src/config.ts";
+import { MAX_IMAGES } from "../src/schemas.ts";
 
 const TOKEN = "ws-test-token-0123456789abcdef0123";
 let dir: string;
@@ -154,5 +155,25 @@ describe("websocket slow clients", () => {
 		expect(code).toBe(1013);
 		await slow.close();
 		rmSync(dir2, { recursive: true, force: true });
+	});
+});
+
+describe("websocket prompt image limit", () => {
+	test("accepts up to MAX_IMAGES (16) images in schema validation and rejects the 17th", async () => {
+		const { ws, frames } = await open();
+		const img = { type: "image", data: "AA==", mimeType: "image/png" };
+		ws.send(JSON.stringify({ id: 1, op: "prompt", sessionId: "missing", text: "sixteen", images: Array.from({ length: MAX_IMAGES }, () => img) }));
+		const okSchema = await ack(frames, 1);
+		expect(okSchema.ok).toBe(false);
+		expect(okSchema.error.code).toBe("not_found");
+
+		ws.send(JSON.stringify({ id: 2, op: "prompt", sessionId: "missing", text: "seventeen", images: Array.from({ length: MAX_IMAGES + 1 }, () => img) }));
+		const badSchema = await ack(frames, 2);
+		expect(badSchema.ok).toBe(false);
+		expect(badSchema.error.code).toBe("invalid_request");
+
+		const done = closed(ws, 1000);
+		ws.close();
+		await done;
 	});
 });

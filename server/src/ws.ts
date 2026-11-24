@@ -4,6 +4,7 @@ import Type from "typebox";
 import type { QuestionManager } from "./questions.ts";
 import { HttpError, parse } from "./errors.ts";
 import type { EventBus } from "./events.ts";
+import { MAX_IMAGES } from "./schemas.ts";
 import type { SessionManager } from "./sessions.ts";
 import { MIN_CLIENT_PROTOCOL, PROTOCOL_VERSION, SERVER_VERSION } from "./version.ts";
 
@@ -37,7 +38,7 @@ const Prompt = Type.Object({
 	sessionId: Type.String(),
 	text: Type.String({ minLength: 1 }),
 	mode: Type.Optional(Type.Union([Type.Literal("prompt"), Type.Literal("steer"), Type.Literal("follow_up")])),
-	images: Type.Optional(Type.Array(Type.Object({ type: Type.Literal("image"), data: Type.String(), mimeType: Type.String() }), { maxItems: 8 })),
+	images: Type.Optional(Type.Array(Type.Object({ type: Type.Literal("image"), data: Type.String(), mimeType: Type.String() }), { maxItems: MAX_IMAGES })),
 });
 const Abort = Type.Object({ sessionId: Type.String() });
 const Answer = Type.Object({ sessionId: Type.String(), toolCallId: Type.String(), answer: Type.String({ minLength: 1, maxLength: 10_000 }) });

@@ -834,7 +834,7 @@
 		}
 		const before = attached.images.length;
 		const room = Math.max(0, MAX_IMAGES - before);
-		if (images.length > room) app.toast(t("이미지는 최대 8장까지 첨부할 수 있습니다"), "error", pane.id);
+		if (images.length > room) app.toast(t("이미지는 최대 {n}장까지 첨부할 수 있습니다", { n: MAX_IMAGES }), "error", pane.id);
 		const taken = images.slice(0, room);
 		attached.load(
 			[...attached.images, ...taken.map((b) => ({ id: uid(), name: "image", preview: `data:${b.mimeType};base64,${b.data}`, data: b.data, mimeType: b.mimeType }))],

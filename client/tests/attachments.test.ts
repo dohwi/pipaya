@@ -75,7 +75,7 @@ describe("Attachments.add", () => {
 		const a = new Attachments(h);
 		await a.add([file("1.png", 1, "image/png"), file("2.png", 1, "image/png"), file("3.png", 1, "image/png"), file("n.txt")]);
 		expect(a.images).toHaveLength(2);
-		expect(errors).toHaveLength(1);
+		expect(errors).toEqual(['이미지는 최대 {n}장까지 첨부할 수 있습니다{"n":2}']);
 		expect(a.files.map((x) => x.name)).toEqual(["n.txt"]);
 	});
 	test("a file over the size limit is refused, the next one is still tried", async () => {

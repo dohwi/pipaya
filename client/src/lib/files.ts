@@ -133,7 +133,7 @@ export function parseTable(src: string, delimiter: string, maxRows = 1000): { ro
 }
 
 /** Images one message can carry (vision models only; everything else is a file). */
-export const MAX_IMAGES = 8;
+export const MAX_IMAGES = 16;
 
 /** Whether a picked file goes in as a downscaled image (the model can see it) rather than as a plain file. */
 export const isInlineImage = (file: { type: string }, vision: boolean): boolean =>
