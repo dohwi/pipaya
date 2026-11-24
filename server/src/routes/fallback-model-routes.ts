@@ -1,8 +1,8 @@
 import type { FastifyInstance } from "fastify";
-import type { EventBus } from "./events.ts";
-import { DEFAULT_FALLBACK_MODEL, FallbackModelResult, FallbackModelSchema, type FallbackModelSettings } from "./fallback-model.ts";
-import { errors } from "./schemas.ts";
-import type { TypeBoxProvider } from "./typebox-provider.ts";
+import type { EventBus } from "../events.ts";
+import { DEFAULT_FALLBACK_MODEL, FallbackModelResult, FallbackModelSchema, type FallbackModelSettings } from "../fallback-model.ts";
+import { errors } from "../schemas.ts";
+import type { TypeBoxProvider } from "../typebox-provider.ts";
 
 /** Automatic fallback model used after repeated zero-output upstream failures (null = off). */
 export function registerFallbackModelRoutes(server: FastifyInstance, settings: FallbackModelSettings, bus: EventBus): void {

@@ -158,7 +158,10 @@
 			loadSlot(slot, owner, signal);
 		}
 	}
+	const copyTimers = new Set<ReturnType<typeof setTimeout>>();
 	onDestroy(() => {
+		for (const id of copyTimers) clearTimeout(id);
+		copyTimers.clear();
 		for (const player of videos) closeVideoView(player);
 		videos.length = 0;
 	});
@@ -176,7 +179,11 @@
 			const code = copy.closest(".codeblock")?.querySelector("code")?.textContent ?? "";
 			void copyText(code).then((ok) => {
 				copy.textContent = ok ? t("복사됨") : t("실패");
-				setTimeout(() => (copy.textContent = t("복사")), 1400);
+				const timer = setTimeout(() => {
+					copyTimers.delete(timer);
+					copy.textContent = t("복사");
+				}, 1400);
+				copyTimers.add(timer);
 			});
 			return;
 		}

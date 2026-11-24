@@ -6,6 +6,9 @@
 	import IconButton from "../ui/IconButton.svelte";
 	import PipayaMark from "../ui/PipayaMark.svelte";
 	import Pin from "../ui/Pin.svelte";
+	import { updater } from "../../lib/updater.svelte";
+	import { serverUpdater } from "../../lib/server-update.svelte";
+	import { extensionUpdates } from "../../lib/extension-updates.svelte";
 	import { app } from "../../lib/store.svelte";
 	import { tilde } from "../../lib/format";
 	import { tabPanes, type DirBlock } from "../../lib/nav";
@@ -22,6 +25,10 @@
 	const scheduled = $derived(app.schedules.all(app.serverId));
 	const schedulesShown = $derived(!!app.serverId && app.schedules.supported(app.serverId));
 	const schedulesTip = $derived(scheduled.next === null ? t("예약 작업") : `${t("예약 작업")} · ${t("다음 실행: {when}", { when: liveNext(scheduled.next) })}`);
+	const problems = $derived(app.problemCount);
+	const alertTone = $derived(problems ? "danger" : app.compat === "ok" ? "ok" : "warn");
+	const settingsAlert = $derived(problems ? t("설정 문제 {n}", { n: problems }) : app.compat !== "ok" ? t("업데이트 필요") : updater.visible ? t("업데이트 있음") : serverUpdater.available ? t("서버 업데이트 있음") : "");
+	const settingsTip = $derived(settingsAlert ? `${t("설정")} · ${settingsAlert}` : extensionUpdates.any ? `${t("설정")} · ${t("업데이트 있음")}` : t("설정"));
 
 	interface Section {
 		server: Server;
@@ -124,7 +131,10 @@
 				{#if scheduled.count}<span class="cnt"><span class="cbadge">{scheduled.count}</span></span>{/if}
 			</button>
 		{/if}
-		<IconButton icon="settings" size="sm" label={t("설정")} tip onclick={() => app.openSettings()} />
+		<button class="nav" onclick={() => app.openSettings()} aria-label={t("설정")} title={settingsTip}>
+			<Icon name="settings" />
+			{#if settingsAlert || extensionUpdates.any}<Pin tone={alertTone} label={settingsAlert || t("업데이트 있음")} />{/if}
+		</button>
 	</div>
 </aside>
 

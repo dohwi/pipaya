@@ -528,6 +528,17 @@
 			onremove={(keepSettings) => removeServer(openServer, keepSettings)}
 		/>
 	{:else}
+	<div class="market-card">
+		<span class="market-ico" aria-hidden="true"><Icon name="sparkles" /></span>
+		<div class="market-copy">
+			<strong>{t("확장 마켓플레이스")}</strong>
+			<span>{t("도구·테마·자동화 확장을 찾아 한 번에 설치합니다.")}</span>
+		</div>
+		<Button variant="primary" size="sm" disabled={tasks.busy.$import} onclick={() => (market = true)}>
+			<Icon name="search" /> {t("마켓플레이스 열기")}
+		</Button>
+	</div>
+
 	<section aria-labelledby="extensions-installed">
 		<div class="bar">
 			<h3 id="extensions-installed" class="section-label bar-title">{t("설치된 확장 ({n})", { n: list.length + unreadable.length + serverSide.length })}</h3>
@@ -572,9 +583,8 @@
 		{#if !list.length && !unreadable.length && !serverSide.length}
 			<EmptyState as="p" compact>{t("이 서버에 설치된 확장이 없습니다")}</EmptyState>
 		{/if}
-		<!-- the two ways in, as the dashed "add" slots every other list ends with: browse the marketplace, or a package file -->
+		<!-- developer / manual package install -->
 		<div class="adds">
-			<Button variant="dashed" disabled={tasks.busy.$import} onclick={() => (market = true)}><Icon name="search" /> {t("마켓플레이스")}</Button>
 			<label class="btn dashed file" class:disabled={tasks.busy.$import}>
 				<input type="file" accept="application/json,.json" disabled={tasks.busy.$import} onchange={selectFile} />
 				<Icon name="plus" /> {t("파일로 추가")}
@@ -615,11 +625,18 @@
 
 	.bar { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
 	.bar-title { margin-right: auto; }
+	.market-card { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 12px 16px; border: 1px solid var(--border-strong); border-radius: var(--radius); background: var(--bg-elev); }
+	.market-ico { flex: none; width: 36px; height: 36px; display: grid; place-items: center; border-radius: var(--radius-control); background: var(--bg-active); color: var(--text); }
+	.market-ico :global(svg) { width: 18px; height: 18px; }
+	.market-copy { flex: 1 1 200px; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+	.market-copy strong { font-size: var(--fs-md); line-height: 20px; font-weight: 600; color: var(--text); }
+	.market-copy span { font-size: var(--fs-xs); line-height: 18px; color: var(--text-dim); }
+	.market-card :global(.btn) { flex: none; margin-left: auto; white-space: nowrap; }
 	.adds { display: flex; gap: 8px; }
 	.adds > :global(.btn) { flex: 1 1 0; min-width: 0; }
 	/* a <label> styled as the button: the file input fills it, invisible, so a click anywhere opens the picker; the ring follows the input */
 	.file { position: relative; cursor: pointer; }
-	.file.disabled { opacity: 0.5; cursor: default; }
+	.file.disabled { color: var(--disabled-fg); cursor: default; }
 	.file input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: inherit; }
 	.file:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
 	.trouble { display: flex; flex-direction: column; gap: 8px; }

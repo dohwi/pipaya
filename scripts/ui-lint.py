@@ -13,6 +13,11 @@ Flags, unless the same line or the line above carries a /* comment */ that says 
   radius    a literal px corner above 3 (use a --radius-* token, or calc() / min() of one, so an extension theme reaches it)
   glow      a box-shadow / drop-shadow with a blur and a colour from a token or color-mix (a decorative halo; grey
             elevation tokens like var(--shadow) and hard focus spreads `0 0 0 3px` pass)
+  shadow    box-shadow: var(--shadow | --shadow-soft | --shadow-sm | --shadow-up) or a literal elevation: hybrid zero-shadow, the only
+            elevation is var(--shadow-overlay) on a light non-modal overlay (a hairline `inset 0 0 0 1px` ring is not elevation)
+  halo      a focus halo `0 0 0 Npx var(--accent-soft | --danger-soft)`: focus is `outline: 2px solid` (offset -1px on bordered fields)
+  disabled  `opacity` in a :disabled / .disabled rule (blanket fade): use --disabled-bg / --disabled-border / --disabled-fg
+  motion    --ease-spring, a `shake` / `ping` keyframe, or box-shadow in a transition (restrained 120-180ms ease-out, transform / opacity)
   chip      markup `class="chip …"`: a hand-made state pill (use Badge; a toggle is a Switch, one-of-N a Segmented).
             Allowed when the element carries `data-lint-ok` or the line holds a <!-- comment --> saying why
 Exit code 1 when something is flagged.
@@ -47,6 +52,8 @@ def layers(value: str):
         else:
             cur += c
     return out + [cur.strip()]
+ELEVATION = re.compile(r"var\(--shadow(?:-soft|-sm|-up)?\)|^0(?:px)?\s+[1-9]\d*(?:px)?\s+[1-9]\d*px")
+HALO = re.compile(r"0(?:px)?\s+0(?:px)?\s+(?:0(?:px)?\s+)?[1-9]\d*px\s+var\(--(?:accent|danger)-soft\)")
 GLOW_FILTER = re.compile(r"drop-shadow\(")
 # a hand-made pill in markup (the global .chip): states are a Badge, toggles a Switch
 CHIP = re.compile(r'class="(?:[^"]*\s)?chip(?:\s[^"]*)?"')
@@ -142,6 +149,24 @@ def main():
                 i = nc[: m.start()].count("\n")
                 if any(GLOW.search(x) for x in layers(" ".join(m.group(1).split()))):
                     (allowed if commented(lines, i) else hits).append((f"{f.relative_to(ROOT)}:{offset + i + 1}", "glow", " ".join(m.group(0).split())[:90]))
+            for m in re.finditer(r"(?<![-\w])box-shadow\s*:([^;{}]+);", nc):
+                i = nc[: m.start()].count("\n")
+                val = " ".join(m.group(1).split())
+                where = f"{f.relative_to(ROOT)}:{offset + i + 1}"
+                if HALO.search(val):
+                    (allowed if commented(lines, i) else hits).append((where, "halo", val[:90]))
+                elif any(ELEVATION.search(x) for x in layers(val)) and "--shadow-overlay" not in val:
+                    (allowed if commented(lines, i) else hits).append((where, "shadow", val[:90]))
+            for m in re.finditer(r"(?<![-\w])transition\s*:[^;{}]*box-shadow[^;{}]*;", nc):
+                i = nc[: m.start()].count("\n")
+                (allowed if commented(lines, i) else hits).append((f"{f.relative_to(ROOT)}:{offset + i + 1}", "motion", "transition: … box-shadow"))
+            for m in re.finditer(r"--ease-spring|@keyframes\s+(?:shake|[\w-]*ping)\b", nc):
+                i = nc[: m.start()].count("\n")
+                (allowed if commented(lines, i) else hits).append((f"{f.relative_to(ROOT)}:{offset + i + 1}", "motion", m.group(0)))
+            for m in re.finditer(r"([^{}]+)\{([^{}]*)\}", nc):
+                if re.search(r":disabled|\.disabled\b", m.group(1)) and re.search(r"(?<![-\w])opacity\s*:\s*(?!0\s*(?:;|$))\S", m.group(2)):
+                    i = nc[: m.start(2)].count("\n")
+                    (allowed if commented(lines, i) else hits).append((f"{f.relative_to(ROOT)}:{offset + i + 1}", "disabled", " ".join(m.group(1).split())[:90]))
             for m in GLOW_FILTER.finditer(nc):
                 i = nc[: m.start()].count("\n")
                 (allowed if commented(lines, i) else hits).append((f"{f.relative_to(ROOT)}:{offset + i + 1}", "glow", lines[i].strip()[:90]))

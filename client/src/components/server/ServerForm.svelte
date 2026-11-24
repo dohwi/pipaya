@@ -30,7 +30,7 @@
 	 */
 	type Section = "info" | "agent" | "models" | "tools" | "mcp" | "sessions" | "devices";
 	/** `section` pins one pane of an existing server (the settings window's sidebar picks it): no header, no tabs. */
-	let { target, embedded = false, onclose, section, only = null }: { target: string | "new"; embedded?: boolean; onclose?: () => void; section?: Section; only?: string | null } = $props();
+	let { target, embedded = false, onclose, section, only = null, onselectmcp }: { target: string | "new"; embedded?: boolean; onclose?: () => void; section?: Section; only?: string | null; onselectmcp?: (name: string | null) => void } = $props();
 
 	// App.svelte re-mounts this component per target ({#key}), so reading `target` once is intended.
 	// svelte-ignore state_referenced_locally
@@ -156,7 +156,7 @@
 	{#if editing && !section}
 		<div class="tabs">
 			<Segmented tabs variant="underline" label={t("서버 설정 구역")} value={tab} onchange={go}
-				options={[{ id: "info" as const, label: t("정보") }, { id: "agent" as const, label: t("에이전트") }, { id: "sessions" as const, label: t("대화") }, { id: "devices" as const, label: t("기기") }]} />
+				options={[{ id: "info" as const, label: t("정보") }, { id: "devices" as const, label: t("기기") }, { id: "agent" as const, label: t("에이전트") }, { id: "sessions" as const, label: t("대화") }]} />
 		</div>
 	{/if}
 
@@ -181,7 +181,7 @@
 		</div>
 	{:else if editing && (tab === "agent" || tab === "models" || tab === "tools" || tab === "mcp")}
 		<!-- the modal keeps one "에이전트" tab with all three; the settings window pins one of them per section -->
-		<div class="body pane" role="tabpanel" in:paneIn={{ x: dir * 18 }}>{#key editing.id}{#if tab === "agent" || tab === "models"}<ModelConnections serverId={editing.id} />{/if}{#if tab === "agent" || tab === "tools"}<ToolSettings serverId={editing.id} />{/if}{#if tab === "agent" || tab === "mcp"}<McpSettings serverId={editing.id} {only} />{/if}{/key}</div>
+		<div class="body pane" role="tabpanel" in:paneIn={{ x: dir * 18 }}>{#key editing.id}{#if tab === "agent" || tab === "models"}<ModelConnections serverId={editing.id} />{/if}{#if tab === "agent" || tab === "tools"}<ToolSettings serverId={editing.id} />{/if}{#if tab === "agent" || tab === "mcp"}<McpSettings serverId={editing.id} {only} onselect={onselectmcp} />{/if}{/key}</div>
 	{:else}
 		<form onsubmit={submit} in:paneIn={{ x: dir * 18 }}>
 			<div class="body">
@@ -366,8 +366,8 @@
 	}
 	.wd > :global(svg) {
 		flex: none;
-		width: 17px;
-		height: 17px;
+		width: 16px;
+		height: 16px;
 		stroke: var(--text-dim);
 		stroke-width: 1.9;
 	}

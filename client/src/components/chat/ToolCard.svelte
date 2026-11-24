@@ -6,7 +6,7 @@
 	import { app } from "../../lib/store.svelte";
 	import { getPane } from "../../lib/pane";
 	import { clip, duration, fullTime } from "../../lib/format";
-	import { splitCd, toolIcon, toolLabel, toolSummary } from "../../lib/tools";
+	import { splitCd, toolArgStr as str, toolIcon, toolLabel, toolSummary } from "../../lib/tools";
 	import type { ToolRun } from "../../lib/types";
 	import { extensions } from "../../lib/extensions/host.svelte";
 	import ExtensionView from "../extensions/ExtensionView.svelte";
@@ -18,7 +18,6 @@
 	const run = $derived<ToolRun>(app.chatOf(pane.id)?.tools[id] ?? { state: "pending", output: "" });
 	let open = $state(false);
 
-	const str = (v: unknown) => (typeof v === "string" ? v : v == null ? "" : JSON.stringify(v));
 	const summary = $derived(toolSummary(name, args));
 	/** A shell summary drops its leading `cd <folder> &&`; hovering it still says the whole line, folder included */
 	const fullLine = $derived(name === "bash" && splitCd(str(args.command)).dir ? str(args.command).split("\n", 1)[0] : undefined);

@@ -50,6 +50,45 @@ interface Pending {
 
 export type DecideResult = "ok" | "not_found" | "invalid";
 
+export interface AskQuestionInput {
+	question: string;
+	options?: string[];
+	recommended?: string;
+	scale?: boolean;
+	multiple?: boolean;
+	descriptions?: string[];
+	allowFreeText?: boolean;
+	items?: (Omit<QuestionItem, "allowFreeText"> & { allowFreeText?: boolean })[];
+}
+
+/** Normalizes optional fields on a question request, asks the user, and throws if the wait was aborted. */
+export async function askQuestion(
+	questions: QuestionManager,
+	sessionId: string,
+	toolCallId: string,
+	req: AskQuestionInput,
+	signal?: AbortSignal,
+): Promise<string> {
+	const items = req.items?.map((q) => ({ ...q, allowFreeText: q.allowFreeText ?? true }));
+	const outcome = await questions.ask(
+		{
+			sessionId,
+			toolCallId,
+			question: req.question,
+			options: req.options,
+			...(req.recommended ? { recommended: req.recommended } : {}),
+			...(req.scale ? { scale: true } : {}),
+			...(req.multiple ? { multiple: true } : {}),
+			...(req.descriptions ? { descriptions: req.descriptions } : {}),
+			allowFreeText: req.allowFreeText ?? true,
+			...(items?.length ? { items } : {}),
+		},
+		signal,
+	);
+	if (outcome.status === "abort") throw new Error("Run aborted while waiting for the user");
+	return outcome.answer;
+}
+
 /**
  * Options without repeats (an agent sometimes offers the same answer twice). The client keys its answer buttons by their
  * text, so a repeated option used to crash the whole screen; it is also a choice the user cannot tell apart.

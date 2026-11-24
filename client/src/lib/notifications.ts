@@ -18,7 +18,8 @@ export interface NativePushAdapter {
 const isWindows = (): boolean => /Windows/i.test(navigator.userAgent);
 export function notificationPlatform(): Platform {
   if (/Android/i.test(navigator.userAgent)) return "android";
-  if (/iPhone|iPad|iPod/i.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1)) return "ios";
+  // Real iPadOS browsers always use WebKit (never desktop Chrome/); avoid misclassifying macOS Chrome with touch emulation as iOS.
+  if (/iPhone|iPad|iPod/i.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1 && !/Chrome\//.test(navigator.userAgent))) return "ios";
   return isTauri() ? "desktop" : "web";
 }
 /** What the user agent says about the operating system, for places that have nothing better (a browser, or before the native answer arrives). */

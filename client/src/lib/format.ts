@@ -59,9 +59,20 @@ export const dayStart = (ts: number): number => {
  * this year's. Korean keeps the weekday in brackets with or without the year: Intl writes "10월 13일 (화)" but
  * "2025년 10월 18일 토", and the two stood one above the other in a long transcript.
  */
+const rtfCache = new Map<string, Intl.RelativeTimeFormat>();
+function rtf(locale?: string): Intl.RelativeTimeFormat {
+  const key = locale ?? "";
+  let cached = rtfCache.get(key);
+  if (!cached) {
+    cached = new Intl.RelativeTimeFormat(locale, { numeric: "auto" });
+    rtfCache.set(key, cached);
+  }
+  return cached;
+}
+
 export function dayLabel(ts: number, locale?: string, now: number = Date.now()): string {
   const days = Math.round((dayStart(now) - dayStart(ts)) / 86_400_000); // round: a DST day is 23 or 25 hours
-  if (days === 0 || days === 1) return new Intl.RelativeTimeFormat(locale, { numeric: "auto" }).format(-days, "day");
+  if (days === 0 || days === 1) return rtf(locale).format(-days, "day");
   const year = new Date(ts).getFullYear() !== new Date(now).getFullYear();
   if (year && (locale ?? localeTag()).startsWith("ko"))
     return `${fmt(locale, { year: "numeric", month: "long", day: "numeric" }).format(ts)} (${fmt(locale, { weekday: "short" }).format(ts)})`;
@@ -106,7 +117,7 @@ export function nextChange(ts: number, now: number): number | null {
  *  - under 6 hours: "N시간 전"
  *  - earlier today: the time, "오후 2:05"
  *  - yesterday: "어제 오후 9:30"
- *  - within a week: the weekday and time, "수 오후 2:05"
+ *  - within a week: the weekday and time, "수요일 오후 2:05" (Korean uses the full weekday so "마지막 접속 수 오후 2:05" never reads like "접속 수") / "Wed 2:05 PM"
  *  - this year: the date, "11월 15일"; before that with the year, "2025년 11월 15일"
  * `time: false` is for a list column that only needs the day: "어제", then "N일 전" for the week (a bare "수" read as a
  * riddle in a card corner), the date, and "2025년 11월" for another year.
@@ -125,7 +136,10 @@ export function pastLabel(ts: number, now: number = Date.now(), opts: { locale?:
   if (sameDay(at, today)) return time;
   const days = Math.round((dayStart(now) - dayStart(ts)) / 86_400_000); // round: a DST day is 23 or 25 hours
   if (days === 1) return withTime ? t("어제 {time}", { time }) : t("어제");
-  if (days < 7) return withTime ? `${fmt(locale, { weekday: "short" }).format(ts)} ${time}` : t("{n}일 전", { n: days });
+  if (days < 7) {
+    const weekday = locale.startsWith("ko") ? "long" : "short";
+    return withTime ? `${fmt(locale, { weekday }).format(ts)} ${time}` : t("{n}일 전", { n: days });
+  }
   if (at.getFullYear() === today.getFullYear()) return fmt(locale, { month: "short", day: "numeric" }).format(ts);
   return fmt(locale, withTime ? { year: "numeric", month: "short", day: "numeric" } : { year: "numeric", month: "short" }).format(ts);
 }

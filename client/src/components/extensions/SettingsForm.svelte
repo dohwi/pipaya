@@ -213,14 +213,14 @@
 	input[type="text"], input[type="password"], input[type="number"], textarea {
 		display: block; width: 100%; min-width: 0; box-sizing: border-box; padding: 0 12px; height: var(--control-h);
 		border: 1px solid var(--border-strong); border-radius: var(--radius-control); background: var(--bg-code); color: var(--text);
-		font-size: var(--fs-lg); /* >=16px stops iOS zooming on focus */ transition: border-color var(--motion-fast) var(--ease-std), box-shadow var(--motion-fast) var(--ease-std);
+		font-size: var(--fs-lg); /* >=16px stops iOS zooming on focus */ transition: border-color var(--motion-fast) var(--ease-std);
 	}
 	textarea { height: auto; min-height: 110px; resize: vertical; padding: 8px 12px; font-family: var(--mono); font-size: var(--fs-xs); line-height: 1.5; }
 	/* touch: 16px, or iOS zooms the page in when the field takes focus */
 	@media (pointer: coarse) { textarea { font-size: var(--fs-lg); } }
-	input:focus-visible, textarea:focus-visible { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
-	.invalid input:not([type="checkbox"]), textarea[aria-invalid="true"] { border-color: var(--danger); }
-	input:disabled, textarea:disabled { opacity: 0.55; }
+	input:focus-visible, textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: -1px; border-color: var(--accent); }
+	.invalid input, textarea[aria-invalid="true"] { border-color: var(--danger); }
+	input:disabled, textarea:disabled { background: var(--disabled-bg); border-color: var(--disabled-border); color: var(--disabled-fg); }
 	.advanced { margin-top: 0; }
 	.body { gap: 8px; }
 </style>

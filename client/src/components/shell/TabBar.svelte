@@ -238,6 +238,8 @@
 {#snippet tabItem(x: Tab, on: boolean, st: ReturnType<typeof stateOf>)}
 	{@const pinned = !!app.serverId && app.sidebar.isTabPinned(app.serverId, x.id)}
 	{@const who = handleOf(x)}
+	{@const parent = parentOf(x)}
+	{@const sched = x.kind === "session" && app.serverId ? app.schedules.of(app.serverId, x.id) : { count: 0, next: null }}
 	<!-- svelte-ignore a11y_no_static_element_interactions -->
 			<div
 				class="tab"
@@ -250,7 +252,7 @@
 				role="tab"
 				tabindex={on ? 0 : -1}
 				aria-selected={on}
-				title="{who ? `${who.title} · ` : ''}{titleOf(x)}{x.kind === 'session' ? ` · ${ACTIVITY_LABEL[st]}` : ''}"
+				title="{who ? `${who.title} · ` : ''}{titleOf(x)}{parent ? ` · ${parent.title}` : ''}{sched.count ? ` · ${t('예약 {n}개', { n: sched.count })}` : ''}{x.kind === 'session' ? ` · ${ACTIVITY_LABEL[st]}` : ''}"
 				use:dragSource={{ id: x.id, disabled: rename.is(x.id), menu: (pt) => tabMenu(pt, x) }}
 				use:dropTarget={tabTarget(x)}
 				onclick={() => {
@@ -287,7 +289,7 @@
 						stopClick
 					/>
 				{:else}
-					{#if who}<Handle text={who.text} state={st} />{/if}<span class="t">{titleOf(x)}</span>{#if parentOf(x)}{@const pl = parentOf(x)!}<span class="from mono" title={pl.title}><Icon name="fork" /><span class="fn">{pl.text}</span></span>{/if}
+					{#if who}<Handle text={who.text} state={st} />{/if}<span class="t">{titleOf(x)}</span>{#if on && parent}<span class="from mono" title={parent.title}><Icon name="fork" /><span class="fn">{parent.text}</span></span>{/if}{#if sched.count}<span class="tclock" aria-hidden="true"><Icon name="clock" /></span>{/if}
 				{/if}
 				{#if x.kind === "group"}<span class="n mono">{x.members.length}</span>{/if}
 				{#if x.kind !== "group"}<button class="x tap" onpointerdown={(e) => e.stopPropagation()} onclick={(e) => (e.stopPropagation(), close(x))} aria-label={closeLabel(x)} title={closeTip(x)}><Icon name="x" /></button>{/if}
@@ -624,6 +626,18 @@
 		height: 12px;
 		stroke-width: 2;
 	}
+	/* subtle clock icon for sessions with active scheduled tasks (matches sidebar SessionRow) */
+	.tclock {
+		flex: none;
+		display: inline-flex;
+		align-items: center;
+		color: var(--text-faint);
+	}
+	.tclock :global(svg) {
+		width: 12px;
+		height: 12px;
+		stroke-width: 2;
+	}
 	/* the title takes the tab's spare width, so the close button sits at its right end as in a browser */
 	.t {
 		flex: 1 1 auto;
@@ -700,6 +714,9 @@
 	.tab.menuopen .x,
 	.x:focus-visible {
 		opacity: 1;
+	}
+	.x:focus-visible {
+		outline-offset: -2px; /* inside the 20px target so the outer ring is never clipped by the scrolling .tabs strip */
 	}
 	/* no hover on a touch screen: the × is always there, after the title as before */
 	@media (pointer: coarse) {

@@ -1,10 +1,10 @@
 import type { FastifyInstance } from "fastify";
 import Type from "typebox";
-import type { EventBus } from "./events.ts";
-import type { ExtensionSettings } from "./extension-settings.ts";
-import { notFound } from "./errors.ts";
-import { IdParams, Ok, errors } from "./schemas.ts";
-import type { TypeBoxProvider } from "./typebox-provider.ts";
+import type { EventBus } from "../events.ts";
+import type { ExtensionSettings } from "../extension-settings.ts";
+import { notFound } from "../errors.ts";
+import { IdParams, Ok, errors } from "../schemas.ts";
+import type { TypeBoxProvider } from "../typebox-provider.ts";
 
 const SettingsObject = Type.Record(Type.String(), Type.Unknown(), { description: "Plain JSON object owned by the extension (max 16000 chars of JSON)" });
 const Stored = Type.Object({

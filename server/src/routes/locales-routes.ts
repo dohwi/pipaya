@@ -1,10 +1,10 @@
 import type { FastifyInstance } from "fastify";
 import Type from "typebox";
-import type { EventBus } from "./events.ts";
-import type { LocaleStore } from "./locales.ts";
-import { MAX_LOCALE_MESSAGES } from "./locales.ts";
-import { Ok, errors } from "./schemas.ts";
-import type { TypeBoxProvider } from "./typebox-provider.ts";
+import type { EventBus } from "../events.ts";
+import type { LocaleStore } from "../locales.ts";
+import { MAX_LOCALE_MESSAGES } from "../locales.ts";
+import { Ok, errors } from "../schemas.ts";
+import type { TypeBoxProvider } from "../typebox-provider.ts";
 
 const Tag = Type.Object({ tag: Type.String({ description: "BCP 47 language tag, e.g. ja or pt-br (case-insensitive)" }) });
 const Summary = Type.Object({

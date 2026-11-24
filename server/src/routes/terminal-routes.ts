@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
-import { IdParams, Ok, errors } from "./schemas.ts";
-import { CreateTerminalBody, PatchTerminalBody, TerminalList, TerminalSchema, TerminalSupport, type TerminalManager } from "./terminals.ts";
-import type { TypeBoxProvider } from "./typebox-provider.ts";
+import { IdParams, Ok, errors } from "../schemas.ts";
+import { CreateTerminalBody, PatchTerminalBody, TerminalList, TerminalSchema, TerminalSupport, type TerminalManager } from "../terminals.ts";
+import type { TypeBoxProvider } from "../typebox-provider.ts";
 
 /** Path of a terminal's I/O socket; the auth hook lets browsers pass the token as ?token= here. */
 export const TERMINAL_SOCKET = /^\/terminals\/[^/]+\/ws$/;

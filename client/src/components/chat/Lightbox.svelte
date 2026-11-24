@@ -408,7 +408,7 @@
 		}
 	}
 	.ctl:disabled {
-		opacity: 0.35;
+		color: var(--lb-ink-dim); /* on the always-dark stage a dimmed ink, not a faded control */
 	}
 	.pct {
 		min-width: 56px;

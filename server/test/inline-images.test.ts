@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { isAbsolute, join } from "node:path";
 import { buildApp, type App } from "../src/app.ts";
 import type { Config } from "../src/config.ts";
-import { FILES_OPEN, inlineImagesHint, saveInlineImages, UPLOAD_DIR } from "../src/file-routes.ts";
+import { FILES_OPEN, inlineImagesHint, saveInlineImages, UPLOAD_DIR } from "../src/routes/file-routes.ts";
 import { HINT_OPEN } from "../src/peers.ts";
 import { buildTools } from "../src/tools.ts";
 import { ECHO_MODEL, echoProviderBody, startEchoUpstream, type EchoUpstream } from "./support/openai-upstream.ts";

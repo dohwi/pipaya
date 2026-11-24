@@ -24,8 +24,8 @@ describe("settings search", () => {
 		expect(hit?.target).toEqual({ tab: "backup" });
 	});
 	test("the voice fields are found by their own words", () => {
-		expect(find("whisper").some((h) => h.target.tab === "voice")).toBe(true);
-		expect(find("받아쓰기").some((h) => h.target.tab === "voice")).toBe(true);
+		expect(find("whisper").some((h) => h.target.tab === "sessions" && h.target.sub === "voice")).toBe(true);
+		expect(find("받아쓰기").some((h) => h.target.tab === "sessions" && h.target.sub === "voice")).toBe(true);
 	});
 	test("a loose setting is found by an English keyword and opens the tab that holds it", () => {
 		const hit = find("zoom").find((h) => h.key.startsWith("item:"));
@@ -34,9 +34,13 @@ describe("settings search", () => {
 	test("subagent delegation is found by its name, in English, and by its old name", () => {
 		for (const q of ["서브에이전트", "subagent", "delegate", "도우미"]) expect(find(q).some((h) => h.target.tab === "tools"), q).toBe(true);
 	});
-	test("guard and prompt templates tabs are searchable in Korean and English", () => {
-		for (const q of ["명령 보호", "guard", "rm", "wipefs", "force push", "재부팅", "원격 스크립트", "차단"]) expect(find(q).some((h) => h.target.tab === "guard"), q).toBe(true);
-		for (const q of ["프롬프트 템플릿", "template", "/prompt:"]) expect(find(q).some((h) => h.target.tab === "templates"), q).toBe(true);
+	test("guard, devices, and prompt templates are searchable and route to their sub-tabs", () => {
+		for (const q of ["명령 보호", "guard", "rm", "wipefs", "force push", "재부팅", "원격 스크립트", "차단"])
+			expect(find(q).some((h) => h.target.tab === "tools" && h.target.sub === "guard"), q).toBe(true);
+		for (const q of ["프롬프트 템플릿", "template", "/prompt:"])
+			expect(find(q).some((h) => h.target.tab === "sessions" && h.target.sub === "templates"), q).toBe(true);
+		for (const q of ["접속 기기", "qr", "phone", "페어링"])
+			expect(find(q).some((h) => h.target.tab === "info" && h.target.sub === "devices"), q).toBe(true);
 	});
 	test("a shortcut is found by its keys and hands its name to the shortcut list as a filter", () => {
 		const hit = find("ctrl+n").find((h) => h.key === "key:newChat");
@@ -67,23 +71,18 @@ describe("tabs and tool labels", () => {
 		expect(toolLabel("bash")).toBe("셸 명령 실행 (bash)");
 		expect(toolLabel("my-ext-tool")).toBe("my-ext-tool");
 	});
-	test("the sections follow setup order: device, the server, then what grows over time", () => {
+	test("the sections stay compact (3 common + 7 server) in grouped mental-model order", () => {
 		const ids = SETTINGS_TABS.map((x) => x.id);
-		// the app-wide ones first, then the server's, and no server section in front of "정보"
-		expect(ids.slice(0, ids.indexOf("info"))).toEqual(["general", "keys", "backup"]);
-		expect(ids.indexOf("info")).toBeLessThan(ids.indexOf("models"));
-		// voice input is a connection like the models, so it sits right after them
-		expect(ids.indexOf("voice")).toBe(ids.indexOf("models") + 1);
-		// the sections that grow over time come last
-		expect(ids.slice(-2)).toEqual(["srvext", "devices"]);
+		expect(ids).toEqual(["general", "keys", "backup", "info", "models", "tools", "mcp", "sessions", "schedules", "srvext"]);
 	});
 });
 
 describe("offline server", () => {
-	test("only the info section of a server stays searchable", () => {
-		const ids = (q: string) => searchSettings(queryWords(q), { hasServer: true, serverOnline: false, shortcuts: keys }).map((h) => h.target.tab);
-		expect(ids("정보")).toContain("info");
-		expect(ids("에이전트")).not.toContain("tools");
-		expect(ids("자동 삭제")).not.toContain("sessions");
+	test("only the info section of a server stays searchable (and not its online-only devices sub-tab)", () => {
+		const hits = (q: string) => searchSettings(queryWords(q), { hasServer: true, serverOnline: false, shortcuts: keys });
+		expect(hits("서버").map((h) => h.target.tab)).toContain("info");
+		expect(hits("페어링").some((h) => h.target.sub === "devices")).toBe(false);
+		expect(hits("에이전트").map((h) => h.target.tab)).not.toContain("tools");
+		expect(hits("자동 삭제").map((h) => h.target.tab)).not.toContain("sessions");
 	});
 });

@@ -171,7 +171,6 @@
 		background: var(--bg-elev);
 		border: 1px solid var(--border-strong);
 		border-radius: var(--radius-panel);
-		box-shadow: var(--shadow);
 		overflow: hidden;
 	}
 	.head {
@@ -232,6 +231,7 @@
 	.list {
 		overflow-y: auto;
 		padding: 8px; /* the same 8px above the first row as below the last: the highlighted first row no longer touches the rule */
+		scroll-padding-block: 8px;
 		border-top: 1px solid var(--border);
 		min-height: 60px;
 	}
@@ -244,6 +244,9 @@
 		text-align: left;
 		color: var(--text);
 		border-radius: var(--radius-sm);
+	}
+	.it:focus-visible {
+		outline-offset: -2px;
 	}
 	.it.on {
 		background: var(--bg-active);

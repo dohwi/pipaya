@@ -42,7 +42,7 @@ export const MIGRATIONS: (string | ((db: Database) => void))[] = [
 
 	CREATE TABLE IF NOT EXISTS events (
 		id         INTEGER PRIMARY KEY AUTOINCREMENT,
-		session_id TEXT,
+		session_id TEXT REFERENCES sessions(id) ON DELETE CASCADE,
 		type       TEXT NOT NULL,
 		data       TEXT NOT NULL,
 		ts         INTEGER NOT NULL
@@ -303,6 +303,32 @@ export const MIGRATIONS: (string | ((db: Database) => void))[] = [
 	CREATE INDEX IF NOT EXISTS idx_session_goals_status ON session_goals(status);`,
 	// Partial index for GET /delegates so it searches only delegate messages instead of scanning every transcript row.
 	`CREATE INDEX IF NOT EXISTS messages_delegate ON messages(role, created_at, seq) WHERE instr(data, '"delegate"') > 0;`,
+	// Ensure events.session_id cascades when a session is deleted (older databases created events without a foreign key).
+	(db) => {
+		const fks = db.query("PRAGMA foreign_key_list(events)").all() as { table: string; from: string; on_delete: string }[];
+		if (fks.some((fk) => fk.table === "sessions" && fk.from === "session_id" && fk.on_delete.toUpperCase() === "CASCADE")) return;
+		db.exec(`
+			DELETE FROM events WHERE session_id IS NOT NULL AND session_id NOT IN (SELECT id FROM sessions);
+			CREATE TABLE events_new (
+				id         INTEGER PRIMARY KEY AUTOINCREMENT,
+				session_id TEXT REFERENCES sessions(id) ON DELETE CASCADE,
+				type       TEXT NOT NULL,
+				data       TEXT NOT NULL,
+				ts         INTEGER NOT NULL
+			);
+			INSERT INTO events_new (id, session_id, type, data, ts)
+				SELECT id, session_id, type, data, ts FROM events;
+			DROP TABLE events;
+			ALTER TABLE events_new RENAME TO events;
+			CREATE INDEX IF NOT EXISTS events_session ON events(session_id, id);
+		`);
+	},
+	// Hot-path indexes: event pruning by ts, message usage/delegate queries by (session_id, role, seq),
+	// session workdir grouping by cwd, and extension entries listing by (session_id, id).
+	`CREATE INDEX IF NOT EXISTS idx_events_ts ON events(ts);
+	 CREATE INDEX IF NOT EXISTS idx_messages_session_role_seq ON messages(session_id, role, seq);
+	 CREATE INDEX IF NOT EXISTS idx_sessions_cwd ON sessions(cwd);
+	 CREATE INDEX IF NOT EXISTS idx_extension_entries_session_id ON extension_entries(session_id, id);`,
 ];
 
 export function openDb(path: string): Database {

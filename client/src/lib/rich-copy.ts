@@ -8,6 +8,7 @@ import type { ImageBlock } from "./types";
  */
 
 const MARK = "data-pipaya-message";
+const MARK_ATTR = new RegExp(`${MARK}\\s*=\\s*["']([^"']*)["']`);
 const IMG_TOKEN = /#image(\d+)\b/g;
 const DATA_IMG = /<img\b[^>]*?\bsrc\s*=\s*["'](data:(image\/[a-z0-9.+-]+);base64,([A-Za-z0-9+/=\s]+))["']/gi;
 
@@ -29,7 +30,7 @@ export function htmlImages(html: string): ImageBlock[] {
 
 /** A message copied from pipaya: its text and pictures. null for any other HTML. */
 export function pastedMessage(html: string): { text: string; images: ImageBlock[] } | null {
-	const m = new RegExp(`${MARK}\\s*=\\s*["']([^"']*)["']`).exec(html);
+	const m = MARK_ATTR.exec(html);
 	if (!m) return null;
 	try {
 		const p = JSON.parse(decodeURIComponent(m[1]!)) as { v?: number; text?: unknown };

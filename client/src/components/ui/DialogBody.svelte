@@ -17,6 +17,7 @@
 		overflow-y: auto;
 		padding: var(--dlg-body-t) var(--dlg-px) var(--dlg-body-b);
 		min-height: 80px;
+		scroll-padding-block: 8px; /* a focused control scrolled into view keeps room for its ring */
 	}
 	.rule {
 		border-top: 1px solid var(--border);

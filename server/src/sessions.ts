@@ -1,16 +1,16 @@
 import { Agent, type AgentEvent, type AgentMessage, type AgentTool } from "@earendil-works/pi-agent-core";
-import { isContextOverflow, retryDelayMs, type ImageContent } from "@earendil-works/pi-ai";
+import { isContextOverflow, type ImageContent } from "@earendil-works/pi-ai";
 import { randomUUID } from "node:crypto";
 import { mkdirSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { isAbsolute, relative, resolve, sep } from "node:path";
-import type { QuestionManager } from "./questions.ts";
+import { askQuestion, type QuestionManager } from "./questions.ts";
 import { DEFAULT_MAX_SESSIONS, type Config } from "./config.ts";
 import { advertisedSkills, aggregateReadFiles, buildSystemPrompt, discoverInstructions, previewContext, type ContextSnapshot, type ContextTool, type SessionContext, type SystemPromptEntry } from "./context.ts";
 import { systemPromptEntries } from "./system-prompts.ts";
 import { mentionedSkills, readSkillText, skillCallHint, skillsPrompt, type SkillRef, type SkillService } from "./skills.ts";
 import { badRequest, conflict, HttpError, notFound } from "./errors.ts";
-import { filesNote, inlineImagesHint, saveInlineImages, saveUploads } from "./file-routes.ts";
+import { filesNote, inlineImagesHint, saveInlineImages, saveUploads } from "./routes/file-routes.ts";
 import type { EventBus } from "./events.ts";
 import { checkServiceTier, modelDefaultTier, modelDefaultLevel, reasoningOption, type ModelRegistry } from "./models.ts";
 import { streamAtTier } from "./served-tier.ts";
@@ -19,8 +19,9 @@ import { contextTokens, estimateTokens, pickCut, SUMMARY_MAX_TOKENS, SUMMARY_SYS
 import { THINKING_LEVELS, type DelegateCall, type SessionPatch, type SessionRecord, type SessionStore, type ThinkingLevel } from "./store.ts";
 import type { McpManager } from "./mcp.ts";
 import { ALWAYS_TOOLS, buildTools, DEFAULT_TOOLS, DELEGATE_TOOL, isInside, PEER_TOOLS, TOOL_DEFS, WORKDIR_TOOL, type ToolContext, type ToolDef } from "./tools.ts";
-import { isGone, movedNote, placeText, resolveMove, stayHint, touchedDir, workDirOf, workTargets } from "./work-tree.ts";
-import { repoOf } from "./git-info.ts";
+import { isGone, workDirOf } from "./work-tree.ts";
+import { SessionWorkdirs } from "./session-workdirs.ts";
+import { SessionDescriber } from "./session-describer.ts";
 import { GOAL_TOOL } from "./goal-tool.ts";
 import type { GoalManager } from "./goals.ts";
 import { SCHEDULE_TOOL } from "./schedule-tool.ts";
@@ -36,8 +37,9 @@ import { stripOversizedToolResultImages, stripToolMessageImages, stripToolResult
 import { describeTools, enabledTools, planTools } from "./tool-plan.ts";
 import { afterTurn, FORCE_STOP_ERROR, isEmptyFailedReply, RESTART_RUN_ERROR, RESTART_TOOL_ERROR, runawayReason, SHUTDOWN_RUN_ERROR, SHUTDOWN_TOOL_ERROR, type RunStopCause } from "./run-guard.ts";
 import { chooseModel, DelegateLimits, finalText, freeRole, repeatedReadSignature, runDelegateWithinDeadline, subagentReport, subagentReportReserveMs, subagentUsage, loadSubagents, SUBAGENT_NAME, SUBAGENT_TIMEOUT_MS, SUBAGENT_WRAP_UP, subagentSystem, type SubagentDef, type SubagentLimit } from "./subagents.ts";
-import { classifyUpstreamError, COMPLETION_RETRY, completeWithUpstreamRetry, DEFAULT_UPSTREAM_RETRY, isZeroOutputError, logUnknownUpstreamError, retryReason, sleepAbortable, STREAM_RETRY, withUpstreamRetry } from "./upstream-retry.ts";
-import { autoTitle, DESCRIBE_MAX_TOKENS, DESCRIBE_SYSTEM, describeRequest, parseDescription, type SystemModelSettings } from "./system-model.ts";
+import { COMPLETION_RETRY, completeWithUpstreamRetry, DEFAULT_UPSTREAM_RETRY, isZeroOutputError, retryReason, sleepAbortable, withUpstreamRetry } from "./upstream-retry.ts";
+import { recoverWithFallback, retryDroppedMidStream } from "./stream-runner.ts";
+import { autoTitle, type SystemModelSettings } from "./system-model.ts";
 import type { FallbackModelSettings } from "./fallback-model.ts";
 import type { GuardSettings } from "./guard.ts";
 import { runPromptTemplate } from "./templates.ts";
@@ -49,8 +51,6 @@ export { DEFAULT_SYSTEM_PROMPT } from "./session-types.ts";
 export { GOAL_OPEN, NOTE_OPEN, noteBlock, SCHEDULE_OPEN } from "./session-helpers.ts";
 export type { CompactionOutcome, CreateSessionInput, PromptMode, SessionStatus } from "./session-types.ts";
 
-/** A failed title/role call is not retried for this long, so a broken system model is not hit on every message. */
-const DESCRIBE_RETRY_MS = 10 * 60_000;
 /** Minimum context size before repeated zero-output failures trigger an automatic compaction pass. */
 const ZERO_OUTPUT_COMPACT_MIN_TOKENS = 32_000;
 
@@ -73,11 +73,9 @@ export class SessionManager {
 	/** Accepted sends keyed by `sessionId\0clientRequestId` so retries after a lost ACK do not duplicate prompts. */
 	private recentSends = new Map<string, { accepted: PromptMode; at: number }>();
 	private inflightSends = new Map<string, Promise<{ accepted: PromptMode }>>();
-	/** Title/role calls in flight (one per session), and when one last failed. */
-	private describing = new Map<string, AbortController>();
-	private describeFailedAt = new Map<string, number>();
-	private pendingDescribes = new Set<Promise<void>>();
-	private backfilling = false;
+	/** Background title/role generation and git worktree operations. */
+	private describer: SessionDescriber;
+	private workdirOps: SessionWorkdirs;
 	/** `delegate` use per session: calls in the current run and subagents running right now. */
 	private delegates = new DelegateLimits();
 	/** Chat models usable now (provider/model), for the tool texts; refreshed before a run is set up, at most every few seconds. */
@@ -108,7 +106,7 @@ export class SessionManager {
 		/** Switchable tools the user turned off in the settings; withheld from every session. */
 		private disabledTools: () => string[] = () => [],
 		/** The light model that writes session titles and roles; none = titles stay the first message cut short. */
-		private systemModel?: SystemModelSettings,
+		systemModel?: SystemModelSettings,
 		/** The image model; while one is set every session gets the generate_image tool. */
 		private imageModel?: ImageModelSettings,
 		/** MCP servers; the tools of the connected ones reach every session. */
@@ -129,6 +127,21 @@ export class SessionManager {
 	) {
 		this.sweeper = setInterval(() => this.evictIdle(), 5 * 60_000);
 		this.sweeper.unref?.();
+		this.describer = new SessionDescriber({
+			store,
+			registry,
+			systemModel,
+			isClosing: () => this.closing,
+			updateSession: (id, patch) => this.update(id, patch),
+		});
+		this.workdirOps = new SessionWorkdirs({
+			store,
+			bus,
+			getSession: (id) => this.get(id),
+			isRunning: (id) => this.isRunning(id),
+			allowedDir: (dir) => !this.cfg.restrictWorkspace || isInside(this.cfg.workspaceRoot, dir),
+			home: this.home,
+		});
 		this.peers = new PeerService({
 			store,
 			groups: () => this.groupSource(),
@@ -595,11 +608,9 @@ export class SessionManager {
 				live.cutLoose?.();
 			}
 		}
-		this.describing.get(id)?.abort();
+		this.describer.abort(id);
 		this.dispose(id);
-		this.stopped.delete(id);
-		const prefix = `${id}\0`;
-		for (const k of this.recentSends.keys()) if (k.startsWith(prefix)) this.recentSends.delete(k);
+		this.clearSessionMemory(id, true);
 		this.store.delete(id);
 		this.bus.publish(null, "session_deleted", { id });
 	}
@@ -713,7 +724,7 @@ export class SessionManager {
 		const live = this.ensureLive(record);
 
 		const content: ({ type: "text"; text: string } | ImageContent)[] = [{ type: "text", text: input.text }, ...extraParts];
-		const moved = this.takeNote(id);
+		const moved = this.workdirOps.takeNote(id);
 		if (moved) content.push({ type: "text", text: `${HINT_OPEN}${moved}</pipaya-hint>` });
 		for (const hint of this.peers.hints(id, input.text)) content.push({ type: "text", text: hint });
 		if (input.origin === "schedule") content.push({ type: "text", text: SCHEDULE_NOTE });
@@ -755,7 +766,7 @@ export class SessionManager {
 		const first = this.store.nextSeq(id) === 0;
 		const shortTitle = autoTitle(inputTitle ?? input.text);
 		if (record.title === "New session" && first && origin !== "goal") this.update(id, { title: shortTitle });
-		if (origin !== "goal") this.describe(id, first ? input.text : undefined, input.text, shortTitle);
+		if (origin !== "goal") this.describer.describe(id, first ? input.text : undefined, input.text, shortTitle);
 		this.run(id, live, "prompt", origin, async () => {
 			await this.autoCompact(id);
 			live.runSystem = undefined;
@@ -771,87 +782,9 @@ export class SessionManager {
 		return { accepted: "prompt" };
 	}
 
-	/**
-	 * In the background, has the system model write a short title and the session's role, while the role is still
-	 * empty: on the first message, and on a later one for sessions that started before a system model was set. The
-	 * title is only replaced while it is still the automatic one, so a name the user gave is kept. Never fails the
-	 * message: without a usable model, or when the call fails, the session keeps what it has.
-	 */
-	private describe(id: string, first: string | undefined, latest: string, shortTitle?: string): Promise<void> | undefined {
-		const target = this.systemModel?.resolve();
-		if (!target || this.closing || this.describing.has(id)) return;
-		const record = this.store.get(id);
-		if (!record || record.purpose) return;
-		if (Date.now() - (this.describeFailedAt.get(id) ?? 0) < DESCRIBE_RETRY_MS) return;
-		const firstText = first ?? this.firstUserText(id) ?? latest;
-		if (!firstText.trim()) return;
-		const controller = new AbortController();
-		this.describing.set(id, controller);
-		const job = (async () => {
-			try {
-				const model = this.registry.models.getModel(target.provider, target.model);
-				if (!model || !(await this.registry.models.checkAuth(target.provider))) throw new Error("system model unavailable");
-				const describeOpts = { maxTokens: DESCRIBE_MAX_TOKENS, signal: controller.signal, ...reasoningOption(target.thinkingLevel, model) };
-				const describeCtx = { systemPrompt: DESCRIBE_SYSTEM, messages: [{ role: "user" as const, content: describeRequest(record.cwd, firstText, first === undefined ? latest : undefined), timestamp: Date.now() }] };
-				const reply = await completeWithUpstreamRetry(
-					(ctx) => this.registry.models.completeSimple(model, ctx, describeOpts),
-					describeCtx,
-					COMPLETION_RETRY,
-					controller.signal,
-				);
-				if (controller.signal.aborted) return;
-				if (reply.stopReason === "error" || reply.stopReason === "aborted") throw new Error(reply.errorMessage || reply.stopReason);
-				const found = parseDescription(reply.content.flatMap((c) => (c.type === "text" ? [c.text] : [])).join(""));
-				if (!found) throw new Error("the system model gave no title");
-				const now = this.store.get(id);
-				if (!now || now.purpose) return;
-				// Only a title that is still the automatic one is replaced; one the user gave is kept.
-				const automatic = now.title === "New session" || now.title === autoTitle(firstText) || now.title === shortTitle;
-				const patch: SessionPatch = { purpose: found.purpose || found.title };
-				if (found.title && automatic) patch.title = found.title;
-				this.describeFailedAt.delete(id);
-				this.update(id, patch);
-			} catch {
-				if (!controller.signal.aborted) this.describeFailedAt.set(id, Date.now());
-			} finally {
-				this.describing.delete(id);
-			}
-		})();
-		this.pendingDescribes.add(job);
-		void job.finally(() => this.pendingDescribes.delete(job));
-		return job;
-	}
-
 	/** Gives a role to the active sessions that have talked but have none yet (after a system model is set, and at start). */
 	describeAll(): void {
-		if (!this.systemModel?.resolve() || this.backfilling) return;
-		this.backfilling = true;
-		const job = (async () => {
-			try {
-				// One at a time: a server with many sessions must not fire them all at the model at once.
-				for (const r of this.store.list({ limit: 200, closed: false })) {
-					if (!this.systemModel?.resolve()) return;
-					if (r.purpose || this.store.nextSeq(r.id) === 0) continue;
-					const first = this.firstUserText(r.id);
-					if (first) await this.describe(r.id, first, first);
-				}
-			} finally {
-				this.backfilling = false;
-			}
-		})();
-		this.pendingDescribes.add(job);
-		void job.finally(() => this.pendingDescribes.delete(job));
-	}
-
-	/** The text of the session's first user message, without the hints the server adds. */
-	private firstUserText(id: string): string | null {
-		const m = this.store.messages(id, { limit: 50 }).find((r) => r.role === "user")?.message;
-		if (!m) return null;
-		const c = (m as { content?: unknown }).content;
-		if (typeof c === "string") return c;
-		if (!Array.isArray(c)) return null;
-		const part = (c as { type: string; text?: string }[]).find((p) => p.type === "text" && p.text && !p.text.startsWith("<pipaya-"));
-		return part?.text ?? null;
+		this.describer.describeAll();
 	}
 
 	/** `input` hooks, built-in `/prompt:` templates and `/command` handling. A swallowed message is never sent to the model. */
@@ -1006,7 +939,7 @@ export class SessionManager {
 	shutdown(): void {
 		clearInterval(this.sweeper);
 		this.closing = true;
-		for (const c of this.describing.values()) c.abort();
+		this.describer.abortAll();
 		for (const id of this.live.keys()) this.ext?.notify("session_shutdown", { sessionId: id }, id);
 		for (const [id, live] of [...this.live]) {
 			live.compacting?.abort();
@@ -1094,8 +1027,8 @@ export class SessionManager {
 
 	/** Wait until every active run has settled (used on shutdown and in tests). */
 	async idle(): Promise<void> {
-		while (this.pendingRuns.size > 0 || this.pendingDescribes.size > 0) {
-			await Promise.all([...this.pendingRuns, ...this.pendingDescribes]);
+		while (this.pendingRuns.size > 0 || this.describer.hasPending()) {
+			await Promise.all([...this.pendingRuns, ...this.describer.pendingJobs()]);
 		}
 		await Promise.all([...this.live.values()].map((l) => l.agent.waitForIdle()));
 	}
@@ -1147,36 +1080,25 @@ export class SessionManager {
 				}
 				// The gateway closed the socket after part of the reply had streamed: a half-written answer cannot be resumed,
 				// so drop it and ask again with backoff instead of ending the run on a transport hiccup.
-				// An unclassified error gets a single restart (and a log line), a transient one the full STREAM_RETRY budget.
-				for (let attempt = 1, unknownUsed = false; !error && !live.forceStopped && live.stopCause !== "shutdown" && attempt <= STREAM_RETRY.maxRetries; attempt++) {
-					const kind = this.droppedMidStream(live);
-					if (!kind || (kind === "unknown" && unknownUsed)) break;
-					const zero = isZeroOutputError(this.lastErrorMessage(live));
-					const zeroCap = STREAM_RETRY.maxZeroOutputRetries !== undefined ? Math.min(STREAM_RETRY.maxRetries, STREAM_RETRY.maxZeroOutputRetries) : STREAM_RETRY.maxRetries;
-					if (zero && attempt > zeroCap) break;
-					let maxRetries = zero ? zeroCap : STREAM_RETRY.maxRetries;
-					if (kind === "unknown") {
-						unknownUsed = true;
-						maxRetries = attempt;
-						logUnknownUpstreamError(this.lastErrorMessage(live));
-					}
-					const delayMs = kind === "unknown" ? STREAM_RETRY.baseDelayMs : retryDelayMs({ baseDelayMs: STREAM_RETRY.baseDelayMs, maxAgentDelayMs: STREAM_RETRY.maxDelayMs }, attempt);
-					this.bus.publish(id, "run_retrying", { attempt, maxRetries, delayMs, restart: true, ...this.retryReasonField(live) }, { ephemeral: true });
-					const wait = new AbortController();
-					live.retryWait = wait;
-					await sleepAbortable(delayMs, wait.signal);
-					live.retryWait = undefined;
-					if (live.forceStopped) return; // run_finished was already published when it was cut loose
-					if (wait.signal.aborted) {
-						if ((live.stopCause as RunStopCause | undefined) !== "shutdown") interrupted = true; // the user stopped the run while it waited: keep the partial reply, report an abort
-						break;
-					}
-					this.dropLastReply(id, live);
-					try {
-						await live.agent.continue();
-					} catch (e) {
-						error = e instanceof Error ? e.message : String(e);
-					}
+				if (!error && !live.forceStopped && live.stopCause !== "shutdown") {
+					const retried = await retryDroppedMidStream({
+						getLastMessage: () => live.agent.state.messages[live.agent.state.messages.length - 1],
+						shouldStop: () => live.forceStopped || live.stopCause === "shutdown",
+						sleep: async (delayMs) => {
+							const wait = new AbortController();
+							live.retryWait = wait;
+							await sleepAbortable(delayMs, wait.signal);
+							live.retryWait = undefined;
+							return { aborted: wait.signal.aborted, forceStopped: live.forceStopped };
+						},
+						dropLastReply: () => this.dropLastReply(id, live),
+						continueRun: () => live.agent.continue(),
+						onRetry: (notice) => this.bus.publish(id, "run_retrying", notice, { ephemeral: true }),
+						catchErrors: true,
+					});
+					if (retried.forceStopped) return; // run_finished was already published when it was cut loose
+					if (retried.aborted && (live.stopCause as RunStopCause | undefined) !== "shutdown") interrupted = true;
+					if (retried.error !== null) error = retried.error;
 				}
 				// When the primary model stalls repeatedly with zero output, switch to the configured fallback model for this run.
 				if (!error && !interrupted && !live.forceStopped && !live.stopCause) {
@@ -1377,43 +1299,46 @@ export class SessionManager {
 	 */
 	private async recoverWithFallbackModel(id: string, live: Live): Promise<{ attempted: boolean; interrupted?: boolean; error?: string | null }> {
 		if (!this.fallbackModel) return { attempted: false };
-		const messages = live.agent.state.messages;
-		const last = messages[messages.length - 1];
-		if (last?.role !== "assistant" || last.stopReason !== "error" || !isZeroOutputError(last.errorMessage)) return { attempted: false };
-		const activeModel = live.agent.state.model;
-		const currentRecord = this.store.get(id);
-		const primary = { provider: activeModel?.provider ?? currentRecord?.provider ?? "", model: activeModel?.id ?? currentRecord?.model ?? "" };
-		const fb = this.fallbackModel.resolve(primary);
-		if (!fb) return { attempted: false };
-		const fbModel = this.registry.models.getModel(fb.provider, fb.model);
-		if (!fbModel || !(await this.registry.models.checkAuth(fb.provider))) return { attempted: false };
-
-		const delayMs = 1000;
-		const reason = retryReason(`${last.errorMessage ?? "zero output"} → ${fb.provider}/${fb.model}`);
-		this.bus.publish(id, "run_retrying", { attempt: 1, maxRetries: 1, delayMs, ...(last.content.length ? { restart: true } : {}), ...(reason ? { reason } : {}) }, { ephemeral: true });
-		const wait = new AbortController();
-		live.retryWait = wait;
-		await sleepAbortable(delayMs, wait.signal);
-		live.retryWait = undefined;
-		if (live.forceStopped) return { attempted: false };
-		if (wait.signal.aborted) return { attempted: true, interrupted: (live.stopCause as RunStopCause | undefined) !== "shutdown" };
-
-		this.dropLastReply(id, live);
-		const prevModel = live.agent.state.model;
-		const prevThinking = live.agent.state.thinkingLevel;
-		live.agent.state.model = fbModel;
-		live.agent.state.thinkingLevel = fb.thinkingLevel ?? this.defaultThinkingLevel(fb.provider, fb.model);
-		let error: string | null = null;
-		try {
-			await live.agent.continue();
-		} catch (e) {
-			error = e instanceof Error ? e.message : String(e);
-		} finally {
-			const latest = this.store.get(id);
-			live.agent.state.model = (latest && this.registry.models.getModel(latest.provider, latest.model)) ?? prevModel;
-			live.agent.state.thinkingLevel = latest?.thinkingLevel ?? prevThinking;
-		}
-		return { attempted: true, error };
+		const fallbackSettings = this.fallbackModel;
+		const res = await recoverWithFallback({
+			getLastMessage: () => live.agent.state.messages[live.agent.state.messages.length - 1],
+			resolveFallback: async () => {
+				const activeModel = live.agent.state.model;
+				const currentRecord = this.store.get(id);
+				const primary = { provider: activeModel?.provider ?? currentRecord?.provider ?? "", model: activeModel?.id ?? currentRecord?.model ?? "" };
+				const fb = fallbackSettings.resolve(primary);
+				if (!fb) return null;
+				const fbModel = this.registry.models.getModel(fb.provider, fb.model);
+				if (!fbModel || !(await this.registry.models.checkAuth(fb.provider))) return null;
+				return { fb, fbModel, label: `${fb.provider}/${fb.model}` };
+			},
+			sleep: async (delayMs) => {
+				const wait = new AbortController();
+				live.retryWait = wait;
+				await sleepAbortable(delayMs, wait.signal);
+				live.retryWait = undefined;
+				return { aborted: wait.signal.aborted, forceStopped: live.forceStopped };
+			},
+			dropLastReply: () => this.dropLastReply(id, live),
+			runWithFallback: async ({ fb, fbModel }) => {
+				const prevModel = live.agent.state.model;
+				const prevThinking = live.agent.state.thinkingLevel;
+				live.agent.state.model = fbModel;
+				live.agent.state.thinkingLevel = fb.thinkingLevel ?? this.defaultThinkingLevel(fb.provider, fb.model);
+				try {
+					await live.agent.continue();
+				} finally {
+					const latest = this.store.get(id);
+					live.agent.state.model = (latest && this.registry.models.getModel(latest.provider, latest.model)) ?? prevModel;
+					live.agent.state.thinkingLevel = latest?.thinkingLevel ?? prevThinking;
+				}
+			},
+			onRetry: (notice) => this.bus.publish(id, "run_retrying", notice, { ephemeral: true }),
+			catchErrors: true,
+		});
+		if (res.forceStopped) return { attempted: false };
+		if (res.aborted) return { attempted: true, interrupted: (live.stopCause as RunStopCause | undefined) !== "shutdown" };
+		return { attempted: res.attempted, error: res.error };
 	}
 
 	/**
@@ -1450,30 +1375,6 @@ export class SessionManager {
 		return !!next && next.role !== "assistant" && next.role !== "system";
 	}
 
-	/**
-	 * The error kind when the run ended on a retryable transport error (a gateway closing the socket mid-answer) *after* the model
-	 * had already started replying. The reply is then half-written and cannot be resumed; the caller repeats the request.
-	 * An empty reply never gets here: withUpstreamRetry already retried it inside the stream call.
-	 */
-	private droppedMidStream(live: Live): "transient" | "unknown" | undefined {
-		const last = live.agent.state.messages[live.agent.state.messages.length - 1];
-		if (last?.role !== "assistant" || last.stopReason !== "error" || !last.content.length) return undefined;
-		const kind = classifyUpstreamError(last);
-		return kind === "permanent" ? undefined : kind;
-	}
-
-	private lastErrorMessage(live: Live): string {
-		const last = live.agent.state.messages[live.agent.state.messages.length - 1];
-		return last?.role === "assistant" ? (last.errorMessage ?? "") : "";
-	}
-
-	/** `{ reason }` for run_retrying from the failed reply at the tail, or nothing. */
-	private retryReasonField(live: Live): { reason?: string } {
-		const last = live.agent.state.messages[live.agent.state.messages.length - 1];
-		const reason = last?.role === "assistant" ? retryReason(last.errorMessage) : "";
-		return reason ? { reason } : {};
-	}
-
 	/** Throws the half-written reply away (`continue()` then replaces it, without asking the model to repeat itself). */
 	private dropLastReply(id: string, live: Live): void {
 		this.store.deleteLastMessage(id);
@@ -1483,7 +1384,7 @@ export class SessionManager {
 
 	private ensureLive(record: SessionRecord): Live {
 		// a worktree removed since the last run sends the session home before its tools are built
-		if (isGone(record.activeDir) && !this.live.get(record.id)?.running) { this.homeIfGone(record.id); record = this.store.get(record.id) ?? record; }
+		if (isGone(record.activeDir) && !this.live.get(record.id)?.running) { this.workdirOps.homeIfGone(record.id); record = this.store.get(record.id) ?? record; }
 		const existing = this.live.get(record.id);
 		if (existing) {
 			// Refresh idle sessions after provider endpoint/model configuration changes.
@@ -1611,16 +1512,11 @@ export class SessionManager {
 			manage: (name, action, a) => this.peers.manage(sessionId, name, action, a),
 			group: (action, a) => this.peers.group(sessionId, action, a),
 		}, schedules: this.scheduleOps(sessionId), goals: this.goalOps(sessionId), workdir: {
-			show: () => this.workdirShow(sessionId),
+			show: () => this.workdirOps.show(sessionId),
 			move: (path) => this.moveWorkdir(sessionId, path, "agent").note,
 		} };
 		if (q) {
-			ctx.ask = async (toolCallId, req, signal) => {
-				const items = req.items?.map((i) => ({ ...i, allowFreeText: i.allowFreeText ?? true }));
-				const outcome = await q.ask({ sessionId, toolCallId, question: req.question, options: req.options, ...(req.recommended ? { recommended: req.recommended } : {}), ...(req.scale ? { scale: true } : {}), ...(req.multiple ? { multiple: true } : {}), ...(req.descriptions ? { descriptions: req.descriptions } : {}), allowFreeText: req.allowFreeText ?? true, ...(items?.length ? { items } : {}) }, signal);
-				if (outcome.status === "abort") throw new Error("Run aborted while waiting for the user");
-				return outcome.answer;
-			};
+			ctx.ask = (toolCallId, req, signal) => askQuestion(q, sessionId, toolCallId, req, signal);
 		}
 		ctx.canSeeImages = () => {
 			const liveModel = this.live.get(sessionId)?.agent.state.model;
@@ -1734,38 +1630,44 @@ export class SessionManager {
 					await agent.prompt(input.task);
 					// A stream cut off after thinking/partial text (e.g. post-thought MALFORMED_FUNCTION_CALL or reset)
 					// bypasses withUpstreamRetry; drop the half-written reply and continue just like SessionManager.run.
-					for (let attempt = 1, unknownUsed = false; !stopping && !retrySignal.aborted && attempt <= STREAM_RETRY.maxRetries; attempt++) {
-						const last = agent.state.messages[agent.state.messages.length - 1];
-						if (last?.role !== "assistant" || last.stopReason !== "error" || !last.content.length) break;
-						const kind = classifyUpstreamError(last);
-						if (kind === "permanent" || (kind === "unknown" && unknownUsed)) break;
-						if (isZeroOutputError(last.errorMessage) && attempt > (STREAM_RETRY.maxZeroOutputRetries ?? STREAM_RETRY.maxRetries)) break;
-						if (kind === "unknown") {
-							unknownUsed = true;
-							logUnknownUpstreamError(last.errorMessage ?? "");
-						}
-						const delayMs = kind === "unknown" ? STREAM_RETRY.baseDelayMs : retryDelayMs({ baseDelayMs: STREAM_RETRY.baseDelayMs, maxAgentDelayMs: STREAM_RETRY.maxDelayMs }, attempt);
-						await sleepAbortable(delayMs, retrySignal);
-						if (stopping || retrySignal.aborted) break;
-						agent.state.messages = agent.state.messages.slice(0, -1);
-						turns = Math.max(0, turns - 1);
-						await agent.continue();
-					}
-					const afterRetry = agent.state.messages[agent.state.messages.length - 1];
-					if (!stopping && !retrySignal.aborted && afterRetry?.role === "assistant" && afterRetry.stopReason === "error" && isZeroOutputError(afterRetry.errorMessage) && this.fallbackModel) {
-						const active = agent.state.model;
-						const fb = this.fallbackModel.resolve({ provider: active.provider, model: active.id });
-						const fbModel = fb && this.registry.models.getModel(fb.provider, fb.model);
-						if (fb && fbModel && (await this.registry.models.checkAuth(fb.provider))) {
-							await sleepAbortable(1000, retrySignal);
-							if (!stopping && !retrySignal.aborted) {
+					await retryDroppedMidStream({
+						getLastMessage: () => agent.state.messages[agent.state.messages.length - 1],
+						shouldStop: () => stopping || retrySignal.aborted,
+						sleep: async (delayMs) => {
+							await sleepAbortable(delayMs, retrySignal);
+							return { aborted: stopping || retrySignal.aborted };
+						},
+						dropLastReply: () => {
+							agent.state.messages = agent.state.messages.slice(0, -1);
+							turns = Math.max(0, turns - 1);
+						},
+						continueRun: () => agent.continue(),
+					});
+					const fallbackSettings = this.fallbackModel;
+					if (!stopping && !retrySignal.aborted && fallbackSettings) {
+						await recoverWithFallback({
+							getLastMessage: () => agent.state.messages[agent.state.messages.length - 1],
+							resolveFallback: async () => {
+								const active = agent.state.model;
+								const fb = fallbackSettings.resolve({ provider: active.provider, model: active.id });
+								const fbModel = fb && this.registry.models.getModel(fb.provider, fb.model);
+								if (!fb || !fbModel || !(await this.registry.models.checkAuth(fb.provider))) return null;
+								return { fb, fbModel, label: `${fb.provider}/${fb.model}` };
+							},
+							sleep: async (delayMs) => {
+								await sleepAbortable(delayMs, retrySignal);
+								return { aborted: stopping || retrySignal.aborted };
+							},
+							dropLastReply: () => {
 								agent.state.messages = agent.state.messages.slice(0, -1);
 								turns = Math.max(0, turns - 1);
+							},
+							runWithFallback: async ({ fb, fbModel }) => {
 								agent.state.model = fbModel;
 								agent.state.thinkingLevel = fb.thinkingLevel ?? this.subagentThinking(rec, requestedThinking, def.thinking, fb.provider, fb.model);
 								await agent.continue();
-							}
-						}
+							},
+						});
 					}
 				} finally { release(); }
 			},
@@ -1930,69 +1832,17 @@ export class SessionManager {
 		}
 	}
 
-	/** Folders outside the workspace are not offered or accepted when the server is confined to it. */
-	private allowedDir = (dir: string) => !this.cfg.restrictWorkspace || isInside(this.cfg.workspaceRoot, dir);
-
-	/** Sets `activeDir` and tells the clients (the sidebar lists the session there). */
-	private setActiveDir(id: string, dir: string | null): SessionRecord {
-		const updated = this.store.setActiveDir(id, dir);
-		if (!updated) throw notFound("session");
-		this.bus.publish(id, "session_updated", updated);
-		return updated;
-	}
-
 	/**
 	 * Moves the session to another working tree of its repository (`target`), or home (null). Shared by the agent's
-	 * `workdir` tool and the user (PATCH workDir). The tools follow from the next turn of a run, or the next run. A user
-	 * move leaves a note the agent sees with its next message; the agent's own move is reported in its tool result.
+	 * `workdir` tool and the user (PATCH workDir).
 	 */
 	moveWorkdir(id: string, target: string | null, by: "agent" | "user"): { record: SessionRecord; note: string } {
-		const rec = this.get(id);
-		if (by === "user" && this.live.get(id)?.running) throw conflict("the session is working; move it after it finishes");
-		const from = workDirOf(rec);
-		let next: string | null;
-		try {
-			next = target === null ? null : resolveMove(rec.cwd, isAbsolute(target) ? resolve(target) : resolve(from, target), this.allowedDir);
-		} catch (e) {
-			throw badRequest((e as Error).message);
-		}
-		const note = movedNote(rec.cwd, from, next, by);
-		if (next === (rec.activeDir ?? null)) return { record: rec, note: `[pipaya] This session already works in ${placeText(from)}.` };
-		const record = this.setActiveDir(id, next);
-		if (by === "user") this.pendingNotes.set(id, note);
-		return { record, note };
-	}
-
-	/**
-	 * What the agent must hear before its next model call about a move it did not make itself (the user moved the
-	 * session, or its worktree is gone): given with its next message or turn, then dropped. The latest move wins.
-	 */
-	private pendingNotes = new Map<string, string>();
-
-	/** Takes the pending move note for the session, if any. */
-	private takeNote(id: string): string | undefined {
-		const note = this.pendingNotes.get(id);
-		this.pendingNotes.delete(id);
-		return note;
+		return this.workdirOps.move(id, target, by);
 	}
 
 	/** The working trees the session may move to, its own first, with the one it works in now marked. */
 	workdirs(id: string): { path: string; branch: string | null; home: boolean; current: boolean }[] {
-		const rec = this.get(id);
-		const here = resolve(rec.activeDir ?? repoOf(rec.cwd)?.top ?? rec.cwd);
-		return workTargets(rec.cwd, this.allowedDir).map((t) => ({ ...t, current: resolve(t.path) === here }));
-	}
-
-	/** What the `workdir` tool shows: where the session works and where it can go. */
-	private workdirShow(id: string): string {
-		const rec = this.get(id);
-		const here = workDirOf(rec);
-		const targets = this.workdirs(id);
-		const lines = [`Works in ${placeText(here)}${rec.activeDir ? ` (its own folder is ${rec.cwd})` : " (its own folder)"}.`];
-		if (targets.length > 1) lines.push("Working trees of its repository:", ...targets.map((t) => `- ${t.path}${t.branch ? ` (${t.branch})` : ""}${t.home ? " [own]" : ""}${t.current ? " [here]" : ""}`));
-		else if (!targets.length) lines.push("Its folder is not in a git repository: there is nowhere to move.");
-		else lines.push("Its repository has no other worktree yet (git worktree add ../<name> makes one).");
-		return lines.join("\n");
+		return this.workdirOps.list(id);
 	}
 
 	/**
@@ -2003,12 +1853,12 @@ export class SessionManager {
 		const out = await this.extensionToolResult(sessionId, c);
 		const failed = out?.isError ?? c.isError;
 		// the worktree it worked in was removed (by this very call, often): home, and the result says so
-		this.homeIfGone(sessionId);
-		let note = this.takeNote(sessionId) ?? null;
+		this.workdirOps.homeIfGone(sessionId);
+		let note = this.workdirOps.takeNote(sessionId) ?? null;
 		const rec = this.store.get(sessionId);
 		const live = this.live.get(sessionId);
 		if (!note && !failed && rec && live && c.toolCall.name !== WORKDIR_TOOL) {
-			try { note = stayHint(rec.cwd, workDirOf(rec), touchedDir(c.toolCall.name, c.args, workDirOf(rec), this.home)); } catch { /* odd .git layout: no hint */ }
+			note = this.workdirOps.stayHintFor(rec, c.toolCall.name, c.args);
 			if (note && live.hinted?.has(note)) note = null;
 			else if (note) (live.hinted ??= new Set()).add(note); // once per place per run: a hint on every call is noise
 		}
@@ -2017,21 +1867,13 @@ export class SessionManager {
 		return { ...out, content: [...(Array.isArray(content) ? content : []), { type: "text" as const, text: note }] };
 	}
 
-	/** A working tree the session was moved into and that is gone sends it home, and says so to the agent. */
-	private homeIfGone(id: string): void {
-		const rec = this.store.get(id);
-		if (!rec || !isGone(rec.activeDir)) return;
-		this.pendingNotes.set(id, movedNote(rec.cwd, rec.activeDir, null, "gone"));
-		this.setActiveDir(id, null);
-	}
-
 	/**
 	 * Rebuilds the session's tools for the folder it works in now when that changed (a run keeps the tools it started
 	 * with until its next turn). Returns the new tools, or undefined when they still fit.
 	 */
 	private retargetTools(sessionId: string): AgentTool<any>[] | undefined {
 		const live = this.live.get(sessionId);
-		this.homeIfGone(sessionId);
+		this.workdirOps.homeIfGone(sessionId);
 		const rec = this.store.get(sessionId);
 		const snap = this.store.context(sessionId);
 		if (!live || !rec || !snap) return undefined;
@@ -2120,6 +1962,17 @@ export class SessionManager {
 		return [...new Set(names)];
 	}
 
+	/** Clears per-session in-memory state; `all` (on delete) also drops cached idempotency entries. */
+	private clearSessionMemory(id: string, all = false): void {
+		this.stopped.delete(id);
+		this.describer.clear(id);
+		this.workdirOps.clearNote(id);
+		if (all) {
+			const prefix = `${id}\0`;
+			for (const k of this.recentSends.keys()) if (k.startsWith(prefix)) this.recentSends.delete(k);
+		}
+	}
+
 	private dispose(id: string): void {
 		const live = this.live.get(id);
 		if (!live) return;
@@ -2131,7 +1984,11 @@ export class SessionManager {
 		const now = Date.now();
 		this.pruneRecentSends(now);
 		for (const [id, live] of this.live) {
-			if (!live.running && now - live.lastActive > IDLE_EVICT_MS) this.dispose(id);
+			if (!live.running && now - live.lastActive > IDLE_EVICT_MS) {
+				this.dispose(id);
+				this.clearSessionMemory(id);
+			}
 		}
+		this.describer.pruneFailed(now);
 	}
 }

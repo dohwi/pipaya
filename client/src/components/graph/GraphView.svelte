@@ -481,8 +481,14 @@
 		});
 	});
 	const ghostById = $derived(new Map(ghostCards.map((c) => [c.id, c])));
-	const ghostEdgeSet = $derived(new Set(ghostEdges));
-	const orderedEdges = $derived([...graph.edges.filter((x) => !x.live), ...graph.edges.filter((x) => x.live), ...ghostEdges]);
+	const ghostEdgeIds = $derived(new Set(ghostEdges.map((e) => e.id)));
+	const orderedEdges = $derived.by(() => {
+		const idle: Edge[] = [];
+		const live: Edge[] = [];
+		for (const x of graph.edges) (x.live ? live : idle).push(x);
+		return [...idle, ...live, ...ghostEdges];
+	});
+	const allCards = $derived([...graph.cards.values(), ...ghostCards]);
 	/** A card where it is drawn this frame (the layout's place once it has settled). */
 	function at(c: Card): Card {
 		void frame;
@@ -858,7 +864,7 @@
 				<defs>
 				</defs>
 				{#each orderedEdges as e (e.id)}
-					{@const ghost = !graph.cards.has(e.from) || !graph.cards.has(e.to) || ghostEdgeSet.has(e)}
+					{@const ghost = !graph.cards.has(e.from) || !graph.cards.has(e.to) || ghostEdgeIds.has(e.id)}
 					{@const ca = graph.cards.get(e.from) ?? ghostById.get(e.from)}
 					{@const cb = graph.cards.get(e.to) ?? ghostById.get(e.to)}
 					{@const r = reach(e, ghost)}
@@ -900,7 +906,7 @@
 					{/if}
 				{/each}
 			</svg>
-			{#each [...graph.cards.values(), ...ghostCards] as c (c.id)}
+			{#each allCards as c (c.id)}
 				{@const p = at(c)}
 				{@const ghost = !graph.cards.has(c.id)}
 				{@const u = presence(c.id)}
@@ -1266,13 +1272,11 @@
 		border: 1px solid var(--border-strong);
 		border-radius: var(--radius);
 		background: var(--bg);
-		box-shadow: var(--shadow-soft);
 		cursor: pointer;
 		overflow: hidden;
 		transition:
 			opacity var(--motion-normal) var(--ease-std),
-			border-color var(--motion-normal) var(--ease-std),
-			box-shadow var(--motion-normal) var(--ease-std);
+			border-color var(--motion-normal) var(--ease-std);
 	}
 	@media (hover: hover) {
 		.card:hover {
@@ -1283,7 +1287,6 @@
 		z-index: 1;
 		cursor: grabbing;
 		border-color: var(--text-faint);
-		box-shadow: var(--shadow);
 	}
 	/*
 	 * A card at work: a light runs round its border (a conic gradient behind a transparent border, turning on the
@@ -1322,9 +1325,8 @@
 	}
 	.card.sel {
 		border-color: var(--text);
-		box-shadow:
-			0 0 0 3px var(--accent-soft),
-			var(--shadow-soft);
+		outline: 2px solid var(--accent);
+		outline-offset: -1px;
 	}
 	.card.dim {
 		opacity: 0.45; /* still readable: the related cards stand out, the rest stays legible */
@@ -1561,7 +1563,6 @@
 		border: 1px solid var(--border);
 		border-radius: var(--radius-control);
 		background: var(--bg-elev);
-		box-shadow: var(--shadow-soft);
 		cursor: default;
 	}
 	.bar .sep {
@@ -1598,7 +1599,7 @@
 		}
 	}
 	.tbtn:disabled {
-		opacity: 0.45;
+		color: var(--disabled-fg);
 		cursor: default;
 	}
 	.pct {

@@ -1,8 +1,8 @@
 import type { FastifyInstance } from "fastify";
-import type { EventBus } from "./events.ts";
-import { DEFAULT_IMAGE_MODEL, ImageModelResult, ImageModelSchema, type ImageModelSettings } from "./image-generation.ts";
-import { errors } from "./schemas.ts";
-import type { TypeBoxProvider } from "./typebox-provider.ts";
+import type { EventBus } from "../events.ts";
+import { DEFAULT_IMAGE_MODEL, ImageModelResult, ImageModelSchema, type ImageModelSettings } from "../image-generation.ts";
+import { errors } from "../schemas.ts";
+import type { TypeBoxProvider } from "../typebox-provider.ts";
 
 /** The image model agents draw with (`generate_image`); null = off. */
 export function registerImageModelRoutes(server: FastifyInstance, settings: ImageModelSettings, bus: EventBus): void {

@@ -243,7 +243,8 @@
 		position: relative;
 	}
 	.dir.over {
-		border-color: var(--accent);
+		outline: 1px solid var(--accent); /* the row has no border: a drop target is outlined inside its box */
+		outline-offset: -1px;
 		background: var(--accent-soft);
 	}
 	/* a block being dragged fades */

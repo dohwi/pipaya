@@ -58,7 +58,7 @@
 		transition: opacity var(--motion-normal) var(--ease-std);
 	}
 	.range.off {
-		opacity: 0.45;
+		color: var(--disabled-fg);
 	}
 	label {
 		flex: 1;

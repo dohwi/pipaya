@@ -4,12 +4,12 @@ import { createReadStream } from "node:fs";
 import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { basename, dirname, extname } from "node:path";
 import Type from "typebox";
-import { badRequest, HttpError, notFound } from "./errors.ts";
-import { previewImage } from "./image-resize.ts";
-import { HINT_OPEN } from "./peers.ts";
-import { errors } from "./schemas.ts";
-import { safePath } from "./tools.ts";
-import type { TypeBoxProvider } from "./typebox-provider.ts";
+import { badRequest, HttpError, notFound } from "../errors.ts";
+import { previewImage } from "../image-resize.ts";
+import { HINT_OPEN } from "../peers.ts";
+import { errors } from "../schemas.ts";
+import { safePath } from "../tools.ts";
+import type { TypeBoxProvider } from "../typebox-provider.ts";
 
 /** Files larger than this are streamed directly from disk instead of buffered whole into RAM. */
 const STREAM_MIN_BYTES = 256 * 1024;

@@ -1,4 +1,4 @@
-import { TERMINAL_SOCKET } from "./terminal-routes.ts";
+import { TERMINAL_SOCKET } from "./routes/terminal-routes.ts";
 import { REALTIME_SOCKET } from "./voice-realtime.ts";
 
 /** Paths reachable without the access token (the one-time pairing code is the credential). */

@@ -12,6 +12,7 @@
 	import type { Server } from "../../lib/store.svelte";
 	import Icon from "../ui/Icon.svelte";
 	import Pin from "../ui/Pin.svelte";
+	import Badge from "../ui/Badge.svelte";
 	import { extensionUpdates } from "../../lib/extension-updates.svelte";
 	import { serverUpdater } from "../../lib/server-update.svelte";
 
@@ -54,6 +55,13 @@
 	const order = (id: string) => SETTINGS_TABS.findIndex((x) => x.id === id);
 	/** Sections whose extensions the user folded away; "MCP" and "확장" start folded, then the last choice is kept (see `settings-fold`). */
 	let collapsed = $state<Record<string, boolean>>(initialFolded());
+	// Selecting an MCP server from the list (e.g. clicking "수정") unfolds the MCP tree so the child tab is visible and focused.
+	$effect(() => {
+		if (extId?.startsWith("mcp:") && collapsed.mcp) {
+			collapsed.mcp = false;
+			saveFolded(collapsed);
+		}
+	});
 	/** Extensions running inside the chosen server (read-only); listed under "서버 확장" like installed ones. */
 	let serverSide = $state<{ id: string; names: { name: string; title?: string; companion?: string }[] } | null>(null);
 	$effect(() => {
@@ -154,7 +162,10 @@
 	{#if server}
 		<div class="gsep" role="separator" aria-orientation="horizontal"></div>
 		<div class="glabel" aria-hidden="true" title={serverName}><span>{serverName}</span></div>
-		{#each groups.server as x (x.id)}
+		{#each groups.server as x, i (x.id)}
+			{#if i > 0 && x.cluster !== groups.server[i - 1]?.cluster}
+				<div class="subsep" aria-hidden="true"></div>
+			{/if}
 			{@render item(x)}
 		{/each}
 	{/if}
@@ -167,7 +178,8 @@
 			{@const off = !serverOnline && needsOnlineServer(x.id)}
 			{@const kids = off ? [] : extsOf(x.id)}
 			{@const open = kids.length > 0 && !collapsed[x.id]}
-			<div class="row" class:has={kids.length > 0}>
+			{@const schedCount = !off && x.id === "schedules" && server ? app.schedules.all(server.id).count : 0}
+			<div class="row" class:has={kids.length > 0} class:counted={!kids.length && schedCount > 0}>
 				<button role="tab" class:srvtab={x.server} disabled={off} title={off ? t("서버에 연결되어 있지 않습니다") : x.sub ? t(x.sub) : undefined} aria-selected={!phone && tab === x.id && !extId} tabindex={phone || (tab === x.id && !extId) ? 0 : -1} class:on={!phone && tab === x.id && !extId} onclick={() => go(x.id)}>
 					<span class="nico"><Icon name={x.icon} />{#if x.id === "models" && server && app.problemsOf(server.id).length}<Pin tone="danger" label={t("설정 문제 {n}", { n: app.problemsOf(server.id).length })} />{:else if hasUpdate(x.id) && !open}<Pin tone="ok" label={x.id === "info" ? t("서버 업데이트 있음") : t("업데이트 있음")} />{/if}</span>
 					<span class="nt">
@@ -178,6 +190,8 @@
 				{#if kids.length}
 					<button type="button" class="fold tap" aria-expanded={open} aria-label={open ? t("하위 항목 접기") : t("하위 항목 펼치기")} onclick={() => { collapsed[x.id] = open; saveFolded(collapsed); }}><Icon name="chevron-down" /></button>
 					{#if !open}<span class="cbadge" aria-hidden="true">{kids.length}</span>{/if}
+				{:else if schedCount}
+					<span class="cbadge solo" aria-hidden="true">{schedCount}</span>
 				{/if}
 			</div>
 			{#if open}
@@ -186,8 +200,8 @@
 						{@const link = e.link}
 						<div class="item" class:end={e.end}>
 							<button role="tab" class="sub" class:linked={e.paired && !!link} aria-selected={extId === e.id} tabindex={extId === e.id ? 0 : -1} class:on={extId === e.id} onclick={() => (e.builtin ? go(x.id) : openExt(x.id, e.id))}>
-								<span class="dot" class:live={e.live && !e.half} class:half={e.half} role="img" aria-label={e.half ? e.halfLabel : e.live ? t("실행 중") : t("꺼짐")}></span>
-								<span class="nl">{e.name}</span>
+								<span class="nl" class:idle={!e.live && !e.half}>{e.name}{#if !e.live && !e.half}<span class="sr-only"> {t("꺼짐")}</span>{/if}</span>
+								{#if e.live && !e.half}<Badge tone="ok" size="sm">{t("실행 중")}</Badge>{/if}
 								{#if e.paired && !link}<span class="clip" class:half={e.half} role="img" aria-label={clipTip(e)} title={clipTip(e)}><Icon name="clip" /></span>{/if}
 								{#if e.update}<span class="upmark" role="img" aria-label={t("업데이트 있음")} title={t("업데이트 있음")}><Icon name="arrow-up" /></span>{/if}
 							</button>
@@ -223,6 +237,13 @@
 		margin: 8px 4px 4px; /* 4px nav gap + 8 = 12 above the rule, 4 + 4 = 8 below it, before the server's label */
 		background: var(--border);
 	}
+	.nav .subsep {
+		flex: none;
+		height: 1px;
+		margin: 4px 12px;
+		background: var(--border);
+		opacity: 0.65;
+	}
 	.nav .upmark {
 		margin-left: auto;
 		flex: none;
@@ -246,6 +267,9 @@
 	.nav .row.has > button:first-child {
 		padding-right: 60px; /* room for the count and the arrow, so a long label never runs under them */
 	}
+	.nav .row.counted > button:first-child {
+		padding-right: 36px; /* room for the right-aligned count column */
+	}
 	/* the row's right end holds [count][arrow]. The arrow is the only control: a 24x24 box around its 14px chevron (5px each side), so the
 	   focus ring (the global 2px + 2px offset, as on every other control) is a small square around the glyph and stops 12px short of the
 	   count. It sits 7px from the row's edge, which puts the chevron's centre 19px from it (12px of padding, the mirror of the 19px icon's
@@ -263,8 +287,8 @@
 		color: var(--text-faint);
 	}
 	/* the count is display only: it neither takes focus nor a click (a click on it falls through to the row's section button). A fixed 20px
-	   column like the sidebar's counts, 10px left of the chevron and clear of the focus ring, shown only while folded; the arrow's x does not
-	   depend on it */
+	   column like the sidebar's counts (bare tabular number, transparent background), 10px left of the chevron and clear of the focus ring,
+	   shown only while folded; a solo count without a fold arrow aligns on the right chevron column (centre 19px). */
 	.nav .row > .cbadge {
 		position: absolute;
 		top: calc(50% - 9px); /* the badge is 18px tall: centred on the row */
@@ -273,7 +297,12 @@
 		width: 20px;
 		min-width: 20px;
 		padding: 0 0 2px; /* the shared badge's 1px digit lift, without its side padding: 20px column, as in the sidebar */
+		background: transparent;
+		font-weight: 500;
 		pointer-events: none;
+	}
+	.nav .row > .cbadge.solo {
+		right: 9px; /* 9 + 10 = centre 19px from the row's edge, aligned with the fold chevron column */
 	}
 	.nav button.fold :global(svg) {
 		width: 14px;
@@ -393,18 +422,12 @@
 		text-overflow: ellipsis;
 		white-space: nowrap;
 	}
-	.nav .dot {
-		flex: none;
-		width: 7px;
-		height: 7px;
-		border-radius: 50%;
-		background: var(--border-strong);
+	/* off: a quieter name (no decorative dot); live: a soft Badge */
+	.nav button.sub :global(.badge) {
+		margin-left: auto;
 	}
-	.nav .dot.live {
-		background: var(--ok);
-	}
-	.nav .dot.half {
-		background: var(--warn);
+	.nav button.sub .nl.idle {
+		color: var(--text-faint);
 	}
 	.nav {
 		position: relative;
@@ -430,7 +453,7 @@
 		color: var(--text-dim);
 	}
 	.nav button:disabled {
-		opacity: 0.4;
+		color: var(--disabled-fg);
 		cursor: default;
 	}
 	@media (hover: hover) {
@@ -451,6 +474,10 @@
 		width: 19px;
 		height: 19px;
 		stroke-width: 1.8;
+	}
+	.nav button.srvtab :global(svg) {
+		width: 18px;
+		height: 18px;
 	}
 	.nt {
 		display: flex;
@@ -506,6 +533,9 @@
 			height: 24px;
 			margin: 0 4px;
 		}
+		.nav .subsep {
+			display: none;
+		}
 		.nav .tree, .nav button.fold, .nav .cbadge {
 			display: none;
 		}
@@ -536,7 +566,8 @@
 		.nav.phone .row > .cbadge {
 			right: 36px;
 		}
-		.nav.phone .row.has > button:first-child {
+		.nav.phone .row.has > button:first-child,
+		.nav.phone .row.counted > button:first-child {
 			padding-right: 60px;
 		}
 		.nav .go {

@@ -16,14 +16,13 @@
 	import Extensions from "../extensions/Extensions.svelte";
 	import Backup from "../server/Backup.svelte";
 	import ServerForm from "../server/ServerForm.svelte";
-	import FilterChip from "../ui/FilterChip.svelte";
+	import Segmented from "../ui/Segmented.svelte";
+	import IconButton from "../ui/IconButton.svelte";
 	import Pin from "../ui/Pin.svelte";
 	import { connectionState, orderServers, unreachable } from "../../lib/sidebar-model";
-	import Icon from "../ui/Icon.svelte";
-	import { slidingIndicator } from "../../lib/sliding-indicator";
 	import { app } from "../../lib/store.svelte";
 	import { serverUpdater } from "../../lib/server-update.svelte";
-	import { SETTINGS_TABS, needsOnlineServer, queryWords, searchSettings, type Hit, type SettingsTabId } from "../../lib/settings-search";
+	import { SETTINGS_TABS, needsOnlineServer, queryWords, resolveSettingsTab, searchSettings, type Hit, type SettingsTabId } from "../../lib/settings-search";
 	import { t } from "../../lib/i18n";
 	import { backLayer } from "../../lib/dialog";
 	import { viewport } from "../../lib/viewport.svelte";
@@ -32,7 +31,14 @@
 
 	// App.svelte mounts this only while open, so the tab requested at open time is read once.
 	// svelte-ignore state_referenced_locally
-	let tab = $state<string>(app.settingsTab === "servers" ? "info" : app.settingsTab === "agent" ? "models" : app.settingsTab); // "agent" (extensions, older links) is now "models"
+	const initial = resolveSettingsTab(app.settingsTab);
+	let tab = $state<string>(initial.tab);
+	/** Sub-tabs inside grouped sections ("info": info|devices, "tools": tools|guard, "sessions": sessions|templates|voice). */
+	let infoSub = $state<"info" | "devices">(initial.tab === "info" && initial.sub === "devices" ? "devices" : "info");
+	let toolsSub = $state<"tools" | "guard">(initial.tab === "tools" && initial.sub === "guard" ? "guard" : "tools");
+	let sessionsSub = $state<"sessions" | "templates" | "voice">(
+		initial.tab === "sessions" && (initial.sub === "templates" || initial.sub === "voice") ? initial.sub : "sessions",
+	);
 
 	/**
 	 * Phone (≤600px): two steps. "list" shows every section (and the search), "detail" one section under a back arrow.
@@ -156,15 +162,27 @@
 <Modal closeShortcut="settings" onclose={close} label={t("설정")} width="2xl" height="700px" maxHeight="700px" gutter="48px" safeArea>
 	<ModalHeader title={detailPhone ? t(current.label) : t("설정")} onclose={close} onback={detailPhone ? back : undefined} />
 	{#if !detailPhone}
-	<div class="srvbar" role="group" aria-label={t("설정 범위")} use:slidingIndicator={{ selector: ".fchip.on", radius: "999px" }}>
-		{#each chips as { s, state } (s.id)}
-			<span class="chipwrap" class:off={unreachable(state)}>
-				<FilterChip on={s.id === server?.id} title={app.serverLabel(s)} onclick={() => showServer(s.id)}><span class="srvname">{app.serverLabel(s)}</span></FilterChip>
-				{#if app.problemsOf(s.id).length}<Pin tone="danger" label={t("설정 문제 {n}", { n: app.problemsOf(s.id).length })} />
-				{:else if needsUpdate(s.id)}<Pin tone={app.compat === "ok" ? "ok" : "warn"} label={app.compat === "ok" ? t("서버 업데이트 있음") : t("업데이트 필요")} />{/if}
-			</span>
-		{/each}
-		<FilterChip title={t("서버 추가")} onclick={() => (app.serverForm = "new")}><Icon name="plus" /></FilterChip>
+	<div class="srvbar">
+		<div class="srvseg">
+			<Segmented
+				label={t("설정 범위")}
+				size="sm"
+				full={false}
+				value={server?.id ?? ""}
+				options={chips.map(({ s }) => ({ id: s.id, label: app.serverLabel(s), title: app.serverLabel(s) }))}
+				onchange={showServer}
+			>
+				{#snippet option({ id, label })}
+					{@const c = chips.find((x) => x.s.id === id)}
+					<span class="srvopt" class:off={c ? unreachable(c.state) : false}>
+						<span class="srvname">{label}</span>
+						{#if c && app.problemsOf(id).length}<Pin tone="danger" label={t("설정 문제 {n}", { n: app.problemsOf(id).length })} />
+						{:else if c && needsUpdate(id)}<Pin tone={app.compat === "ok" ? "ok" : "warn"} label={app.compat === "ok" ? t("서버 업데이트 있음") : t("업데이트 필요")} />{/if}
+					</span>
+				{/snippet}
+			</Segmented>
+		</div>
+		<IconButton icon="plus" size="sm" label={t("서버 추가")} tip onclick={() => (app.serverForm = "new")} />
 	</div>
 
 	<div class="searchbar">
@@ -197,20 +215,68 @@
 				<Extensions serverId={server?.id ?? null} bind:selected={extId} bind:marketFor bind:installFor />
 			{:else if tab === "backup"}
 				<Backup />
-			{:else if tab === "voice" && server}
-				{#key server.id}<VoicePane serverId={server.id} />{/key}
 			{:else if tab === "schedules" && server}
 				{#key server.id}<SchedulesPane serverId={server.id} />{/key}
-			{:else if tab === "guard" && server}
-				{#key server.id}<GuardPane serverId={server.id} />{/key}
-			{:else if tab === "templates" && server}
-				{#key server.id}<TemplatesPane serverId={server.id} />{/key}
 			{:else if tab === "keys"}
 				<Shortcuts bind:filter={keyFilter} />
 			{:else if tab === "general"}
 				<GeneralPane />
+			{:else if tab === "info" && server}
+				{#if serverOnline}
+					<div class="subtabs">
+						<Segmented
+							tabs
+							variant="underline"
+							label={t("서버 세부 구역")}
+							value={infoSub}
+							onchange={(v) => (infoSub = v)}
+							options={[{ id: "info" as const, label: t("연결 정보") }, { id: "devices" as const, label: t("접속 기기") }]}
+						/>
+					</div>
+				{/if}
+				{#key `${server.id}:${infoSub}`}
+					<ServerForm target={server.id} embedded section={serverOnline ? infoSub : "info"} />
+				{/key}
+			{:else if tab === "tools" && server}
+				<div class="subtabs">
+					<Segmented
+						tabs
+						variant="underline"
+						label={t("에이전트 세부 구역")}
+						value={toolsSub}
+						onchange={(v) => (toolsSub = v)}
+						options={[{ id: "tools" as const, label: t("도구 · 위임") }, { id: "guard" as const, label: t("명령 보호") }]}
+					/>
+				</div>
+				{#if toolsSub === "guard"}
+					{#key server.id}<GuardPane serverId={server.id} />{/key}
+				{:else}
+					{#key server.id}<ServerForm target={server.id} embedded section="tools" />{/key}
+				{/if}
+			{:else if tab === "sessions" && server}
+				<div class="subtabs">
+					<Segmented
+						tabs
+						variant="underline"
+						label={t("대화 세부 구역")}
+						value={sessionsSub}
+						onchange={(v) => (sessionsSub = v)}
+						options={[
+							{ id: "sessions" as const, label: t("기본 설정") },
+							{ id: "templates" as const, label: t("프롬프트 템플릿") },
+							{ id: "voice" as const, label: t("음성 입력") },
+						]}
+					/>
+				</div>
+				{#if sessionsSub === "templates"}
+					{#key server.id}<TemplatesPane serverId={server.id} />{/key}
+				{:else if sessionsSub === "voice"}
+					{#key server.id}<VoicePane serverId={server.id} />{/key}
+				{:else}
+					{#key server.id}<ServerForm target={server.id} embedded section="sessions" />{/key}
+				{/if}
 			{:else if current.server && server}
-				{#key server.id}<ServerForm target={server.id} embedded section={current.id as "info"} only={current.id === "mcp" && extId?.startsWith("mcp:") ? extId.slice(4) : null} />{/key}
+				{#key server.id}<ServerForm target={server.id} embedded section={current.id as "models" | "mcp"} only={current.id === "mcp" && extId?.startsWith("mcp:") ? extId.slice(4) : null} onselectmcp={(name) => (extId = name ? `mcp:${name}` : null)} />{/key}
 			{/if}
 			</div>
 			{/key}
@@ -226,39 +292,36 @@
 		position: relative;
 		padding: 0 var(--dlg-px) var(--dlg-foot-t);
 	}
-	/* The chips' focus ring (4px) needs room inside the scroller, which clips on both axes */
-	.srvbar {
+		.srvbar {
 		position: relative;
 		flex: none;
 		display: flex;
+		align-items: center;
 		gap: var(--dlg-gap-sm);
-		margin-top: -4px; /* pulls the strip up under the title: the 4px focus-ring room below is part of its 8px top padding */
 		padding: var(--dlg-gap-sm) var(--dlg-px) var(--dlg-foot-t);
+	}
+	.srvseg {
+		min-width: 0;
 		overflow-x: auto;
 		scrollbar-width: none;
 	}
-	.srvbar::-webkit-scrollbar {
+	/* the strip scrolls (so it clips): draw the ring inside the button, not 4px outside it */
+	.srvseg :global(.seg > button:focus-visible) {
+		outline-offset: -2px;
+	}
+	.srvseg::-webkit-scrollbar {
 		display: none;
 	}
-	.chipwrap {
+	.srvopt {
 		position: relative;
-		flex: none;
 		display: inline-flex;
-		--pin-ring: var(--bg-elev);
-		/* the chip is a pill, so its corner is empty: pull the dot in onto the curve */
-		--pin-inset: 2px;
+		align-items: center;
+		gap: 4px;
+		--pin-ring: var(--bg-active);
 	}
-	/* unreachable: the chip falls back to a dashed outline and a quieter name (still pressable: its "정보" tab fixes the
-	   address or token). No opacity: at 0.5 the name sank to 2.4:1 and the chip looked disabled rather than offline. */
-	.chipwrap.off :global(.fchip) {
-		border-style: dashed;
+	/* unreachable: a quieter name (still pressable: its "정보" tab fixes the address or token) */
+	.srvopt.off {
 		color: var(--text-faint);
-	}
-	.chipwrap.off :global(.fchip:not(.on)) {
-		border-color: var(--border-strong);
-	}
-	.chipwrap.off :global(.fchip.on) {
-		color: var(--text-dim);
 	}
 	.srvname {
 		min-width: 0;

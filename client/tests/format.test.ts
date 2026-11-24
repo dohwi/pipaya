@@ -80,7 +80,7 @@ describe("pastLabel / messageTime", () => {
 		expect(ko(at(10, 22, 0, 5))).toBe("오전 12:05");
 		expect(ko(at(10, 21, 23, 30))).toBe("어제 오후 11:30");
 		expect(ko(at(10, 21, 23, 30), false)).toBe("어제");
-		expect(ko(at(10, 18, 14, 5))).toBe("수 오후 2:05");
+		expect(ko(at(10, 18, 14, 5))).toBe("수요일 오후 2:05");
 		expect(ko(at(10, 16, 14, 5), false)).toBe("6일 전"); // a list column: days, not a bare weekday
 		expect(ko(at(10, 15, 14, 5))).toBe("11월 15일"); // 7 days back: the date
 		expect(ko(new Date(2025, 10, 15, 12).getTime())).toBe("2025년 11월 15일");

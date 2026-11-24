@@ -3,7 +3,7 @@ import type { FastifyInstance } from "fastify";
 import Type from "typebox";
 import type { QuestionManager } from "./questions.ts";
 import { HttpError, parse } from "./errors.ts";
-import type { EventBus } from "./events.ts";
+import type { EventBus, PipayaEvent } from "./events.ts";
 import { MAX_IMAGES } from "./schemas.ts";
 import type { SessionManager } from "./sessions.ts";
 import { MIN_CLIENT_PROTOCOL, PROTOCOL_VERSION, SERVER_VERSION } from "./version.ts";
@@ -54,10 +54,13 @@ export const HEARTBEAT_MS = 30_000;
 export const MAX_BUFFERED = 8 * 1024 * 1024;
 /** Most events replayed to a client that reconnects with a cursor (the same bound as the SSE stream). */
 const REPLAY_LIMIT = 5000;
+/** Most live events buffered while an async replay is in flight before dropping the replaying socket. */
+export const MAX_REPLAY_BUFFER = 2000;
 
 export interface WebSocketOptions {
 	heartbeatMs?: number;
 	maxBuffered?: number;
+	maxReplayBuffer?: number;
 }
 
 export async function registerWebSocket(
@@ -67,20 +70,32 @@ export async function registerWebSocket(
 ): Promise<void> {
 	const heartbeatMs = opts.heartbeatMs ?? HEARTBEAT_MS;
 	const maxBuffered = opts.maxBuffered ?? MAX_BUFFERED;
+	const maxReplayBuffer = opts.maxReplayBuffer ?? MAX_REPLAY_BUFFER;
+	// Reuse serialized JSON payloads when broadcasting one live event across multiple connected sockets.
+	const serializedEvents = new WeakMap<PipayaEvent, string>();
+	const serializeEvent = (e: PipayaEvent): string => {
+		let raw = serializedEvents.get(e);
+		if (raw === undefined) {
+			raw = JSON.stringify({ type: "event", event: e });
+			serializedEvents.set(e, raw);
+		}
+		return raw;
+	};
 	await server.register(websocket, { options: { maxPayload: 25 * 1024 * 1024 } });
 
 	server.get("/ws", { websocket: true }, (socket, req) => {
 		// Token was already checked by the global onRequest hook (header or ?token=).
 		const subs = new Map<string, { unsubscribe: () => void }>();
-		const send = (msg: unknown) => {
+		const sendRaw = (raw: string) => {
 			if (socket.readyState !== socket.OPEN) return;
 			if (socket.bufferedAmount > maxBuffered) {
 				req.log.warn({ buffered: socket.bufferedAmount }, "websocket client too slow, closing");
 				socket.close(1013, "client too slow"); // 1013 try again later: reconnect and replay from the cursor
 				return;
 			}
-			socket.send(JSON.stringify(msg));
+			socket.send(raw);
 		};
+		const send = (msg: unknown) => sendRaw(JSON.stringify(msg));
 
 		let alive = true;
 		socket.on("pong", () => (alive = true));
@@ -103,17 +118,30 @@ export async function registerWebSocket(
 			let lastSent = after ?? 0;
 			let replaying = after !== undefined;
 			let cancelled = false;
-			const buffered: Parameters<Parameters<EventBus["subscribe"]>[0]>[0][] = [];
-			const emit = (e: (typeof buffered)[number]) => {
+			const buffered: PipayaEvent[] = [];
+			const emit = (e: PipayaEvent) => {
 				if (cancelled) return;
 				if (wanted && !wanted.has(e.type)) return;
 				if (e.id !== 0) {
 					if (e.id <= lastSent) return;
 					lastSent = e.id;
 				}
-				send({ type: "event", event: e });
+				sendRaw(serializeEvent(e));
 			};
-			const off = deps.bus.subscribe((e) => (replaying ? buffered.push(e) : emit(e)), sessionId);
+			const off = deps.bus.subscribe((e) => {
+				if (cancelled) return;
+				if (wanted && !wanted.has(e.type)) return;
+				if (!replaying) return emit(e);
+				if (buffered.length >= maxReplayBuffer) {
+					cancelled = true;
+					buffered.length = 0;
+					off();
+					req.log.warn({ maxReplayBuffer }, "websocket replay buffer overflow, closing");
+					if (socket.readyState === socket.OPEN) socket.close(1013, "replay buffer overflow");
+					return;
+				}
+				buffered.push(e);
+			}, sessionId);
 			const unsubscribe = () => {
 				cancelled = true;
 				off();

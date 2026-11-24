@@ -545,7 +545,8 @@ export class Api {
 
 	compactionSettings = () => this.req<CompactionSettingsInfo>("GET", "/compaction");
 	setCompactionSettings = (settings: CompactionSettings) => this.req<CompactionSettingsInfo>("PUT", "/compaction", settings);
-	schedules = (sessionId?: string, signal?: AbortSignal) => this.req<{ schedules: Schedule[] }>("GET", `/schedules${sessionId ? `?${new URLSearchParams({ sessionId })}` : ""}`, undefined, signal);
+	schedules = (sessionId?: string, signal?: AbortSignal) => this.req<{ schedules: Schedule[]; historyDays?: number }>("GET", `/schedules${sessionId ? `?${new URLSearchParams({ sessionId })}` : ""}`, undefined, signal);
+	setScheduleSettings = (input: { historyDays: number }) => this.req<{ historyDays: number }>("PUT", "/schedules/settings", input);
 	createSchedule = (input: ScheduleInput) => this.req<Schedule>("POST", "/schedules", input);
 	patchSchedule = (id: string, patch: SchedulePatch) => this.req<Schedule>("PATCH", `/schedules/${encodeURIComponent(id)}`, patch);
 	deleteSchedule = (id: string) => this.req<{ ok: boolean }>("DELETE", `/schedules/${encodeURIComponent(id)}`);

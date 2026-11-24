@@ -3,6 +3,7 @@
 	import { onMount, untrack } from "svelte";
 	import { installFocusRescue } from "./lib/focus-rescue";
 	import { isTouch } from "./lib/format";
+	import { warmMarkdown } from "./lib/markdown";
 	import { backLayer, handleBack } from "./lib/dialog";
 	import { BackTrail } from "./lib/back-trail";
 	import { OVERLAY_SELECTOR } from "./lib/keys";
@@ -12,7 +13,9 @@
 	import Sidebar from "./components/shell/Sidebar.svelte";
 	import Rail from "./components/shell/Rail.svelte";
 	import { drag, dropTarget } from "./lib/dnd.svelte";
-	import { released } from "./lib/pointer";
+	import { SidebarResizeController } from "./lib/shell/sidebar-resize.svelte";
+	import { DrawerSwipeController } from "./lib/shell/drawer-swipe.svelte";
+	import { createExtensionHostAdapter } from "./lib/extensions/adapter";
 	import { cancelChord, endExtensionHold, notePress, onShortcut, onShortcutCapture, onShortcutUp, onShortcutUpCapture, resetKeyboard } from "./lib/actions";
 	import Header from "./components/shell/Header.svelte";
 	import Pane from "./components/shell/Pane.svelte";
@@ -29,7 +32,6 @@
 	import DoneNotice from "./components/shell/DoneNotice.svelte";
 	import ChordStrip from "./components/shell/ChordStrip.svelte";
 	import { updater } from "./lib/updater.svelte";
-	import { paneAdapter } from "./lib/extensions/panes";
 	import ExtensionPanels from "./components/extensions/ExtensionPanels.svelte";
 	import ExtensionDock from "./components/extensions/ExtensionDock.svelte";
 	import ExtensionFloating from "./components/extensions/ExtensionFloating.svelte";
@@ -44,15 +46,11 @@
 	import { armSound } from "./lib/sound";
 	import { extensions } from "./lib/extensions/host.svelte";
 	import { voice } from "./lib/voice.svelte";
-	import { COMMANDS, runCommand } from "./lib/commands";
-	import { workspaceAdapter } from "./lib/extensions/workspace";
 	import { viewport } from "./lib/viewport.svelte";
 	import { notifications } from "./lib/notifications";
 	import { nativePushAdapter } from "./lib/native-push";
-	import { notificationRules } from "./lib/notification-rules";
-	import { getLang, t } from "./lib/i18n";
-	import { isTauri, openExternal } from "./lib/tauri";
-	import { copyText } from "./lib/clipboard";
+	import { t } from "./lib/i18n";
+	import { isTauri } from "./lib/tauri";
 	import { notificationPlatform } from "./lib/notifications";
 	import { listenForPairingLinks } from "./lib/pairing-intake";
 
@@ -135,7 +133,7 @@
 	// Cold markdown code is what the first reply stalls on (lib/markdown.ts): warm it once the first paint is done.
 	onMount(() => {
 		const run = () => {
-			void import("./lib/markdown").then((m) => m.warmMarkdown());
+			warmMarkdown();
 			// Settings is the dialog people open most: fetched on the first click, its sheet arrived ~0.6s late on a phone.
 			void preload(load.settings).catch(() => {});
 		};
@@ -249,43 +247,14 @@
 		// A few seconds after launch, so the check never competes with connecting to the server.
 		const updateTimer = setTimeout(() => updater.autoCheck(), 5000);
 		notifications.init(() => app.visibleIds, (sid, api) => { const sv = api ? app.serverIdOfApi(api) : null; if (sv && sv !== app.serverId) app.openIn(sv, { session: sid }); else void app.openAny(sid); }, nativePushAdapter(), () => app.readableId);
-		const api = () => { if (!app.api) throw new Error(t("서버에 연결해 주세요")); return app.api; };
 		// Voice input: the microphone's own availability (secure context, MediaRecorder) is fixed for this window.
 		voice.probe();
-		extensions.init({
-			prefill: text => { app.prefill = text; },
-			notify: text => app.toast(text),
-			systemNotifications: {
-				send: (owner, spec) => api().sendNotification(owner, spec),
-				status: () => notifications.status(),
-				register: async (owner, id, rule) => { await notificationRules.register(api(), owner, id, rule); },
-				remove: async (owner, id) => { await notificationRules.remove(api(), owner, id); },
-				revoke: async owner => { await notificationRules.revoke(api(), owner); },
-			},
-			context: () => ({ sessionId: app.activeId, model: app.effective.model, provider: app.effective.provider, running: app.runningHere, online: app.net === "online", language: getLang() }),
-			session: {
-				send: async (text, mode) => { if (!app.activeId) throw new Error(t("열려 있는 대화가 없습니다")); const ok = mode === "steer" ? await app.steer(text) : mode === "follow_up" ? await app.queue(text) : await app.send(text); if (!ok) throw new Error(t("보내지 못했습니다")); },
-				abort: async () => { if (app.activeId) await app.abort(); },
-			},
-			panes: paneAdapter(app),
-			workspace: workspaceAdapter(app, { names: () => COMMANDS.map(c => c.name), run: (name, arg) => runCommand(name, arg) }),
-			dialog: request => app.extensionRequests.ask(request),
-			dark: () => app.prefs.resolvedDark,
-			reservedCommands: () => COMMANDS.map(c => c.name),
-			connection: () => app.conn,
-			openUrl: url => openExternal(url),
-			copy: text => copyText(text),
-			serverId: () => app.serverId,
-			deviceId: () => notifications.id,
-			listChanged: () => app.listChanged(),
-			statesChanged: () => app.statesChanged(),
-			configuration: { capture: () => app.captureConfiguration(), apply: document => app.applyConfiguration(document), applyBackground: document => app.applyBackgroundConfiguration(document), backup: () => app.backupConfiguration(), restore: value => app.restoreConfiguration(value), confirm: message => app.extensionRequests.confirm(message) },
-		});
+		extensions.init(createExtensionHostAdapter());
 		return () => { gone = true; stopLinks(); clearTimeout(updateTimer); extensions.stop(); notifications.stop(); stopApp(); };
 	});
 
 	// Drag the sidebar edge to resize it (desktop).
-	let resizing = $state(false);
+	const sidebarResize = new SidebarResizeController(app.sidebar);
 	// the reconnect link gives feedback: the net stays "offline" while a retry runs, so without this a tap looks like nothing happened
 	let retrying = $state(false);
 	async function retryNow() {
@@ -296,47 +265,6 @@
 		} finally {
 			retrying = false;
 		}
-	}
-	let gripFrom = { x: 0, w: 0 };
-	function gripDown(e: PointerEvent) {
-		(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-		gripFrom = { x: e.clientX, w: app.sidebar.shownWidth() };
-		resizing = true;
-		document.body.style.userSelect = "none";
-	}
-	/** Dragged this far past the narrowest width, letting go folds the sidebar into the rail (as in an editor) */
-	const FOLD_PAST = 80;
-	let foldOnRelease = $state(false);
-	function gripMove(e: PointerEvent) {
-		if (resizing && released(e)) return gripUp(); // let go where no pointerup reached us
-		if (!resizing) return;
-		const want = gripFrom.w + e.clientX - gripFrom.x;
-		foldOnRelease = want < SIDEBAR_W.min - FOLD_PAST;
-		app.sidebar.setWidth(want, false);
-	}
-	function gripUp() {
-		if (!resizing) return;
-		resizing = false;
-		document.body.style.userSelect = "";
-		if (foldOnRelease) {
-			// the width the drag started from stays: unfolding comes back to it, not to the narrowest
-			foldOnRelease = false;
-			app.sidebar.setWidth(gripFrom.w);
-			app.sidebar.toggleCollapsed();
-			return;
-		}
-		app.sidebar.setWidth(app.sidebar.shownWidth()); // persist once, at the end of the drag
-	}
-	function gripKey(e: KeyboardEvent) {
-		if (e.key === "Home" || e.key === "End") {
-			e.preventDefault();
-			app.sidebar.setWidth(e.key === "Home" ? SIDEBAR_W.min : SIDEBAR_W.max);
-			return;
-		}
-		const d = e.key === "ArrowLeft" ? -16 : e.key === "ArrowRight" ? 16 : 0;
-		if (!d) return;
-		e.preventDefault();
-		app.sidebar.setWidth(app.sidebar.shownWidth() + d * (e.shiftKey ? 4 : 1));
 	}
 
 	// Phone drawer: a session carried out of it and let go on the dimmed page joins what is being viewed (its group, or a new one).
@@ -360,89 +288,24 @@
 		},
 	};
 
-	// Swipe sideways anywhere to drag the drawer open / shut: it follows the finger, and settles on release by
-	// distance or flick speed (touch only, narrow screens only, never while a dialog is up).
+	// Swipe sideways anywhere to drag the drawer open / shut (touch only, narrow screens only).
 	let sideEl: HTMLElement | undefined = $state();
-	let startX = 0;
-	let startY = 0;
-	let lastX = 0;
-	let lastT = 0;
-	let vx = 0; // px/ms, smoothed
-	let tracking = false;
-	let locked = false; // decided: this gesture is a horizontal drag of the drawer
-	let swipe: number | null = $state(null); // drawer's visible width in px while dragging
-	let drawerW = $state(320);
 	/** The sidebar's drawn width: the user's, or the theme's `--sidebar-w` (which can change while the app runs). */
 	let sideW = $state(0);
-	// A swipe that starts on these keeps its own meaning (typing, selecting, scrolling sideways, dragging, panning a canvas
-	// that marks itself `data-own-swipe`, such as the graph view). The 24px screen edge still opens the drawer.
-	const NO_SWIPE = "input, textarea, select, [contenteditable], [role=separator], [role=slider], [draggable=true], .grip, [data-own-swipe]";
-	// pre / table are not listed: they only keep the swipe when they really scroll sideways (scrollsSideways below),
-	// so a short code block or table inside a chat no longer swallows the drawer swipe.
-	const MODAL = 'dialog[open], [role="dialog"], [role="alertdialog"]';
-	function scrollsSideways(el: Element | null): boolean {
-		for (; el && el !== document.body; el = el.parentElement) {
-			if (el.scrollWidth > el.clientWidth + 1 && /(auto|scroll)/.test(getComputedStyle(el).overflowX)) return true;
-		}
-		return false;
-	}
-	function touchStart(e: TouchEvent) {
-		tracking = locked = false;
-		swipe = null;
-		if (e.touches.length !== 1 || !viewport.narrow) return; // the drawer only exists on narrow screens
-		if (document.querySelector(MODAL)) return;
-		const t = e.touches[0]!;
-		startX = lastX = t.clientX;
-		startY = t.clientY;
-		lastT = e.timeStamp;
-		vx = 0;
-		if (!app.sidebar.open && t.clientX >= 24) {
-			const el = e.target instanceof Element ? e.target : null;
-			if (el?.closest(NO_SWIPE) || scrollsSideways(el)) return;
-			// adjusting a text selection: only when the touch lands on it (a selection left over from before the app went
-			// to the background must not block the drawer swipe for good)
-			const sel = getSelection();
-			if (sel && !sel.isCollapsed && sel.rangeCount && el && sel.getRangeAt(0).intersectsNode(el)) return;
-		}
-		drawerW = sideEl?.offsetWidth || 320;
-		tracking = true;
-	}
-	function touchMove(e: TouchEvent) {
-		if (!tracking) return;
-		if (drag.id || e.touches.length !== 1) return cancelSwipe(); // a session is being carried, not the drawer swiped
-		const t = e.touches[0]!;
-		const dx = t.clientX - startX;
-		const dy = t.clientY - startY;
-		if (!locked) {
-			if (Math.abs(dy) > 10 && Math.abs(dy) > Math.abs(dx)) return cancelSwipe(); // vertical scroll
-			if (Math.abs(dx) < 8 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
-			if (app.sidebar.open ? dx > 0 : dx < 0) return cancelSwipe(); // wrong direction for the current state
-			locked = true;
-		}
-		const dt = e.timeStamp - lastT;
-		if (dt > 0) vx = 0.6 * vx + 0.4 * ((t.clientX - lastX) / dt);
-		lastX = t.clientX;
-		lastT = e.timeStamp;
-		swipe = Math.max(0, Math.min(drawerW, (app.sidebar.open ? drawerW : 0) + dx));
-	}
-	function cancelSwipe() {
-		tracking = locked = false;
-		swipe = null;
-	}
+	const drawerSwipe = new DrawerSwipeController({
+		isNarrow: () => viewport.narrow,
+		isOpen: () => app.sidebar.open,
+		setOpen: (open) => { app.sidebar.open = open; },
+		isDraggingItem: () => !!drag.id,
+		getDrawerWidth: () => sideEl?.offsetWidth || 320,
+	});
 	// Going to the background can swallow touchend/pointercancel: drop a half-done swipe or carried session so the
 	// next gesture starts clean (a stale `drag.id` makes every touchMove cancel the swipe).
 	function settleOnHide() {
 		if (!document.hidden) return;
 		endExtensionHold("hidden"); // the keyup of a held extension shortcut will not arrive while the page is hidden
-		cancelSwipe();
+		drawerSwipe.cancel();
 		if (drag.id) drag.end(false);
-	}
-	function touchEnd() {
-		if (!tracking || !locked) return cancelSwipe();
-		if (swipe === null) return cancelSwipe();
-		const open = swipe / drawerW > 0.35 ? vx > -0.35 : vx > 0.35;
-		app.sidebar.open = open;
-		cancelSwipe();
 	}
 </script>
 
@@ -453,10 +316,10 @@
 <svelte:document onvisibilitychange={settleOnHide} />
 
 <svelte:window
-	ontouchstart={touchStart}
-	ontouchmove={touchMove}
-	ontouchend={touchEnd}
-	ontouchcancel={cancelSwipe}
+	ontouchstart={drawerSwipe.start}
+	ontouchmove={drawerSwipe.move}
+	ontouchend={drawerSwipe.end}
+	ontouchcancel={drawerSwipe.cancel}
 	onpagehide={() => (endExtensionHold("hidden"), settleOnHide())}
 	onkeydowncapture={onShortcutCapture}
 	onkeydown={onShortcut}
@@ -494,7 +357,7 @@
 	<div class="app" data-part="app">
 		<!-- A closed drawer is only slid off screen: `inert` keeps Tab and screen readers out of it too (they walked 14 hidden
 		     controls before reaching the page). Not while a swipe is pulling it in, so it answers the moment it shows. -->
-		<div class="side" inert={viewport.narrow && !app.sidebar.open && swipe === null} bind:this={sideEl} bind:offsetWidth={sideW} class:dragging={swipe !== null} style:translate={swipe !== null ? `${swipe - drawerW}px 0` : undefined} class:open={app.sidebar.open} class:collapsed={app.sidebar.collapsed} class:resizing class:folding={resizing && foldOnRelease} style:--sidebar-w={app.sidebar.width === null ? undefined : `${app.sidebar.width}px`}>
+		<div class="side" inert={viewport.narrow && !app.sidebar.open && drawerSwipe.swipe === null} bind:this={sideEl} bind:offsetWidth={sideW} class:dragging={drawerSwipe.swipe !== null} style:translate={drawerSwipe.swipe !== null ? `${drawerSwipe.swipe - drawerSwipe.drawerW}px 0` : undefined} class:open={app.sidebar.open} class:collapsed={app.sidebar.collapsed} class:resizing={sidebarResize.resizing} class:folding={sidebarResize.resizing && sidebarResize.foldOnRelease} style:--sidebar-w={app.sidebar.width === null ? undefined : `${app.sidebar.width}px`}>
 			<div class="full"><Sidebar /></div>
 			<div class="rail-slot"><Rail /></div>
 			{#if !app.sidebar.collapsed}
@@ -510,18 +373,18 @@
 					aria-valuenow={app.sidebar.width ?? (sideW || app.sidebar.shownWidth())}
 					tabindex="0"
 					title={t("끌어서 너비 조절 · 끝까지 끌면 접기 · 더블 클릭으로 원래 크기")}
-					onpointerdown={gripDown}
-					onpointermove={gripMove}
-					onpointerup={gripUp}
-					onpointercancel={gripUp}
+					onpointerdown={sidebarResize.down}
+					onpointermove={sidebarResize.move}
+					onpointerup={sidebarResize.up}
+					onpointercancel={sidebarResize.up}
 					ondblclick={() => app.sidebar.resetWidth()}
-					onkeydown={gripKey}
+					onkeydown={sidebarResize.key}
 				></div>
 			{/if}
 		</div>
 		<!-- Tapping the scrim closes the drawer; with a keyboard the drawer closes with Esc (the app shortcut layer). -->
 		<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
-		<div class="scrim" class:show={app.sidebar.open} class:dragging={swipe !== null} class:catch={canCatch} class:over={scrimOver} style:opacity={swipe !== null ? swipe / drawerW : undefined} onclick={() => (app.sidebar.open = false)} use:dropTarget={scrimDrop}>
+		<div class="scrim" class:show={app.sidebar.open} class:dragging={drawerSwipe.swipe !== null} class:catch={canCatch} class:over={scrimOver} style:opacity={drawerSwipe.swipe !== null ? drawerSwipe.swipe / drawerSwipe.drawerW : undefined} onclick={() => (app.sidebar.open = false)} use:dropTarget={scrimDrop}>
 			{#if canCatch}<span class="catch-hint">{t("지금 보는 대화에 합치기")}</span>{/if}
 		</div>
 
@@ -914,7 +777,6 @@
 		}
 		.side.open {
 			translate: 0 0;
-			box-shadow: var(--shadow);
 		}
 		.scrim {
 			display: block;
@@ -929,9 +791,6 @@
 		.side.dragging,
 		.scrim.dragging {
 			transition: none; /* follow the finger exactly */
-		}
-		.side.dragging {
-			box-shadow: var(--shadow);
 		}
 		.scrim.show {
 			opacity: 1;

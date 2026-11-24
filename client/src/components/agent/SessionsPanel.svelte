@@ -254,11 +254,11 @@
 		gap: 12px;
 	}
 	.group {
-		border: 1px solid var(--border);
-		border-radius: var(--radius-panel);
+		/* a borderless tinted group (no box-in-box); a row sits 12px in, like the header, so every control lines up */
+		background: var(--bg-set);
+		border-radius: var(--radius-sm);
+		padding: 4px 0;
 		overflow: hidden;
-		/* the card's outer edge is the content edge, flush with the buttons above it; what is inside the card sits 12px in
-		   (its own padding) plus the 1px border, so every control inside lines up with every other one */
 	}
 	/* the checkbox, folder name and the bulk buttons share one row that wraps: on a phone the buttons drop under the name
 	   instead of covering it. Checkbox column x = 12 in the header and in every row below, so the ticks line up. */
@@ -268,7 +268,6 @@
 		align-items: center;
 		gap: 8px 12px;
 		padding: 8px 12px;
-		background: var(--bg-elev);
 	}
 	.fold {
 		flex: 1 1 160px;
@@ -314,11 +313,18 @@
 		display: flex;
 		align-items: center;
 		gap: 12px;
-		padding: 8px 12px;
-		border-top: 1px solid var(--border);
+		margin: 0 3px; /* 3 + 1 border + 8 padding = the header's 12px gutter */
+		padding: 8px;
+		border: 1px solid transparent; /* inactive rows keep the border's room, so selecting never shifts the layout */
+		border-radius: var(--radius-xs);
 	}
+	li + li {
+		margin-top: 1px;
+	}
+	/* Hairline Inset Fill: the selected row is the page colour with a 1px hairline */
 	li.on {
-		background: var(--accent-soft);
+		background: var(--bg-active);
+		border-color: var(--border-strong);
 	}
 	li label {
 		flex: 1;

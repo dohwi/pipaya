@@ -7,7 +7,7 @@ import { dirname } from "node:path";
 import Type, { type Static } from "typebox";
 import Value from "typebox/value";
 import { badRequest } from "./errors.ts";
-import { mimeOf } from "./file-routes.ts";
+import { mimeOf } from "./routes/file-routes.ts";
 import { sniffImage } from "./image-file.ts";
 import type { ModelRegistry } from "./models.ts";
 import { safePath, type ToolDef } from "./tools.ts";

@@ -22,7 +22,6 @@
 	import { keepDraft } from "../../lib/settings-drafts.svelte";
 	import type {
 		ConfigurationInfo,
-		ConnectionResult,
 		CustomProvider,
 		DefaultModelSelection,
 		ModelInfo,
@@ -40,8 +39,6 @@
 		const el = sections[role];
 		if (el) flash(el);
 	}
-	/** Opened on one of a connection's models (the graph view): that connection's model list starts folded open. */
-	const openModelsOf = $derived(app.settingsFocus?.kind === "model" ? app.settingsFocus.provider : null);
 
 	let cfg = $state<ConfigurationInfo | null>(null);
 	let models = $state<ModelInfo[]>([]);
@@ -53,7 +50,6 @@
 	let actionError = $state("");
 	const setError = (m: string) => (actionError = m);
 	let busy = $state(false);
-	let tests = $state<Record<string, ConnectionResult | "running">>({});
 	let keyFor = $state<string | null>(null);
 	let keyValue = $state("");
 	// a key typed for a connection and not saved yet survives leaving the section or Settings
@@ -76,7 +72,6 @@
 			models = [];
 			form = null;
 			keyFor = null;
-			tests = {};
 		}
 		loadError = "";
 		if (!s) return;
@@ -197,23 +192,6 @@
 		}
 	}
 
-	/** Turn one model on or off: the connection is saved again with that model's flag changed. */
-	async function toggleModel(p: CustomProvider, id: string, on: boolean) {
-		const a = api();
-		if (!a) return;
-		busy = true;
-		try {
-			const models = p.models.map(({ thinkingSource: _s, unavailable: _u, ...m }) => (m.id === id ? { ...m, disabled: on ? undefined : true } : m));
-			await a.saveCustomProvider(p.id, { name: p.name, baseUrl: p.baseUrl, api: p.api, authRequired: p.authRequired, models });
-			await load(serverId, true); // quiet: the card stays open
-			if (serverId === app.serverId) await app.refreshProviders();
-		} catch (e) {
-			app.toast(t("모델을 바꾸지 못했습니다: {error}", { error: errorText(e) }), "error");
-		} finally {
-			busy = false;
-		}
-	}
-
 	async function saveKey(p: CustomProvider) {
 		const a = api();
 		if (!a || !keyValue.trim()) return;
@@ -241,18 +219,6 @@
 			app.toast(t("키를 삭제하지 못했습니다: {error}", { error: errorText(e) }), "error");
 		} finally {
 			busy = false;
-		}
-	}
-
-	async function test(provider: string, model: string) {
-		const a = api();
-		if (!a) return;
-		const k = `${provider}\u0000${model}`;
-		tests[k] = "running";
-		try {
-			tests[k] = await a.testModel({ provider, model });
-		} catch (e) {
-			tests[k] = { ok: false, durationMs: 0, error: errorText(e) };
 		}
 	}
 </script>
@@ -283,16 +249,11 @@
 						<div class="provwrap" animate:reflow in:rowIn out:rowOut>
 							<ProviderCard
 								{p}
-								conn={server ? { baseUrl: server.baseUrl, token: server.token } : null}
 								{busy}
-								{tests}
 								keying={keyFor === p.id}
-								openModels={openModelsOf === p.id}
 								bind:keyValue
 								refreshing={refreshingId === p.id}
 								anyRefreshing={refreshingId !== null}
-								ontest={(model) => test(p.id, model)}
-								ontoggle={(model, on) => void toggleModel(p, model, on)}
 								ontogglekey={() => { keyFor = keyFor === p.id ? null : p.id; keyValue = ""; }}
 								onsavekey={() => void saveKey(p)}
 								onremovekey={() => removeKey(p)}

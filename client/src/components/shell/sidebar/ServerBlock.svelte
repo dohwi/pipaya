@@ -117,7 +117,7 @@
 	}
 	/* the rows are the copy kept from the last visit: drawn at once, a step quieter until the server confirms them */
 	.srv.stale > .fold {
-		opacity: 0.7;
+		color: var(--text-dim);
 	}
 	.srv > .fold {
 		transition: opacity var(--motion-fast) var(--ease-std);

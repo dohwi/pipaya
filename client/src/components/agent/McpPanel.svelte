@@ -23,7 +23,22 @@
 	import type { McpInfo, McpServer, McpServerInfo } from "../../lib/types";
 
 	/** The MCP server list and its add/edit form for one server (`api`): the dialog and the settings page both show it. */
-	let { api, data = $bindable(null), loading = $bindable(true), refresh = 0, only = null }: { api: Api; data?: McpInfo | null; loading?: boolean; refresh?: number; only?: string | null } = $props();
+	let {
+		api,
+		data = $bindable(null),
+		loading = $bindable(true),
+		refresh = 0,
+		only = null,
+		onselect,
+	}: {
+		api: Api;
+		data?: McpInfo | null;
+		loading?: boolean;
+		refresh?: number;
+		only?: string | null;
+		/** Syncs the settings sidebar MCP subtree selection when opening/closing an edit form. */
+		onselect?: (name: string | null) => void;
+	} = $props();
 
 	let error = $state("");
 	let busy = $state(false);
@@ -93,7 +108,21 @@
 	}
 	function edit(s: McpServerInfo) {
 		form = { original: s.name, name: s.name, transport: s.transport, command: s.command ?? "", args: (s.args ?? []).join("\n"), env: show(s.env, "="), url: s.url ?? "", headers: show(s.headers, ": ") };
+		onselect?.(s.name);
 	}
+	function closeForm() {
+		const wasEdit = form?.original != null;
+		form = null;
+		if (wasEdit) onselect?.(null);
+	}
+	// Sidebar navigation: returning to root "MCP" (only -> null) or picking another server leaves the previous edit form.
+	$effect(() => {
+		const targetOnly = only;
+		untrack(() => {
+			if (!form?.original) return;
+			if (targetOnly === null || targetOnly !== form.original) form = null;
+		});
+	});
 	async function submit(e: Event) {
 		e.preventDefault();
 		const f = form;
@@ -109,7 +138,10 @@
 		};
 		const rest = all().filter(x => x.name !== f.original);
 		const list = f.original ? all().map(x => (x.name === f.original ? next : x)) : [...rest, next];
-		if (await save(list)) form = null;
+		if (await save(list)) {
+			form = null;
+			if (f.original) onselect?.(null);
+		}
 	}
 
 	/** One server's card only (picked in the settings sidebar); the whole list when it is gone or not asked for. */
@@ -130,6 +162,13 @@
 
 	{#if form}
 		<form class="form" onsubmit={submit}>
+			<div class="fhead">
+				<button type="button" class="back" onclick={closeForm} disabled={busy}>
+					<Icon name="chevron-left" />
+					<span>{t("MCP 서버 목록")}</span>
+				</button>
+				<span class="ftitle mono">{form.original ? form.original : t("MCP 서버 추가")}</span>
+			</div>
 			<FormField label={t("이름")}>
 				<input class="field mono" bind:value={form.name} placeholder="github" maxlength="32" autocomplete="off" required />
 			</FormField>
@@ -146,28 +185,36 @@
 					<input class="field mono" bind:value={form.command} placeholder="npx" autocomplete="off" autocapitalize="off" spellcheck="false" required />
 				</FormField>
 				<FormField label={t("인자 (한 줄에 하나)")}>
-					<textarea class="field mono area" bind:value={form.args} rows="3" placeholder={"-y\n@modelcontextprotocol/server-filesystem\n/home"} spellcheck="false"></textarea>
+					<textarea class="field mono area" onfocus={(e) => e.currentTarget.scrollIntoView({ block: "nearest", inline: "nearest" })} bind:value={form.args} rows="3" placeholder={"-y\n@modelcontextprotocol/server-filesystem\n/home"} spellcheck="false"></textarea>
 				</FormField>
 				<FormField label={t("환경 변수 (KEY=값, 한 줄에 하나)")}>
-					<textarea class="field mono area" bind:value={form.env} rows="2" placeholder="API_TOKEN=..." spellcheck="false"></textarea>
+					<textarea class="field mono area" onfocus={(e) => e.currentTarget.scrollIntoView({ block: "nearest", inline: "nearest" })} bind:value={form.env} rows="2" placeholder="API_TOKEN=..." spellcheck="false"></textarea>
 				</FormField>
 			{:else}
 				<FormField label="URL">
 					<input class="field mono" bind:value={form.url} placeholder="https://example.com/mcp" autocomplete="off" autocapitalize="off" spellcheck="false" required />
 				</FormField>
 				<FormField label={t("헤더 (이름: 값, 한 줄에 하나)")}>
-					<textarea class="field mono area" bind:value={form.headers} rows="2" placeholder="Authorization: Bearer ..." spellcheck="false"></textarea>
+					<textarea class="field mono area" onfocus={(e) => e.currentTarget.scrollIntoView({ block: "nearest", inline: "nearest" })} bind:value={form.headers} rows="2" placeholder="Authorization: Bearer ..." spellcheck="false"></textarea>
 				</FormField>
 			{/if}
 			<p class="hint">{t("저장된 비밀 값은 ••••••••로 가려 보입니다. 그대로 두면 기존 값이 유지됩니다.")}</p>
 			<div class="actions form-actions">
-				<Button onclick={() => (form = null)} disabled={busy}>{t("취소")}</Button>
+				<Button onclick={closeForm} disabled={busy}>{t("취소")}</Button>
 				<Button variant="primary" type="submit" disabled={busy}>{t("저장")}</Button>
 			</div>
 		</form>
 	{:else if !data && loading}
 		<EmptyState loading />
 	{:else if data}
+		{#if only && onselect}
+			<div class="fhead">
+				<button type="button" class="back" onclick={() => onselect(null)}>
+					<Icon name="chevron-left" />
+					<span>{t("MCP 서버 목록")}</span>
+				</button>
+			</div>
+		{/if}
 		<ListGroup title={t("MCP 서버")} count={t("{on}/{total}개 연결", { on: data.ready, total: data.servers.length })}>
 		<ul class="list">
 			{#each shown as s (s.name)}
@@ -195,7 +242,7 @@
 			{/each}
 		</ul>
 		</ListGroup>
-		{#if shown.length === data.servers.length}<Button variant="dashed" onclick={add}><Icon name="plus" /> {t("MCP 서버 추가")}</Button>{/if}
+		{#if !only}<Button variant="dashed" onclick={add}><Icon name="plus" /> {t("MCP 서버 추가")}</Button>{/if}
 	{/if}
 </div>
 
@@ -206,7 +253,11 @@
 	.tools { display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 	.err { color: var(--danger); }
 	.form { display: flex; flex-direction: column; gap: var(--dlg-gap); }
-	.area:focus { box-shadow: inset 0 0 0 3px var(--accent-soft); } /* keep the field halo visible against the scrollport edge */
+	.fhead { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+	.back { display: inline-flex; align-items: center; gap: 4px; height: var(--control-h-sm); padding: 0 8px 0 0; border-radius: var(--radius-control); color: var(--text-dim); font-size: var(--fs-sm); line-height: 20px; }
+	@media (hover: hover) { .back:hover { background: var(--bg-hover); color: var(--text); } }
+	.back :global(svg) { width: 18px; height: 18px; stroke-width: 1.9; }
+	.ftitle { font-size: var(--fs-sm); line-height: 20px; color: var(--text-faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 	.area { height: auto; padding: 8px 12px; resize: vertical; font-size: var(--fs-sm); line-height: 1.5; }
 	.actions { display: flex; justify-content: flex-end; gap: 8px; }
 </style>

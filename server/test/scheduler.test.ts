@@ -782,6 +782,24 @@ describe("schedule routes", () => {
 		const types = (await api("GET", "/events/types")).json.events.map((e: any) => e.type);
 		expect(types).toContain("schedules_updated");
 	});
+
+	test("GET /schedules returns historyDays and PUT /schedules/settings updates retention (including 0 = never delete)", async () => {
+		const initial = await api("GET", "/schedules");
+		expect(initial.status).toBe(200);
+		expect(initial.json.historyDays).toBe(7);
+
+		const updated = await api("PUT", "/schedules/settings", { historyDays: 30 });
+		expect(updated.status).toBe(200);
+		expect(updated.json).toEqual({ historyDays: 30 });
+		expect((await api("GET", "/schedules")).json.historyDays).toBe(30);
+
+		const keepForever = await api("PUT", "/schedules/settings", { historyDays: 0 });
+		expect(keepForever.status).toBe(200);
+		expect(keepForever.json).toEqual({ historyDays: 0 });
+
+		expect((await api("PUT", "/schedules/settings", { historyDays: -1 })).status).toBe(400);
+		expect((await api("PUT", "/schedules/settings", { historyDays: 366 })).status).toBe(400);
+	});
 });
 
 describe("migration", () => {

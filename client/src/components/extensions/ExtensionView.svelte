@@ -35,6 +35,7 @@
 	import Segmented from "../ui/Segmented.svelte";
 	import { getContext, setContext, tick } from "svelte";
 	import Select from "../ui/Select.svelte";
+	import Switch from "../ui/Switch.svelte";
 	import ExtensionView from "./ExtensionView.svelte";
 	import ExtensionIcon from "./ExtensionIcon.svelte";
 	import { fieldsIn, UIValidationError, validateUIEvent, type UIEvent, type UIFieldValue } from "../../lib/extensions/ui";
@@ -195,9 +196,7 @@
 		onchange(field.id, value);
 		void emit({ type: "change", id: field.id, value }, field.id);
 	}
-	function commitChoice(field: Kind<"select"> | Kind<"checkbox">, event: Event) {
-		const target = event.currentTarget as HTMLInputElement | HTMLSelectElement;
-		const value = field.type === "checkbox" ? (target as HTMLInputElement).checked : target.value;
+	function commitToggle(field: Kind<"checkbox">, value: boolean) {
 		onchange(field.id, value);
 		void emit({ type: "change", id: field.id, value }, field.id);
 	}
@@ -477,18 +476,16 @@
 	{@const id = domId(namespace, node.id)}
 	{@const message = problemOf(node.id, node.error)}
 	<div class="ui-field">
+		<!-- on / off is a Switch (DESIGN.md rule 8): the label on the left, the switch on the right -->
 		<div class="check">
-			<input
-				{id}
-				type="checkbox"
+			<span class="checklabel" {id}>{node.label}{#if node.required}<span class="req" aria-hidden="true"> *</span>{/if}</span>
+			<Switch
 				checked={checkedOf(node)}
-				required={node.required}
 				disabled={locked || node.disabled}
-				aria-invalid={message ? "true" : undefined}
-				aria-describedby={message ? domId(namespace, node.id, "error") : undefined}
-				onchange={(event) => commitChoice(node, event)}
+				label={node.label}
+				describedby={message ? domId(namespace, node.id, "error") : undefined}
+				onchange={(on) => commitToggle(node, on)}
 			/>
-			<label for={id}>{node.label}{#if node.required}<span class="req" aria-hidden="true"> *</span>{/if}</label>
 		</div>
 		{@render note(node.id, message)}
 	</div>
@@ -589,19 +586,15 @@
 	.ui-field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 	label { font-size: var(--fs-xs); font-weight: 550; line-height: 20px; color: var(--text); }
 	.req { color: var(--danger); }
-	.control { width: 100%; min-width: 0; box-sizing: border-box; height: var(--control-h); padding: 0 12px; border: 1px solid var(--border-strong); border-radius: var(--radius-control); background: var(--bg-code); color: var(--text); font-size: var(--fs-lg); line-height: 1.4; transition: border-color var(--motion-fast) var(--ease-std), box-shadow var(--motion-fast) var(--ease-std); }
+	.control { width: 100%; min-width: 0; box-sizing: border-box; height: var(--control-h); padding: 0 12px; border: 1px solid var(--border-strong); border-radius: var(--radius-control); background: var(--bg-code); color: var(--text); font-size: var(--fs-lg); line-height: 1.4; transition: border-color var(--motion-fast) var(--ease-std); }
 	textarea.control { height: auto; padding: 8px 12px; resize: vertical; min-height: 4.5rem; }
 	.control::placeholder { color: var(--text-faint); }
-	.control:focus-visible { outline: 2px solid transparent; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+	.control:focus-visible { outline: 2px solid var(--accent); outline-offset: -1px; border-color: var(--accent); }
 	.control[aria-invalid="true"] { border-color: var(--danger); }
-	.control[aria-invalid="true"]:focus-visible { box-shadow: 0 0 0 3px var(--danger-soft); }
-	.control:disabled, .btn:disabled, .check input:disabled { opacity: 0.55; cursor: not-allowed; }
-	.check { display: flex; align-items: flex-start; gap: 8px; }
-	/* 17px checkbox centred on the 20px first line: (20 - 17) / 2 = 1.5px */
-	.check input { flex: none; width: 17px; height: 17px; margin: 1.5px 0 0; accent-color: var(--accent); }
-	.check input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-	.check input[aria-invalid="true"] { outline: 2px solid var(--danger); outline-offset: 1px; }
-	.check label { font-size: var(--fs-sm); font-weight: 450; line-height: 20px; }
+	.control[aria-invalid="true"]:focus-visible { outline-color: var(--danger); }
+	.control:disabled, .btn:disabled { background: var(--disabled-bg); border-color: var(--disabled-border); color: var(--disabled-fg); cursor: not-allowed; }
+	.check { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-width: 0; }
+	.checklabel { font-size: var(--fs-sm); font-weight: 450; line-height: 20px; color: var(--text); overflow-wrap: anywhere; }
 	.error { margin: 0; font-size: var(--fs-xs); line-height: 1.45; color: var(--danger); }
 	.error:empty { display: none; }
 

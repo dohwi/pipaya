@@ -254,7 +254,6 @@
 		/* elevated rounded card tinted subtly with its tone */
 		background: color-mix(in srgb, var(--tone) 12%, var(--bg-lift));
 		border: 1px solid color-mix(in srgb, var(--tone) 28%, var(--border-strong));
-		box-shadow: var(--shadow-soft);
 		color: var(--text);
 		font-size: var(--fs-sm);
 		line-height: 20px;

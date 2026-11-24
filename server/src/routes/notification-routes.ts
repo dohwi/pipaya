@@ -1,8 +1,8 @@
 import type { FastifyInstance } from "fastify";
 import Type from "typebox";
-import { badRequest, HttpError } from "./errors.ts";
-import { NOTIFICATION_KINDS, NOTIFYING_EVENT_TYPES, NotificationService } from "./notifications.ts";
-import type { TypeBoxProvider } from "./typebox-provider.ts";
+import { badRequest, HttpError } from "../errors.ts";
+import { NOTIFICATION_KINDS, NOTIFYING_EVENT_TYPES, NotificationService } from "../notifications.ts";
+import type { TypeBoxProvider } from "../typebox-provider.ts";
 const id = Type.String({ minLength: 1, maxLength: 80, pattern: "^[a-zA-Z0-9._-]+$" });
 const text = (maxLength: number) => Type.String({ minLength: 1, maxLength });
 const owner = Type.String({ minLength: 1, maxLength: 80, pattern: "^[a-z][a-z0-9.-]*$" });

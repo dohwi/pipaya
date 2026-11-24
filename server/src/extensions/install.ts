@@ -73,7 +73,17 @@ export async function installFromGit(id: string, src: GitSource, extensionsDir: 
 			const [out, err] = await Promise.all([new Response(p.stdout).text(), new Response(p.stderr).text()]);
 			return { code: await p.exited, out: out.trim(), err: err.trim() };
 		};
-		const cloned = await git("clone", "--quiet", "--depth", "1", "--branch", src.ref, `https://${host}/${src.repo}.git`, tmp);
+		const cloned = await git(
+			"clone",
+			"-c", "core.symlinks=false",
+			"-c", "protocol.file.allow=never",
+			"--quiet",
+			"--depth", "1",
+			"--branch", src.ref,
+			"--",
+			`https://${host}/${src.repo}.git`,
+			tmp,
+		);
 		if (cloned.code !== 0) throw new Error(`clone failed: ${cloned.err}`);
 		const head = (await git("-C", tmp, "rev-parse", "HEAD")).out;
 		if (head !== src.commit) throw new Error(`${src.repo}@${src.ref} is at ${head}, the catalog lists ${src.commit}; refusing to install`);

@@ -1,16 +1,16 @@
 import type { FastifyInstance } from "fastify";
-import { Configuration, ConfigurationResult, CustomProviderBody, CustomProviderPublic, ToolsBody, ToolsInfo, DelegatePolicy, DefaultsBody, DefaultsResult, DiscoverBody, DiscoverResult, ConnectionResult, Selection, WorkdirBody, WorkdirInfo } from "./configuration.ts";
-import { IdParams, Ok, Tier, errors } from "./schemas.ts";
-import type { TypeBoxProvider } from "./typebox-provider.ts";
-import type { EventBus } from "./events.ts";
-import { badRequest, HttpError, notFound } from "./errors.ts";
-import { MAX_ICON_BYTES } from "./model-icons.ts";
+import { Configuration, ConfigurationResult, CustomProviderBody, CustomProviderPublic, ToolsBody, ToolsInfo, DelegatePolicy, DefaultsBody, DefaultsResult, DiscoverBody, DiscoverResult, ConnectionResult, Selection, WorkdirBody, WorkdirInfo } from "../configuration.ts";
+import { IdParams, Ok, Tier, errors } from "../schemas.ts";
+import type { TypeBoxProvider } from "../typebox-provider.ts";
+import type { EventBus } from "../events.ts";
+import { badRequest, HttpError, notFound } from "../errors.ts";
+import { MAX_ICON_BYTES } from "../model-icons.ts";
 import Type from "typebox";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
-import { subagentTools, listSubagents, removeSubagent, saveSubagent, subagentKey } from "./subagents.ts";
-import { TOOL_DEFS } from "./tools.ts";
-import { THINKING_LEVELS } from "./store.ts";
+import { subagentTools, listSubagents, removeSubagent, saveSubagent, subagentKey } from "../subagents.ts";
+import { TOOL_DEFS } from "../tools.ts";
+import { THINKING_LEVELS } from "../store.ts";
 const Scope = Type.Union([Type.Literal("global"), Type.Literal("project")], { description: "global: ~/.agents/subagents; project: .agents/subagents of the server's default working folder" });
 const SubagentInfo = Type.Object({
 	name: Type.String(), description: Type.String(), model: Type.Optional(Type.String()), thinking: Type.Optional(Type.String()),

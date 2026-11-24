@@ -545,7 +545,7 @@
 		{#if schedulesShown}
 			<button class="navbtn wide" onclick={() => ((app.schedulesDialog = true), (app.sidebar.open = false))} title={schedulesTip}>
 				<span class="sico"><Icon name="clock" /></span> {t("예약 작업")}
-				{#if scheduled.count}<span class="salert"><span class="cbadge">{scheduled.count}</span></span>{/if}
+				{#if scheduled.count}<span class="salert"><span class="cbadge neutral">{scheduled.count}</span></span>{/if}
 			</button>
 		{/if}
 		<!-- the phone drawer steps aside for the sheet (like the graph view does): it was left open behind it, two layers deep -->
@@ -611,6 +611,7 @@
 		flex: 1;
 		overflow-y: auto;
 		padding: 8px 0 16px; /* 8 below the brand row, 16 above the window edge */
+		scroll-padding-block: 8px;
 		overscroll-behavior: contain;
 	}
 	/* the line where a carried server, folder or tab would land: its own rules below only place it */

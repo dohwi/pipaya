@@ -63,12 +63,11 @@
 		font-size: var(--fs-sm);
 		font-variant-numeric: tabular-nums;
 		transition:
-			border-color var(--motion-fast) var(--ease-std),
-			box-shadow var(--motion-fast) var(--ease-std);
+			border-color var(--motion-fast) var(--ease-std);
 	}
 	.numfield:focus-visible {
-		outline: none;
+		outline: 2px solid var(--accent);
+		outline-offset: -1px;
 		border-color: var(--accent);
-		box-shadow: 0 0 0 3px var(--accent-soft);
 	}
 </style>

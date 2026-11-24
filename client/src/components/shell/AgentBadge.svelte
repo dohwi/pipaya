@@ -30,7 +30,7 @@
 </script>
 
 <span class="agent {state}" style="width:{size}px;height:{size}px" role="img" aria-label={goal ? `${ACTIVITY_LABEL[state]} · ${t("목표")} ${goalLabel(goal.status)}` : ACTIVITY_LABEL[state]}>
-	<!-- .cut holds still and takes PinMark's cut-out; the logo inside it pulses, swells or shakes under that fixed hole, so the
+	<!-- .cut holds still and takes PinMark's cut-out; the logo inside it pulses or swells under that fixed hole, so the
 	     air around the mark never closes up mid-animation (a cut on the animated .logo moved with it, up to 1.5px) -->
 	<span class="cut"><span class="logo" use:syncAnim={state === "idle" || state === "done" ? false : state}><ModelLogo conn={link?.conn} provider={logoModel.provider} model={logoModel.model} {icon} {size} /></span></span>
 	{#if goal}<PinMark kind="goal" tone={ACTIVITY_TONE[state]} quiet={goal.status === "paused" || goal.status === "complete"} label={`${t("목표")} ${goalLabel(goal.status)}`} />{/if}
@@ -78,10 +78,6 @@
 	.asking .logo {
 		animation: ask var(--anim-working-duration) var(--anim-working-ease) infinite;
 	}
-	/* failed: a short shake at the start of each beat, then rest */
-	.failed .logo {
-		animation: shake var(--anim-working-duration) var(--anim-working-ease) infinite;
-	}
 	/* working: bright, dims halfway, bright again */
 	@keyframes pulse {
 		50% {
@@ -97,25 +93,6 @@
 		50% {
 			opacity: var(--anim-working-dim);
 			transform: scale(1);
-		}
-	}
-	@keyframes shake {
-		0%,
-		30%,
-		100% {
-			transform: translateX(0);
-		}
-		6% {
-			transform: translateX(-1.5px);
-		}
-		12% {
-			transform: translateX(1.5px);
-		}
-		18% {
-			transform: translateX(-1px);
-		}
-		24% {
-			transform: translateX(1px);
 		}
 	}
 	@media (prefers-reduced-motion: reduce) {

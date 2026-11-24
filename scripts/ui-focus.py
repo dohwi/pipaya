@@ -72,7 +72,7 @@ SEED = {"pipaya.servers": json.dumps([{"id": "dev", "name": "dev", "baseUrl": ba
 
 # The screens and how to reach each one. A step is a selector to click; "key:<Key>" presses a key, "open:<text>" opens a
 # conversation from the sidebar (through the drawer on a narrow window). Settings panes are listed by their nav label.
-SETTINGS = ["내 설정", "단축키", "백업", "정보", "모델", "음성 입력", "에이전트 도구", "MCP", "대화", "예약 작업", "확장", "기기"]
+SETTINGS = ["내 설정", "단축키", "백업", "서버", "모델", "에이전트", "MCP", "대화", "예약 작업", "확장"]
 
 def settings(label):
     return ["button.settings", f'.nav [role="tab"]:has(.nl:text-is("{label}"))']
@@ -105,7 +105,7 @@ SCREENS = [
     ("catalog-picker", MODEL + ['.mtrigger'], '.pk-list .pk-opt'),
     ("model-picker", [".trigger.inline"], '.pk-list .pk-opt'),
     ("mcp-form", settings("MCP") + ['button:text-is("MCP 서버 추가")'], 'form input[placeholder="github"]'),
-    ("role-form", settings("에이전트 도구") + ['button:text-is("서브에이전트 역할 추가")'], 'form .chips'),
+    ("role-form", settings("에이전트") + ['button:text-is("역할 관리")', 'button:text-is("서브에이전트 역할 추가")'], 'form .chips'),
     ("schedule-form", settings("예약 작업") + ['button:text-is("예약 추가")'], 'form textarea'),
     ("extension-detail", settings("확장") + ['.extensions .expand:has-text("Focus audit")'], '.extensions .page input'),
     ("extension-market", settings("확장") + ['button:has-text("마켓플레이스")'], 'input[aria-label="확장 검색"]'),

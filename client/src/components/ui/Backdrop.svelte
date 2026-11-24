@@ -312,7 +312,7 @@
 		stroke: var(--accent);
 	}
 	.gauge.full {
-		animation: gauge-pop var(--motion-normal) var(--ease-spring) both;
+		animation: gauge-pop var(--motion-normal) var(--ease) both;
 	}
 	@keyframes gauge-in {
 		from {
