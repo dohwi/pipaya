@@ -1,10 +1,17 @@
 <script lang="ts">
+	import { untrack } from "svelte";
 	import { t } from "../../lib/i18n";
 	import { toolLabel } from "../../lib/settings-search";
 	import { Api, errorText } from "../../lib/api";
 	import { app } from "../../lib/store.svelte";
-	import type { DelegateMode, DelegatePolicy, DelegateRoles, ModelInfo, ToolsInfo } from "../../lib/types";
+	import type { DelegateMode, DelegatePolicy, DelegateRoles, ModelInfo, SubagentInfo, ToolsInfo } from "../../lib/types";
 	import SubagentsPanel from "../agent/SubagentsPanel.svelte";
+	import Badge from "../ui/Badge.svelte";
+	import Button from "../ui/Button.svelte";
+	import DialogBody from "../ui/DialogBody.svelte";
+	import Icon from "../ui/Icon.svelte";
+	import IconButton from "../ui/IconButton.svelte";
+	import Modal from "../ui/Modal.svelte";
 	import Segmented from "../ui/Segmented.svelte";
 	import Select from "../ui/Select.svelte";
 	import Switch from "../ui/Switch.svelte";
@@ -45,6 +52,44 @@
 		apiOf(id)?.models().then((list) => (models = { id, list: list.filter((m) => !m.imageGeneration) })).catch(() => {});
 	});
 	const modelList = $derived(models && models.id === serverId ? models.list : []);
+
+	/** Compact global role summary + separate management modal (like ProviderCard -> ConnectionForm). */
+	let rolesOpen = $state(false);
+	let rolesRefresh = $state(0);
+	let rolesData = $state<{ id: string; list: SubagentInfo[] } | null>(null);
+	let modalCount = $state<{ on: number; total: number } | null>(null);
+
+	function loadRoleSummary(id: string) {
+		apiOf(id)
+			?.subagents()
+			.then((r) => (rolesData = { id, list: r.subagents.filter((x) => x.scope === "global") }))
+			.catch(() => {});
+	}
+	$effect(() => {
+		void app.skillsTick;
+		void rolesRefresh;
+		const id = serverId;
+		untrack(() => loadRoleSummary(id));
+	});
+	function closeRolesModal() {
+		rolesOpen = false;
+		loadRoleSummary(serverId);
+	}
+	// If Settings was opened specifically for a role (e.g. from Graph view), open the management modal automatically.
+	$effect(() => {
+		const f = app.settingsFocus;
+		if (f && (f.kind === "role" || f.kind === "roles")) rolesOpen = true;
+	});
+	const globalRoles = $derived(rolesData && rolesData.id === serverId ? rolesData.list : null);
+	const rolesActive = $derived(globalRoles ? globalRoles.filter((r) => r.enabled).length : 0);
+	const rolesDisabled = $derived(globalRoles ? globalRoles.filter((r) => !r.enabled).length : 0);
+	const rolesHint = $derived.by(() => {
+		if (!globalRoles) return "~/.agents/subagents";
+		if (!globalRoles.length) return t("등록된 전역 역할이 없습니다. 관리 창에서 새 역할을 추가하세요.");
+		const names = globalRoles.filter((r) => r.enabled).slice(0, 4).map((r) => r.name);
+		const more = rolesActive > names.length ? ` +${rolesActive - names.length}` : "";
+		return names.length ? `${names.join(", ")}${more}` : t("켜진 전역 역할이 없습니다.");
+	});
 
 	const modes: { id: DelegateMode; label: string }[] = [
 		{ id: "defined", label: t("정의된 모델만") },
@@ -157,7 +202,50 @@
 			<Select size="sm" width="96px" label={t("서브에이전트 최대 모델 호출")} value={d.maxTurns} options={nums([5, 10, 15, 20, 30, 50])} onchange={(n) => saveDelegate({ maxTurns: n })} />
 		</SettingRow>
 	</section>
-	<SubagentsPanel {serverId} models={modelList} globalOnly />
+
+	<section class="set-group" data-focus="roles">
+		<div class="section-label">{t("서브에이전트 역할")}</div>
+		<div class="roles-card">
+			<div class="roles-info">
+				<div class="roles-head">
+					<span class="roles-count">
+						{#if !globalRoles}
+							…
+						{:else if !globalRoles.length}
+							{t("전역 역할 없음")}
+						{:else}
+							{t("전역 역할 {n}개", { n: rolesActive })}
+						{/if}
+					</span>
+					{#if rolesDisabled}
+						<Badge size="sm">{t("꺼짐 {n}개", { n: rolesDisabled })}</Badge>
+					{/if}
+				</div>
+				<span class="hint mono">{rolesHint}</span>
+			</div>
+			<Button size="sm" onclick={() => (rolesOpen = true)}><Icon name="widgets" /> {t("역할 관리")}</Button>
+		</div>
+	</section>
+{/if}
+
+{#if rolesOpen}
+	<Modal
+		onclose={closeRolesModal}
+		title={t("서브에이전트 역할")}
+		sub={modalCount ? `${t("{total}개 중 {on}개 사용", modalCount)} · ~/.agents/subagents` : "~/.agents/subagents"}
+		width="xl"
+		maxHeight="760px"
+		layer={2}
+		portal
+		safeArea
+	>
+		{#snippet headerActions()}
+			<IconButton icon="retry" label={t("새로고침")} tip onclick={() => rolesRefresh++} />
+		{/snippet}
+		<DialogBody gap>
+			<SubagentsPanel {serverId} models={modelList} globalOnly refresh={rolesRefresh} bind:count={modalCount} bare />
+		</DialogBody>
+	</Modal>
 {/if}
 
 <style>
@@ -165,5 +253,33 @@
 		display: flex;
 		flex-direction: column;
 		gap: 8px;
+	}
+	.roles-card {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 12px;
+	}
+	.roles-info {
+		display: flex;
+		flex-direction: column;
+		gap: 4px;
+		min-width: 0;
+	}
+	.roles-head {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		flex-wrap: wrap;
+	}
+	.roles-count {
+		font-size: var(--fs-md);
+		font-weight: 500;
+		line-height: 20px;
+	}
+	.roles-info .hint {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 	}
 </style>

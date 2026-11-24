@@ -105,7 +105,7 @@ SCREENS = [
     ("catalog-picker", MODEL + ['.mtrigger'], '.pk-list .pk-opt'),
     ("model-picker", [".trigger.inline"], '.pk-list .pk-opt'),
     ("mcp-form", settings("MCP") + ['button:text-is("MCP 서버 추가")'], 'form input[placeholder="github"]'),
-    ("role-form", settings("에이전트 도구") + ['button:text-is("서브에이전트 역할 추가")'], 'form .chips'),
+    ("role-form", settings("에이전트") + ['button:text-is("역할 관리")', 'button:text-is("서브에이전트 역할 추가")'], 'form .chips'),
     ("schedule-form", settings("예약 작업") + ['button:text-is("예약 추가")'], 'form textarea'),
     ("extension-detail", settings("확장") + ['.extensions .expand:has-text("Focus audit")'], '.extensions .page input'),
     ("extension-market", settings("확장") + ['button:has-text("마켓플레이스")'], 'input[aria-label="확장 검색"]'),
