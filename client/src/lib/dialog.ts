@@ -117,6 +117,11 @@ export function backLayer(opts: { onclose: () => void; dismissible?: boolean }):
 	return () => untrack(layer);
 }
 
+/** Whether any modal, drawer, or other back-button layer is currently open. */
+export function hasBackLayer(): boolean {
+	return backs.length > 0;
+}
+
 /**
  * The native back button (Tauri Android does not turn it into a popstate once it is handled natively):
  * closes the top open modal / drawer. Returns false when there is nothing to close.

@@ -186,6 +186,11 @@ describe("shortcut catalogue", () => {
 		expect(DEFAULT_BINDINGS.splitTerminal).toBe("Mod+Alt+Minus");
 	});
 
+	test("history navigation binds Mod+[ and Mod+] without colliding with tab/workspace/row stepping", () => {
+		expect(DEFAULT_BINDINGS.navBack).toBe("Mod+BracketLeft");
+		expect(DEFAULT_BINDINGS.navForward).toBe("Mod+BracketRight");
+	});
+
 	test("the waiting strip folds the four Ctrl+B arrows into one option, and keeps every other one", () => {
 		const prefix = { mod: true, alt: false, shift: false, keys: ["B"] };
 		const opts = chordOptions(prefix, DEFAULT_BINDINGS);
