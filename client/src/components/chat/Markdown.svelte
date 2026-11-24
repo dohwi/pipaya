@@ -1,6 +1,6 @@
 <script lang="ts">
-	import { onDestroy, tick } from "svelte";
-	import { t } from "../../lib/i18n";
+	import { onDestroy, tick, untrack } from "svelte";
+	import { getLang, t } from "../../lib/i18n";
 	import { app } from "../../lib/store.svelte";
 	import { baseName } from "../../lib/files";
 	import { awaitsHighlight, isSafeExternalUrl, renderMarkdown, renderStreaming } from "../../lib/markdown";
@@ -8,12 +8,18 @@
 	import { copyText } from "../../lib/clipboard";
 	import { openExternal } from "../../lib/tauri";
 	import { sharedMedia } from "../../lib/media-urls";
-	import { patchHtml } from "../../lib/patch-html";
+	import { patchHtml, type PatchInput } from "../../lib/patch-html";
+	import { decorateMarkdownTokens, mentionSignature } from "../../lib/markdown-tokens";
 	import { closeVideoView, videoPlayer } from "../../lib/video-view";
 
 	const INLINE_IMAGE_MAX = 1280;
 
-	let { text, streaming = false, sessionId = null }: { text: string; streaming?: boolean; sessionId?: string | null } = $props();
+	let {
+		text,
+		streaming = false,
+		sessionId = null,
+		mentions = false,
+	}: { text: string; streaming?: boolean; sessionId?: string | null; mentions?: boolean } = $props();
 	let root: HTMLElement | undefined = $state();
 
 	// While streaming, re-parsing on every token is wasteful on phones; coalesce to one parse per frame.
@@ -41,6 +47,29 @@
 		return onHighlightReady(() => hlTick++);
 	});
 
+	// Assistant replies highlight known @session / @group mentions and /skill:name tokens into clickable chips, matching
+	// TokenText. `mentionSig` narrows reactivity to targets that actually appear in this message so opening or closing
+	// an unrelated session never re-patches the DOM or resets loaded inline media.
+	const mentionSig = $derived(mentions ? mentionSignature(html, app.mentionIndex) : "");
+	const patchInput = $derived.by((): PatchInput => {
+		const raw = html;
+		if (!mentions) return raw;
+		const sig = mentionSig;
+		const hasSkill = raw.includes("/skill:");
+		if (!sig && !hasSkill) return raw;
+		void getLang(); // re-apply tooltips when the UI language switches
+		const index = untrack(() => app.mentionIndex);
+		const labels = {
+			openSession: (name: string) => t("{name} 대화 열기", { name }),
+			openGroup: (name: string) => t("{name} 그룹 열기", { name }),
+			openSkill: (name: string) => t("스킬 {name} 보기", { name }),
+		};
+		return {
+			html: raw,
+			decorate: (frag) => decorateMarkdownTokens(frag, { index, skills: hasSkill, labels }),
+		};
+	});
+
 	// Pictures the agent wrote into the working directory (`![](out/chart.png)`) are fetched with the token and shown inline.
 	// Blob URLs live in the app-wide LRU cache (`sharedMedia`) so switching tabs or remounting after a stream settles
 	// displays already-fetched pictures immediately without downloading them again.
@@ -51,8 +80,8 @@
 	/** the video players this message drew: a player left on the whole screen goes away with the message */
 	const videos: HTMLDivElement[] = [];
 	$effect(() => {
-		// read `html` for real: a bare `html;` is not a dependency, so the pictures were looked for only before the text was in the DOM
-		const rendered = html;
+		// read `patchInput` for real: a bare `html;` is not a dependency, and a mention re-patch restores cached images synchronously
+		const rendered = patchInput;
 		const host = root;
 		const owner = media;
 		const live = streaming;
@@ -168,6 +197,22 @@
 
 	function onClick(e: MouseEvent) {
 		const el = e.target as HTMLElement;
+		if (mentions) {
+			const mention = el.closest<HTMLButtonElement>("button[data-mention-id]");
+			if (mention) {
+				app.openMention({
+					kind: mention.dataset.mentionKind === "group" ? "group" : "session",
+					id: mention.dataset.mentionId!,
+				});
+				return;
+			}
+			const skill = el.closest<HTMLButtonElement>("button[data-skill]");
+			if (skill) {
+				const name = skill.dataset.skill ?? "";
+				if (/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(name)) app.openSkills(sessionId, name);
+				return;
+			}
+		}
 		const file = el.closest<HTMLAnchorElement>("a[data-file]");
 		if (file) {
 			e.preventDefault();
@@ -242,7 +287,7 @@
 
 <!-- Delegated click for the links and buttons inside the rendered HTML: those are focusable and keyboard-activated themselves. -->
 <!-- svelte-ignore a11y_no_static_element_interactions -->
-<div class="md" class:streaming bind:this={root} onclick={onClick} onkeydown={onKeyDown} use:patchHtml={html}></div>
+<div class="md" class:streaming bind:this={root} onclick={onClick} onkeydown={onKeyDown} use:patchHtml={patchInput}></div>
 
 <style>
 	/* Korean wraps between words like the rest of the app (app.css keep-all); only a word wider than the line breaks */
@@ -485,6 +530,56 @@
 	@media (hover: hover) {
 		.md :global(a.wd-file:hover) {
 			background: color-mix(in srgb, var(--mark-file) 22%, transparent);
+		}
+	}
+	/* Matches TokenText's `.tok.mention` and `.tok.skill` chips: amber @session / @group and accent /skill:name pills. */
+	.md :global(button.wd-mention),
+	.md :global(button.wd-skill) {
+		--hue: var(--mark-mention);
+		display: inline-flex;
+		align-items: center;
+		gap: 4px;
+		max-width: 100%;
+		padding: 1px 0.4em; /* em sides scale with the text, like inline code and TokenText */
+		border-radius: var(--radius-sm);
+		background: color-mix(in srgb, var(--hue) 12%, transparent);
+		box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--hue) 22%, transparent);
+		color: inherit;
+		font: inherit;
+		font-size: 0.88em;
+		font-weight: 600;
+		line-height: 18px; /* whole-pixel 20px box (18 + 2 padding), matching TokenText */
+		vertical-align: -1px; /* measured: aligns chip ink with surrounding 1.55 body text (<= 0.5px) */
+		cursor: pointer;
+		transition: background var(--motion-fast) var(--ease-std);
+	}
+	.md :global(button.wd-mention) {
+		color: var(--hue);
+	}
+	.md :global(button.wd-skill) {
+		--hue: var(--accent);
+	}
+	.md :global(button.wd-skill::before) {
+		content: "";
+		flex: none;
+		width: 12px;
+		height: 12px;
+		background: currentColor;
+		opacity: 0.7;
+		-webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 7c-1.6-1.4-3.7-2-7-2v13c3.3 0 5.4.6 7 2 1.6-1.4 3.7-2 7-2V5c-3.3 0-5.4.6-7 2zM12 7v13'/%3E%3C/svg%3E") center / contain no-repeat;
+		mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 7c-1.6-1.4-3.7-2-7-2v13c3.3 0 5.4.6 7 2 1.6-1.4 3.7-2 7-2V5c-3.3 0-5.4.6-7 2zM12 7v13'/%3E%3C/svg%3E") center / contain no-repeat;
+	}
+	.md :global(button.wd-mention .wd-lbl),
+	.md :global(button.wd-skill .wd-lbl) {
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	@media (hover: hover) {
+		.md :global(button.wd-mention:hover),
+		.md :global(button.wd-skill:hover) {
+			background: color-mix(in srgb, var(--hue) 22%, transparent);
 		}
 	}
 	.md :global(.wd-media) {

@@ -96,10 +96,10 @@ export type TextPart = { text: string; kind?: "mention" | "image" | "file" | "sk
 const FILE_TOKEN = /^(?=[^\s#]*[A-Za-z])[^\s#]*(?:\/[^\s#]*|\.[A-Za-z0-9]{1,8})$/;
 
 /**
- * A sent message cut into plain runs and the tokens the composer marks, by the same rules: a token starts the text or
- * follows whitespace; `@name` only for a known name (`@미나랑` is `@미나` plus "랑"; `a@b.c` is no mention), `#imageN` only
- * for an attached image (1..images), `#path` only when it reads as a path, and `/skill:name` only for a skill the
- * server confirmed it injected (`<pipaya-hint>`). Trailing particles/punctuation stay text.
+ * A sent message cut into plain runs and the tokens the composer marks: `@name` for a known session or group (at the
+ * start, after whitespace, or after opening/delimiter punctuation like `(@서아, ...)` — never inside an email or path),
+ * `#imageN` for an attached image (1..images), `#path` when it reads as a path, and `/skill:name` for a skill the server
+ * confirmed it injected (`<pipaya-hint>`). Trailing particles and punctuation stay text.
  */
 export function splitTokens(text: string, known: { names: readonly string[]; images?: number; skills?: readonly string[] }): TextPart[] {
 	const hasSkills = !!known.skills?.length && text.includes("/skill:");
@@ -114,18 +114,24 @@ export function splitTokens(text: string, known: { names: readonly string[]; ima
 		out.push(part);
 		last = at + part.text.length;
 	};
-	for (const m of text.matchAll(/(^|\s)(?:([@#])([^\s@#]+)|\/skill:([a-z0-9]+(?:-[a-z0-9]+)*)(?![A-Za-z0-9_/-]))/g)) {
-		const at = m.index! + m[1]!.length;
-		if (m[4]) {
-			if (known.skills?.includes(m[4])) push(at, { text: `/skill:${m[4]}`, kind: "skill", name: m[4] });
+	const re = /(?<![\p{L}\p{N}_.%+\-@/])@([^\s@#]+)|(?:^|(?<=\s))#([^\s@#]+)|(?<![\p{L}\p{N}_./-])\/skill:([a-z0-9]+(?:-[a-z0-9]+)*)(?![A-Za-z0-9_/-])/gu;
+	for (let m = re.exec(text); m; m = re.exec(text)) {
+		const at = m.index;
+		if (m[3]) {
+			if (known.skills?.includes(m[3])) push(at, { text: `/skill:${m[3]}`, kind: "skill", name: m[3] });
 			continue;
 		}
-		const body = m[3]!;
-		if (m[2] === "@") {
-			const hit = knownMention(body, known.names);
-			if (hit) push(at, { text: `@${body.slice(0, hit.length)}`, kind: "mention", name: hit });
+		if (m[1]) {
+			const hit = knownMention(m[1], known.names);
+			if (hit) {
+				push(at, { text: `@${m[1].slice(0, hit.length)}`, kind: "mention", name: hit });
+				re.lastIndex = last;
+			} else {
+				re.lastIndex = at + 1;
+			}
 			continue;
 		}
+		const body = m[2]!;
 		const img = /^image(\d+)(?![\w./-])/.exec(body);
 		if (img) {
 			const n = Number(img[1]);

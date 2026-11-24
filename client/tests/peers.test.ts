@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { groupHandle, parentLabel, parsePeer, peerLabel, peerMentions } from "../src/lib/peers";
+import { buildMentionIndex, groupHandle, parentLabel, parsePeer, peerLabel, peerMentions } from "../src/lib/peers";
 import type { Group, Session } from "../src/lib/types";
 
 const s = (id: string, name: string, extra: Partial<Session> = {}) => ({ id, name, title: `t-${id}`, purpose: "", cwd: "/home/u/proj/app", closed: false, ...extra }) as Session;
@@ -31,6 +31,19 @@ describe("peers", () => {
 		const r = parsePeer("[from the server: @도하 finished its run. This is a report you asked for; no reply needed.]\nlast words: \"끝\"\nUse peer(action=read).");
 		expect(r?.server).toBe(true);
 		expect(r?.body).toBe("@도하 finished its run. This is a report you asked for; no reply needed.\nlast words: \"끝\"\nUse peer(action=read).");
+	});
+
+	test("buildMentionIndex resolves active sessions and groups, with sessions taking precedence", () => {
+		const idx = buildMentionIndex(
+			[s("a", "서아"), s("b", "닫힘", { closed: true }), s("c", "")],
+			[group("결제 개편", "a"), group("서아", "a")],
+		);
+		expect(idx.resolve("서아")).toEqual({ kind: "session", id: "a" });
+		expect(idx.resolve("@서아")).toEqual({ kind: "session", id: "a" });
+		expect(idx.resolve("@결제-개편")).toEqual({ kind: "group", id: "결제 개편" });
+		expect(idx.resolve("닫힘")).toBeUndefined();
+		expect(idx.names).toContain("서아");
+		expect(idx.names).toContain("결제-개편");
 	});
 });
 

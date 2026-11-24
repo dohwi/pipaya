@@ -7,6 +7,39 @@ import type { Group, Session } from "./types";
 /** How a group is written in a message: its name with whitespace turned into "-" so the tag stays one token (same rule as the server). */
 export const groupHandle = (name: string): string => name.trim().replace(/\s+/g, "-");
 
+export type MentionTarget = { kind: "session"; id: string } | { kind: "group"; id: string };
+
+export interface MentionIndex {
+	/** All known lowercase handle forms (stored session name, localized romanized form, and group handles). */
+	names: string[];
+	/** Resolve a handle (with or without leading `@`) to the active session or group it names. */
+	resolve: (name: string) => MentionTarget | undefined;
+}
+
+/** Lookup table from every known `@name` (session or group) to the target it opens. Sessions take precedence on a clash. */
+export function buildMentionIndex(
+	sessions: readonly Pick<Session, "id" | "name" | "closed">[],
+	groups: readonly Pick<Group, "id" | "name">[],
+): MentionIndex {
+	const map = new Map<string, MentionTarget>();
+	for (const s of sessions) {
+		if (s.closed || !s.name) continue;
+		const target: MentionTarget = { kind: "session", id: s.id };
+		map.set(s.name.toLowerCase(), target);
+		map.set(nameInLang(s.name).toLowerCase(), target);
+	}
+	for (const g of groups) {
+		const handle = groupHandle(g.name);
+		if (!handle) continue;
+		const key = handle.toLowerCase();
+		if (!map.has(key)) map.set(key, { kind: "group", id: g.id });
+	}
+	return {
+		names: [...map.keys()],
+		resolve: (name: string) => map.get(name.replace(/^@/, "").toLowerCase()),
+	};
+}
+
 /** The label shown before a session's title in the sidebar and the pane header. */
 export function peerLabel(s: Pick<Session, "name" | "purpose"> | undefined): { text: string; title: string } | undefined {
 	if (!s?.name) return undefined;

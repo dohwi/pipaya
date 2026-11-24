@@ -33,6 +33,14 @@
 
 	/** Set when an extension recognises the first line of the message (`sdk.messages.setHeader`): a label for where it came from. */
 	const header = $derived(parsePeer(item.text) ?? extensions.headerOf(item.text));
+	/** When the header names another active session/group (`@name`), clicking it jumps straight to that chat. */
+	const headerTarget = $derived.by(() => {
+		if (!header || ("server" in header && header.server) || !header.from.startsWith("@")) return undefined;
+		return app.mentionIndex.resolve(header.from);
+	});
+	const openHeaderTarget = () => {
+		if (headerTarget) app.openMention(headerTarget);
+	};
 	/** A prompt a scheduled task sent: the bubble is labelled "예약" like a message from another session is labelled with its sender. */
 	const scheduled = $derived(!!item.scheduled && !header);
 	const shown = $derived(splitQuote(header ? header.body : item.text));
@@ -62,7 +70,19 @@
 			</div>
 		{/if}
 		{#if header}
-			<div class="header"><Icon name={"server" in header && header.server ? "server" : "chat"} /> <span>{header.from}</span></div>
+			<div class="header">
+				<Icon name={"server" in header && header.server ? "server" : "chat"} />
+				{#if headerTarget}
+					<button
+						type="button"
+						class="header-link"
+						title={headerTarget.kind === "group" ? t("{name} 그룹 열기", { name: header.from }) : t("{name} 대화 열기", { name: header.from })}
+						onclick={openHeaderTarget}
+					>{header.from}</button>
+				{:else}
+					<span>{header.from}</span>
+				{/if}
+			</div>
 		{:else if scheduled}
 			<div class="header"><Icon name="clock" /> <span>{t("예약")}</span></div>
 		{/if}
@@ -155,6 +175,16 @@
 		width: 14px;
 		height: 14px;
 		stroke-width: 1.8;
+	}
+	.header-link {
+		font: inherit;
+		color: inherit;
+		text-underline-offset: 3px;
+	}
+	@media (hover: hover) {
+		.header-link:hover {
+			text-decoration: underline;
+		}
 	}
 	.quote {
 		margin: 0 0 4px;

@@ -6,7 +6,7 @@ export const toolArgStr = (v: unknown): string => (typeof v === "string" ? v : v
 const str = toolArgStr;
 
 /** What a tool call really is. A `read` of a SKILL.md is a skill being loaded gets its own look. */
-export type ToolKind = "read" | "write" | "edit" | "ls" | "grep" | "bash" | "skill" | "think" | "image" | "other";
+export type ToolKind = "read" | "write" | "edit" | "ls" | "grep" | "bash" | "skill" | "think" | "image" | "peer" | "other";
 
 /** `read` of …/<name>/SKILL.md → the skill's name, else null. */
 export function skillOf(name: string, args: Record<string, unknown>): string | null {
@@ -33,6 +33,7 @@ const LOOK: Record<ToolKind, { icon: ToolIcon }> = {
 	think: { icon: "brain" },
 	other: { icon: "bolt" },
 	image: { icon: "sparkles" },
+	peer: { icon: "chat" },
 };
 
 /** The tool that draws pictures (the server's image model setting gives it to agents). */
@@ -67,6 +68,46 @@ export function splitCd(command: string): { dir: string; rest: string } {
 	return { dir, rest };
 }
 
+const peerHandle = (v: unknown): string => {
+	const s = str(v).trim().replace(/^@/, "");
+	return s ? `@${s}` : "";
+};
+
+/**
+ * Ordered `@`-less handle candidates a `peer` call acted on. `rename` returns `[newName, name]` so callers fall back
+ * to the old handle if the rename failed or has not completed yet.
+ */
+export function peerTargetsOf(args: Record<string, unknown>, output = ""): string[] {
+	const clean = (v: unknown) => {
+		const s = str(v).trim().replace(/^@/, "");
+		return s || null;
+	};
+	const list = (...vals: (string | null)[]) => vals.filter((v, i, a): v is string => !!v && a.indexOf(v) === i);
+	switch (str(args.action)) {
+		case "send":
+			return list(clean(args.to));
+		case "rename":
+			return list(clean(args.newName), clean(args.name));
+		case "create": {
+			const m = /^Created @([^\s(,.:;!?]+)/.exec(output.trim());
+			return list(m ? m[1]! : null);
+		}
+		case "group_create": {
+			const m = /^Group @([^\s(,.:;!?]+)/.exec(output.trim());
+			return list(m ? m[1]! : null, clean(args.groupName));
+		}
+		case "group_add":
+		case "group_remove":
+		case "group_dissolve":
+			return list(clean(args.group));
+		default:
+			return list(clean(args.name), clean(args.to));
+	}
+}
+
+/** Primary `@`-less handle a `peer` call acted on, or null. */
+export const peerTargetOf = (args: Record<string, unknown>, output = ""): string | null => peerTargetsOf(args, output)[0] ?? null;
+
 /** One line that says what a tool call is doing. */
 export function toolSummary(name: string, args: Record<string, unknown>): string {
 	if (toolKind(name, args) === "skill") return "";
@@ -85,6 +126,20 @@ export function toolSummary(name: string, args: Record<string, unknown>): string
 			return str(args.path);
 		case "delegate":
 			return clip(`${str(args.role)}: ${firstLine(str(args.task))}`, 90);
+		case "peer": {
+			const action = str(args.action);
+			if (action === "send") return clip([action, peerHandle(args.to), firstLine(str(args.message))].filter(Boolean).join(" · "), 90);
+			if (action === "create") return clip([action, firstLine(str(args.title || args.purpose || args.message))].filter(Boolean).join(" · "), 90);
+			if (action === "rename") {
+				const to = peerHandle(args.newName);
+				return clip([action, peerHandle(args.name), to ? `→ ${to}` : ""].filter(Boolean).join(" · "), 90);
+			}
+			if (action.startsWith("group_")) {
+				const members = Array.isArray(args.members) ? args.members.map(peerHandle).filter(Boolean).join(", ") : "";
+				return clip([action, peerHandle(args.group || args.groupName), members].filter(Boolean).join(" · "), 90);
+			}
+			return clip([action, peerHandle(args.name || args.to), firstLine(str(args.purpose || args.model || args.answer || args.text))].filter(Boolean).join(" · "), 90);
+		}
 		case "schedule":
 			return clip([str(args.action), str(args.id), firstLine(str(args.title || args.prompt))].filter(Boolean).join(" · "), 90);
 		case "goal":

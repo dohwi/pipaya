@@ -119,8 +119,25 @@ describe("splitTokens", () => {
 		expect(splitTokens("#README.md 봐", known)[0]).toEqual({ text: "#README.md", kind: "file", name: "README.md" });
 	});
 	test("leaves unknown names, e-mail addresses, missing images, issue numbers and words alone", () => {
-		for (const t of ["@누구 a@미나.com", "#image3", "PR #96 병합", "#main 브랜치", "hello"]) expect(splitTokens(t, known)).toEqual([{ text: t }]);
+		for (const t of ["@누구 a@미나.com https://x.com/@미나 @@미나", "#image3", "PR #96 병합", "#main 브랜치", "hello"]) expect(splitTokens(t, known)).toEqual([{ text: t }]);
 		expect(splitTokens("@미나", { names: [] })).toEqual([{ text: "@미나" }]);
+	});
+	test("matches mentions and skills wrapped in parentheses or quotes", () => {
+		const withSkills = { ...known, skills: ["review"] };
+		expect(splitTokens("세션(@미나, @철수)과 (/skill:review)", withSkills)).toEqual([
+			{ text: "세션(" },
+			{ text: "@미나", kind: "mention", name: "미나" },
+			{ text: ", " },
+			{ text: "@철수", kind: "mention", name: "철수" },
+			{ text: ")과 (" },
+			{ text: "/skill:review", kind: "skill", name: "review" },
+			{ text: ")" },
+		]);
+		expect(splitTokens("@미나,@철수", known)).toEqual([
+			{ text: "@미나", kind: "mention", name: "미나" },
+			{ text: "," },
+			{ text: "@철수", kind: "mention", name: "철수" },
+		]);
 	});
 	test("marks confirmed /skill:name tokens and keeps Korean particles or punctuation outside", () => {
 		const withSkills = { ...known, skills: ["review", "my-skill"] };

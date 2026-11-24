@@ -42,6 +42,7 @@ import { graphRuns } from "./graph-runs.svelte";
 import { fetchLocalePacks } from "./locale-sync";
 import { configureUiEnv } from "./ui-env.svelte";
 import { groupNameFor } from "./group-name";
+import { buildMentionIndex, type MentionIndex, type MentionTarget } from "./peers";
 import { parseConfiguration, type ConfigurationDocument } from "./extensions/configuration";
 import { rehydrateSettingsFromDurable } from "./durable-storage";
 import { K, read, write } from "./persist";
@@ -255,6 +256,18 @@ class AppStore {
   }
   set groups(v: Group[]) {
     if (this.link) this.link.data.groups = v;
+  }
+  /** Shared lookup from `@name` (session or group) to the target it opens, memoized across all messages and tool cards. */
+  mentionIndex: MentionIndex = $derived(buildMentionIndex(this.sessions, this.groups));
+
+  /** Open the active session or group named by a mention chip, closing the queue modal if it was opened from there. */
+  openMention(target: MentionTarget) {
+    if (this.queueDialog) this.queueDialog = null;
+    if (target.kind === "group") {
+      if (this.groups.some((g) => g.id === target.id)) this.openTab(target.id);
+    } else if (this.sessions.some((s) => s.id === target.id)) {
+      void this.openAny(target.id);
+    }
   }
   /** Terminals open on the server (shells on its own OS), and what it supports; null support = not known (yet) */
   get terminals(): TerminalInfo[] {
