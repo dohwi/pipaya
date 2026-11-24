@@ -231,6 +231,7 @@
 	<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
 	<div class="grip" role="separator" aria-orientation="vertical" aria-label={t("파일 뷰어 너비 조절")} onpointerdown={startResize}></div>
 
+	<div class="ftree-in">
 	<header class="head">
 		<div class="htitle" title={workspaceViewer.workDir}>
 			{#if workspaceViewer.branch}
@@ -343,6 +344,7 @@
 			{/if}
 		</div>
 	{/if}
+	</div>
 </aside>
 
 <style>
@@ -357,16 +359,34 @@
 		min-height: 0;
 		display: flex;
 		flex-direction: column;
+		overflow: hidden;
 		background: var(--bg-side);
 		border-left: 1px solid var(--border);
+		transition:
+			flex-basis var(--motion-normal) var(--ease),
+			width var(--motion-normal) var(--ease),
+			opacity var(--motion-fast) var(--ease-std),
+			border-left-color var(--motion-fast) var(--ease-std);
+	}
+	.ftree-in {
+		flex: 1;
+		min-height: 0;
+		width: var(--wv-w, 260px);
+		display: flex;
+		flex-direction: column;
 	}
 	@media (min-width: 901px) {
 		.ftree:not(.open) {
-			display: none;
+			flex-basis: 0;
+			width: 0;
+			opacity: 0;
+			border-left-color: transparent;
+			pointer-events: none;
 		}
 	}
 	.ftree.dragging {
 		user-select: none;
+		transition: none; /* follow the resize pointer 1:1 */
 	}
 	.grip {
 		position: absolute;
@@ -619,6 +639,9 @@
 			z-index: var(--z-drawer);
 			translate: 102% 0;
 			transition: translate var(--motion-normal) var(--ease);
+		}
+		.ftree-in {
+			width: 100%;
 		}
 		.ftree.open {
 			translate: 0 0;

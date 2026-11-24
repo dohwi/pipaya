@@ -42,6 +42,7 @@
 		aria-haspopup="menu"
 		title={t("이 폴더에서 새 대화 또는 터미널")}><Icon name="plus" /></button
 	>{/if}
+	{#if count && part !== "add"}<TabCountButton {count} {place} />{/if}
 	{#if part !== "add" && !app.graphOpen && workspaceViewer.sessionId}
 		<button
 			class="add files tap"
@@ -55,7 +56,6 @@
 			{#if workspaceViewer.changes.length > 0}<span class="fdot" aria-hidden="true"></span>{/if}
 		</button>
 	{/if}
-	{#if count && part !== "add"}<TabCountButton {count} {place} />{/if}
 </div>
 <RowMenu bind:this={menu} bind:open={menuId} />
 

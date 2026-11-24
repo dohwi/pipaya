@@ -262,7 +262,7 @@
 		const online = app.net === "online";
 		workspaceViewer.bind(api, boundSession?.id ?? null, dir, (id) => app.chatOf(id));
 		if (api && online && boundSession) {
-			void workspaceViewer.refreshTree();
+			void workspaceViewer.refreshTree({ preserveOpenDirs: true });
 		}
 	});
 

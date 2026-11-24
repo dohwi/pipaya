@@ -73,30 +73,72 @@ export class WorkspaceViewerStore {
 	private liveTurnPaths = new Set<string>();
 	private latestTurnKey: string | null = null;
 	private dismissedTurnKey: string | null = null;
+	private dirStates = new Map<string, { openFiles: string[]; expandedDirs: Record<string, boolean> }>();
 	private refreshTimer: ReturnType<typeof setTimeout> | null = null;
 	private clearRecentTimer: ReturnType<typeof setTimeout> | null = null;
 	private seq = { tree: 0, search: 0, file: 0, diff: 0 };
+
+	private dirKey(api: Api | null, dir: string): string {
+		if (!dir) return "";
+		return `${api?.baseUrl ?? ""}\0${dir}`;
+	}
+
+	private readStoredTabs(key: string): string[] {
+		if (!key || typeof localStorage === "undefined") return [];
+		try {
+			const raw = localStorage.getItem("pipaya.workspace.tabs");
+			if (!raw) return [];
+			const map = JSON.parse(raw) as Record<string, string[]>;
+			const list = map[key];
+			return Array.isArray(list) ? list.filter((x): x is string => typeof x === "string" && x.length > 0) : [];
+		} catch {
+			return [];
+		}
+	}
+
+	private persistCurrentDirState() {
+		const key = this.dirKey(this.api, this.workDir);
+		if (!key) return;
+		this.dirStates.set(key, {
+			openFiles: [...this.openFiles],
+			expandedDirs: { ...this.expandedDirs },
+		});
+		if (typeof localStorage === "undefined") return;
+		try {
+			const raw = localStorage.getItem("pipaya.workspace.tabs");
+			const map: Record<string, string[]> = raw ? (JSON.parse(raw) as Record<string, string[]>) : {};
+			if (this.openFiles.length > 0) map[key] = [...this.openFiles];
+			else delete map[key];
+			localStorage.setItem("pipaya.workspace.tabs", JSON.stringify(map));
+		} catch { /* ignore storage errors */ }
+	}
 
 	bind(api: Api | null, sessionId: string | null, workDir: string, getChat?: (id: string) => ChatState | null | undefined) {
 		const serverChanged = this.api !== api;
 		const dirChanged = this.workDir !== workDir;
 		const sessionChanged = this.sessionId !== sessionId;
+		if ((serverChanged || dirChanged) && this.workDir) {
+			this.persistCurrentDirState();
+		}
 		this.api = api;
 		this.getChat = getChat ?? this.getChat;
 		if (serverChanged) this.supported = true;
 		if (serverChanged || dirChanged) {
 			this.sessionId = sessionId;
 			this.workDir = workDir;
+			const nextKey = this.dirKey(api, workDir);
+			const saved = nextKey ? this.dirStates.get(nextKey) : undefined;
+			const restoredFiles = saved ? [...saved.openFiles] : this.readStoredTabs(nextKey);
 			this.isRepo = false;
 			this.branch = null;
 			this.rootEntries = [];
 			this.dirEntries = {};
-			this.expandedDirs = {};
+			this.expandedDirs = saved ? { ...saved.expandedDirs } : {};
 			this.search = "";
 			this.searchEntries = [];
 			this.changes = [];
 			this.recentTouched = {};
-			this.openFiles = [];
+			this.openFiles = restoredFiles;
 			this.activeFile = null;
 			this.selectedPath = null;
 			this.fileData = null;
@@ -167,6 +209,7 @@ export class WorkspaceViewerStore {
 		if (!clean) return;
 		if (!this.openFiles.includes(clean)) {
 			this.openFiles = [...this.openFiles, clean];
+			this.persistCurrentDirState();
 		}
 		this.activeFile = clean;
 		await this.selectFile(clean, preferredMode);
@@ -193,6 +236,7 @@ export class WorkspaceViewerStore {
 		if (idx < 0) return;
 		const next = this.openFiles.filter((p) => p !== path);
 		this.openFiles = next;
+		this.persistCurrentDirState();
 		if (this.activeFile === path) {
 			const fallback = next[Math.min(idx, next.length - 1)] ?? null;
 			this.activeFile = fallback;
@@ -334,6 +378,7 @@ export class WorkspaceViewerStore {
 	async toggleDir(relDir: string) {
 		const nextOpen = !this.expandedDirs[relDir];
 		this.expandedDirs = { ...this.expandedDirs, [relDir]: nextOpen };
+		this.persistCurrentDirState();
 		if (nextOpen && !this.dirEntries[relDir]) {
 			await this.loadDir(relDir);
 		}
