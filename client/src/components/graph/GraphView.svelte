@@ -366,6 +366,14 @@
 		});
 	});
 	const ghostById = $derived(new Map(ghostCards.map((c) => [c.id, c])));
+	const ghostEdgeIds = $derived(new Set(ghostEdges.map((e) => e.id)));
+	const orderedEdges = $derived.by(() => {
+		const idle: Edge[] = [];
+		const live: Edge[] = [];
+		for (const x of graph.edges) (x.live ? live : idle).push(x);
+		return [...idle, ...live, ...ghostEdges];
+	});
+	const allCards = $derived([...graph.cards.values(), ...ghostCards]);
 	/** A card where it is drawn this frame (the layout's place once it has settled). */
 	function at(c: Card): Card {
 		void frame;
@@ -690,8 +698,8 @@
 			<svg class="edges" aria-hidden="true">
 				<defs>
 				</defs>
-				{#each [...graph.edges.filter((x) => !x.live), ...graph.edges.filter((x) => x.live), ...ghostEdges] as e (e.id)}
-					{@const ghost = !graph.cards.has(e.from) || !graph.cards.has(e.to) || ghostEdges.includes(e)}
+				{#each orderedEdges as e (e.id)}
+					{@const ghost = !graph.cards.has(e.from) || !graph.cards.has(e.to) || ghostEdgeIds.has(e.id)}
 					{@const ca = graph.cards.get(e.from) ?? ghostById.get(e.from)}
 					{@const cb = graph.cards.get(e.to) ?? ghostById.get(e.to)}
 					{@const r = reach(e, ghost)}
@@ -733,7 +741,7 @@
 					{/if}
 				{/each}
 			</svg>
-			{#each [...graph.cards.values(), ...ghostCards] as c (c.id)}
+			{#each allCards as c (c.id)}
 				{@const p = at(c)}
 				{@const ghost = !graph.cards.has(c.id)}
 				{@const u = presence(c.id)}

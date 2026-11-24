@@ -1,7 +1,7 @@
 import { resolve } from "node:path";
 import { defineConfig } from "vite";
 import { svelte } from "@sveltejs/vite-plugin-svelte";
-import { eachGuard } from "./scripts/each-guard-plugin";
+import { eachGuard } from "./scripts/each-guard-plugin.ts";
 
 // Tauri sets TAURI_DEV_HOST when running on a physical mobile device.
 const host = process.env.TAURI_DEV_HOST;

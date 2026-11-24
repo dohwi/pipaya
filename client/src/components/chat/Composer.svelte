@@ -141,6 +141,10 @@
 			clearTimeout(saveTimer);
 			saveTimer = setTimeout(saveNow, SAVE_DELAY_MS);
 		});
+		return () => {
+			clearTimeout(saveTimer);
+			saveTimer = undefined;
+		};
 	});
 	$effect(() => {
 		const hidden = () => { if (document.visibilityState === "hidden") saveNow(); };

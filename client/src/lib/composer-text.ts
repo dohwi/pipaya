@@ -152,35 +152,58 @@ export interface Known {
 	paths: readonly string[];
 }
 
+const MIRROR_TOKEN = /(^|\s)(#image(\d+)(?=\s|$)|#[^\s#]+|@[^\s@]+|\/skill:[^\s]+|\/[a-z][a-z0-9-]*:[A-Za-z0-9_.-]+)(?=\s|$)/g;
+const MIRROR_SKILL = /^\/skill:([a-z0-9]+(?:-[a-z0-9]+)*)(?![A-Za-z0-9_/-])(.*)$/;
+
 /**
  * The text as HTML for the layer under the textarea: escaped, with tokens that refer to something real wrapped in a
  * `<mark>` of their kind. A trailing newline keeps the layer's height in step with a textarea that ends in a newline.
  */
 export function mirrorHtml(text: string, known: Known): string {
+	const escaped = esc(text);
+	if (!escaped.includes("#") && !escaped.includes("@") && !escaped.includes("/")) return `${escaped}\n`;
+	let commandSet: Set<string> | undefined;
+	let skillSet: Set<string> | undefined;
+	let escapedMentions: string[] | undefined;
+	let pathSet: Set<string> | undefined;
 	return (
-		esc(text).replace(/(^|\s)(#image(\d+)(?=\s|$)|#[^\s#]+|@[^\s@]+|\/skill:[^\s]+|\/[a-z][a-z0-9-]*:[A-Za-z0-9_.-]+)(?=\s|$)/g, (m, lead: string, tok: string, n?: string) => {
-			if (tok.startsWith("/") && !tok.startsWith("/skill:")) return known.commands.includes(tok.slice(1)) ? `${lead}<mark class="skill">${tok}</mark>` : m;
+		escaped.replace(MIRROR_TOKEN, (m, lead: string, tok: string, n?: string) => {
+			if (tok.startsWith("/") && !tok.startsWith("/skill:")) {
+				commandSet ??= new Set(known.commands);
+				return commandSet.has(tok.slice(1)) ? `${lead}<mark class="skill">${tok}</mark>` : m;
+			}
 			if (tok.startsWith("/skill:")) {
-				const sm = /^\/skill:([a-z0-9]+(?:-[a-z0-9]+)*)(?![A-Za-z0-9_/-])(.*)$/.exec(tok);
-				return sm && known.skills.some((k) => k.name === sm[1]) ? `${lead}<mark class="skill">/skill:${sm[1]}</mark>${sm[2]}` : m;
+				const sm = MIRROR_SKILL.exec(tok);
+				if (!sm) return m;
+				skillSet ??= new Set(known.skills.map((k) => k.name));
+				return skillSet.has(sm[1]!) ? `${lead}<mark class="skill">/skill:${sm[1]}</mark>${sm[2]}` : m;
 			}
 			if (tok.startsWith("@")) {
 				const rest = tok.slice(1);
-				const hit = knownMention(rest, known.mentions.map(esc));
+				escapedMentions ??= known.mentions.map(esc);
+				const hit = knownMention(rest, escapedMentions);
 				return hit ? `${lead}<mark class="mention">@${hit}</mark>${rest.slice(hit.length)}` : m;
 			}
 			if (n !== undefined && Number(n) >= 1 && Number(n) <= known.images) return `${lead}<mark class="img">${tok}</mark>`;
-			return known.paths.some((p) => esc(`#${p}`) === tok) ? `${lead}<mark class="file">${tok}</mark>` : m;
+			pathSet ??= new Set(known.paths.map((p) => esc(`#${p}`)));
+			return pathSet.has(tok) ? `${lead}<mark class="file">${tok}</mark>` : m;
 		}) + "\n"
 	);
 }
 
 /** `#image1`-style reserved words refer to attachments by position (1-based). */
 const IMG_TOKEN = /#image(\d+)\b/g;
+const IMG_TOKEN_OPT_LEAD = /([ \t]?)#image(\d+)\b/g;
 
 /** The image at 1-based position `gone` was removed: drop its token (and the space before it) and renumber the later ones. */
 export function dropImageToken(text: string, gone: number): string {
-	return text.replace(new RegExp(`[ \\t]?#image${gone}\\b`, "g"), "").replace(IMG_TOKEN, (m, n) => (Number(n) > gone ? `#image${Number(n) - 1}` : m));
+	if (!text.includes("#image")) return text;
+	return text.replace(IMG_TOKEN_OPT_LEAD, (m, lead: string, nStr: string) => {
+		const n = Number(nStr);
+		if (n === gone) return "";
+		if (n > gone) return `${lead}#image${n - 1}`;
+		return m;
+	});
 }
 
 /**
