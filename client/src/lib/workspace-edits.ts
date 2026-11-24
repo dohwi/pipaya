@@ -52,6 +52,15 @@ export interface WorkspaceDiffData {
 	truncated: boolean;
 }
 
+export interface FullDiffRow {
+	type: "context" | "add" | "del";
+	oldLine: number | null;
+	newLine: number | null;
+	text: string;
+	/** Marks the first line of each contiguous changed block for auto-scroll & prev/next jump. */
+	changeStart?: boolean;
+}
+
 export function normalizeRelPath(raw: string, workDir: string): string {
 	let clean = raw.trim().replace(/\\/g, "/");
 	if (workDir) {
@@ -239,3 +248,107 @@ export function deriveLatestTurnEdits(
 
 	return { turnKey: null, changes: [], diffs: new Map() };
 }
+
+/**
+ * Merge diff hunks into the complete current file contents so changed files are always shown in full context
+ * with inline deleted (`del`) and added (`add`) lines highlighted right where they happened.
+ */
+export function buildFullFileDiff(fileContent: string | null | undefined, hunks: readonly DiffHunk[]): FullDiffRow[] {
+	const markChangeStarts = (rows: FullDiffRow[]): FullDiffRow[] => {
+		let prevChanged = false;
+		for (const r of rows) {
+			const changed = r.type !== "context";
+			if (changed && !prevChanged) r.changeStart = true;
+			prevChanged = changed;
+		}
+		return rows;
+	};
+
+	if (!fileContent) {
+		const fallback: FullDiffRow[] = [];
+		for (const h of hunks) {
+			for (const l of h.lines) {
+				if (l.type === "meta") continue;
+				fallback.push({ type: l.type, oldLine: l.oldLine, newLine: l.newLine, text: l.text });
+			}
+		}
+		return markChangeStarts(fallback);
+	}
+
+	const fileLines = fileContent.split(/\r?\n/);
+	const validHunks = hunks
+		.filter((h) => h.lines.some((l) => l.type !== "meta"))
+		.map((h) => {
+			const firstNew = h.lines.find((l) => l.newLine !== null)?.newLine;
+			const startNew = Math.max(1, firstNew ?? h.newStart ?? 1);
+			return { hunk: h, startNew };
+		})
+		.sort((a, b) => a.startNew - b.startNew);
+
+	if (validHunks.length === 0) {
+		return fileLines.map((text, i) => ({
+			type: "context",
+			oldLine: i + 1,
+			newLine: i + 1,
+			text,
+		}));
+	}
+
+	const out: FullDiffRow[] = [];
+	let newCur = 1;
+	// oldLine = newLine - oldDelta (increases when lines are added, decreases when lines are deleted)
+	let oldDelta = 0;
+
+	for (const { hunk, startNew } of validHunks) {
+		const targetNew = Math.min(fileLines.length + 1, Math.max(newCur, startNew));
+		while (newCur < targetNew && newCur <= fileLines.length) {
+			out.push({
+				type: "context",
+				oldLine: Math.max(1, newCur - oldDelta),
+				newLine: newCur,
+				text: fileLines[newCur - 1]!,
+			});
+			newCur++;
+		}
+
+		for (const dl of hunk.lines) {
+			if (dl.type === "meta") continue;
+			if (dl.type === "del") {
+				const ol = dl.oldLine ?? Math.max(1, newCur - oldDelta);
+				out.push({ type: "del", oldLine: ol, newLine: null, text: dl.text });
+				oldDelta--;
+			} else if (dl.type === "add") {
+				if (dl.newLine !== null && dl.newLine < newCur) continue;
+				const lineNum = newCur;
+				const text = lineNum <= fileLines.length ? fileLines[lineNum - 1]! : dl.text;
+				out.push({ type: "add", oldLine: null, newLine: lineNum, text });
+				oldDelta++;
+				newCur++;
+			} else {
+				// Context line from hunk: skip if already emitted by an overlapping prior hunk.
+				if (dl.newLine !== null && dl.newLine < newCur) continue;
+				if (newCur > fileLines.length) continue;
+				out.push({
+					type: "context",
+					oldLine: Math.max(1, newCur - oldDelta),
+					newLine: newCur,
+					text: fileLines[newCur - 1]!,
+				});
+				newCur++;
+			}
+		}
+	}
+
+	while (newCur <= fileLines.length) {
+		out.push({
+			type: "context",
+			oldLine: Math.max(1, newCur - oldDelta),
+			newLine: newCur,
+			text: fileLines[newCur - 1]!,
+		});
+		newCur++;
+	}
+
+	return markChangeStarts(out);
+}
+

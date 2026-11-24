@@ -372,7 +372,7 @@ export class WorkspaceViewerStore {
 		this.selectedPath = clean;
 		this.syncRecentChanges();
 		const hasChange = !!this.changeFor(clean);
-		this.viewMode = preferredMode ?? (hasChange && this.filter === "changed" ? "diff" : "file");
+		this.viewMode = preferredMode ?? (hasChange ? "diff" : "file");
 		await this.loadFile(clean);
 		if (hasChange || this.viewMode === "diff") {
 			await this.loadDiff(clean);

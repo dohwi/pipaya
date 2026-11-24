@@ -9,7 +9,8 @@
 	import { saveFile } from "../../lib/save-file";
 	import { app } from "../../lib/store.svelte";
 	import { closeVideoView, videoPlayer } from "../../lib/video-view";
-	import { workspaceViewer, type DiffLine } from "../../lib/workspace-viewer.svelte";
+	import { buildFullFileDiff, type FullDiffRow } from "../../lib/workspace-edits";
+	import { workspaceViewer } from "../../lib/workspace-viewer.svelte";
 	import Markdown from "../chat/Markdown.svelte";
 	import Button from "../ui/Button.svelte";
 	import EmptyState from "../ui/EmptyState.svelte";
@@ -195,37 +196,67 @@
 		return out;
 	});
 
-	// Flattened diff rows so single-line AND multi-line range selection work identically in Diff view.
-	interface FlatDiffItem {
-		kind: "hunk" | "line";
-		key: string;
-		header?: string;
-		line?: DiffLine;
-		selectableIdx?: number;
-		lineNum?: number;
+	// Full-file inline diff: merges changed hunks into the complete file so changed files always show full context.
+	const fullDiffRows = $derived.by<FullDiffRow[]>(() => {
+		const diff = workspaceViewer.diffData;
+		if (!diff || diff.binary) return [];
+		const content = workspaceViewer.fileData && !workspaceViewer.fileData.binary ? workspaceViewer.fileData.content : null;
+		return buildFullFileDiff(content, diff.hunks);
+	});
+
+	const highlightedDiffLines = $derived.by<string[] | null>(() => {
+		void hlTick;
+		if (fullDiffRows.length === 0 || fullDiffRows.length > 2500) return null;
+		const sample = workspaceViewer.fileData?.content ?? fullDiffRows.map((r) => r.text).join("\n");
+		const probe = highlightCode(sample.slice(0, 4000), fileExt);
+		if (!probe || probe === "wait") return null;
+		const out: string[] = [];
+		for (const r of fullDiffRows) {
+			if (!r.text) {
+				out.push("");
+				continue;
+			}
+			const h = highlightCode(r.text, fileExt);
+			out.push(h && h !== "wait" ? DOMPurify.sanitize(h, { ALLOWED_TAGS: ["span"], ALLOWED_ATTR: ["class"] }) : "");
+		}
+		return out;
+	});
+
+	const changeAnchors = $derived.by<number[]>(() => {
+		const out: number[] = [];
+		for (let i = 0; i < fullDiffRows.length; i++) {
+			if (fullDiffRows[i]?.changeStart) out.push(i);
+		}
+		return out;
+	});
+
+	let scrollHost = $state<HTMLElement>();
+	let activeChangeIdx = $state(0);
+	let lastAutoScrollKey = "";
+
+	function jumpToChange(idx: number) {
+		if (changeAnchors.length === 0 || !scrollHost) return;
+		const wrapped = ((idx % changeAnchors.length) + changeAnchors.length) % changeAnchors.length;
+		activeChangeIdx = wrapped;
+		const rowIdx = changeAnchors[wrapped]!;
+		const el = scrollHost.querySelector<HTMLElement>(`[data-drow="${rowIdx}"]`);
+		el?.scrollIntoView({ block: "center", behavior: "smooth" });
 	}
 
-	const flatDiff = $derived.by<{ items: FlatDiffItem[]; lines: { lineNum: number; text: string }[] }>(() => {
-		const diff = workspaceViewer.diffData;
-		if (!diff) return { items: [], lines: [] };
-		const items: FlatDiffItem[] = [];
-		const lines: { lineNum: number; text: string }[] = [];
-		for (let hi = 0; hi < diff.hunks.length; hi++) {
-			const hunk = diff.hunks[hi]!;
-			items.push({ kind: "hunk", key: `h:${hi}:${hunk.header}`, header: hunk.header });
-			for (let li = 0; li < hunk.lines.length; li++) {
-				const dl = hunk.lines[li]!;
-				if (dl.type === "meta") {
-					items.push({ kind: "line", key: `d:${hi}:${li}`, line: dl });
-				} else {
-					const idx = lines.length;
-					const lineNum = dl.newLine ?? dl.oldLine ?? 1;
-					lines.push({ lineNum, text: dl.text });
-					items.push({ kind: "line", key: `d:${hi}:${li}`, line: dl, selectableIdx: idx, lineNum });
-				}
-			}
-		}
-		return { items, lines };
+	// Automatically scroll to the first changed line once when opening a changed file in full-file diff mode.
+	$effect(() => {
+		const path = selectedPath;
+		const isDiff = workspaceViewer.viewMode === "diff" && !!selectedChange;
+		const first = changeAnchors[0];
+		const host = scrollHost;
+		if (!isDiff || !path || first === undefined || !host) return;
+		const key = `${path}:${fullDiffRows.length}:${first}`;
+		if (lastAutoScrollKey === key) return;
+		lastAutoScrollKey = key;
+		activeChangeIdx = 0;
+		requestAnimationFrame(() => {
+			host.querySelector<HTMLElement>(`[data-drow="${first}"]`)?.scrollIntoView({ block: "center" });
+		});
 	});
 
 	// --- Range & file-level comment state ---
@@ -248,9 +279,9 @@
 			const lines = rawLines.slice(startIdx, endIdx + 1);
 			return { mode: "file" as const, path: selection.path, startIdx, endIdx, startLine, endLine, lines };
 		}
-		const slice = flatDiff.lines.slice(startIdx, endIdx + 1);
+		const slice = fullDiffRows.slice(startIdx, endIdx + 1);
 		if (slice.length === 0) return null;
-		const nums = slice.map((x) => x.lineNum);
+		const nums = slice.map((x) => x.newLine ?? x.oldLine ?? 1);
 		return {
 			mode: "diff" as const,
 			path: selection.path,
@@ -516,6 +547,13 @@
 				{/if}
 			</div>
 			<div class="ftools">
+				{#if workspaceViewer.viewMode === "diff" && selectedChange && changeAnchors.length > 1}
+					<div class="cnav">
+						<IconButton icon="arrow-up" size="sm" label={t("이전 변경")} onclick={() => jumpToChange(activeChangeIdx - 1)} />
+						<span class="cidx mono">{activeChangeIdx + 1}/{changeAnchors.length}</span>
+						<IconButton icon="arrow-down" size="sm" label={t("다음 변경")} onclick={() => jumpToChange(activeChangeIdx + 1)} />
+					</div>
+				{/if}
 				{#if modeOptions.length > 0}
 					<div class="mtoggle">
 						<Segmented
@@ -553,53 +591,53 @@
 			{@render inlineCommentBox(false)}
 		{/if}
 
-		<div class="cscroll" class:media-bg={isMediaKind || showRichPreview}>
+		<div class="cscroll" bind:this={scrollHost} class:media-bg={isMediaKind || showRichPreview}>
 			{#if workspaceViewer.viewMode === "diff" && selectedChange}
 				{#if !workspaceViewer.diffData}
 					<div class="pad"><EmptyState loading compact>{t("Diff를 불러오는 중…")}</EmptyState></div>
 				{:else if workspaceViewer.diffData.binary}
 					<div class="pad"><EmptyState compact>{t("바이너리 파일은 Diff로 표시할 수 없습니다.")}</EmptyState></div>
-				{:else if workspaceViewer.diffData.hunks.length === 0}
+				{:else if fullDiffRows.length === 0}
 					<div class="pad"><EmptyState compact>{t("표시할 변경 라인이 없습니다.")}</EmptyState></div>
 				{:else}
+					{#if workspaceViewer.fileData?.truncated}
+						<div class="trunc">{t("파일이 커서 앞부분만 표시합니다 (읽기 전용).")}</div>
+					{/if}
 					<div class="lines mono" class:selecting={draggingRange}>
-						{#each flatDiff.items as item (item.key)}
-							{#if item.kind === "hunk"}
-								<div class="hunk">{item.header}</div>
-							{:else if item.line}
-								{@const dl = item.line}
-								{@const sidx = item.selectableIdx}
-								{@const inRange =
-									sidx !== undefined &&
-									lineRange?.mode === "diff" &&
-									sidx >= lineRange.startIdx &&
-									sidx <= lineRange.endIdx}
-								{@const isEnd = sidx !== undefined && lineRange?.mode === "diff" && sidx === lineRange.endIdx}
-								<!-- svelte-ignore a11y_no_static_element_interactions -->
-								<div
-									class="row d-{dl.type}"
-									class:picked={inRange}
-									onpointerenter={() => sidx !== undefined && onLinePointerEnter("diff", sidx)}
+						{#each fullDiffRows as dl, idx (idx)}
+							{@const html = highlightedDiffLines?.[idx]}
+							{@const inRange =
+								lineRange?.mode === "diff" && idx >= lineRange.startIdx && idx <= lineRange.endIdx}
+							{@const isEnd = lineRange?.mode === "diff" && idx === lineRange.endIdx}
+							{@const ln = dl.newLine ?? dl.oldLine ?? idx + 1}
+							<!-- svelte-ignore a11y_no_static_element_interactions -->
+							<div
+								class="row d-{dl.type}"
+								class:picked={inRange}
+								data-drow={idx}
+								data-change-start={dl.changeStart ? "true" : undefined}
+								onpointerenter={() => onLinePointerEnter("diff", idx)}
+							>
+								<button
+									type="button"
+									class="lnbtn diff-ln"
+									title={t("{line}번 줄에 코멘트 달기", { line: ln })}
+									onpointerdown={(e) => onLinePointerDown(e, "diff", idx)}
+									onkeydown={(e) => onLineKeyClick(e, "diff", idx)}
 								>
-									<span class="ln">{dl.oldLine ?? ""}</span>
-									<span class="ln">{dl.newLine ?? ""}</span>
-									{#if sidx !== undefined}
-										<button
-											type="button"
-											class="plus"
-											title={t("이 줄에 코멘트 달기")}
-											aria-label={t("이 줄에 코멘트 달기")}
-											onpointerdown={(e) => onLinePointerDown(e, "diff", sidx)}
-											onkeydown={(e) => onLineKeyClick(e, "diff", sidx)}
-										>+</button>
-									{:else}
-										<span class="plus-sp"></span>
-									{/if}
-									<span class="txt">{dl.type === "add" ? "+" : dl.type === "del" ? "-" : " "}{dl.text}</span>
-								</div>
-								{#if isEnd}
-									{@render inlineCommentBox(true)}
+									<span class="lplus" aria-hidden="true">+</span>
+									<span class="dln">{dl.oldLine ?? ""}</span>
+									<span class="dln">{dl.newLine ?? ""}</span>
+								</button>
+								<span class="dsig" aria-hidden="true">{dl.type === "add" ? "+" : dl.type === "del" ? "-" : " "}</span>
+								{#if html}
+									<span class="txt">{@html html}</span>
+								{:else}
+									<span class="txt">{dl.text}</span>
 								{/if}
+							</div>
+							{#if isEnd}
+								{@render inlineCommentBox(true)}
 							{/if}
 						{/each}
 					</div>
@@ -791,6 +829,17 @@
 		gap: 4px;
 		flex: none;
 	}
+	.cnav {
+		display: inline-flex;
+		align-items: center;
+		gap: 4px;
+		flex: none;
+	}
+	.cidx {
+		font-size: var(--fs-2xs);
+		color: var(--text-faint);
+		line-height: 16px;
+	}
 	.mtoggle {
 		flex: none;
 	}
@@ -819,15 +868,6 @@
 	.lines.selecting {
 		user-select: none;
 		-webkit-user-select: none;
-	}
-	.hunk {
-		padding: 4px 12px;
-		font-size: var(--fs-2xs);
-		line-height: 16px;
-		color: var(--info);
-		background: var(--info-soft);
-		border-top: 1px solid var(--border);
-		border-bottom: 1px solid var(--border);
 	}
 	.row {
 		display: flex;
@@ -869,6 +909,33 @@
 		user-select: none;
 		line-height: 20px;
 	}
+	.lnbtn.diff-ln {
+		width: 84px;
+		display: inline-flex;
+		align-items: center;
+		justify-content: flex-end;
+		gap: 4px;
+		padding: 0 4px 0 16px;
+	}
+	.dln {
+		width: 30px;
+		text-align: right;
+		flex: none;
+	}
+	.dsig {
+		width: 16px;
+		text-align: center;
+		flex: none;
+		user-select: none;
+		color: var(--text-faint);
+		line-height: 20px;
+	}
+	.row.d-add .dsig {
+		color: var(--ok);
+	}
+	.row.d-del .dsig {
+		color: var(--danger);
+	}
 	.lplus {
 		position: absolute;
 		left: 4px;
@@ -886,41 +953,6 @@
 	.lnbtn:focus-visible .lplus,
 	.row.picked .lplus {
 		opacity: 1;
-	}
-	.ln {
-		width: 36px;
-		padding: 0 4px;
-		text-align: right;
-		color: var(--text-faint);
-		user-select: none;
-		flex: none;
-		line-height: 20px;
-	}
-	.plus {
-		width: 20px;
-		height: 20px;
-		padding: 0;
-		border: 0;
-		background: transparent;
-		color: var(--accent);
-		font-weight: 700;
-		cursor: pointer;
-		flex: none;
-		opacity: 0;
-		line-height: 20px;
-	}
-	@media (hover: hover) {
-		.row:hover .plus {
-			opacity: 1;
-		}
-	}
-	.plus:focus-visible,
-	.row.picked .plus {
-		opacity: 1;
-	}
-	.plus-sp {
-		width: 20px;
-		flex: none;
 	}
 	.txt {
 		padding: 0 12px 0 4px;

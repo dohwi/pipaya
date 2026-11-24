@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { buildEditHunk, deriveLatestTurnEdits } from "../src/lib/workspace-edits";
+import { buildEditHunk, buildFullFileDiff, deriveLatestTurnEdits } from "../src/lib/workspace-edits";
 import type { ChatState } from "../src/lib/chat.svelte";
 
 function fakeChat(items: ChatState["items"], tools: ChatState["tools"] = {}): ChatState {
@@ -65,5 +65,25 @@ describe("workspace-viewer recent edits", () => {
 		expect(deletions).toBe(1);
 		expect(hunk.newStart).toBe(4);
 		expect(hunk.lines.find((l) => l.type === "add")?.newLine).toBe(4);
+	});
+
+	it("merges hunks into the complete file contents with inline del/add rows and changeStart markers", () => {
+		const content = ["line1", "line2", "addedA", "addedB", "line4", "line5", "line6"].join("\n");
+		const { hunk } = buildEditHunk("line2\noldLine3\nline4", "line2\naddedA\naddedB\nline4", content);
+		const rows = buildFullFileDiff(content, [hunk]);
+
+		expect(rows.map((r) => `${r.type}:${r.text}`)).toEqual([
+			"context:line1",
+			"context:line2",
+			"del:oldLine3",
+			"add:addedA",
+			"add:addedB",
+			"context:line4",
+			"context:line5",
+			"context:line6",
+		]);
+		expect(rows.filter((r) => r.changeStart).map((r) => r.text)).toEqual(["oldLine3"]);
+		expect(rows.find((r) => r.text === "line6")?.newLine).toBe(7);
+		expect(rows.find((r) => r.text === "line6")?.oldLine).toBe(6);
 	});
 });
