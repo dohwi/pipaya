@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { cleanWorkdirPath, fileRejection, filePathOf, isImagePath, isInlineImage, MAX_FILE_BYTES, MAX_FILES, MAX_FILES_TOTAL, isLocalFilePath, isWorkdirPath, parseTable, previewKind, sizeLabel } from "../src/lib/files";
+import { cleanWorkdirPath, fileRejection, filePathOf, isImagePath, isInlineImage, MAX_FILE_BYTES, MAX_FILES, MAX_FILES_TOTAL, MAX_IMAGES, isLocalFilePath, isWorkdirPath, parseTable, previewKind, sizeLabel, splitFilePath } from "../src/lib/files";
 
 import { readFileSync } from "node:fs";
 import { extname } from "node:path";
@@ -27,6 +27,14 @@ describe("working-directory links", () => {
 	test("the query and fragment are dropped and escapes decoded", () => {
 		expect(cleanWorkdirPath("./out/a%20b.png?x=1#y")).toBe("out/a b.png");
 		expect(cleanWorkdirPath("out/%E0%A4%A")).toBe("out/%E0%A4%A");
+	});
+	test("splitFilePath separates directory prefix and basename only when both exist", () => {
+		expect(splitFilePath("client/src/App.svelte")).toEqual({ dir: "client/src/", base: "App.svelte" });
+		expect(splitFilePath("a/b")).toEqual({ dir: "a/", base: "b" });
+		expect(splitFilePath("README.md")).toBeNull();
+		expect(splitFilePath("")).toBeNull();
+		expect(splitFilePath("/root.ts")).toBeNull();
+		expect(splitFilePath("dir/")).toBeNull();
 	});
 });
 
@@ -101,6 +109,10 @@ describe("previews", () => {
 });
 
 describe("attaching files to a message", () => {
+	test("inline image limit is 16 while plain file limit stays 8", () => {
+		expect(MAX_IMAGES).toBe(16);
+		expect(MAX_FILES).toBe(8);
+	});
 	test("only pictures a vision model can see go in as images", () => {
 		expect(isInlineImage({ type: "image/png" }, true)).toBe(true);
 		expect(isInlineImage({ type: "image/png" }, false)).toBe(false);

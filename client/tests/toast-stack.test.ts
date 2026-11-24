@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { layoutToastStack, STACK_DEFAULT_HEIGHT, STACK_GAP, STACK_PEEK, STACK_VISIBLE } from "../src/lib/toast-stack";
+import { layoutToastStack, STACK_DEFAULT_HEIGHT, STACK_GAP, STACK_PEEK, STACK_VISIBLE, stageToastBox } from "../src/lib/toast-stack";
 
 describe("layoutToastStack", () => {
 	test("returns empty layout for zero toasts", () => {
@@ -49,5 +49,39 @@ describe("layoutToastStack", () => {
 		const expanded = layoutToastStack([3, 2, 1], { 3: 44, 2: 52, 1: 40 }, true, "bottom");
 		expect(expanded.items.map((x) => x.y)).toEqual([0, -(44 + STACK_GAP), -(44 + STACK_GAP + 52 + STACK_GAP)]);
 		expect(expanded.height).toBe(44 + STACK_GAP + 52 + STACK_GAP + 40);
+	});
+});
+
+describe("stageToastBox", () => {
+	test("places tray directly below stage top or any taller overlay strips", () => {
+		expect(stageToastBox({ left: 288, width: 1152, top: 83 })).toEqual({ left: 288, width: 1152, top: 83 });
+		expect(stageToastBox({ left: 288, width: 1152, top: 83 }, [60, 127, 171])).toEqual({ left: 288, width: 1152, top: 171 });
+		expect(stageToastBox({ left: 288, width: 1152, top: 83 }, [40])).toEqual({ left: 288, width: 1152, top: 83 });
+	});
+
+	test("divides out CSS --ui-zoom so fixed coordinates are not scaled twice", () => {
+		expect(stageToastBox({ left: 345.6, width: 1094.4, top: 99.6 }, [152.4], 1.2)).toEqual({
+			left: 288,
+			width: 912,
+			top: 127,
+		});
+		expect(stageToastBox({ left: 230.4, width: 1209.6, top: 66.4 }, [], 0.8)).toEqual({
+			left: 288,
+			width: 1512,
+			top: 83,
+		});
+	});
+
+	test("falls back to zoom 1 for falsy, zero, negative, or non-finite values and ignores non-finite bottoms", () => {
+		const rect = { left: 288, width: 1152, top: 83 };
+		expect(stageToastBox(rect, [], 0)).toEqual(rect);
+		expect(stageToastBox(rect, [], -1)).toEqual(rect);
+		expect(stageToastBox(rect, [], Number.NaN)).toEqual(rect);
+		expect(stageToastBox(rect, [], Number.POSITIVE_INFINITY)).toEqual(rect);
+		expect(stageToastBox(rect, [Number.NaN, Number.POSITIVE_INFINITY, 120], 1)).toEqual({
+			left: 288,
+			width: 1152,
+			top: 120,
+		});
 	});
 });

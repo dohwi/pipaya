@@ -93,7 +93,7 @@
 		width: 16px; /* the tabs' icon column (16px), so the book icon and the name line up with theirs */
 	}
 	@media (hover: hover) {
-		:global(:where(.side) .gfold:hover .chev svg) {
+		:global(:where(.side) .gfold[data-hovered] .chev svg) {
 			stroke: var(--text);
 		}
 	}
@@ -125,7 +125,7 @@
 	:global(:where(.side) .grprow.gfolded .cbadge) {
 		transition: opacity var(--motion-fast) var(--ease-std);
 	}
-	:global(:where(.side) .grprow.gfolded:hover .cbadge),
+	:global(:where(.side) .grprow.gfolded[data-hovered] .cbadge),
 	:global(:where(.side) .grprow.gfolded:has(:focus-visible) .cbadge),
 	:global(:where(.side) .grprow.gfolded.menuopen .cbadge) {
 		opacity: 0;

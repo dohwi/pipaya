@@ -15,6 +15,7 @@
 	import Icon from "../ui/Icon.svelte";
 	import IconButton from "../ui/IconButton.svelte";
 	import { viewport } from "../../lib/viewport.svelte";
+	import { hoverScope } from "../../lib/hover-scope";
 	import { treeKeys } from "../../lib/tree-keys";
 	import RowMenu, { type RowMenuItem } from "../ui/RowMenu.svelte";
 	import PipayaMark from "../ui/PipayaMark.svelte";
@@ -510,10 +511,12 @@
 	const alertTone = $derived(problems ? "danger" : app.compat === "ok" ? "ok" : "warn");
 	/** Something in settings needs the user: a newer app or server build, or the two out of step. Connection state is not here: the sidebar's server block already shows it. */
 	const settingsAlert = $derived(problems ? t("설정 문제 {n}", { n: problems }) : app.compat !== "ok" ? t("업데이트 필요") : updater.visible ? t("업데이트 있음") : serverUpdater.available ? t("서버 업데이트 있음") : "");
+	/** Elements inside the sidebar whose hover state is tracked explicitly (avoids sticky CSS `:hover` across overlays/WebViews). */
+	const SIDEBAR_HOVER_TARGETS = ".srvhead, .dir, .proj, .item, .grprow, .dirnew, .more, .gfold, .navbtn";
 </script>
 
 
-<aside class="side" id="app-sidebar" data-part="sidebar">
+<aside class="side" id="app-sidebar" data-part="sidebar" use:hoverScope={SIDEBAR_HOVER_TARGETS}>
 	<!-- the logo is the app's own: no extension part or style hook here (lib/pipaya-logo.ts) -->
 	<div class="brandrow" data-logo-frame>
 		<PipayaMark tone="color" size={26} />
@@ -663,8 +666,8 @@
 		color: var(--text-faint);
 		opacity: 0;
 	}
-	:global(:where(.side) .dir:hover .dirnew),
-	:global(:where(.side) .srvhead:hover .dirnew),
+	:global(:where(.side) .dir[data-hovered] .dirnew),
+	:global(:where(.side) .srvhead[data-hovered] .dirnew),
 	:global(:where(.side) .dirnew:focus-visible) {
 		opacity: 1;
 	}
@@ -691,7 +694,7 @@
 	}
 	/* hover only with a real pointer: after a tap the "+" kept its grey disc on a phone (sticky :hover) */
 	@media (hover: hover) {
-		:global(:where(.side) .dirnew:hover) {
+		:global(:where(.side) .dirnew[data-hovered]) {
 			background: color-mix(in srgb, var(--text) 14%, transparent);
 			color: var(--text);
 			opacity: 1;
@@ -769,7 +772,7 @@
 		transition: background var(--motion-fast) var(--ease-std);
 	}
 	@media (hover: hover) {
-		.navbtn:hover {
+		.navbtn:global([data-hovered]) {
 			background: var(--bg-hover);
 			color: var(--text);
 		}

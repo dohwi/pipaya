@@ -101,14 +101,19 @@
 		picked = next;
 	}
 	/** Run `act` over what is ticked in `list` and passes `keep`; then untick those, report with `done` and reload. */
-	async function bulk(list: Session[], keep: (s: Session) => boolean, act: (ids: string[]) => Promise<string | void>) {
+	async function bulk(
+		list: Session[],
+		keep: (s: Session) => boolean,
+		act: (ids: string[]) => Promise<string | { text: string; tone: "ok" | "warn" } | void>,
+	) {
 		const ids = list.filter((s) => picked[s.id] && keep(s)).map((s) => s.id);
 		if (!api || !ids.length) return;
 		busy = true;
 		error = "";
 		try {
-			const msg = await act(ids);
-			if (msg) app.toast(msg);
+			const result = await act(ids);
+			if (typeof result === "string") app.toast(result, "ok");
+			else if (result) app.toast(result.text, result.tone);
 			const next = { ...picked };
 			for (const id of ids) delete next[id];
 			picked = next;
@@ -166,7 +171,9 @@
 				gone.push(...r.deleted);
 			}
 			dropFromLink(gone);
-			return skipped ? t("{n}개를 지웠습니다. {s}개는 실행 중이거나 답을 기다려 남겨 두었습니다.", { n: deleted, s: skipped }) : t("{n}개를 지웠습니다.", { n: deleted });
+			return skipped
+				? { text: t("{n}개를 지웠습니다. {s}개는 실행 중이거나 답을 기다려 남겨 두었습니다.", { n: deleted, s: skipped }), tone: "warn" }
+				: t("{n}개를 지웠습니다.", { n: deleted });
 		});
 
 </script>

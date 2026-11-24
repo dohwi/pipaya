@@ -33,6 +33,34 @@ export interface ToastStackLayout {
 	items: ToastSlotLayout[];
 }
 
+export interface ToastAnchorBox {
+	left: number;
+	width: number;
+	top: number;
+}
+
+/**
+ * Convert a `.stage` bounding rect and any pinned top-strip bottoms into CSS coordinates for a fixed toast tray.
+ * `getBoundingClientRect()` returns viewport-scaled px under CSS `html { zoom }`, while `position: fixed` `left/top/width`
+ * are multiplied by `zoom` again; dividing out `zoom` keeps the tray aligned with `.stage` at every UI scale.
+ */
+export function stageToastBox(
+	rect: { left: number; width: number; top: number },
+	aboveBottoms: readonly number[] = [],
+	zoom = 1,
+): ToastAnchorBox {
+	const z = typeof zoom === "number" && Number.isFinite(zoom) && zoom > 0 ? zoom : 1;
+	let top = rect.top;
+	for (const b of aboveBottoms) {
+		if (Number.isFinite(b) && b > top) top = b;
+	}
+	return {
+		left: Math.round(rect.left / z),
+		width: Math.round(rect.width / z),
+		top: Math.round(top / z),
+	};
+}
+
 export function layoutToastStack(
 	ids: readonly number[],
 	heights: Readonly<Record<number, number>>,

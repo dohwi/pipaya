@@ -8,7 +8,8 @@
 
 	/**
 	 * Says why things may not work when the app and the server are not the same age (lib/protocol.ts decides which case).
-	 * It is a strip at the top of the chat area, in the same stack as the toasts (Toasts.svelte), so every notice lives in one place.
+	 * It is a strip at the top of the stage overlay alongside the connection banner and done notices, so it stays behind
+	 * dialogs instead of slicing across them while toasts float cleanly underneath it.
 	 *  - The server needs a newer app: nothing else works, so the strip stays until the app is updated.
 	 *  - The server is older than the app: it works, but newer features are missing. Shown once when connecting, it goes by
 	 *    itself after a while (the ring on its close button) and is not shown again for that server in this session. If the

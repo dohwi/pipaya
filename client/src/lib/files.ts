@@ -63,6 +63,13 @@ export async function fileToDraft(file: File): Promise<FileDraft> {
 /** Last path segment of a relative path */
 export const baseName = (path: string): string => path.split(/[\\/]/).filter(Boolean).pop() ?? path;
 
+/** Split a path with a directory prefix into `{ dir, base }` so a narrow chip can shrink `dir` before `base`. */
+export function splitFilePath(path: string): { dir: string; base: string } | null {
+	const idx = path.lastIndexOf("/");
+	if (idx <= 0 || idx === path.length - 1) return null;
+	return { dir: path.slice(0, idx + 1), base: path.slice(idx + 1) };
+}
+
 /** A markdown href that points into the working directory: relative, no scheme, not an anchor. */
 export function isWorkdirPath(href: string): boolean {
 	if (!href || href.startsWith("#") || href.startsWith("//") || href.startsWith("/") || /^[a-z][a-z0-9+.-]*:/i.test(href)) return false;
@@ -133,7 +140,7 @@ export function parseTable(src: string, delimiter: string, maxRows = 1000): { ro
 }
 
 /** Images one message can carry (vision models only; everything else is a file). */
-export const MAX_IMAGES = 8;
+export const MAX_IMAGES = 16;
 
 /** Whether a picked file goes in as a downscaled image (the model can see it) rather than as a plain file. */
 export const isInlineImage = (file: { type: string }, vision: boolean): boolean =>

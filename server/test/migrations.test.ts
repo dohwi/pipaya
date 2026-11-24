@@ -137,7 +137,7 @@ describe("migrations", () => {
 			(db.query("SELECT name FROM sqlite_master WHERE type = 'index' AND name LIKE 'idx_%' ORDER BY name").all() as { name: string }[]).map((r) => r.name);
 		for (const idx of expected) expect(listIndexes()).toContain(idx);
 
-		const step = MIGRATIONS[42]!;
+		const step = MIGRATIONS[43]!;
 		expect(typeof step).toBe("string");
 		expect(() => db.exec(step as string)).not.toThrow();
 		for (const idx of expected) expect(listIndexes()).toContain(idx);

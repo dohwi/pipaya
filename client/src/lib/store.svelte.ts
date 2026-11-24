@@ -333,15 +333,15 @@ class AppStore {
   set replyTo(v: { text: string; who?: string } | null) { this.ui.replyTo = v; }
   get settingsOpen(): boolean { return this.ui.settingsOpen; }
   set settingsOpen(v: boolean) { this.ui.settingsOpen = v; }
-  /** Skills dialog (opened from the footer badge). cwd decides which project's skills; sessionId marks the ones that conversation already uses. */
-  get skillsDialog(): { cwd: string; sessionId: string | null } | null { return this.ui.skillsDialog; }
-  set skillsDialog(v: { cwd: string; sessionId: string | null } | null) { this.ui.skillsDialog = v; }
+  /** Skills dialog (opened from the footer badge or a /skill:name chip). cwd decides which project's skills; sessionId marks the ones that conversation already uses; skill opens that skill's viewer directly. */
+  get skillsDialog(): { cwd: string; sessionId: string | null; skill?: string } | null { return this.ui.skillsDialog; }
+  set skillsDialog(v: { cwd: string; sessionId: string | null; skill?: string } | null) { this.ui.skillsDialog = v; }
   /** Bumped when any client changes a skill, so footers and dialogs re-read it. */
   get skillsTick(): number { return this.ui.skillsTick; }
   set skillsTick(v: number) { this.ui.skillsTick = v; }
-  openSkills(sessionId: string | null = this.activeId) {
+  openSkills(sessionId: string | null = this.activeId, skill?: string) {
     if (!this.api) return;
-    this.ui.skillsDialog = { cwd: this.session(sessionId)?.cwd ?? this.workdirAbs, sessionId };
+    this.ui.skillsDialog = { cwd: this.session(sessionId)?.cwd ?? this.workdirAbs, sessionId, ...(skill ? { skill } : {}) };
   }
   /** MCP servers dialog (opened from the footer badge). */
   get mcpDialog(): boolean { return this.ui.mcpDialog; }

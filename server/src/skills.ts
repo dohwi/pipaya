@@ -386,17 +386,23 @@ export class SkillService {
 		return this.view(cwd, input.sessionId);
 	}
 
-	/** The skill to edit or delete, looked up by name among what is discovered for `cwd`; built-in ones are read-only. */
-	private editable(name: string, cwd: string): Skill {
+	/** Looks up a skill by name among what is discovered for `cwd`. */
+	private find(name: string, cwd: string): Skill {
 		if (!SKILL_NAME.test(name) || name.length > MAX_SKILL_NAME) throw badRequest("invalid skill name");
 		const skill = this.discover(cwd).skills.find((s) => s.name === name);
 		if (!skill) throw notFound(`skill "${name}"`);
+		return skill;
+	}
+
+	/** The skill to edit or delete, looked up by name among what is discovered for `cwd`; built-in ones are read-only. */
+	private editable(name: string, cwd: string): Skill {
+		const skill = this.find(name, cwd);
 		if (skill.scope === "builtin") throw conflict("built-in skills ship with the server and cannot be changed; copy one into ~/.agents/skills to change it");
 		return skill;
 	}
 
 	source(name: string, cwdInput?: string): SkillSource {
-		const skill = this.editable(name, this.resolveCwd(cwdInput));
+		const skill = this.find(name, this.resolveCwd(cwdInput));
 		const raw = readFileSync(skill.path, "utf8");
 		const meta = parseFrontmatter(raw) ?? {};
 		return {

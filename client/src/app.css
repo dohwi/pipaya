@@ -762,6 +762,7 @@ input[type="checkbox"]:disabled {
 /* A key cap in running text ("Esc 취소"): bordered key shape on --radius-xs. */
 kbd {
 	display: inline-block;
+	max-width: 100%;
 	padding: 1px 4px;
 	border: 1px solid var(--border-strong);
 	border-bottom-width: 2px;
@@ -771,6 +772,7 @@ kbd {
 	font-size: var(--fs-2xs);
 	line-height: 14px; /* whole-pixel cap: 14 + 2 padding + 3 border = 19px, inside a 20px text line (1.5 made it 21.5 and stretched the line) */
 	color: var(--text-dim);
+	white-space: nowrap;
 }
 /* A count in a round badge (folded rows, tab totals): the one shape for a bare number. */
 .cbadge {

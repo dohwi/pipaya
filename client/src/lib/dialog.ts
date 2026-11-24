@@ -29,6 +29,11 @@ export interface LayerOpts {
 
 type Layer = { node: HTMLElement; opts: LayerOpts; prefix?: Recording };
 const stack: Layer[] = [];
+const modalListeners = new Set<(count: number) => void>();
+function notifyModalStack() {
+	const count = stack.length;
+	for (const fn of [...modalListeners]) fn(count);
+}
 type Back = { opts: { onclose?: () => void; dismissible?: boolean }; entry: boolean };
 const backs: Back[] = [];
 
@@ -162,6 +167,19 @@ export function topLayer(): HTMLElement | null {
 	return stack[stack.length - 1]?.node ?? null;
 }
 
+/** How many modal layers are currently open (Modal, Palette, Lightbox). */
+export function modalCount(): number {
+	return stack.length;
+}
+
+/** Subscribe to modal stack depth changes; returns the unsubscribe function. */
+export function onModalStackChange(fn: (count: number) => void): () => void {
+	modalListeners.add(fn);
+	return () => {
+		modalListeners.delete(fn);
+	};
+}
+
 /** Esc for the top modal. Runs after the focused element's own handlers, so a field or menu that used Esc keeps it. */
 function escapeLayer(e: KeyboardEvent, layer: Layer) {
 	if (e.key !== "Escape" || e.defaultPrevented || e.isComposing) return;
@@ -224,6 +242,7 @@ export function modalLayer(node: HTMLElement, opts: LayerOpts) {
 		window.addEventListener("pointerdown", resetModalChord, true);
 	}
 	stack.push(layer);
+	notifyModalStack();
 	track(hist);
 	if (!node.hasAttribute("tabindex")) node.tabIndex = -1;
 
@@ -263,7 +282,10 @@ export function modalLayer(node: HTMLElement, opts: LayerOpts) {
 			node.removeEventListener("keydown", onCapture, true);
 			offKey();
 			const i = stack.indexOf(layer);
-			if (i >= 0) stack.splice(i, 1);
+			if (i >= 0) {
+				stack.splice(i, 1);
+				notifyModalStack();
+			}
 			untrack(hist);
 			if (!stack.length) {
 				window.removeEventListener("keydown", onWindowKey);

@@ -331,7 +331,7 @@
 		<p class="text size-{size} tone-{node.tone ?? 'neutral'}">{node.text}</p>
 	{/if}
 {:else if node.type === "badge"}
-	<span class="ext-badge"><Badge tone={badgeTone(node.tone)}>{node.text}</Badge></span>
+	<span class="ext-badge"><Badge tone={badgeTone(node.tone)} title={node.text}><span class="blbl">{node.text}</span></Badge></span>
 {:else if node.type === "divider"}
 	<hr class="divider" />
 {:else if node.type === "code"}
@@ -393,7 +393,7 @@
 						<span class="list-title">{item.title}</span>
 						{#if item.description}<span class="muted">{item.description}</span>{/if}
 					</div>
-					{#if item.badge}<Badge size="sm">{item.badge}</Badge>{/if}
+					{#if item.badge}<Badge size="sm" title={item.badge}><span class="blbl">{item.badge}</span></Badge>{/if}
 				</li>
 			{/each}
 		</ul>
@@ -534,6 +534,7 @@
 	.muted { font-size: var(--fs-xs); color: var(--text-faint); line-height: 1.5; }
 	.empty { padding: 4px 0; }
 	.ext-badge { display: inline-flex; align-self: flex-start; max-width: 100%; }
+	.blbl { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 	.divider { width: 100%; margin: 4px 0; border: 0; border-top: 1px solid var(--border); }
 
 	.code { margin: 0; padding: 8px 12px; max-width: 100%; overflow: auto; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-code); font-family: var(--mono); font-size: var(--fs-xs); line-height: 1.55; tab-size: 2; }
@@ -571,7 +572,7 @@
 	.list li { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 12px; }
 	.list li + li { border-top: 1px solid var(--border); }
 	.list-text { display: flex; flex: 1; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; min-width: 0; }
-	.list li > :global(.badge) { flex: none; align-self: center; white-space: nowrap; }
+	.list li > :global(.badge) { flex: none; align-self: center; max-width: 45%; white-space: nowrap; }
 	.list-title { font-size: var(--fs-sm); font-weight: 550; line-height: 20px; }
 
 	/* tabs */

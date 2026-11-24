@@ -21,7 +21,7 @@
 	 * (desktop), tapping once (touch), or focusing expands the deck, reveals clamped multi-line text in full, and pauses
 	 * auto-dismiss countdowns while reading.
 	 */
-	let { toasts, compact = false, from = "top" }: { toasts: Toast[]; compact?: boolean; from?: "top" | "bottom" } = $props();
+	let { toasts, compact = false, fit = false, from = "top" }: { toasts: Toast[]; compact?: boolean; fit?: boolean; from?: "top" | "bottom" } = $props();
 
 	const ordered = $derived([...toasts].reverse());
 	const ids = $derived(ordered.map((t) => t.id));
@@ -163,6 +163,7 @@
 				<div
 					class="card {item.tone}"
 					class:compact
+					class:fit
 					class:behind={slot.behind}
 					class:expandable={ordered.length > 1 && !expanded && !slot.behind}
 					role={item.tone === "error" ? "alert" : "status"}
@@ -260,6 +261,12 @@
 			width var(--motion-normal) var(--ease),
 			height var(--motion-normal) var(--ease),
 			border-color var(--motion-fast) var(--ease);
+	}
+	/* Over a modal there is no composer to align to: stay compact for short notices (still full-width inside phone gutters)
+	   and cap at --content-w so long errors never stretch edge-to-edge across wide viewports. */
+	.card.fit {
+		min-width: min(var(--modal-w-xs), 100%);
+		max-width: min(var(--content-w), 100%);
 	}
 	.card.expandable {
 		cursor: pointer;

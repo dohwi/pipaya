@@ -10,7 +10,7 @@ import { advertisedSkills, aggregateReadFiles, buildSystemPrompt, discoverInstru
 import { systemPromptEntries } from "./system-prompts.ts";
 import { mentionedSkills, readSkillText, skillCallHint, skillsPrompt, type SkillRef, type SkillService } from "./skills.ts";
 import { badRequest, conflict, HttpError, notFound } from "./errors.ts";
-import { filesNote, saveUploads } from "./routes/file-routes.ts";
+import { filesNote, inlineImagesHint, saveInlineImages, saveUploads } from "./routes/file-routes.ts";
 import type { EventBus } from "./events.ts";
 import { checkServiceTier, modelDefaultTier, modelDefaultLevel, reasoningOption, type ModelRegistry } from "./models.ts";
 import { streamAtTier } from "./served-tier.ts";
@@ -738,7 +738,11 @@ export class SessionManager {
 				if (body !== null) content.push({ type: "text", text: skillCallHint(skill, body, "<pipaya-hint>") });
 			}
 		}
-		if (input.images?.length) content.push(...input.images);
+		if (input.images?.length) {
+			content.push(...input.images);
+			const saved = await saveInlineImages(workDirOf(record), input.images);
+			if (saved.length) content.push({ type: "text", text: inlineImagesHint(saved) });
+		}
 		if (input.files?.length) {
 			const saved = await saveUploads(workDirOf(record), input.files);
 			content.push({ type: "text", text: filesNote(saved) });
@@ -986,10 +990,11 @@ export class SessionManager {
 	 */
 	delegateRuns(): DelegateRun[] {
 		const pol = this.delegatePolicy();
+		const disabled = this.disabledSubagents();
 		const roles = new Map<string, Map<string, SubagentDef>>(); // per cwd, read once per request
 		return this.store.delegateCalls().map(({ cwd, provider, sessionModel, ...c }) => {
 			let defs = roles.get(cwd);
-			if (!defs) roles.set(cwd, (defs = loadSubagents(cwd, this.home, this.disabledSubagents())));
+			if (!defs) roles.set(cwd, (defs = loadSubagents(cwd, this.home, disabled)));
 			const def = defs.get(c.role);
 			const running = c.doneAt === null && (this.live.get(c.sessionId)?.agent.state.pendingToolCalls.has(c.callId) ?? false);
 			let model = c.model;

@@ -44,7 +44,7 @@
 			await fn();
 			app.goalDialog = null;
 		} catch (e) {
-			app.toast(errorText(e), "error", id);
+			app.toast(errorText(e), "error");
 		} finally {
 			busy = false;
 		}

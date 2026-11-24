@@ -59,7 +59,7 @@ export class UiOverlayState {
   settingsDirect = false;
   settingsFocus = $state<SettingsFocus | null>(null);
 
-  skillsDialog = $state<{ cwd: string; sessionId: string | null } | null>(null);
+  skillsDialog = $state<{ cwd: string; sessionId: string | null; skill?: string } | null>(null);
   mcpDialog = $state(false);
   goalDialog = $state<string | null>(null);
   schedulesDialog = $state(false);
