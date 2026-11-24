@@ -56,8 +56,12 @@
 		<h2 {id}>{title}{@render titleExtra?.()}</h2>
 		{#if sub}<span class="mh-sub" class:mono={subMono}>{sub}</span>{/if}
 	</div>
-	{@render actions?.()}
-	{#if onclose}<IconButton icon="x" label={t("닫기")} onclick={onclose} disabled={closeDisabled} />{/if}
+	{#if actions || onclose}
+		<div class="mh-acts">
+			{@render actions?.()}
+			{#if onclose}<IconButton icon="x" label={t("닫기")} onclick={onclose} disabled={closeDisabled} />{/if}
+		</div>
+	{/if}
 </header>
 
 <style>
@@ -66,7 +70,7 @@
 		display: flex;
 		align-items: center;
 		gap: var(--dlg-gap-sm);
-		padding: var(--dlg-head-t) calc(var(--dlg-px) - 9px) var(--dlg-head-b) var(--dlg-px); /* measured: the 38px close button holds a 19px glyph, 9.5px from its edge: 9 + 9.5 = 18.5 + the modal's 1px border = the body's right edge (gutter + 1) */
+		padding: var(--dlg-head-t) calc(var(--dlg-px) - 9.5px) var(--dlg-head-b) var(--dlg-px); /* the 38px close button holds a 19px glyph, 9.5px from its edge: the glyph lands on the body's right line (DESIGN.md 5), like the back button on the left */
 	}
 	.mh:has(> :global(.iconbtn:first-child)) {
 		padding-left: calc(var(--dlg-px) - 9.5px); /* the back button's 19px glyph sits 9.5px in: it lands on the body's left line (DESIGN.md 5) */
@@ -76,7 +80,13 @@
 		border-bottom: 1px solid var(--border);
 	}
 	.mh.compact {
-		padding: 12px 7px 4px 16px; /* compact list popover: fixed 16px gutter (its rows start at 16), the 38px close button's 9.5px puts the glyph at 16.5 */
+		padding: 12px calc(16px - 9.5px) 4px 16px; /* compact list popover: fixed 16px gutter (its rows start at 16); the 38px close button's 9.5px inset puts the glyph exactly on it */
+	}
+	.mh-acts {
+		flex: none;
+		display: flex;
+		align-items: center;
+		gap: 4px; /* adjacent header icon buttons sit 4px apart app-wide; the 8px title gap stays on .mh */
 	}
 	.mh-lead {
 		flex: none;
@@ -117,10 +127,10 @@
 	/* phones: the title lines up with the 16px gutter every dialog body uses there */
 	@media (max-width: 640px) {
 		.mh {
-			padding: 12px calc(var(--dlg-px) - 9px) 8px var(--dlg-px); /* same glyph-on-the-edge rule as above */
+			padding: var(--dlg-head-t) calc(var(--dlg-px) - 9.5px) 8px var(--dlg-px); /* same glyph-on-the-edge rule as above; the top stays 16px so the sheet grabber (bottom: 10px) keeps 6px clear */
 		}
 		.mh.compact {
-			padding: 12px 7px 4px 16px; /* the same fixed 16px as on a desktop: it already is the phone gutter */
+			padding: 12px calc(16px - 9.5px) 4px 16px; /* the same fixed 16px as on a desktop: it already is the phone gutter */
 		}
 	}
 </style>

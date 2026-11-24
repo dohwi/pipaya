@@ -189,8 +189,8 @@
 				{:else}
 					{#if recording === a.id}
 						<span class="key rec" aria-live="polite">{live || t("키를 누르세요…")}</span>
-						<button class="step ok" disabled={!canConfirm} onclick={confirm} title={t("이 단축키로 저장")} aria-label={t("이 단축키로 저장")}><Icon name="check" /></button>
-						<button class="step" onclick={stop} title={t("취소")} aria-label={t("취소")}><Icon name="x" /></button>
+						<button class="step ok tap" disabled={!canConfirm} onclick={confirm} title={t("이 단축키로 저장")} aria-label={t("이 단축키로 저장")}><Icon name="check" /></button>
+						<button class="step tap" onclick={stop} title={t("취소")} aria-label={t("취소")}><Icon name="x" /></button>
 					{:else}
 						<button class="key" class:none={!combo} onclick={() => start(a.id)}>
 							{#if combo}{formatCombo(combo)}{:else}{t("없음")}{/if}
@@ -220,8 +220,8 @@
 				</div>
 				{#if recordingExt?.key === x.owner + ":" + x.id}
 					<span class="key rec" aria-live="polite">{live || t("키를 누르세요…")}</span>
-					<button class="step ok" disabled={!canConfirm} onclick={confirmExt} title={t("이 단축키로 저장")} aria-label={t("이 단축키로 저장")}><Icon name="check" /></button>
-					<button class="step" onclick={stopExt} title={t("취소")} aria-label={t("취소")}><Icon name="x" /></button>
+					<button class="step ok tap" disabled={!canConfirm} onclick={confirmExt} title={t("이 단축키로 저장")} aria-label={t("이 단축키로 저장")}><Icon name="check" /></button>
+					<button class="step tap" onclick={stopExt} title={t("취소")} aria-label={t("취소")}><Icon name="x" /></button>
 				{:else}
 					<button class="key" class:none={!x.combo} onclick={() => startExt(x)}>
 						{#if x.combo}{formatCombo(x.combo)}{:else}{t("없음")}{/if}
@@ -340,10 +340,10 @@
 		border-style: dashed;
 		cursor: default;
 	}
-	/* stands in for the two 30px reset buttons and the 8px gap between them, so a fixed key (F2) lines up with the others */
+	/* stands in for the two 32px reset buttons and the 8px gap between them, so a fixed key (F2) lines up with the others */
 	.slot {
 		flex: none;
-		width: 68px;
+		width: 72px; /* 32 + 8 + 32 */
 	}
 	.key.none {
 		color: var(--text-faint);
@@ -361,8 +361,8 @@
 		flex: none;
 		display: grid;
 		place-items: center;
-		width: 30px;
-		height: 30px;
+		width: 32px;
+		height: 32px;
 		border-radius: 50%;
 		color: var(--text-dim);
 	}
@@ -386,15 +386,15 @@
 	.reset {
 		display: grid;
 		place-items: center;
-		width: 30px;
-		height: 30px;
+		width: 32px;
+		height: 32px;
 		flex: none;
 		border-radius: 50%;
 		color: var(--text-dim);
 	}
 	.reset :global(svg) {
-		width: 14px;
-		height: 14px;
+		width: 16px;
+		height: 16px;
 		stroke-width: 2.2;
 	}
 	@media (hover: hover) {
@@ -422,6 +422,13 @@
 		}
 		.key {
 			flex: 1;
+		}
+	}
+	/* touch: the 44px hit box fills the 8px gap edge to edge (height stays 44px) without covering a neighbour */
+	@media (pointer: coarse) {
+		.step.tap::after,
+		.reset.tap::after {
+			width: calc(100% + 8px);
 		}
 	}
 </style>

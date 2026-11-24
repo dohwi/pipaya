@@ -53,7 +53,7 @@
 		<span class="st" title={ACTIVITY_LABEL[activity]}><AgentBadge id={session} {server} state={activity} size={24} /></span>
 	{/snippet}
 	{#snippet headerActions()}
-		<button class="open" onclick={openChat} title={t("대화 열기")}><Icon name="arrow-right" /><span class="lbl">{t("대화 열기")}</span></button>
+		<button class="open tap" onclick={openChat} aria-label={t("대화 열기")} title={t("대화 열기")}><Icon name="arrow-right" /><span class="lbl">{t("대화 열기")}</span></button>
 	{/snippet}
 	<div class="quick">
 		{#if ready}
@@ -116,8 +116,13 @@
 			display: none;
 		}
 		.open {
-			width: 32px;
+			width: 38px;
+			height: 38px;
 			padding: 0;
+			border-radius: 50%; /* the sibling ModalHeader close button: a 38px circle with a 19px glyph */
+		}
+		.open :global(.ic) {
+			font-size: 19px;
 		}
 	}
 </style>

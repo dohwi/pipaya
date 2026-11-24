@@ -227,8 +227,8 @@
 		color: var(--text-dim);
 	}
 	.k.icon :global(svg) {
-		width: 17px;
-		height: 17px;
+		width: 16px;
+		height: 16px;
 	}
 	/* Pressed: a tint, like the app's list rows (no scale: the bar is a row of tightly packed keys) */
 	.k:active {

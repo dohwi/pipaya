@@ -210,7 +210,7 @@
 								{#if e.update}<span class="upmark" role="img" aria-label={t("업데이트 있음")} title={t("업데이트 있음")}><Icon name="arrow-up" /></span>{/if}
 							</button>
 							{#if e.paired && link}
-								<button type="button" class="clip go" class:half={e.half} aria-label={clipTip(e)} title={clipTip(e)} onclick={() => follow(link)}><Icon name="clip" /></button>
+								<button type="button" class="clip go tap" class:half={e.half} aria-label={clipTip(e)} title={clipTip(e)} onclick={() => follow(link)}><Icon name="clip" /></button>
 							{/if}
 						</div>
 					{/each}
@@ -403,8 +403,8 @@
 		transform: translateY(-50%);
 		align-items: center;
 		justify-content: center;
-		width: 30px;
-		height: 30px;
+		width: 28px;
+		height: 28px;
 		padding: 0;
 		border-radius: var(--radius-sm);
 	}

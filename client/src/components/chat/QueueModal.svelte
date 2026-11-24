@@ -156,7 +156,7 @@
 				>
 					<QueueBadge {q} />
 					<QueueText text={q.text} />
-					<button type="button" class="rm" tabindex="-1" disabled={removing} aria-label={t("{name} 취소", { name: queuedShown(q.text) })} title={t("대기열에서 빼기")} onclick={(e) => { e.stopPropagation(); index = i; void remove(q); }}><Icon name="x" /></button>
+					<button type="button" class="rm tap" tabindex="-1" disabled={removing} aria-label={t("{name} 취소", { name: queuedShown(q.text) })} title={t("대기열에서 빼기")} onclick={(e) => { e.stopPropagation(); index = i; void remove(q); }}><Icon name="x" /></button>
 				</li>
 			{:else}
 				<EmptyState as="li" tone="plain" compact>{t("대기 중인 메시지가 없습니다")}</EmptyState>

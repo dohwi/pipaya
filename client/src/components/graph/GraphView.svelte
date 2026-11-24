@@ -17,6 +17,7 @@
 	import { isMouseWheel, edgeLength, edgePath, edgeTip, sparkPlan, fitGraph, fitView, focusCards, growthPlan, leavePlan, quietCards, related, springStep, type Card, type Edge, type Graph, type GraphServer } from "../../lib/graph";
 	import EmptyState from "../ui/EmptyState.svelte";
 	import Icon from "../ui/Icon.svelte";
+	import IconButton from "../ui/IconButton.svelte";
 	import ModelLogo from "../models/ModelLogo.svelte";
 	import AgentBadge from "../shell/AgentBadge.svelte";
 	import GraphQuick from "./GraphQuick.svelte";
@@ -834,7 +835,7 @@
 		</div>
 		<NavbarItems />
 		<ExtensionMount slot="header.end" />
-		<button class="close" onclick={() => app.toggleGraph(false)} aria-label={t("그래프 뷰 닫기")} title={t("그래프 뷰 닫기") + keyHint}><Icon name="x" /></button>
+		<IconButton icon="x" label={t("그래프 뷰 닫기")} title={t("그래프 뷰 닫기") + keyHint} class="gclose" onclick={() => app.toggleGraph(false)} />
 	</header>
 
 	<div class="body">
@@ -998,10 +999,10 @@
 		<div class="bar">
 			<button class="tbtn" onclick={arrange} disabled={!Object.keys(pins).length} title={t("옮긴 카드를 제자리로")}><Icon name="columns" />{t("다시 배치")}</button>
 			<span class="sep"></span>
-			<button class="tbtn icon" onclick={() => zoomBy(1 / ZOOM_STEP)} aria-label={t("축소")} title={t("축소")}>−</button>
+			<button class="tbtn icon tap" onclick={() => zoomBy(1 / ZOOM_STEP)} aria-label={t("축소")} title={t("축소")}>−</button>
 			<span class="pct mono">{Math.round(view.k * 100)}%</span>
-			<button class="tbtn icon" onclick={() => zoomBy(ZOOM_STEP)} aria-label={t("확대")} title={t("확대")}><Icon name="plus" /></button>
-			<button class="tbtn icon" onclick={refit} aria-label={t("전체 보기")} title={t("전체 보기 (F)")}><Icon name="expand" /></button>
+			<button class="tbtn icon tap" onclick={() => zoomBy(ZOOM_STEP)} aria-label={t("확대")} title={t("확대")}><Icon name="plus" /></button>
+			<button class="tbtn icon tap" onclick={refit} aria-label={t("전체 보기")} title={t("전체 보기 (F)")}><Icon name="expand" /></button>
 		</div>
 	</div>
 
@@ -1071,29 +1072,13 @@
 		overflow: hidden;
 		text-overflow: ellipsis;
 	}
-	/* After extension items the close button joins them as the app header's "+" does: its 8px around the glyph is taken
-	   back to 4, so the last item's ink stands 2px (the slot's padding) + 4 + 4 = 10px from the "x", the header's
-	   2 + 4 + 4.5. Right after the title it keeps the 12px gap. */
-	.close {
+	/* The shared 38px IconButton (19px glyph). It follows the header's 4px gap, also right after the extension items. */
+	.head :global(.iconbtn.gclose) {
 		flex: none;
-		margin-left: -4px;
-		display: inline-grid;
-		place-items: center;
-		width: 32px;
-		height: 32px;
-		margin-right: -8px; /* the 16px glyph sits on the 16px gutter (DESIGN rule 5) */
-		border-radius: var(--radius-sm);
-		color: var(--text-dim);
-		font-size: 16px;
+		margin-right: -9.5px; /* the 19px glyph's right edge lands on the 16px gutter (DESIGN.md 5) */
 	}
-	.ttl + .close {
-		margin-left: 0;
-	}
-	@media (hover: hover) {
-		.close:hover {
-			background: var(--bg-hover);
-			color: var(--text);
-		}
+	.head :global(.iconbtn.gclose:focus-visible) {
+		outline-offset: -2px;
 	}
 
 	/* ---- the canvas, and the chat panel beside it ---- */
@@ -1691,6 +1676,12 @@
 		.run .lead,
 		.doing > :global(.ic) {
 			animation: none;
+		}
+	}
+	/* touch: the 44px hit box fills the 4px gap edge to edge (height stays 44px) without covering a neighbour */
+	@media (pointer: coarse) {
+		.tbtn.icon.tap::after {
+			width: calc(100% + 4px);
 		}
 	}
 </style>

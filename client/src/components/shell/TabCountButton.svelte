@@ -40,7 +40,7 @@
 			background var(--motion-fast) var(--ease-std),
 			color var(--motion-fast) var(--ease-std);
 	}
-	/* the header's tool buttons: 32 wide, 40 tall, round (Header.svelte `.tool` on a phone) */
+	/* the header's tool buttons: 28 wide, 40 tall, round (Header.svelte `.tool` on a phone) */
 	.count.header {
 		width: 28px; /* beside the 28px "+" (TabControls), so the pair sits tight */
 		height: 40px;

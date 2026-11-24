@@ -6,6 +6,7 @@
 	import { fadeIn, fadeOut, isPhone, modalIn, modalOut, surfaceIn, surfaceOut } from "../../lib/motion";
 	import { sheetPull } from "../../lib/sheet";
 	import Icon from "../ui/Icon.svelte";
+	import IconButton from "../ui/IconButton.svelte";
 	import { app } from "../../lib/store.svelte";
 	import { uniqueBy } from "../../lib/unique";
 	import { verticalFade } from "../../lib/edge-fade";
@@ -87,7 +88,7 @@
 	<div class="pal sheet" data-part="palette" role="dialog" aria-modal="true" aria-label={spec.title} use:modalLayer={{ onclose: close, closeBinding: spec.closeShortcut && app.prefs.bindings[spec.closeShortcut] }} in:paletteIn out:paletteOut>
 		<div class="head" use:sheetPull={{ onclose: close }}>
 			<span class="ttl">{spec.title}</span>
-			<button class="x" onclick={close} aria-label={t("닫기")}><Icon name="x" /></button>
+			<IconButton icon="x" size="sm" label={t("닫기")} onclick={close} />
 		</div>
 		<div class="sw">
 			<Icon name="search" />
@@ -148,7 +149,7 @@
 					</div>
 					{#if spec.ondelete}
 						<button
-							class="del"
+							class="del tap"
 							type="button"
 							onclick={(e) => {
 								e.stopPropagation();
@@ -196,33 +197,17 @@
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
-		padding: 12px 8px 4px 16px; /* the 32px close button's 15px glyph is 8.5px from its edge: 8 + 8.5 = 16.5, the search box's right edge */
+		padding: 12px 8px 4px 16px; /* the 32px close button's 16px glyph is 8px from its edge: 8 + 8 = 16, the search box's right edge */
 	}
 	.ttl {
 		font-size: var(--fs-sm);
 		font-weight: 600;
 	}
-	.x {
-		display: grid;
-		place-items: center;
-		width: 32px;
-		height: 32px;
-		margin-right: 0;
-		border-radius: 50%;
-		color: var(--text-faint);
-	}
-	@media (hover: hover) {
-		.x:hover {
-			background: var(--bg-active);
-			color: var(--text);
-		}
-	}
-	.x :global(svg),
 	.sw :global(svg),
 	.cur :global(svg),
 	.del :global(svg) {
-		width: 15px;
-		height: 15px;
+		width: 16px;
+		height: 16px;
 		stroke-width: 2;
 	}
 	.sw {

@@ -94,7 +94,10 @@
 
 <style>
 	.float { position: fixed; display: flex; flex-direction: column; min-width: 0; background: var(--bg); border: 1px solid var(--border-strong); border-radius: var(--radius-panel); box-shadow: var(--shadow-overlay); overflow: hidden; }
-	.bar { flex: none; display: flex; align-items: center; gap: 8px; padding: 4px 4px 4px 12px; background: var(--bg-side); border-bottom: 1px solid var(--border); cursor: grab; touch-action: none; }
+	.bar { flex: none; display: flex; align-items: center; gap: 8px; padding: 4px 12px 4px 12px; background: var(--bg-side); border-bottom: 1px solid var(--border); cursor: grab; touch-action: none; }
+	/* the 19px glyph of the 38px button lands on the body's 12px right edge: 12 - 9.5 bleed */
+	.bar :global(.iconbtn:last-child) { margin-right: -9.5px; }
+	.bar :global(.iconbtn:last-child:focus-visible) { outline-offset: -2px; }
 	.bar:active { cursor: grabbing; }
 	.bar:focus-visible, .corner:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 	.title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--fs-xs); font-weight: 650; }

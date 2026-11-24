@@ -590,7 +590,7 @@
 		/* same box as the header capsule (44px + 1px hairline), so the two lines meet across the sidebar edge */
 		box-sizing: content-box;
 		height: 44px;
-		padding: 0 8px 0 12px; /* spacing scale: 4 / 8 / 12 / 16 / 24. The wordmark sits 12 in, the fold button's right edge lines up with the card (8) */
+		padding: 0 16px 0 12px; /* spacing scale: 4 / 8 / 12 / 16 / 24. The wordmark sits 12 in; on the right the 16px gutter, which the fold button's -9.5px margin turns into the glyph's edge */
 		border-bottom: 1px solid var(--border);
 		color: var(--text);
 	}
@@ -608,11 +608,11 @@
 	}
 	:global(.iconbtn.foldbtn) {
 		margin-left: auto;
-		margin-right: -9.5px; /* the 19px icon's right edge sits on the 16px gutter, like the server chevron below */
+		margin-right: -9.5px; /* the 38px box bleeds 9.5px into the 16px gutter: its 19px icon's right edge sits on the gutter line (x = 16 from the edge), like the server chevron below */
 	}
 	/* 38px in a 44px row: an outer ring would run into the window's top edge, so it is drawn inside */
 	:global(.iconbtn.foldbtn:focus-visible) {
-		outline-offset: -3px; /* -2 like the other header buttons, 1 more: the -9.5px bleed puts the box 0.5px past the sidebar's clipping edge */
+		outline-offset: -2px; /* like the other header buttons: the box now ends inside the sidebar's edge (16 - 9.5 = 6.5px in), so nothing is clipped */
 	}
 	@media (min-width: 861px) {
 		.side {
@@ -741,8 +741,8 @@
 		stroke-width: 1.9;
 	}
 	:global(:where(.side) .dirnew svg) {
-		width: 15px;
-		height: 15px;
+		width: 14px;
+		height: 14px;
 		stroke-width: 2;
 	}
 	:global(:where(.side) .list .item.nested .open) {
@@ -825,7 +825,7 @@
 		padding-left: 4px; /* chevron (x 41-55, centre 48) + 4 + 6 gap: the book icon centres on x 68 like the tabs' icons */
 	}
 	:global(:where(.side) .grp .item.member .open) {
-		padding-left: 59px; /* grid: the pane icon centres on x 84, 20px past the book */
+		padding-left: 59px; /* grid: the pane icon centres on x 88, 20px past the book */
 		min-height: 32px;
 	}
 	:global(:where(.side) .grp .item.member .title) {

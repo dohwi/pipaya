@@ -165,8 +165,8 @@
 		}
 	}
 	.more :global(svg) {
-		width: 15px;
-		height: 15px;
+		width: 14px;
+		height: 14px;
 		stroke-width: 2.6;
 	}
 	/* touch: the row's other buttons get a 20 x 40 hit box (Sidebar.svelte, .dirnew.tap); the "⋯" was left at its 20px

@@ -133,10 +133,10 @@
 		<div class="set" in:chipIn out:chipOut>
 			{#if mode === "compacting"}
 				<span class="compacting" role="status"><span class="dots" aria-hidden="true"><i></i><i></i><i></i></span> {t("압축 중")}</span>
-				<button class="send" class:on={canSend} onclick={onsend} disabled={!canSend} aria-label={t("보내기")}>
+				<button class="send tap" class:on={canSend} onclick={onsend} disabled={!canSend} aria-label={t("보내기")}>
 					{#if sending}<Spinner />{:else}<Icon name="send" />{/if}
 				</button>
-				<button class="send stop" onclick={onstop} disabled={!online} aria-label={t("압축 취소")} title={t("컨텍스트 압축 취소")}><Icon name="stop" /></button>
+				<button class="send stop tap" onclick={onstop} disabled={!online} aria-label={t("압축 취소")} title={t("컨텍스트 압축 취소")}><Icon name="stop" /></button>
 			{:else if mode === "running"}
 				<div class="stack">
 					{#if hasInput}
@@ -160,7 +160,7 @@
 						{/if}
 						<button
 							bind:this={steerBtn}
-							class="mode primary"
+							class="mode primary tap"
 							disabled={!online || sending}
 							aria-haspopup="menu"
 							aria-expanded={menu}
@@ -177,11 +177,11 @@
 						</button>
 					</div>
 					{/if}
-					<button class="send stop" onclick={onstop} aria-label={t("중지")} title={t("작업 중지")}><Icon name="stop" /></button>
+					<button class="send stop tap" onclick={onstop} aria-label={t("중지")} title={t("작업 중지")}><Icon name="stop" /></button>
 				</div>
 			{:else}
 				<div class="slot" class:folded={fold} inert={fold}>
-					<button class="send" class:on={canSend} onclick={onsend} disabled={!canSend} aria-label={t("보내기")}>
+					<button class="send tap" class:on={canSend} onclick={onsend} disabled={!canSend} aria-label={t("보내기")}>
 						{#if sending}<Spinner />{:else}<Icon name="send" />{/if}
 					</button>
 				</div>

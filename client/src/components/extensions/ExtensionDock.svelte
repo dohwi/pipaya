@@ -93,9 +93,15 @@
 	.edge { position: absolute; z-index: 2; top: 0; bottom: 0; left: -4px; width: 8px; cursor: col-resize; touch-action: none; }
 	.edge:focus-visible { background: linear-gradient(90deg, transparent 3px, var(--accent) 3px, var(--accent) 5px, transparent 5px); outline: none; opacity: 0.6; }
 	@media (hover: hover) { .edge:hover { background: linear-gradient(90deg, transparent 3px, var(--accent) 3px, var(--accent) 5px, transparent 5px); opacity: 0.6; } }
-	/* the header's hairline runs under the close button too; the tabs' own one lies on it */
-	header { flex: none; display: flex; align-items: center; gap: 4px; padding: 0 4px 0 0; box-shadow: inset 0 -1px 0 var(--border); }
+	/* the header's hairline runs under the close button too */
+	header { flex: none; display: flex; align-items: center; gap: 4px; padding: 0 12px 0 0; box-sizing: content-box; min-height: 44px; border-bottom: 1px solid var(--border); /* the app header's box (44px + 1px hairline), so the lines meet across the dock edge */ }
+	/* the 19px glyph of the 38px button lands on the body's 12px right edge: 12 - 9.5 bleed */
+	header :global(.iconbtn:last-child) { margin-right: -9.5px; }
+	header :global(.iconbtn:last-child:focus-visible) { outline-offset: -2px; }
 	.tabs { flex: 1; min-width: 0; }
+	/* the tabs fill the 44px header, and the header's own border is the hairline: the tabs' inset one would draw a second, 1px above it */
+	.tabs :global(.utabs) { box-shadow: none; }
+	.tabs :global(.utabs > button) { height: 44px; }
 	.tabs :global(.utabs > button) { max-width: 180px; overflow: hidden; text-overflow: ellipsis; }
 	.bodywrap { flex: 1; min-height: 0; --fade-bg: var(--bg-side); }
 	.body { flex: 1; min-height: 0; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; padding: 12px; }

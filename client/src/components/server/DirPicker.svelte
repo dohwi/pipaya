@@ -141,7 +141,7 @@
 		<input class="mono" bind:this={input} bind:value={browser.typed} oninput={() => browser.typedChanged()} onkeydown={onkey} spellcheck="false" autocomplete="off" aria-label={t("경로")} placeholder="/home/user/project" use:focus />
 		{#if !remote && browser.listing}
 			{@const fav = app.isFavDir(browser.listing.path)}
-			<button type="button" class="favbtn" class:on={fav} aria-pressed={fav} onclick={() => app.toggleFavDir(browser.listing!.path)} aria-label={fav ? t("즐겨찾기 해제") : t("즐겨찾기")} title={fav ? t("즐겨찾기 해제") : t("즐겨찾기")}>
+			<button type="button" class="favbtn tap" class:on={fav} aria-pressed={fav} onclick={() => app.toggleFavDir(browser.listing!.path)} aria-label={fav ? t("즐겨찾기 해제") : t("즐겨찾기")} title={fav ? t("즐겨찾기 해제") : t("즐겨찾기")}>
 				<Icon name="star" />
 			</button>
 		{/if}

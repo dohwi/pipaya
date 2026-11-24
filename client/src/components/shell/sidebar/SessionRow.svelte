@@ -56,8 +56,8 @@
 		color: var(--text-faint);
 	}
 	.clock :global(svg) {
-		width: 13px;
-		height: 13px;
+		width: 14px;
+		height: 14px;
 		stroke-width: 2;
 	}
 	/* the parent mark (fork icon + "@parent", like "forked from") after the title: gives way to it only when the row is narrow (the title shrinks first) */

@@ -301,7 +301,19 @@ Everything you read in a dialog ends on **one** right line and starts on **one**
 - A row of controls that wraps (bulk buttons) wraps; it never overlaps and never leaves one button on a different edge.
 - Slider rows use one grid (`RangeField`): track, a 48px value column, and an 88px action column only when there is an action, so the value
   or the action is the row's right edge like a switch.
-- A close button's hit box is wider than what you see: measure the glyph. Header padding is `calc(var(--dlg-px) - 9px)` so the glyph lands on the body's right edge.
+- A close button's hit box is wider than what you see: measure the glyph. Header padding is `calc(var(--dlg-px) - 9.5px)` so the glyph lands on the body's right edge.
+
+### Icon buttons (one size set, one gap, one bleed)
+
+- **Sizes.** `IconButton` `md` is 38px with a 19px glyph (headers, drawers, modals); `sm` is 32px with a 16px glyph (inline and compact rows).
+  A glyph is always an even size in an even box (14 in 20, 16 in 32, 19 in 38); never 13, 15 or 17.
+  Do not write a custom 30/32 square for a close button: use `IconButton`.
+- **Gap.** Adjacent icon buttons in a header or toolbar sit **4px** apart (`ModalHeader` wraps `actions` and the close button in `.mh-acts` for this;
+  the 8px gap between the title and the buttons stays).
+- **Right gutter.** The glyph, not the box, lands on the gutter: `md` bleeds `margin-right: -9.5px`, `sm` bleeds `-8px`, each with a comment naming the line it lands on.
+  A bleeding button draws its focus ring inside (`outline-offset: -2px`).
+- **Touch.** A custom button under 44px gets `.tap` (an invisible 44px hit box on coarse pointers). Not on `.iconbtn`: it is `overflow: hidden` for the ripple, which would clip the box.
+- A topbar is 44px + 1px hairline everywhere (app header, sidebar brand row, graph head, extension dock), so the lines meet.
 
 ### Extra facts in a tooltip
 
