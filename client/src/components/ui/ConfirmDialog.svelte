@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { Snippet } from "svelte";
+	import { sheetPull } from "../../lib/sheet";
 	import Button from "./Button.svelte";
 	import Icon, { type IconName } from "./Icon.svelte";
 	import Modal from "./Modal.svelte";
@@ -54,7 +55,7 @@
 </script>
 
 <Modal onclose={() => !busy && oncancel()} dismissible={!busy} role="alertdialog" labelledby="{id}-title" describedby={description ? `${id}-desc` : undefined} width="s" {layer} {portal} {sheet}>
-	<div class="cd">
+	<div class="cd" use:sheetPull={{ onclose: () => !busy && oncancel(), disabled: !sheet || busy }}>
 		<span class="mark {tone}"><Icon name={icon} /></span>
 		<h3 id="{id}-title">{title}</h3>
 		{#if description}<p id="{id}-desc">{description}</p>{/if}
@@ -80,8 +81,8 @@
 	.warn { background: var(--warn-soft); color: var(--warn); }
 	.danger { background: var(--danger-soft); color: var(--danger); }
 	.neutral { background: var(--bg-elev); border: 1px solid var(--border); color: var(--text-dim); }
-	h3 { margin: 0; font-size: var(--fs-lg); overflow-wrap: anywhere; }
-	p { margin: 0; color: var(--text-dim); font-size: var(--fs-sm); line-height: 1.5; }
+	h3 { margin: 0; font-size: var(--fs-lg); line-height: 24px; overflow-wrap: anywhere; }
+	p { margin: 0; color: var(--text-dim); font-size: var(--fs-sm); line-height: 20px; word-break: keep-all; }
 	.btns { display: flex; flex-direction: column; gap: 8px; align-self: stretch; margin-top: 16px; }
 	.btns :global(.btn) { width: 100%; }
 </style>

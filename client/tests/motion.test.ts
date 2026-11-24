@@ -195,7 +195,7 @@ describe("modals mounted by their parent animate", () => {
 		}
 	});
 	test("confirmations and status cards are the shared ConfirmDialog / StatusCard, never their own Modal", () => {
-		for (const f of ["shell/DiscardConfirm", "shell/CloseConfirm", "extensions/RemoveExtensionConfirm", "extensions/PairInstallConfirm"]) {
+		for (const f of ["shell/DiscardConfirm", "shell/CloseConfirm", "shell/SessionCloseConfirm", "extensions/RemoveExtensionConfirm", "extensions/PairInstallConfirm"]) {
 			const s = markup(read(`components/${f}.svelte`));
 			expect(s, f).toContain("<ConfirmDialog");
 			expect(s, f).not.toContain("<Modal");
@@ -205,6 +205,12 @@ describe("modals mounted by their parent animate", () => {
 			expect(s, f).toContain("<StatusCard");
 			expect(s, f).not.toContain("<Modal");
 		}
+	});
+	test("ConfirmDialog attaches sheetPull and sheet.ts recognises role=alertdialog", () => {
+		const cd = read("components/ui/ConfirmDialog.svelte");
+		expect(cd).toContain("use:sheetPull=");
+		expect(cd).toContain("disabled: !sheet || busy");
+		expect(read("lib/sheet.ts")).toContain('[role="alertdialog"]');
 	});
 	test("the address form is a step inside ConnectModal (embedded), not a second dialog opened over it", () => {
 		expect(markup(read("components/server/ConnectModal.svelte"))).toContain("<ConnectionForm embedded");
