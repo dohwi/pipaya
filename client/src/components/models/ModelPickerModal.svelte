@@ -3,6 +3,7 @@
 	import type { Api } from "../../lib/api";
 	import TierOptions from "./TierOptions.svelte";
 	import { takesTier } from "../../lib/service-tier";
+	import { thinkingLabel } from "../../lib/thinking";
 	import type { ServiceTier } from "../../lib/types";
 	import { t } from "../../lib/i18n";
 	import Ladder from "../ui/Ladder.svelte";
@@ -173,7 +174,7 @@
 		{#if reasoning}
 		<div class="sec" in:collapseIn out:collapseOut>
 			<div class="section-label">{t("추론 강도")}</div>
-			<Ladder label={t("추론 강도")} options={available.map((l) => ({ id: l, label: l, level: l }))} value={shownLvl} disabled={!sel} onchange={strength} />
+			<Ladder label={t("추론 강도")} options={available.map((l) => ({ id: l, label: thinkingLabel(l), level: l }))} value={shownLvl} disabled={!sel} onchange={strength} />
 		</div>
 		{/if}
 		{#if tierApi && info && (takesTier(info) || selectedTier) && !info.imageGeneration}
