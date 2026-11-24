@@ -1,34 +1,42 @@
 <script lang="ts">
 	import { tick } from "svelte";
+	import { modalCount, onModalStackChange } from "../../lib/dialog";
 	import { app } from "../../lib/store.svelte";
+	import { stageToastBox } from "../../lib/toast-stack";
 	import { viewport } from "../../lib/viewport.svelte";
 	import ToastStrip from "./ToastStrip.svelte";
-	import VersionNotice from "./VersionNotice.svelte";
 
 	/**
-	 * Toasts are strips like the "done" notices: full width of the chat area (not of the window,
-	 * so the sidebar does not push them off centre), right under the header. They stay above dialogs, so a toast raised
-	 * from inside Settings is still seen. With no chat area on screen (no server yet) they span the window.
+	 * Floating global toast tray. Over the normal workspace it aligns to the chat stage (right of the sidebar, below the
+	 * header and any pinned stage banners). Whenever a modal is open, it detaches from the stage and moves to the bottom
+	 * centre of the viewport so it never covers modal headers, close buttons, or hangs off-centre past narrow dialogs.
 	 */
+	const STAGE_STRIPS = ".overlay > .banner, .overlay > .stack, .overlay > .strip";
 	let box = $state<{ left: number; width: number; top: number } | null>(null);
-	/** A phone sheet that covers the whole screen (tab overview): a strip under the header would sit on its title and first
-	 *  cards, so the strips drop to the bottom edge instead, where the sheet has nothing to cover. */
-	let overSheet = $state(false);
+	let overModal = $state(modalCount() > 0);
+
+	$effect(() => {
+		overModal = modalCount() > 0;
+		return onModalStackChange((count) => {
+			overModal = count > 0;
+		});
+	});
 
 	function measure() {
-		overSheet = viewport.phone && !!document.querySelector(".modal.sheet.full");
 		const stage = document.querySelector<HTMLElement>(".stage");
 		if (!stage) return (box = null);
+		const zoom = Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--ui-zoom")) || 1;
 		// the stage's overlay column: the top of the chat area, or under the graph view's header while that is open
 		const r = (stage.querySelector<HTMLElement>(".overlay") ?? stage).getBoundingClientRect();
-		// the strips at the top of that column (the connection strip under the graph, "done" notices): ours go right below them
-		const above = [...stage.querySelectorAll<HTMLElement>(".overlay > .banner, .overlay > .stack")].map((e) => e.getBoundingClientRect().bottom);
-		box = { left: r.left, width: r.width, top: Math.max(r.top, ...above) };
+		// the strips at the top of that column (connection / version / "done" banners): toasts float right below them
+		const above = [...stage.querySelectorAll<HTMLElement>(STAGE_STRIPS)].map((e) => e.getBoundingClientRect().bottom);
+		box = stageToastBox(r, above, zoom);
 	}
 
 	$effect(() => {
-		// re-attach when the layout around the stage changes shape
-		void [app.servers.length, app.feedback.notices.length, app.globalToasts.length, app.tabOverview, app.sidebar.collapsed, app.sidebar.open, viewport.narrow, app.activeGroup?.id, app.graphOpen, app.net];
+		// re-attach when the layout around the stage or zoom scale changes shape
+		void [app.servers.length, app.feedback.notices.length, app.globalToasts.length, app.compat, app.prefs.uiScale, overModal, app.sidebar.collapsed, app.sidebar.open, viewport.narrow, app.activeGroup?.id, app.graphOpen, app.net];
+		if (overModal) return;
 		let ro: ResizeObserver | undefined;
 		let dead = false;
 		tick().then(() => {
@@ -36,8 +44,10 @@
 			measure();
 			ro = new ResizeObserver(measure);
 			const stage = document.querySelector(".stage");
+			const overlay = stage?.querySelector(".overlay");
 			if (stage) ro.observe(stage);
-			for (const e of stage?.querySelectorAll(".overlay > .banner, .overlay > .stack") ?? []) ro.observe(e);
+			if (overlay) ro.observe(overlay);
+			for (const e of stage?.querySelectorAll(STAGE_STRIPS) ?? []) ro.observe(e);
 		});
 		return () => {
 			dead = true;
@@ -51,16 +61,15 @@
 <div
 	class="toasts"
 	data-part="toasts"
-	class:anchored={!!box && !overSheet}
-	class:bottom={overSheet}
-	style:left={box && !overSheet ? `${box.left}px` : null}
-	style:width={box && !overSheet ? `${box.width}px` : null}
-	style:top={box && !overSheet ? `${box.top}px` : null}
+	class:anchored={!!box && !overModal}
+	class:bottom={overModal}
+	style:left={box && !overModal ? `${box.left}px` : null}
+	style:width={box && !overModal ? `${box.width}px` : null}
+	style:top={box && !overModal ? `${box.top}px` : null}
 	aria-live="polite"
 >
-	<VersionNotice />
-	<div class="tray" class:bottom={overSheet}>
-		<ToastStrip toasts={app.globalToasts} from={overSheet ? "bottom" : "top"} />
+	<div class="tray" class:bottom={overModal}>
+		<ToastStrip toasts={app.globalToasts} fit={overModal} from={overModal ? "bottom" : "top"} />
 	</div>
 </div>
 

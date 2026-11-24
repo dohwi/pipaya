@@ -25,6 +25,7 @@
 	import { registerContextMenu } from "./lib/context-menu";
 	import Lazy, { preload } from "./components/ui/Lazy.svelte";
 	import UpdateBanner from "./components/shell/UpdateBanner.svelte";
+	import VersionNotice from "./components/shell/VersionNotice.svelte";
 	import DoneNotice from "./components/shell/DoneNotice.svelte";
 	import ChordStrip from "./components/shell/ChordStrip.svelte";
 	import { updater } from "./lib/updater.svelte";
@@ -539,6 +540,7 @@
 				<!-- One column for everything pinned to the top of the stage: notices first, the extension button below them, so they never overlap -->
 				<div class="overlay">
 					{#if app.graphOpen}{@render netBanner()}{/if}
+					<VersionNotice />
 					<DoneNotice />
 					<div class="extension-launcher">{@render launcher()}</div>
 				</div>
