@@ -109,7 +109,7 @@ describe("migrations", () => {
 		db.query("INSERT INTO events (id, session_id, type, data, ts) VALUES (2, 's1', 'session_created', '{}', 20)").run();
 		db.query("INSERT INTO events (id, session_id, type, data, ts) VALUES (3, 'orphan', 'session_updated', '{}', 30)").run();
 
-		const step = MIGRATIONS[MIGRATIONS.length - 1]!;
+		const step = MIGRATIONS[41]!;
 		expect(typeof step).toBe("function");
 		db.transaction(() => (step as (d: typeof db) => void)(db))();
 
@@ -123,5 +123,23 @@ describe("migrations", () => {
 		expect(db.query("SELECT id, session_id, type FROM events ORDER BY id").all()).toEqual([
 			{ id: 1, session_id: null, type: "provider_updated" },
 		]);
+	});
+
+	test("hot-path indexes exist and survive re-running the migration", () => {
+		const db = openDb(":memory:");
+		const expected = [
+			"idx_events_ts",
+			"idx_extension_entries_session_id",
+			"idx_messages_session_role_seq",
+			"idx_sessions_cwd",
+		];
+		const listIndexes = () =>
+			(db.query("SELECT name FROM sqlite_master WHERE type = 'index' AND name LIKE 'idx_%' ORDER BY name").all() as { name: string }[]).map((r) => r.name);
+		for (const idx of expected) expect(listIndexes()).toContain(idx);
+
+		const step = MIGRATIONS[42]!;
+		expect(typeof step).toBe("string");
+		expect(() => db.exec(step as string)).not.toThrow();
+		for (const idx of expected) expect(listIndexes()).toContain(idx);
 	});
 });

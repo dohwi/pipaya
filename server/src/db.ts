@@ -321,6 +321,12 @@ export const MIGRATIONS: (string | ((db: Database) => void))[] = [
 			CREATE INDEX IF NOT EXISTS events_session ON events(session_id, id);
 		`);
 	},
+	// Hot-path indexes: event pruning by ts, message usage/delegate queries by (session_id, role, seq),
+	// session workdir grouping by cwd, and extension entries listing by (session_id, id).
+	`CREATE INDEX IF NOT EXISTS idx_events_ts ON events(ts);
+	 CREATE INDEX IF NOT EXISTS idx_messages_session_role_seq ON messages(session_id, role, seq);
+	 CREATE INDEX IF NOT EXISTS idx_sessions_cwd ON sessions(cwd);
+	 CREATE INDEX IF NOT EXISTS idx_extension_entries_session_id ON extension_entries(session_id, id);`,
 ];
 
 export function openDb(path: string): Database {
