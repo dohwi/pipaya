@@ -17,6 +17,7 @@
 	import { plainTextOf, replyActions, segmentsOf, type Segment } from "../../lib/reply-blocks";
 	import { modelDisplayName } from "../../lib/model-name";
 	import { replySpeed, tierLabel } from "../../lib/service-tier";
+	import { thinkingLabel } from "../../lib/thinking";
 	import { SWIPE_BLOCKERS, SWIPE_TRIGGER, SwipeReply } from "../../lib/swipe-reply";
 	import type { AssistantItem, Session } from "../../lib/types";
 	import { tapTitle } from "../../lib/touch-hints";
@@ -111,8 +112,8 @@
 	const modelName = $derived(modelDisplayName(app.models, tail?.provider, tail?.model));
 	const tokens = $derived(parts.reduce((n, p) => n + (p.tokens ?? 0), 0));
 	const took = $derived(parts.reduce((n, p) => n + (p.durationMs ?? 0), 0));
-	/** The reasoning level the reply ran at: "off" for a model that cannot think (it ignores the session's level). */
-	const level = $derived(tailModel && !tailModel.reasoning ? "off" : (tail?.thinkingLevel ?? ""));
+	/** The reasoning level the reply ran at: "Off" for a model that cannot think (it ignores the session's level). */
+	const level = $derived(thinkingLabel(tailModel && !tailModel.reasoning ? "off" : (tail?.thinkingLevel ?? "")));
 	/** Speed label when non-default (or when OpenRouter fell back to another tier than requested). */
 	const speed = $derived(replySpeed(parts, tail));
 	const hasSpeed = $derived(speed.kind !== "none");

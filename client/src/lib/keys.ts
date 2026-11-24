@@ -196,7 +196,7 @@ const BASE: Omit<ActionDef, "group">[] = [
   {
     id: "cycleThinking",
     label: msg("추론 강도 변경"),
-    hint: msg("minimal → … → max, 끝에서 처음으로 돌아갑니다. 입력창 밖에서 Shift+Tab은 포커스를 뒤로 옮깁니다"),
+    hint: msg("Minimal → … → Max, 끝에서 처음으로 돌아갑니다. 입력창 밖에서 Shift+Tab은 포커스를 뒤로 옮깁니다"),
     default: "Shift+Tab",
   },
   {
