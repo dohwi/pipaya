@@ -6,8 +6,9 @@ background = the crop's corner colour) and reports the pairs that are off by 0.7
 label inherits the body's 1.55 line box are listed too: that fractional line box is what once put the
 working-directory path 1.5px below its folder glyph (DESIGN.md rule 3).
 
-Usage: python3 scripts/ui-pairs.py [--size 1440x900]... [--out DIR] [--json FILE]
-Needs .agents/bin/dev-up.sh to have run (this worktree's own dev pair).
+Usage: python3 scripts/ui-pairs.py [--seed] [--size 1440x900]... [--out DIR] [--json FILE]
+Needs .agents/bin/dev-up.sh to have run (this worktree's own dev pair). `--seed` adds a sample conversation with
+user/assistant messages (including a Gemini reply footer) so chat metadata rows are measured too.
 
 Reading the result: 0.5px is the physical half-pixel limit and is fine; from 1px on it is a bug. Two kinds of
 label are reported separately because their ink has no height of its own ("light glyph", ink under 55% of the
@@ -17,7 +18,7 @@ measured like any other row. Ink is the rows that reach half of the crop's peak 
 grid does not count as part of a glyph. A two-line block (label + sub label) is skipped: the icon centres
 the block, not either line.
 """
-import argparse, io, json, pathlib, subprocess, sys
+import argparse, io, json, pathlib, sqlite3, subprocess, sys, time, urllib.request
 from collections import Counter
 from PIL import Image
 from playwright.sync_api import sync_playwright
@@ -28,14 +29,16 @@ if not envf.exists():
     sys.exit("ui-pairs: run .agents/bin/dev-up.sh first")
 env = dict(l.split("=", 1) for l in envf.read_text().split() if "=" in l)
 token = pathlib.Path(env["TOKEN_FILE"]).read_text().strip()
+base = f"http://127.0.0.1:{env['SERVER_PORT']}"
 seed = {
-    "pipaya.servers": json.dumps([{"id": "dev", "name": "dev", "baseUrl": f"http://127.0.0.1:{env['SERVER_PORT']}", "token": token}]),
+    "pipaya.servers": json.dumps([{"id": "dev", "name": "dev", "baseUrl": base, "token": token}]),
     "pipaya.server": json.dumps("dev"),
 }
 url = f"http://127.0.0.1:{env['CLIENT_PORT']}/"
 DSF = 4
 
 ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+ap.add_argument("--seed", action="store_true", help="seed a conversation with messages so chat footers are audited")
 ap.add_argument("--size", action="append", help="WxH (default 1440x900, 820x1180, 390x844)")
 ap.add_argument("--out", help="directory for the screenshots (default: <worktree>/tmp/ui-pairs)")
 ap.add_argument("--json", help="write every measured pair here")
@@ -44,10 +47,64 @@ sizes = a.size or ["1440x900", "820x1180", "390x844"]
 out = pathlib.Path(a.out).resolve() if a.out else root / "tmp/ui-pairs"
 out.mkdir(parents=True, exist_ok=True)
 
+
+def seed_chat():
+    def api(method, path, body=None):
+        r = urllib.request.Request(
+            base + path,
+            method=method,
+            data=json.dumps(body).encode() if body is not None else None,
+            headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+        )
+        try:
+            with urllib.request.urlopen(r, timeout=5) as resp:
+                return json.loads(resp.read() or b"null")
+        except Exception as e:
+            sys.exit(f"ui-pairs --seed: {method} {path} failed: {e}")
+
+    api("PUT", "/configuration/providers/pairs-stub", {
+        "name": "pairs-stub",
+        "baseUrl": "http://127.0.0.1:9/v1",
+        "api": "openai-completions",
+        "authRequired": False,
+        "models": [{"id": "gemini-4-neon", "name": "Gemini 4 Neon", "contextWindow": 100000, "maxTokens": 4000, "reasoning": True, "vision": False}],
+    })
+    res = api("GET", "/sessions")
+    sessions = res.get("sessions", []) if isinstance(res, dict) else res
+    existing = next((s for s in sessions if s.get("title") == "ui-pairs 정렬 점검"), None)
+    sid = existing["id"] if existing else api("POST", "/sessions", {
+        "cwd": "pairs-check", "title": "ui-pairs 정렬 점검", "provider": "pairs-stub", "model": "gemini-4-neon",
+    })["id"]
+    now = int(time.time() * 1000)
+    db_path = pathlib.Path(env["TOKEN_FILE"]).parent / "pipaya.db"
+    db = sqlite3.connect(db_path, timeout=5)
+    db.executemany(
+        "INSERT OR REPLACE INTO messages (session_id, seq, role, data, created_at) VALUES (?, ?, ?, ?, ?)",
+        [
+            (sid, 1, "user", json.dumps({"role": "user", "content": "정렬 확인해줘", "timestamp": now - 180_000}), now - 180_000),
+            (sid, 2, "assistant", json.dumps({
+                "role": "assistant",
+                "content": [{"type": "text", "text": "골라 주시면, `@동훈` 완료 후 바로 이어서 진행하겠습니다."}],
+                "provider": "pairs-stub",
+                "model": "gemini-4-neon",
+                "stopReason": "stop",
+                "timestamp": now - 120_000,
+            }), now - 120_000),
+        ],
+    )
+    db.commit()
+    db.close()
+
+
+if a.seed:
+    seed_chat()
+
 # The screens of the app and how to reach each one (clicks in order; `>> nth=N` picks one of several).
 SCREENS = [
     ("main", []),
+    *([("chat", ['.dirblock[data-block$="pairs-check"] > .dir .dirtoggle'])] if a.seed else []),
     ("main-context", [".statusline .b >> nth=0"]),
+    ("graph", ['button.navbtn:has-text("그래프 뷰")']),
     ("settings-general", ["button.settings", '.nav button:has-text("내 설정")']),
     ("settings-keys", ["button.settings", '.nav button:has-text("단축키")']),
     ("settings-backup", ["button.settings", '.nav button:has-text("백업")']),
@@ -80,6 +137,9 @@ FIND = r"""() => {
   for (const host of document.querySelectorAll('*')) {
     const hcs = getComputedStyle(host);
     if (!/flex|grid/.test(hcs.display) || hcs.alignItems !== 'center') continue;
+    // a multi-row grid card (e.g. GraphView .card: 20px title + 20px sub beside a spanning lead icon) centres the icon
+    // on the two-line block, not on either single line
+    if (/grid/.test(hcs.display) && hcs.gridTemplateRows.trim().split(/\s+/).length > 1) continue;
     const rr = host.getBoundingClientRect();
     if (rr.width < 16 || rr.height < 8 || rr.height > 90 || rr.width > 1400) continue;
     if (rr.bottom < 1 || rr.top > innerHeight-1) continue;
@@ -91,14 +151,26 @@ FIND = r"""() => {
     if (ir.width < 5 || ir.height < 5) continue;
     { const hit = document.elementFromPoint(ir.left + ir.width/2, ir.top + ir.height/2);
       if (!hit || !(host.contains(hit) || hit === host)) continue; }
-    // A direct text child beside the icon only: a two-line block (label + sub label) or a second word in the
-    // same row is a different shape, and comparing it with the icon would report a 10px "error" that is by design.
-    for (const c0 of host.children) {
+    // Check the nearest visible label on either side of the icon (stepping over punctuation separators like `.sep`),
+    // skipping trailing units (`.unit`, e.g. "tps") and unrelated distant children in multi-column rows.
+    const kids = [...host.children];
+    const iIdx = kids.indexOf(icon);
+    const isSep = (e) => e.classList.contains('sep') || e.getAttribute('aria-hidden') === 'true';
+    const nearest = (dir) => {
+      for (let k = iIdx + dir; k >= 0 && k < kids.length; k += dir) {
+        const el = kids[k];
+        const s = getComputedStyle(el);
+        if (s.visibility==='hidden' || s.display==='none' || +s.opacity===0) continue;
+        if (isSep(el)) continue;
+        return el;
+      }
+      return null;
+    };
+    const targets = [nearest(-1), nearest(1)].filter(Boolean);
+    for (const c0 of targets) {
       const cs0 = getComputedStyle(c0);
-      if (cs0.visibility==='hidden' || cs0.display==='none' || +cs0.opacity===0) continue;
       if (c0 === icon || icon.contains(c0)) continue;
-      // only the label that stands right after the icon: a trailing unit ("tps" after the value) is not beside the glyph
-      if (c0.previousElementSibling && c0.previousElementSibling !== icon && !c0.previousElementSibling.contains(icon)) continue;
+      if (c0.classList.contains('unit')) continue;
       // a one-line flex wrapper around the label (settings nav: icon + <span class=nt><span class=nl>…</span> badge</span>):
       // compare its first text child, which is what sits beside the icon
       let c = c0;
@@ -113,17 +185,21 @@ FIND = r"""() => {
       const r = c.getBoundingClientRect();
       if (r.width < 5 || r.height < 5 || r.height > 45) continue;
       const lh = cs.lineHeight==='normal' ? parseFloat(cs.fontSize)*1.2 : parseFloat(cs.lineHeight);
-      if (r.height > lh*1.45) continue;
+      const pt = parseFloat(cs.paddingTop) || 0, pb = parseFloat(cs.paddingBottom) || 0;
+      const bt = parseFloat(cs.borderTopWidth) || 0, bb = parseFloat(cs.borderBottomWidth) || 0;
+      const contentH = r.height - pt - pb - bt - bb;
+      if (contentH > lh*1.45) continue;
       if (Math.abs((r.top+r.height/2)-(ir.top+ir.height/2)) > 14) continue;
       const gapX = Math.max(r.left - ir.right, ir.left - r.right);
-      if (gapX > 16) continue;
+      if (gapX > 32) continue;
       // the label's cap-height centre from the font's own metrics: string-independent, unlike the ink ("beta" has no descender,
-      // "alpha" has one, and their ink centres differ by 1px in the same row)
+      // "alpha" has one, and their ink centres differ by 1px in the same row). Use the content box (not border box) so
+      // asymmetric padding-bottom nudges are caught instead of averaged away.
       const cv = (window.__pairsCv ||= document.createElement('canvas').getContext('2d'));
       cv.font = `${cs.fontStyle} ${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
       const fm = cv.measureText('Hg'), hm = cv.measureText('H');
       const lhpx = cs.lineHeight==='normal' ? fm.fontBoundingBoxAscent + fm.fontBoundingBoxDescent : parseFloat(cs.lineHeight);
-      const lineTop = r.top + (r.height - lhpx) / 2;
+      const lineTop = r.top + bt + pt + (contentH - lhpx) / 2;
       const base = lineTop + (lhpx - (fm.fontBoundingBoxAscent + fm.fontBoundingBoxDescent)) / 2 + fm.fontBoundingBoxAscent;
       const capC = base - hm.actualBoundingBoxAscent / 2;
       out.push({i: n++, inStatus: !!host.closest('.statusline'), host: describe(host), icon: describe(icon), cls: describe(c),
@@ -168,6 +244,8 @@ def shoot(pg, name, clicks, narrow):
         loc.scroll_into_view_if_needed(timeout=4000)
         loc.click(force=True, timeout=8000); pg.wait_for_timeout(900)
     pg.wait_for_timeout(600)
+    if name.endswith("-chat") and pg.locator(".foot .stats").count() == 0:
+        raise RuntimeError("seeded chat rendered no .foot .stats")
     rows = pg.evaluate(FIND)
     shot = Image.open(io.BytesIO(pg.screenshot(path=str(out/f"{name}.png"))))
     res = []
@@ -175,10 +253,13 @@ def shoot(pg, name, clicks, narrow):
         ylim = (r["hostrect"]["y"], r["hostrect"]["y"]+r["hostrect"]["h"])
         ii = ink(shot, r["irect"], ylim); ti = ink(shot, r["trect"], ylim)
         if not ii or not ti: continue
+        # a progress ring at ~0% paints only its 12-o'clock start cap above 50% contrast while the track is faint;
+        # its visual centre is the full circle's box centre, not the start dot
+        icon_c = r["irect"]["y"] + r["irect"]["h"] / 2 if "ring" in r["icon"].split() and ii["h"] < r["irect"]["h"] * 0.45 else ii["centre"]
         lh = float(r["lh"].replace("px","")) if r["lh"].endswith("px") else None
         # the smaller of two readings: the painted ink, and the font's cap-height centre. A real offset moves both; a string
         # without descenders (or with tall ones) moves only the ink, so it is not reported as a layout bug
-        d_ink = ti["centre"] - ii["centre"]; d_cap = r["capC"] - ii["centre"]
+        d_ink = ti["centre"] - icon_c; d_cap = r["capC"] - icon_c
         res.append({**r, "dy": round(d_ink if abs(d_ink) <= abs(d_cap) else d_cap, 2), "dyInk": round(d_ink, 2), "dyCap": round(d_cap, 2),
                     "iconInkH": round(ii["h"],2), "textInkH": round(ti["h"],2),
                     "edge": bool(ii["edge"] or ti["edge"]),

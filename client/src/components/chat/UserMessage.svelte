@@ -169,6 +169,7 @@
 		margin-bottom: 4px;
 		font-size: var(--fs-sm);
 		font-weight: 600;
+		line-height: 20px;
 		color: var(--tint);
 	}
 	.header :global(svg) {
@@ -261,7 +262,6 @@
 	.when {
 		margin-left: 6px;
 		margin-right: 6px;
-		padding-bottom: 2px; /* lifts the x-height onto the glyph centre, as the answer's stats line does */
 		font-size: var(--fs-2xs);
 		line-height: 20px;
 		color: var(--text-faint);
