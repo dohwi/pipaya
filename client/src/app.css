@@ -1012,7 +1012,7 @@ kbd {
 		opacity var(--motion-fast) var(--ease-std);
 }
 :where(
-		button:not(.btn, .iconbtn, .wide, [aria-expanded], [role="option"], [role="tab"]):active:not(:disabled),
+		button:not(.btn, .iconbtn, .wide, .tok, [aria-expanded], [role="option"], [role="tab"]):active:not(:disabled),
 		[role="button"]:active
 	) {
 	scale: 0.97;

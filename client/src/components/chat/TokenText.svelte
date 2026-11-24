@@ -44,8 +44,8 @@
 		font: inherit;
 		font-size: 0.88em; /* inline code's size: the chip (content box + 2px) stays under the 1.55 line, so chips on wrapped lines never touch */
 		line-height: 18px; /* whole-pixel 20px box (18 + 2 padding) so button and span chips share one height */
-		vertical-align: -1px; /* measured: aligns chip text ink with surrounding 1.55 body text (<= 0.5px) */
-		transition: background var(--motion-fast) var(--ease-std);
+		vertical-align: -1px; /* measured: aligns chip text ink with surrounding 24px body text (<= 0.5px) */
+		transition: none; /* instant hover tint avoids GPU background-color layer promotion snapping inline chips by 1px */
 	}
 	.tlabel {
 		min-width: 0;

@@ -293,6 +293,7 @@
 	/* Korean wraps between words like the rest of the app (app.css keep-all); only a word wider than the line breaks */
 	.md {
 		overflow-wrap: anywhere;
+		line-height: 24px; /* whole-pixel line box (vs body's 23.25px) so streaming growth keeps scroll heights integer */
 	}
 	.md :global(> :first-child) {
 		margin-top: 0;
@@ -403,7 +404,7 @@
 		-webkit-overflow-scrolling: touch;
 		font-family: var(--mono);
 		font-size: var(--fs-sm);
-		line-height: 1.55;
+		line-height: 20px; /* whole-pixel line box (vs 20.15px at 1.55) so streaming code blocks keep scroll heights integer */
 		tab-size: 2;
 	}
 	.md :global(pre code) {
@@ -482,8 +483,8 @@
 		text-decoration: none;
 		font-size: 0.88em;
 		line-height: 18px; /* whole-pixel 20px box (18 + 2 padding), matching TokenText */
-		vertical-align: -1px; /* measured: aligns chip ink with surrounding 1.55 body text (<= 0.5px) */
-		transition: background var(--motion-fast) var(--ease-std);
+		vertical-align: -1px; /* measured: aligns chip ink with surrounding 24px body text (<= 0.5px) */
+		transition: none; /* instant hover tint avoids GPU background-color layer promotion snapping inline chips by 1px */
 	}
 	.md :global(a.wd-file::before) {
 		content: "";
