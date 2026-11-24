@@ -414,29 +414,68 @@
 		max-width: 100%;
 		border-radius: var(--radius);
 	}
+	/* Matches TokenText's `.tok.file` chip: monochrome file glyph, atomic inline-flex, directory shrinks before basename. */
 	.md :global(a.wd-file) {
-		display: inline-block;
+		display: inline-flex;
+		align-items: center;
+		gap: 4px;
 		max-width: 100%;
-		padding: 0 8px;
-		border: 1px solid var(--border);
+		padding: 1px 0.4em; /* em sides scale with the text, like inline code and TokenText */
 		border-radius: var(--radius-sm);
-		background: var(--bg-elev);
+		background: color-mix(in srgb, var(--mark-file) 12%, transparent);
+		box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--mark-file) 22%, transparent);
+		color: inherit;
 		text-decoration: none;
-		font-size: 0.93em;
-		line-height: 20px; /* whole-pixel 22px chip (20 + 2 border) */
-		vertical-align: -5px; /* optical baseline alignment with surrounding body text */
+		font-size: 0.88em;
+		line-height: 18px; /* whole-pixel 20px box (18 + 2 padding), matching TokenText */
+		vertical-align: -1px; /* measured: aligns chip ink with surrounding 1.55 body text (<= 0.5px) */
+		transition: background var(--motion-fast) var(--ease-std);
+	}
+	.md :global(a.wd-file::before) {
+		content: "";
+		flex: none;
+		width: 12px;
+		height: 12px;
+		background: currentColor;
+		opacity: 0.7;
+		-webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M7 3h7l5 5v13H7zM14 3v5h5'/%3E%3C/svg%3E") center / contain no-repeat;
+		mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M7 3h7l5 5v13H7zM14 3v5h5'/%3E%3C/svg%3E") center / contain no-repeat;
+	}
+	.md :global(a.wd-file .wd-lbl) {
+		min-width: 0;
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
 	}
-	.md :global(a.wd-file::before) {
-		content: "📄";
-		margin-right: 4px;
-		font-size: 0.9em;
+	.md :global(a.wd-file .wd-path) {
+		display: inline-flex;
+		min-width: 0;
+	}
+	.md :global(a.wd-file .wd-dir) {
+		flex: 0 999999 auto;
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		opacity: 0.68;
+	}
+	.md :global(a.wd-file .wd-base) {
+		flex: 0 1 auto;
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	.md :global(a.wd-file code) {
+		padding: 0;
+		border: 0;
+		background: none;
+		font-size: inherit;
+		line-height: inherit;
 	}
 	@media (hover: hover) {
 		.md :global(a.wd-file:hover) {
-			border-color: var(--border-strong);
+			background: color-mix(in srgb, var(--mark-file) 22%, transparent);
 		}
 	}
 	.md :global(.wd-media) {
