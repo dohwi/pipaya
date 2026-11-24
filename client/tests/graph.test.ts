@@ -554,4 +554,33 @@ describe("fitGraph widths", () => {
 		const g = fitGraph([srv(1)], { widths: () => 999 }, 390, 844);
 		expect(g.cards.get("v:a")!.w).toBe(CARD_W_MAX);
 	});
+	test("measures each card width at most once across maxW narrowing and lane wrapping", () => {
+		const counts = new Map<string, number>();
+		const widths = (c: { id: string }) => {
+			counts.set(c.id, (counts.get(c.id) ?? 0) + 1);
+			return 380;
+		};
+		const s: GraphServer = {
+			id: "a", name: "a", host: "a.local", online: true, activity: () => "idle", queued: () => 0, runs: null,
+			sessions: Array.from({ length: 18 }, (_, i) => ({ id: `s${i}`, title: `s${i}`, name: `s${i}`, purpose: "", cwd: "/w", provider: "p", model: "m0", thinkingLevel: "off", systemPrompt: "", tools: [], parentId: null, closed: false, createdAt: 1, updatedAt: i }) as never),
+		};
+		const g = fitGraph([s], { widths }, 900, 500);
+		expect(g.cards.size).toBeGreaterThan(18);
+		for (const [id, n] of counts) expect([id, n]).toEqual([id, 1]);
+	});
+	test("maxW narrowing with pinned cards preserves pin coordinates and matches buildGraph widths", () => {
+		const pins = { "s:a/s0": { x: 1250, y: 120 } };
+		const wide = () => 999;
+		const g = fitGraph([srv(1)], { widths: wide, pins }, 760, 900);
+		expect(g.cards.get("s:a/s0")!.x).toBe(1250);
+		expect(g.cards.get("s:a/s0")!.y).toBe(120);
+		const colW = g.cards.get("v:a")!.w;
+		expect(colW).toBeLessThan(CARD_W_MAX);
+		const ref = buildGraph([srv(1)], { widths: wide, pins, lanes: 1, maxW: colW });
+		expect(g.width).toBe(ref.width);
+		for (const [id, c] of g.cards) {
+			expect(c.w).toBe(ref.cards.get(id)!.w);
+			expect(c.x).toBe(ref.cards.get(id)!.x);
+		}
+	});
 });

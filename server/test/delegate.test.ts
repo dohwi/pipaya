@@ -3,6 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { buildApp } from "../src/app.ts";
+import { openDb } from "../src/db.ts";
 import { buildTools, modelList } from "../src/tools.ts";
 import { readFileSync } from "node:fs";
 import { chooseModel, DEFAULT_SUBAGENT_TURNS, DelegateLimits, freeRole, subagentUsage, listSubagents, loadSubagents, removeSubagent, runDelegateWithinDeadline, saveSubagent } from "../src/subagents.ts";
@@ -587,6 +588,32 @@ describe("delegate usage in the session totals", () => {
 			await app.close();
 			upstream.stop();
 			rmSync(dir, { recursive: true, force: true });
+		}
+	});
+
+	test("messages_delegate partial index backs delegateCalls queries", () => {
+		const db = openDb(":memory:");
+		try {
+			const plan1 = db
+				.query(
+					`EXPLAIN QUERY PLAN
+					 SELECT m.session_id FROM messages m JOIN sessions s ON s.id = m.session_id AND s.closed = 0, json_each(m.data, '$.content') c
+					 WHERE m.role = 'assistant' AND instr(m.data, '"delegate"') > 0
+					   AND json_extract(c.value, '$.type') = 'toolCall' AND json_extract(c.value, '$.name') = 'delegate'
+					 ORDER BY m.created_at, m.seq`,
+				)
+				.all() as { detail: string }[];
+			const plan2 = db
+				.query(
+					`EXPLAIN QUERY PLAN
+					 SELECT m.session_id FROM messages m JOIN sessions s ON s.id = m.session_id AND s.closed = 0
+					 WHERE m.role = 'toolResult' AND instr(m.data, '"delegate"') > 0 AND json_extract(m.data, '$.toolName') = 'delegate'`,
+				)
+				.all() as { detail: string }[];
+			expect(plan1.some((r) => r.detail.includes("USING INDEX messages_delegate"))).toBe(true);
+			expect(plan2.some((r) => r.detail.includes("USING INDEX messages_delegate"))).toBe(true);
+		} finally {
+			db.close();
 		}
 	});
 });

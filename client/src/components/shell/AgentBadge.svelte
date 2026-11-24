@@ -26,13 +26,13 @@
 	});
 	/** The session's goal on its server (falls back to the open server when omitted). */
 	const goal = $derived(app.goals.of(server ?? app.serverId, id));
-	const icon = $derived((link?.models ?? []).find((m) => m.provider === logoModel.provider && m.id === logoModel.model)?.icon);
+	const icon = $derived(link?.modelByKey.get(`${logoModel.provider ?? ""}\u0000${logoModel.model ?? ""}`)?.icon);
 </script>
 
 <span class="agent {state}" style="width:{size}px;height:{size}px" role="img" aria-label={goal ? `${ACTIVITY_LABEL[state]} · ${t("목표")} ${goalLabel(goal.status)}` : ACTIVITY_LABEL[state]}>
 	<!-- .cut holds still and takes PinMark's cut-out; the logo inside it pulses, swells or shakes under that fixed hole, so the
 	     air around the mark never closes up mid-animation (a cut on the animated .logo moved with it, up to 1.5px) -->
-	<span class="cut"><span class="logo" use:syncAnim={state}><ModelLogo conn={link?.conn} provider={logoModel.provider} model={logoModel.model} {icon} {size} /></span></span>
+	<span class="cut"><span class="logo" use:syncAnim={state === "idle" || state === "done" ? false : state}><ModelLogo conn={link?.conn} provider={logoModel.provider} model={logoModel.model} {icon} {size} /></span></span>
 	{#if goal}<PinMark kind="goal" tone={ACTIVITY_TONE[state]} quiet={goal.status === "paused" || goal.status === "complete"} label={`${t("목표")} ${goalLabel(goal.status)}`} />{/if}
 </span>
 

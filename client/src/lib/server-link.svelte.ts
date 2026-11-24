@@ -102,7 +102,11 @@ export class ServerLink {
 	 */
 	repos = $state<Record<string, RepoInfo | null>>({});
 	models = $state<ModelInfo[]>([]);
+	/** Models indexed by `provider\0id` so badges and the graph view do not scan the catalog per session. */
+	modelByKey: Map<string, ModelInfo> = $derived(new Map(this.models.map((m) => [`${m.provider}\u0000${m.id}`, m] as const)));
 	providers = $state<ProviderInfo[]>([]);
+	/** Providers indexed by id for O(1) name and endpoint lookups. */
+	providerById: Map<string, ProviderInfo> = $derived(new Map(this.providers.map((p) => [p.id, p] as const)));
 	tools = $state<ToolInfo[]>([]);
 	workspace = $state<WorkspaceInfo | null>(null);
 	workdirInfo = $state<WorkdirInfo | null>(null);
@@ -110,6 +114,8 @@ export class ServerLink {
 	serverDefault = $state<DefaultModelSelection | null>(null);
 	/** The connections the owner added (address, API format, key), from `/configuration`; empty on a server without it. */
 	customProviders = $state<CustomProvider[]>([]);
+	/** Custom connections indexed by id for O(1) endpoint lookups. */
+	customProviderById: Map<string, CustomProvider> = $derived(new Map(this.customProviders.map((p) => [p.id, p] as const)));
 	terminalSupport = $state<TerminalSupport | null>(null);
 	/** The compaction, system and fallback models, kept to flag the ones that stopped working (see settings-problems). */
 	compaction = $state<CompactionSettings | null>(null);

@@ -1057,10 +1057,11 @@ export class SessionManager {
 	 */
 	delegateRuns(): DelegateRun[] {
 		const pol = this.delegatePolicy();
+		const disabled = this.disabledSubagents();
 		const roles = new Map<string, Map<string, SubagentDef>>(); // per cwd, read once per request
 		return this.store.delegateCalls().map(({ cwd, provider, sessionModel, ...c }) => {
 			let defs = roles.get(cwd);
-			if (!defs) roles.set(cwd, (defs = loadSubagents(cwd, this.home, this.disabledSubagents())));
+			if (!defs) roles.set(cwd, (defs = loadSubagents(cwd, this.home, disabled)));
 			const def = defs.get(c.role);
 			const running = c.doneAt === null && (this.live.get(c.sessionId)?.agent.state.pendingToolCalls.has(c.callId) ?? false);
 			let model = c.model;

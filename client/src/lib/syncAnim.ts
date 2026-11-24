@@ -3,16 +3,19 @@
  * with the same duration blinks in lockstep no matter when it mounted or when its state changed.
  * Usage: `use:syncAnim={state}` (pass anything that changes when the animation may restart).
  */
-export function syncAnim(node: HTMLElement, _dep?: unknown) {
+export function syncAnim(node: HTMLElement, dep?: unknown) {
 	const apply = () => {
 		for (const a of node.getAnimations()) a.startTime = 0;
 	};
-	queueMicrotask(apply);
-	requestAnimationFrame(apply);
+	const run = (active?: unknown) => {
+		if (active === false) return;
+		queueMicrotask(apply);
+		requestAnimationFrame(apply);
+	};
+	run(dep);
 	return {
-		update() {
-			queueMicrotask(apply);
-			requestAnimationFrame(apply);
+		update(next?: unknown) {
+			run(next);
 		},
 	};
 }

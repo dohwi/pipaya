@@ -301,6 +301,8 @@ export const MIGRATIONS: (string | ((db: Database) => void))[] = [
 		updated_at        INTEGER NOT NULL
 	);
 	CREATE INDEX IF NOT EXISTS idx_session_goals_status ON session_goals(status);`,
+	// Partial index for GET /delegates so it searches only delegate messages instead of scanning every transcript row.
+	`CREATE INDEX IF NOT EXISTS messages_delegate ON messages(role, created_at, seq) WHERE instr(data, '"delegate"') > 0;`,
 ];
 
 export function openDb(path: string): Database {
