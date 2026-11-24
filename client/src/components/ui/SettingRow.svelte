@@ -57,7 +57,7 @@
 		opacity: 0.55;
 	}
 	.text {
-		flex: 1 1 6em;
+		flex: 1 1 128px; /* keeps Korean labels and hints readable instead of squeezing into an 84px column beside a 3-option control */
 		min-width: 0;
 		display: flex;
 		flex-direction: column;
@@ -67,5 +67,30 @@
 	}
 	.hint {
 		line-height: 16px;
+	}
+	/* phones: a segmented control or wide/editable Select stacks cleanly full-width below its label instead of floating right */
+	@media (max-width: 640px) {
+		.row:has(> :global(.seg)),
+		.row:has(> :global(.sel.wide)) {
+			flex-direction: column;
+			align-items: stretch;
+			gap: 8px;
+		}
+		.row:has(> :global(.seg)) > .text,
+		.row:has(> :global(.sel.wide)) > .text {
+			flex: none;
+		}
+		.row > :global(.seg) {
+			display: grid;
+			grid-auto-flow: column;
+			grid-auto-columns: 1fr;
+			width: 100%;
+			margin-left: 0;
+		}
+		.row > :global(.sel.wide) {
+			--sel-w: 100%;
+			width: 100%;
+			margin-left: 0;
+		}
 	}
 </style>

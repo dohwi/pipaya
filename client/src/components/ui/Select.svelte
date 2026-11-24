@@ -190,7 +190,7 @@
 <svelte:window onpointerdown={outside} onresize={hide} />
 <svelte:document onscrollcapture={onscroll} />
 
-<div class="sel" class:sm={size === "sm"} class:open class:invalid class:disabled class:mono bind:this={root} style:width>
+<div class="sel" class:sm={size === "sm"} class:open class:invalid class:disabled class:mono class:wide={editable} bind:this={root} style:--sel-w={width}>
 	{#if editable}
 		<div class="trigger edit" bind:this={trigger}>
 			<input
@@ -291,6 +291,7 @@
 	.sel {
 		position: relative;
 		display: inline-block;
+		width: var(--sel-w);
 		min-width: 0;
 		max-width: 100%;
 	}

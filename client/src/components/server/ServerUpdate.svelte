@@ -21,6 +21,7 @@
 	const release = $derived(serverReleaseState(version, updater.current));
 	const isNew = $derived(Boolean(status?.available));
 	const shown = $derived(serverVersionLabel(serverUpdater.status, version));
+	const multi = $derived(isNew && (pending || (serverUpdater.blockedByRuns && !busy)));
 
 	async function check() {
 		const conn = updater.connection?.();
@@ -35,7 +36,7 @@
 
 {#if status || version}
 	<div class="section-label head">{t("서버 버전")}</div>
-	<div class="item">
+	<div class="item" class:multi>
 		<div class="meta">
 			{#if shown.from}
 				<span class="ver">{shown.from}{#if isNew && shown.to} → {shown.to}{/if}</span>
@@ -51,7 +52,7 @@
 		<div class="actions">
 			{#if isNew}
 				{#if pending}
-					<Button size="sm" variant="ghost" onclick={cancel}>{t("대기 취소")}</Button>
+					<Button size="sm" onclick={cancel}>{t("대기 취소")}</Button>
 					<ConfirmButton size="sm" confirmLabel={t("정말 중지")} onconfirm={forceUpdate}>{t("중지하고 업데이트")}</ConfirmButton>
 				{:else}
 					{#if serverUpdater.blockedByRuns && !busy}
@@ -72,19 +73,50 @@
 	{:else if release === "older" && !isNew && !busy}
 		<p class="hint note" in:collapseIn out:collapseOut>{t("서버가 앱보다 오래된 버전입니다. 서버에서 업데이트를 실행하세요 (install.sh update)")}</p>
 	{/if}
-	{#if serverUpdater.error}<div class="err-gap" in:collapseIn out:collapseOut><Notice tone="danger" size="sm">{serverUpdater.error}</Notice></div>{/if}
+	{#if serverUpdater.error}<div class="err-gap" in:collapseIn out:collapseOut><Notice tone="danger" size="sm" raised>{serverUpdater.error}</Notice></div>{/if}
 {/if}
 
 <style>
 	.head { margin-bottom: 12px; }
-	/* version and status stack on the left, the update/check action sits on the right; when narrow it wraps cleanly */
-	.item { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 12px 12px; min-height: 56px; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); }
-	/* 120px: fits "0.10.5 → 0.10.6" beside the update button on one line on phones before wrapping */
+	/* borderless page-tinted surface inside .set-group (no box-in-box, matching ListItem) */
+	.item {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 8px 12px;
+		padding: 12px;
+		min-height: 56px;
+		background: var(--item-bg, var(--bg));
+		border-radius: var(--radius-sm);
+	}
+	/* 120px: fits "0.10.5 → 0.10.6" beside the single update button on one line on phones */
 	.meta { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; flex: 1 1 120px; min-width: 0; }
 	.ver { max-width: 100%; font-size: var(--fs-sm); line-height: 20px; color: var(--text); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 	.actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-left: auto; }
 	.actions :global(.btn) { flex: none; white-space: nowrap; }
 	.actions :global(.btn svg) { width: 14px; height: 14px; }
+	/* phones: when two actions stack under the meta block, stretch them edge-to-edge under a hairline instead of floating right */
+	@media (max-width: 640px) {
+		.item.multi {
+			flex-direction: column;
+			align-items: stretch;
+			gap: 12px;
+		}
+		.item.multi .meta {
+			flex: none;
+		}
+		.item.multi .actions {
+			display: grid;
+			grid-template-columns: repeat(2, minmax(0, 1fr));
+			width: 100%;
+			margin-left: 0;
+			padding-top: 12px;
+			border-top: 1px solid var(--border);
+		}
+		.item.multi .actions :global(.btn) {
+			width: 100%;
+		}
+	}
 	.note { line-height: 20px; margin: 8px 0 0; }
 	.err-gap { padding-top: 8px; }
 </style>

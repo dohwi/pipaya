@@ -138,7 +138,7 @@
 	<div class="actions">
 		<Button variant="primary" disabled={nothing} onclick={exportFile}><Icon name="download" /> {t("파일로 내보내기")}</Button>
 	</div>
-	{#if exported}<Notice tone="ok" size="sm" role="status">{exported}</Notice>{/if}
+	{#if exported}<Notice tone="ok" size="sm" raised role="status">{exported}</Notice>{/if}
 	<p class="note"><Icon name="shield" /><span>{t("토큰·비밀번호는 빠지지만, 공유하기 전에 한 번 확인하세요.")}</span></p>
 </section>
 
@@ -161,17 +161,17 @@
 			<span class="dt">{reading ? t("파일을 읽는 중…") : t("설정 파일을 끌어다 놓거나 눌러서 고르세요")}</span>
 			<span class="ds">{t("pipaya에서 내보낸 JSON · 최대 4MiB")}</span>
 		</label>
-		{#if loadError}<Notice tone="danger" size="sm" role="alert">{loadError}</Notice>{/if}
+		{#if loadError}<Notice tone="danger" size="sm" raised role="alert">{loadError}</Notice>{/if}
 	{:else}
 		<ImportReview filename={loaded.filename} plan={loaded.plan} oncancel={() => (loaded = null)} onapply={applyLoaded} />
 	{/if}
 
 	{#if applied}
-		<Notice tone="ok" size="sm">
+		<Notice tone="ok" size="sm" raised>
 			<strong>{t("가져왔습니다.")}</strong> {applied.join(" · ") || t("변경 사항이 없습니다.")}
 		</Notice>
 	{/if}
-	{#if restoredNote}<Notice tone="ok" size="sm" role="status">{restoredNote}</Notice>{/if}
+	{#if restoredNote}<Notice tone="ok" size="sm" raised role="status">{restoredNote}</Notice>{/if}
 </section>
 
 <section class="set-group" aria-labelledby="bk-restore">
@@ -210,11 +210,12 @@
 		margin: 0;
 		line-height: 16px;
 	}
+	/* borderless page-tinted surface inside .set-group (no box-in-box, matching ListItem) */
 	.list {
 		display: flex;
 		flex-direction: column;
-		border: 1px solid var(--border);
-		border-radius: var(--radius);
+		background: var(--item-bg, var(--bg));
+		border-radius: var(--radius-sm);
 		overflow: hidden;
 	}
 	.item {
@@ -257,6 +258,11 @@
 		justify-content: flex-end;
 		gap: 8px;
 		flex-wrap: wrap;
+	}
+	@media (max-width: 640px) {
+		.actions > :global(.btn) {
+			flex: 1;
+		}
 	}
 	.actions :global(svg) {
 		width: 16px;
