@@ -447,6 +447,10 @@
 		height: 19px;
 		stroke-width: 1.8;
 	}
+	.nav button.srvtab :global(svg) {
+		width: 18px;
+		height: 18px;
+	}
 	.nt {
 		display: flex;
 		align-items: center;

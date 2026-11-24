@@ -366,8 +366,8 @@
 	}
 	.wd > :global(svg) {
 		flex: none;
-		width: 17px;
-		height: 17px;
+		width: 16px;
+		height: 16px;
 		stroke: var(--text-dim);
 		stroke-width: 1.9;
 	}

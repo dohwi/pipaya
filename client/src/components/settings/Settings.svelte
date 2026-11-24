@@ -250,6 +250,10 @@
 		overflow-x: auto;
 		scrollbar-width: none;
 	}
+	/* the strip scrolls (so it clips): draw the ring inside the button, not 4px outside it */
+	.srvseg :global(.seg > button:focus-visible) {
+		outline-offset: -2px;
+	}
 	.srvseg::-webkit-scrollbar {
 		display: none;
 	}
