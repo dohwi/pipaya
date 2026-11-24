@@ -1,6 +1,6 @@
 import { clip, firstLine } from "./format";
 
-export type ToolIcon = "file" | "pencil" | "folder" | "search" | "terminal" | "bolt" | "chat" | "skill" | "fork" | "brain" | "list" | "sparkles";
+export type ToolIcon = "file" | "pencil" | "folder" | "search" | "terminal" | "bolt" | "chat" | "skill" | "fork" | "brain" | "list" | "sparkles" | "bot" | "clock" | "target" | "globe";
 
 export const toolArgStr = (v: unknown): string => (typeof v === "string" ? v : v == null ? "" : JSON.stringify(v));
 const str = toolArgStr;
@@ -41,7 +41,16 @@ const LOOK: Record<ToolKind, { icon: ToolIcon }> = {
 export const IMAGE_TOOL = "generate_image";
 export const isImageTool = (name: string) => name === IMAGE_TOOL;
 
-export const toolIcon = (name: string, args: Record<string, unknown> = {}): ToolIcon => LOOK[toolKind(name, args)].icon;
+export const toolIcon = (name: string, args: Record<string, unknown> = {}): ToolIcon => {
+	const kind = toolKind(name, args);
+	if (kind !== "other") return LOOK[kind].icon;
+	if (name === "delegate") return "bot";
+	if (name === "schedule") return "clock";
+	if (name === "goal") return "target";
+	if (name === "workdir") return "fork";
+	if (/search|fetch|web|browse/i.test(name)) return "globe";
+	return LOOK.other.icon;
+};
 
 /** The name a call's line shows: the tool name, except skills, which say what they are. */
 export function toolLabel(name: string, args: Record<string, unknown> = {}): string {

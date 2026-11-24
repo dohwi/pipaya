@@ -2,13 +2,16 @@
 	import { t } from "../../lib/i18n";
 	import { collapseIn, collapseOut } from "../../lib/motion";
 	import Icon from "../ui/Icon.svelte";
+	import Markdown from "./Markdown.svelte";
 	import QuestionReply from "./QuestionReply.svelte";
 	import { app } from "../../lib/store.svelte";
 	import { getPane } from "../../lib/pane";
 	import { clip, duration, fullTime } from "../../lib/format";
+	import { modelRefName } from "../../lib/model-name";
 	import { baseName, formatFileLine, splitFilePath } from "../../lib/files";
 	import { highlightCode, highlightLines, languageFromPath, onHighlightReady } from "../../lib/code-highlight";
 	import { computeLineDiff, lineCount } from "../../lib/line-diff";
+	import { formatKvArgs, parseGrepOutput, parseLsOutput, tryPrettyJson } from "../../lib/tool-view";
 	import { peerTargetsOf, scheduleIdOf, skillOf, splitCd, toolArgStr as str, toolIcon, toolLabel, toolSummary } from "../../lib/tools";
 	import type { ToolRun } from "../../lib/types";
 	import { extensions } from "../../lib/extensions/host.svelte";
@@ -167,11 +170,33 @@
 		return res && res !== "wait" ? res : null;
 	});
 
-	/** edit / write / read / bash fold their own output into the code frame unless a custom renderer or an error needs raw output. */
+	const grepMatches = $derived(name === "grep" && typeof run.details?.matches === "number" ? (run.details.matches as number) : null);
+	const grepParsed = $derived(open && name === "grep" && !failed && !custom && run.output ? parseGrepOutput(run.output) : null);
+	const grepView = $derived(!!grepParsed);
+
+	const lsCount = $derived(name === "ls" && typeof run.details?.count === "number" ? (run.details.count as number) : null);
+	const lsParsed = $derived(open && name === "ls" && !failed && !custom && run.output ? parseLsOutput(run.output, str(args.path)) : null);
+	const lsView = $derived(!!lsParsed);
+
+	const delegateTurns = $derived(name === "delegate" && typeof run.details?.turns === "number" ? (run.details.turns as number) : null);
+	const delegateModel = $derived(name === "delegate" && typeof run.details?.model === "string" ? modelRefName(app.models, run.details.model as string) : "");
+	const delegateTask = $derived(name === "delegate" ? str(args.task).trim() : "");
+	const delegateView = $derived(name === "delegate" && !asked && !custom);
+
+	const genericView = $derived(!asked && !custom && name !== "edit" && name !== "write" && name !== "read" && name !== "bash" && !grepView && !lsView && !delegateView);
+	const kvRows = $derived(open && genericView ? formatKvArgs(args) : []);
+	const genericPrettyJson = $derived(open && genericView && run.output ? tryPrettyJson(run.output) : null);
+	const genericJsonHl = $derived.by(() => {
+		void hlTick;
+		if (!genericPrettyJson) return null;
+		const res = highlightCode(genericPrettyJson, "json");
+		return res && res !== "wait" ? res : null;
+	});
+
+	/** Tools with their own unified frame fold output inside it unless a custom renderer or an error needs raw output. */
 	const showStandaloneOutput = $derived.by(() => {
 		if (!run.output || asked || custom) return false;
-		if (name === "bash") return false;
-		if (readCodeView) return false;
+		if (name === "bash" || readCodeView || grepView || lsView || delegateView || genericView) return false;
 		if ((name === "edit" || name === "write") && !failed) return false;
 		return true;
 	});
@@ -195,6 +220,12 @@
 				<span class="stat mono"><span class="stat-add">+{writeLinesCount}</span></span>
 			{:else if readRangeLabel}
 				<span class="stat mono stat-range">{readRangeLabel}</span>
+			{:else if grepMatches != null}
+				<span class="stat mono stat-range">{t("{n}건", { n: grepMatches })}</span>
+			{:else if lsCount != null}
+				<span class="stat mono stat-range">{t("{n}개", { n: lsCount })}</span>
+			{:else if delegateTurns != null}
+				<span class="stat mono stat-range">{t("{n}턴", { n: delegateTurns })}</span>
 			{/if}
 			{#if working}<span class="dots" role="status" aria-label={label}><i></i><i></i><i></i></span>
 			{:else if awaiting}<span class="need">{label}</span>
@@ -209,16 +240,7 @@
 
 	{#if open && !questionOnly}
 		<div class="body" in:collapseIn out:collapseOut>
-			{#if peerResolved}
-				<div class="jump">
-					<button
-						type="button"
-						class="jump-tok mention"
-						title={peerResolved.target.kind === "group" ? t("{name} 그룹 열기", { name: `@${peerResolved.handle}` }) : t("{name} 대화 열기", { name: `@${peerResolved.handle}` })}
-						onclick={() => app.openMention(peerResolved.target)}
-					><span class="jlabel">@{peerResolved.handle}</span></button>
-				</div>
-			{:else if skillName}
+			{#if skillName}
 				<div class="jump">
 					<button
 						type="button"
@@ -245,7 +267,16 @@
 						{/if}
 					</button>
 				</div>
-			{:else if delegateRole}
+			{:else if peerResolved && !genericView}
+				<div class="jump">
+					<button
+						type="button"
+						class="jump-tok mention"
+						title={peerResolved.target.kind === "group" ? t("{name} 그룹 열기", { name: `@${peerResolved.handle}` }) : t("{name} 대화 열기", { name: `@${peerResolved.handle}` })}
+						onclick={() => app.openMention(peerResolved.target)}
+					><span class="jlabel">@{peerResolved.handle}</span></button>
+				</div>
+			{:else if delegateRole && !delegateView}
 				<div class="jump">
 					<button
 						type="button"
@@ -254,7 +285,7 @@
 						onclick={() => app.openSubagents(pane.id)}
 					><Icon name="bot" /><span class="jlabel">{delegateRole}</span></button>
 				</div>
-			{:else if name === "schedule" && pane.id}
+			{:else if name === "schedule" && pane.id && !genericView}
 				<div class="jump">
 					<button
 						type="button"
@@ -263,7 +294,7 @@
 						onclick={() => (scheduleId ? app.openScheduleEdit(scheduleId) : app.openScheduleFor(pane.id!))}
 					><Icon name="clock" /><span class="jlabel">{t("예약 작업")}</span></button>
 				</div>
-			{:else if name === "goal" && pane.id}
+			{:else if name === "goal" && pane.id && !genericView}
 				<div class="jump">
 					<button
 						type="button"
@@ -329,10 +360,187 @@
 						<pre class="mono term-out">{clip(run.output, 12000)}</pre>
 					{/if}
 				</div>
+			{:else if grepView && grepParsed}
+				<div class="codeframe">
+					<div class="codebar">
+						<span class="codebar-title mono">
+							<Icon name="search" />
+							<span class="jlabel">{str(args.pattern)}</span>
+							{#if args.path}<span class="codebar-sub">in {str(args.path)}</span>{/if}
+							{#if args.glob}<span class="codebar-sub">({str(args.glob)})</span>{/if}
+						</span>
+						<span class="codebar-meta mono">
+							<span class="stat-range">{grepMatches != null ? t("{n}건", { n: grepMatches }) : grepParsed.empty ? t("일치 없음") : ""}</span>
+						</span>
+					</div>
+					{#if grepParsed.empty}
+						<div class="codeempty">{t("일치 없음")}</div>
+					{:else}
+						<div class="grep-scroll mono">
+							{#each grepParsed.groups as g, gi (gi)}
+								{#if g.path}
+									<div class="grep-file">
+										{#if pane.id}
+											{@const fp = splitFilePath(g.path)}
+											<button
+												type="button"
+												class="grep-path"
+												title={t("{name} 미리 보기", { name: g.path })}
+												onclick={() => app.openFile(pane.id!, { path: g.path, name: baseName(g.path) })}
+											>
+												<Icon name="file" />
+												{#if fp}
+													<span class="jpath"><span class="jdir">{fp.dir}</span><span class="jbase">{fp.base}</span></span>
+												{:else}
+													<span class="jlabel">{g.path}</span>
+												{/if}
+											</button>
+										{:else}
+											<span class="grep-path"><Icon name="file" /><span class="jlabel">{g.path}</span></span>
+										{/if}
+									</div>
+								{/if}
+								{#each g.hits as hit, hi (hi)}
+									{#if g.path && pane.id && hit.line != null}
+										<button
+											type="button"
+											class="grep-hit"
+											onclick={() => app.openFile(pane.id!, { path: g.path, name: baseName(g.path), line: hit.line! })}
+										>
+											<span class="lno">{hit.line}</span>
+											<span class="hit-text">{hit.text || " "}</span>
+										</button>
+									{:else}
+										<div class="grep-hit">
+											{#if hit.line != null}<span class="lno">{hit.line}</span>{/if}
+											<span class="hit-text">{hit.text || " "}</span>
+										</div>
+									{/if}
+								{/each}
+							{/each}
+						</div>
+						{#if grepParsed.moreNote}
+							<div class="codefoot mono">{grepParsed.moreNote}</div>
+						{/if}
+					{/if}
+				</div>
+			{:else if lsView && lsParsed}
+				<div class="codeframe">
+					<div class="codebar">
+						<span class="codebar-title mono">
+							<Icon name="folder" />
+							<span class="jlabel">{str(args.path) || "."}</span>
+						</span>
+						{#if lsCount != null}
+							<span class="codebar-meta mono"><span class="stat-range">{t("{n}개", { n: lsCount })}</span></span>
+						{/if}
+					</div>
+					{#if lsParsed.empty}
+						<div class="codeempty">{t("비어 있음")}</div>
+					{:else}
+						<div class="ls-grid mono">
+							{#each lsParsed.entries as e, i (i)}
+								{#if e.isDir || !pane.id}
+									<span class="ls-entry" class:dir={e.isDir}>
+										<Icon name={e.isDir ? "folder" : "file"} />
+										<span class="jlabel">{e.name}{e.isDir ? "/" : ""}</span>
+									</span>
+								{:else}
+									<button
+										type="button"
+										class="ls-entry"
+										title={t("{name} 미리 보기", { name: e.fullPath })}
+										onclick={() => app.openFile(pane.id!, { path: e.fullPath, name: e.name })}
+									>
+										<Icon name="file" />
+										<span class="jlabel">{e.name}</span>
+									</button>
+								{/if}
+							{/each}
+						</div>
+					{/if}
+				</div>
+			{:else if delegateView}
+				<div class="codeframe">
+					<div class="codebar">
+						{#if delegateRole && pane.id}
+							<button type="button" class="codebar-file mono" title={t("서브에이전트 역할 보기")} onclick={() => app.openSubagents(pane.id)}>
+								<Icon name="bot" />
+								<span class="jlabel">{delegateRole}</span>
+							</button>
+						{:else}
+							<span class="codebar-title mono"><Icon name="bot" /><span class="jlabel">{str(args.role) || "subagent"}</span></span>
+						{/if}
+						{#if delegateModel || delegateTurns != null}
+							<span class="codebar-meta mono">
+								{#if delegateModel}<span class="stat-range">{delegateModel}</span>{/if}
+								{#if delegateTurns != null}<span class="stat-range">{t("{n}턴", { n: delegateTurns })}</span>{/if}
+							</span>
+						{/if}
+					</div>
+					{#if delegateTask}
+						<div class="sub-task">{delegateTask}</div>
+					{/if}
+					{#if run.output.trim()}
+						<div class="sub-out"><Markdown text={run.output.trim()} /></div>
+					{/if}
+				</div>
 			{:else if asked}
 				<!-- while it waits, the reply block under the card asks the question itself; show it here only once answered -->
 				{#if !awaiting}<div class="q">{run.question?.question ?? str(args.question)}</div>{/if}
 				{#if answer}<div class="a"><span class="label">{t("답변")}</span> {answer}</div>{/if}
+			{:else if genericView && (kvRows.length || run.output)}
+				<div class="codeframe">
+					{#if peerResolved}
+						<div class="codebar">
+							<button
+								type="button"
+								class="codebar-file mention mono"
+								title={peerResolved.target.kind === "group" ? t("{name} 그룹 열기", { name: `@${peerResolved.handle}` }) : t("{name} 대화 열기", { name: `@${peerResolved.handle}` })}
+								onclick={() => app.openMention(peerResolved.target)}
+							><Icon name="chat" /><span class="jlabel">@{peerResolved.handle}</span></button>
+						</div>
+					{:else if name === "schedule" && pane.id}
+						<div class="codebar">
+							<button
+								type="button"
+								class="codebar-file mono"
+								title={t("예약 작업 보기")}
+								onclick={() => (scheduleId ? app.openScheduleEdit(scheduleId) : app.openScheduleFor(pane.id!))}
+							><Icon name="clock" /><span class="jlabel">{t("예약 작업")}</span></button>
+						</div>
+					{:else if name === "goal" && pane.id}
+						<div class="codebar">
+							<button
+								type="button"
+								class="codebar-file mono"
+								title={t("목표 보기")}
+								onclick={() => app.openGoal(pane.id)}
+							><Icon name="target" /><span class="jlabel">{t("목표")}</span></button>
+						</div>
+					{/if}
+					{#if kvRows.length}
+						<div class="kv-list mono">
+							{#each kvRows as row, i (i)}
+								<div class="kv-row" class:multi={row.multiline}>
+									<span class="kv-key">{row.key}</span>
+									{#if row.multiline}
+										<pre class="kv-pre">{clip(row.value, 6000)}</pre>
+									{:else}
+										<span class="kv-val">{row.value}</span>
+									{/if}
+								</div>
+							{/each}
+						</div>
+					{/if}
+					{#if run.output}
+						{#if genericPrettyJson}
+							<pre class="mono frame-out">{#if genericJsonHl != null}{@html genericJsonHl}{:else}{clip(genericPrettyJson, 12000)}{/if}</pre>
+						{:else}
+							<pre class="mono frame-out">{clip(run.output, 12000)}</pre>
+						{/if}
+					{/if}
+				</div>
 			{:else if name !== "read" && name !== "ls"}
 				<pre class="mono">{JSON.stringify(args, null, 2)}</pre>
 			{/if}
@@ -712,8 +920,8 @@
 	}
 	.lno {
 		flex: none;
-		min-width: 3.5ch;
-		padding-right: 8px;
+		min-width: 4ch;
+		padding: 0 8px;
 		text-align: right;
 		color: var(--text-faint);
 		opacity: 0.6;
@@ -778,6 +986,211 @@
 	.codeframe.term .term-out {
 		border-top: 1px solid var(--border);
 		color: var(--text-dim);
+	}
+	.codebar-title {
+		display: inline-flex;
+		align-items: center;
+		gap: 8px;
+		min-width: 0;
+		color: var(--text-dim);
+		font-size: var(--fs-2xs);
+		line-height: 20px;
+	}
+	.codebar-title :global(svg) {
+		flex: none;
+		width: 12px;
+		height: 12px;
+		color: var(--text-faint);
+	}
+	.codebar-sub {
+		flex: none;
+		color: var(--text-faint);
+	}
+	.codebar-file.mention {
+		color: var(--mark-mention);
+	}
+	.codebar-file.mention :global(svg) {
+		color: var(--mark-mention);
+	}
+	.codeempty {
+		padding: 12px;
+		color: var(--text-faint);
+		font-size: var(--fs-xs);
+		line-height: 20px;
+	}
+	.grep-scroll {
+		max-height: 320px;
+		overflow: auto;
+		padding: 4px 0;
+		font-size: var(--fs-xs);
+		line-height: 20px;
+	}
+	.grep-file {
+		padding: 4px 12px;
+	}
+	.grep-file:not(:first-child) {
+		margin-top: 4px;
+		padding-top: 8px;
+		border-top: 1px solid var(--border);
+	}
+	.grep-path {
+		display: inline-flex;
+		align-items: center;
+		gap: 8px;
+		max-width: 100%;
+		padding: 0;
+		color: var(--text);
+		font-size: var(--fs-2xs);
+		font-weight: 500;
+		line-height: 20px;
+		text-align: left;
+	}
+	.grep-path :global(svg) {
+		flex: none;
+		width: 12px;
+		height: 12px;
+		color: var(--text-faint);
+	}
+	.grep-hit {
+		display: flex;
+		align-items: flex-start;
+		width: 100%;
+		min-width: max-content;
+		padding: 0 12px 0 0;
+		color: var(--text-dim);
+		font-size: var(--fs-xs);
+		line-height: 20px;
+		text-align: left;
+		transition: background-color var(--motion-fast) var(--ease-std), color var(--motion-fast) var(--ease-std);
+	}
+	@media (hover: hover) {
+		button.grep-hit:hover {
+			background-color: var(--bg-hover);
+			color: var(--text);
+		}
+	}
+	.hit-text {
+		flex: 1 0 auto;
+		padding-left: 4px;
+		white-space: pre;
+	}
+	.ls-grid {
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+		gap: 4px 8px;
+		max-height: 280px;
+		overflow: auto;
+		padding: 8px 12px;
+		font-size: var(--fs-xs);
+		line-height: 20px;
+	}
+	.ls-entry {
+		display: inline-flex;
+		align-items: center;
+		gap: 8px;
+		min-width: 0;
+		padding: 4px 8px;
+		border-radius: var(--radius-xs);
+		color: var(--text-dim);
+		font-size: var(--fs-xs);
+		line-height: 20px;
+		text-align: left;
+		transition: background-color var(--motion-fast) var(--ease-std), color var(--motion-fast) var(--ease-std);
+	}
+	.ls-entry.dir {
+		color: var(--text);
+		font-weight: 500;
+	}
+	.ls-entry :global(svg) {
+		flex: none;
+		width: 14px;
+		height: 14px;
+		color: var(--text-faint);
+	}
+	@media (hover: hover) {
+		button.ls-entry:hover {
+			background-color: var(--bg-hover);
+			color: var(--text);
+		}
+	}
+	.sub-task {
+		padding: 8px 12px;
+		max-height: 120px;
+		overflow-y: auto;
+		color: var(--text-dim);
+		font-size: var(--fs-xs);
+		line-height: 20px;
+		white-space: pre-wrap;
+		overflow-wrap: anywhere;
+	}
+	.sub-out {
+		padding: 8px 12px;
+		max-height: 320px;
+		overflow-y: auto;
+		border-top: 1px solid var(--border);
+		color: var(--text);
+		font-size: var(--fs-xs);
+		line-height: 20px;
+	}
+	.sub-out :global(.md) {
+		line-height: 20px;
+	}
+	.sub-out :global(.md p),
+	.sub-out :global(.md ul),
+	.sub-out :global(.md ol),
+	.sub-out :global(.md blockquote) {
+		margin: 0 0 8px;
+	}
+	.sub-out :global(.md > :last-child) {
+		margin-bottom: 0;
+	}
+	.sub-out :global(.md :not(pre) > code) {
+		font-size: var(--fs-2xs);
+	}
+	.kv-list {
+		display: flex;
+		flex-direction: column;
+		gap: 4px;
+		padding: 8px 12px;
+		font-size: var(--fs-xs);
+		line-height: 20px;
+	}
+	.kv-row {
+		display: grid;
+		grid-template-columns: 12ch minmax(0, 1fr);
+		gap: 12px;
+		align-items: baseline;
+	}
+	.kv-row.multi {
+		grid-template-columns: minmax(0, 1fr);
+		gap: 4px;
+	}
+	.kv-key {
+		color: var(--text-faint);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	.kv-val {
+		color: var(--text);
+		overflow-wrap: anywhere;
+	}
+	.kv-pre {
+		padding: 8px;
+		max-height: 200px;
+		border-radius: var(--radius-xs);
+		background: var(--bg-group);
+		color: var(--text-dim);
+		font-size: var(--fs-xs);
+		line-height: 20px;
+	}
+	.frame-out {
+		border-radius: 0;
+		background: transparent;
+		color: var(--text-dim);
+	}
+	.kv-list + .frame-out {
+		border-top: 1px solid var(--border);
 	}
 	.q {
 		font-size: var(--fs-sm);
