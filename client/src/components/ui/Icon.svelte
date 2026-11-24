@@ -14,6 +14,7 @@
 	/* Line-icon defaults at zero specificity (:where), so any rule in the parent (a size, a fill, a thinner stroke) wins
 	   without !important. New code needs nothing; existing per-component svg rules keep working unchanged. */
 	:where(.ic) {
+		display: block;
 		width: 1em;
 		height: 1em;
 		flex: none;

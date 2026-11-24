@@ -98,10 +98,13 @@ def seed_chat():
 
 if a.seed:
     seed_chat()
+    seed["pipaya.fav.models.dev"] = json.dumps(["pairs-stub\u0000gemini-4-neon"])
 
 # The screens of the app and how to reach each one (clicks in order; `>> nth=N` picks one of several).
 SCREENS = [
     ("main", []),
+    ("dir-picker", [".where"]),
+    ("model-picker", [".trigger.inline"]),
     *([("chat", ['.dirblock[data-block$="pairs-check"] > .dir .dirtoggle'])] if a.seed else []),
     ("main-context", [".statusline .b >> nth=0"]),
     ("graph", ['button.navbtn:has-text("그래프 뷰")']),
@@ -117,20 +120,19 @@ SCREENS = [
     ("srv-ext", ["button.settings", '.nav button.srvtab:has-text("확장")']),
     ("srv-devices", ["button.settings", '.nav button.srvtab:has-text("서버")', '.subtabs button:has-text("접속 기기")']),
     ("sessions-panel", [".listbtn"]),
-    ("dir-picker", [".where"]),
-    ("model-picker", [".trigger.inline"]),
     ("row-menu", ['button[aria-label*="새로 만들기"]']),
 ]
 
 FIND = r"""() => {
   const describe = (e) => (e.getAttribute('class')||'').replace(/svelte-[\w-]+/g,'').replace(/\s+/g,' ').trim();
-  const R = (e) => { const r = e.getBoundingClientRect(); return {x:r.x,y:r.y,w:r.width,h:r.height}; };
+  const R = (r) => ({x:r.x,y:r.y,w:r.width,h:r.height});
   const out = []; let n = 0;
   const iconOf = (host) => {
     for (const c of host.children) {
       const t = c.tagName.toLowerCase();
-      if (t === 'svg' || t === 'img') return c;
-      if (c.querySelector(':scope > svg, :scope > img') && (c.innerText||'').trim() === '') return c;
+      if (t === 'svg' || t === 'img') return [c, c];
+      const inner = c.querySelector(':scope > svg, :scope > img');
+      if (inner && (c.innerText||'').trim() === '') return [c, inner];
     }
     return null;
   };
@@ -145,48 +147,68 @@ FIND = r"""() => {
     if (rr.bottom < 1 || rr.top > innerHeight-1) continue;
     // only what is on top: a row under an open dialog or sheet (the composer's path chip behind the folder picker) is painted
     // over, so its pixels are the dialog's. Asked at the icon's centre: the topmost element there must be the icon or inside the host.
-    const icon = iconOf(host);
-    if (!icon) continue;
-    const ir = icon.getBoundingClientRect();
+    const found = iconOf(host);
+    if (!found) continue;
+    const [icon, glyph] = found;
+    const ir = glyph.getBoundingClientRect();
     if (ir.width < 5 || ir.height < 5) continue;
     { const hit = document.elementFromPoint(ir.left + ir.width/2, ir.top + ir.height/2);
       if (!hit || !(host.contains(hit) || hit === host)) continue; }
     // Check the nearest visible label on either side of the icon (stepping over punctuation separators like `.sep`),
-    // skipping trailing units (`.unit`, e.g. "tps") and unrelated distant children in multi-column rows.
-    const kids = [...host.children];
+    // including bare text nodes (e.g. `<div class="pk-group"><span class="gstar"><Icon /></span>즐겨찾기</div>` or
+    // `<button class="btn"><Icon /> Label</button>`), skipping trailing units (`.unit`, e.g. "tps") and distant columns.
+    const kids = [...host.childNodes].filter((nd) => {
+      if (nd.nodeType === 3) return nd.textContent.trim().length > 0;
+      if (nd.nodeType === 1) {
+        const s = getComputedStyle(nd);
+        return s.visibility !== 'hidden' && s.display !== 'none' && +s.opacity !== 0;
+      }
+      return false;
+    });
     const iIdx = kids.indexOf(icon);
-    const isSep = (e) => e.classList.contains('sep') || e.getAttribute('aria-hidden') === 'true';
+    if (iIdx < 0) continue;
+    const isSep = (e) => e.nodeType === 1 && (e.classList.contains('sep') || e.getAttribute('aria-hidden') === 'true');
     const nearest = (dir) => {
       for (let k = iIdx + dir; k >= 0 && k < kids.length; k += dir) {
-        const el = kids[k];
-        const s = getComputedStyle(el);
-        if (s.visibility==='hidden' || s.display==='none' || +s.opacity===0) continue;
-        if (isSep(el)) continue;
-        return el;
+        if (isSep(kids[k])) continue;
+        return kids[k];
       }
       return null;
     };
     const targets = [nearest(-1), nearest(1)].filter(Boolean);
     for (const c0 of targets) {
-      const cs0 = getComputedStyle(c0);
-      if (c0 === icon || icon.contains(c0)) continue;
-      if (c0.classList.contains('unit')) continue;
-      // a one-line flex wrapper around the label (settings nav: icon + <span class=nt><span class=nl>…</span> badge</span>):
-      // compare its first text child, which is what sits beside the icon
-      let c = c0;
-      if (/flex|grid/.test(cs0.display)) {
-        if (cs0.flexDirection.startsWith('column')) continue;
-        c = [...c0.children].find((k) => (k.innerText||'').trim() && !/flex|grid/.test(getComputedStyle(k).display));
-        if (!c) continue;
+      let t = '', r = null, cs = null, cls = '';
+      if (c0.nodeType === 3) {
+        t = c0.textContent.trim();
+        const range = document.createRange();
+        range.selectNodeContents(c0);
+        r = range.getBoundingClientRect();
+        cs = hcs;
+        cls = '#text';
+      } else {
+        const cs0 = getComputedStyle(c0);
+        if (c0 === icon || icon.contains(c0)) continue;
+        if (c0.classList.contains('unit')) continue;
+        // a one-line flex wrapper around the label (settings nav: icon + <span class=nt><span class=nl>…</span> badge</span>):
+        // compare its first text child, which is what sits beside the icon
+        let c = c0;
+        if (/flex|grid/.test(cs0.display)) {
+          if (cs0.flexDirection.startsWith('column')) continue;
+          c = [...c0.children].find((k) => (k.innerText||'').trim() && !/flex|grid/.test(getComputedStyle(k).display));
+          if (!c) continue;
+        }
+        if (['BUTTON','INPUT','TEXTAREA','SELECT','SVG','IMG'].includes(c.tagName)) continue;
+        t = (c.innerText||'').trim(); if (!t) continue;
+        r = c.getBoundingClientRect();
+        cs = getComputedStyle(c);
+        cls = describe(c);
       }
-      const cs = getComputedStyle(c);
-      if (['BUTTON','INPUT','TEXTAREA','SELECT'].includes(c.tagName)) continue;
-      const t = (c.innerText||'').trim(); if (!t) continue;
-      const r = c.getBoundingClientRect();
-      if (r.width < 5 || r.height < 5 || r.height > 45) continue;
+      if (!r || r.width < 5 || r.height < 5 || r.height > 45) continue;
       const lh = cs.lineHeight==='normal' ? parseFloat(cs.fontSize)*1.2 : parseFloat(cs.lineHeight);
-      const pt = parseFloat(cs.paddingTop) || 0, pb = parseFloat(cs.paddingBottom) || 0;
-      const bt = parseFloat(cs.borderTopWidth) || 0, bb = parseFloat(cs.borderBottomWidth) || 0;
+      const pt = c0.nodeType === 3 ? 0 : (parseFloat(cs.paddingTop) || 0);
+      const pb = c0.nodeType === 3 ? 0 : (parseFloat(cs.paddingBottom) || 0);
+      const bt = c0.nodeType === 3 ? 0 : (parseFloat(cs.borderTopWidth) || 0);
+      const bb = c0.nodeType === 3 ? 0 : (parseFloat(cs.borderBottomWidth) || 0);
       const contentH = r.height - pt - pb - bt - bb;
       if (contentH > lh*1.45) continue;
       if (Math.abs((r.top+r.height/2)-(ir.top+ir.height/2)) > 14) continue;
@@ -202,9 +224,9 @@ FIND = r"""() => {
       const lineTop = r.top + bt + pt + (contentH - lhpx) / 2;
       const base = lineTop + (lhpx - (fm.fontBoundingBoxAscent + fm.fontBoundingBoxDescent)) / 2 + fm.fontBoundingBoxAscent;
       const capC = base - hm.actualBoundingBoxAscent / 2;
-      out.push({i: n++, inStatus: !!host.closest('.statusline'), host: describe(host), icon: describe(icon), cls: describe(c),
+      out.push({i: n++, inStatus: !!host.closest('.statusline'), host: describe(host), icon: describe(icon) || describe(glyph), cls,
         text: t.replace(/\s+/g,' ').slice(0,30), fs: cs.fontSize, lh: cs.lineHeight,
-        irect: R(icon), trect: R(c), hostrect: R(host), capC});
+        irect: R(ir), trect: R(r), hostrect: R(rr), capC});
     }
   }
   return out;

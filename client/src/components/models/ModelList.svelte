@@ -197,6 +197,7 @@
 	.mname :global(.lockic) {
 		margin-left: 4px;
 		vertical-align: -2px;
+		display: inline-flex;
 	}
 	.mname :global(.lockic svg) {
 		width: 13px;

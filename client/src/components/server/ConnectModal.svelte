@@ -385,7 +385,7 @@
 	.group { margin-top: 4px; font-size: var(--fs-xs); font-weight: 600; color: var(--text-dim); }
 	.list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
 	.tabpane { display: flex; flex-direction: column; gap: 12px; }
-	.item { width: 100%; display: flex; align-items: center; gap: 8px; padding: 8px 12px; text-align: left; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg-elev, var(--bg)); color: var(--text); }
+	.item { width: 100%; display: flex; align-items: center; gap: 8px; padding: 8px 12px; line-height: 20px; text-align: left; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg-elev, var(--bg)); color: var(--text); }
 	@media (hover: hover) {
 		.item:hover:not(:disabled) { border-color: var(--border-strong); background: var(--bg-active); }
 	}

@@ -306,6 +306,7 @@
 		background: var(--bg);
 		color: var(--text);
 		font-size: var(--fs-lg);
+		line-height: 24px;
 		text-align: left;
 		transition:
 			border-color var(--motion-fast) var(--ease-std),
@@ -315,10 +316,12 @@
 		height: var(--control-h-sm);
 		padding: 0 8px;
 		font-size: var(--fs-md);
+		line-height: 20px;
 	}
 	.mono .trigger {
 		font-family: var(--mono);
 		font-size: var(--fs-sm);
+		line-height: 20px;
 	}
 	@media (hover: hover) {
 		button.trigger:hover:not(:disabled) {
