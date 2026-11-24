@@ -231,6 +231,7 @@
 		white-space: nowrap;
 		font-size: var(--fs-md);
 		font-weight: 600;
+		line-height: 20px;
 	}
 	.sstat {
 		flex: none;

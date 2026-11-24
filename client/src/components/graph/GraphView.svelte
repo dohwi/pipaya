@@ -1606,6 +1606,7 @@
 		min-width: 44px;
 		text-align: center;
 		font-size: var(--fs-2xs);
+		line-height: 16px;
 		color: var(--text-dim);
 	}
 
