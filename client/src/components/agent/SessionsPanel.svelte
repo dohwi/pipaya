@@ -142,6 +142,8 @@
 			link.data.awaiting[id] = 0;
 			delete link.data.unread[id];
 			delete link.data.failed[id];
+			delete link.data.queued[id];
+			delete link.data.tool[id];
 		}
 	};
 
@@ -156,6 +158,7 @@
 		bulk(list, canClose, async (ids) => {
 			for (const id of ids) await api!.patchSession(id, { closed: true });
 			dropFromLink(ids);
+			for (const id of ids) app.cleanupClosedSession(serverId, id);
 			return t("{n}개를 닫았습니다.", { n: ids.length });
 		});
 	/** Delete what is ticked in one folder. Ticks in other folders stay untouched. */
@@ -171,6 +174,7 @@
 				gone.push(...r.deleted);
 			}
 			dropFromLink(gone);
+			for (const id of gone) app.cleanupDeletedSession(serverId, id);
 			return skipped
 				? { text: t("{n}개를 지웠습니다. {s}개는 실행 중이거나 답을 기다려 남겨 두었습니다.", { n: deleted, s: skipped }), tone: "warn" }
 				: t("{n}개를 지웠습니다.", { n: deleted });

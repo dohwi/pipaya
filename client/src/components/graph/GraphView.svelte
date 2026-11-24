@@ -13,6 +13,7 @@
 	import { formatCombo, isMac } from "../../lib/keys";
 	import { toolSummary } from "../../lib/tools";
 	import { graphRuns } from "../../lib/graph-runs.svelte";
+	import { onGraphPinForgotten, readGraphPins, writeGraphPins } from "../../lib/graph-pins";
 	import { isMouseWheel, edgeLength, edgePath, edgeTip, sparkPlan, fitGraph, fitView, focusCards, growthPlan, leavePlan, quietCards, related, springStep, type Card, type Edge, type Graph, type GraphServer } from "../../lib/graph";
 	import EmptyState from "../ui/EmptyState.svelte";
 	import Icon from "../ui/Icon.svelte";
@@ -73,22 +74,15 @@
 	});
 
 	// ---- layout: pins are cards moved by hand, kept on this device until "다시 배치" ----
-	const PIN_KEY = "pipaya.graph.pins";
-	const readPins = (): Record<string, { x: number; y: number }> => {
-		try {
-			return JSON.parse(localStorage.getItem(PIN_KEY) ?? "{}") ?? {};
-		} catch {
-			return {};
-		}
-	};
-	let pins = $state(readPins());
-	const savePins = () => {
-		try {
-			localStorage.setItem(PIN_KEY, JSON.stringify(pins));
-		} catch {
-			/* private mode: the pins last this visit */
-		}
-	};
+	let pins = $state(readGraphPins());
+	const savePins = () => writeGraphPins(pins);
+	$effect(() =>
+		onGraphPinForgotten((key) => {
+			if (!Object.hasOwn(pins, key)) return;
+			const { [key]: _, ...rest } = pins;
+			pins = rest;
+		}),
+	);
 
 	let measure: HTMLDivElement | undefined = $state();
 	/**

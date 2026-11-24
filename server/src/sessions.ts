@@ -1962,12 +1962,14 @@ export class SessionManager {
 		return [...new Set(names)];
 	}
 
-	/** Clears per-session in-memory state; `all` (on delete) also drops cached idempotency entries. */
+	/** Clears per-session in-memory state; `all` (on delete) also drops cached idempotency, peer and delegate entries. */
 	private clearSessionMemory(id: string, all = false): void {
 		this.stopped.delete(id);
 		this.describer.clear(id);
 		this.workdirOps.clearNote(id);
 		if (all) {
+			this.delegates.forget(id);
+			this.peers.forget(id);
 			const prefix = `${id}\0`;
 			for (const k of this.recentSends.keys()) if (k.startsWith(prefix)) this.recentSends.delete(k);
 		}

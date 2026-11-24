@@ -109,6 +109,12 @@ export class NotificationClient {
   private navigate: (sessionId: string, api?: Api) => void = () => {};
   private pendingSession: string | null = null;
   private openSession(sid: string) { if (this.api) this.navigate(sid, this.home.get(sid)); else this.pendingSession = sid; }
+  /** Forget cached server routing for a deleted session. */
+  forgetSession(sid: string) {
+    if (!sid) return;
+    this.home.delete(sid);
+    if (this.pendingSession === sid) this.pendingSession = null;
+  }
   private native?: NativePushAdapter;
   private providers: ("fcm" | "apns")[] = [];
   init(visible: () => string[], navigate: (sessionId: string, api?: Api) => void, native?: NativePushAdapter, active: () => string | null = () => null) {

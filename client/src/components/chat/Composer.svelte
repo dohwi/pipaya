@@ -1,13 +1,6 @@
 <script lang="ts" module>
-	import type { Attachment as DraftAttachment } from "../../lib/images";
 	import type { Outgoing } from "../../lib/chat.svelte";
-	import type { FileDraft } from "../../lib/files";
-	/**
-	 * Unsent input per session ("" = new chat); outlives the component so switching sessions keeps what was typed. The
-	 * text and reply (saved-drafts.ts, localStorage) and the attachments (saved-attachments.ts, IndexedDB) are also saved on
-	 * this device so they survive a restart.
-	 */
-	const drafts = new Map<string, { text: string; attachments: DraftAttachment[]; files: FileDraft[]; reply: { text: string; who?: string } | null }>();
+	import { isDraftForgotten, memoryDrafts as drafts } from "../../lib/composer/memory-drafts";
 </script>
 
 <script lang="ts">
@@ -132,7 +125,7 @@
 	function saveNow() {
 		clearTimeout(saveTimer);
 		saveTimer = undefined;
-		if (draftKey !== undefined) saveDraft(draftKey ?? "", text, reply);
+		if (draftKey !== undefined && !(draftKey && isDraftForgotten(draftKey))) saveDraft(draftKey ?? "", text, reply);
 	}
 	$effect(() => {
 		void text;
@@ -161,7 +154,7 @@
 	/** The stored attachments of `draftKey` are still being read: saving now would erase them. */
 	let attachLoading = false;
 	function saveAttachmentsNow(sig = attachmentsSignature(attached.images, attached.files)) {
-		if (draftKey === undefined || attachLoading || sig === attachSaved) return;
+		if (draftKey === undefined || attachLoading || sig === attachSaved || (draftKey && isDraftForgotten(draftKey))) return;
 		attachSaved = sig;
 		void saveAttachments(draftKey ?? "", attached.images, attached.files);
 	}
@@ -170,7 +163,7 @@
 		untrack(() => saveAttachmentsNow(sig));
 	});
 	function stash() {
-		if (draftKey === undefined) return;
+		if (draftKey === undefined || (draftKey && isDraftForgotten(draftKey))) return;
 		saveNow();
 		saveAttachmentsNow();
 		const k = draftKey ?? "";

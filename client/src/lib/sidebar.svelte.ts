@@ -222,6 +222,76 @@ export class SidebarState {
     this.onEdit(serverId);
   }
 
+  private dropFromList(map: Record<string, string[]>, serverId: string, id: string): Record<string, string[]> | null {
+    const list = map[serverId];
+    if (!list?.includes(id)) return null;
+    const next = list.filter((p) => p !== id);
+    if (next.length) return { ...map, [serverId]: next };
+    const { [serverId]: _, ...rest } = map;
+    return rest;
+  }
+
+  /** Unpin a tab if it is pinned (e.g. when a session is closed, so resuming it later does not auto-pin it). */
+  unpinTab(serverId: string, id: string) {
+    if (!serverId || !id) return;
+    const next = this.dropFromList(this.pinnedTabs, serverId, id);
+    if (!next) return;
+    this.pinnedTabs = next;
+    write(K.pinnedTabs, this.pinnedTabs);
+    this.onEdit(serverId);
+  }
+
+  /** Drop pinned tab ids that are no longer among the server's active sessions, groups, or terminals. */
+  prunePinnedTabs(serverId: string, activeIds: ReadonlySet<string>) {
+    if (!serverId) return;
+    const list = this.pinnedTabs[serverId];
+    if (!list?.length) return;
+    const next = list.filter((id) => activeIds.has(id));
+    if (next.length === list.length) return;
+    if (next.length) this.pinnedTabs = { ...this.pinnedTabs, [serverId]: next };
+    else {
+      const { [serverId]: _, ...rest } = this.pinnedTabs;
+      this.pinnedTabs = rest;
+    }
+    write(K.pinnedTabs, this.pinnedTabs);
+    this.onEdit(serverId);
+  }
+
+  /** Forget a permanently removed tab (deleted session, closed terminal, or dissolved group) from sidebar state. */
+  forgetTab(serverId: string, id: string) {
+    if (!serverId || !id) return;
+    let sharedChanged = false;
+    const nextPinned = this.dropFromList(this.pinnedTabs, serverId, id);
+    if (nextPinned) {
+      this.pinnedTabs = nextPinned;
+      write(K.pinnedTabs, this.pinnedTabs);
+      sharedChanged = true;
+    }
+    const nextOrder = this.dropFromList(this.tabOrder, serverId, id);
+    if (nextOrder) {
+      this.tabOrder = nextOrder;
+      write(K.tabOrder, this.tabOrder);
+      sharedChanged = true;
+    }
+    const gdir = this.groupDir[serverId];
+    if (gdir && Object.hasOwn(gdir, id)) {
+      const { [id]: _, ...rest } = gdir;
+      if (Object.keys(rest).length) this.groupDir = { ...this.groupDir, [serverId]: rest };
+      else {
+        const { [serverId]: __, ...allRest } = this.groupDir;
+        this.groupDir = allRest;
+      }
+      write(K.groupDir, this.groupDir);
+      sharedChanged = true;
+    }
+    const gkey = `group\u0000${id}`;
+    if (this.folded.includes(gkey)) {
+      this.folded = this.folded.filter((p) => p !== gkey);
+      write(K.folded, this.folded);
+    }
+    if (sharedChanged) this.onEdit(serverId);
+  }
+
   /** Put directory `path` before/after `target` within `visible` (the directories as listed now) and remember it. */
   moveDir(serverId: string, visible: string[], path: string, target: string, after: boolean) {
     const list = reorder(visible, path, target, after);
