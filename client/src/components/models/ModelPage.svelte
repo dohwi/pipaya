@@ -15,7 +15,6 @@
 	import Switch from "../ui/Switch.svelte";
 	import { CAPS } from "../../lib/model-caps";
 	import { EXTRA_TIERS, tierLabel } from "../../lib/service-tier";
-	import { thinkingLabel } from "../../lib/thinking";
 	import type { ServiceTier } from "../../lib/types";
 	import ModelLogo from "./ModelLogo.svelte";
 
@@ -114,7 +113,7 @@
 			{#if hit && r.imageGeneration}
 				<p class="hint note src ok"><Icon name="check" /> {t("이미지를 만드는 모델입니다")}</p>
 			{:else if hit && hit.reasoning && r.reasoning}
-				<p class="hint note src ok"><Icon name="check" /> {t("추론 강도:")} <span class="mono">{hit.levels.map(thinkingLabel).join(", ")}</span></p>
+				<p class="hint note src ok"><Icon name="check" /> {t("추론 강도:")} <span class="mono">{hit.levels.join(", ")}</span></p>
 			{:else if !hit && r.catalogId === undefined && r.id.trim() && !r.imageGeneration}
 				<p class="hint note src bad"><Icon name="alert" /> {t("OpenRouter에서 자동으로 찾지 못했습니다. 모델을 직접 고르거나 아래 값을 입력하세요.")}</p>
 			{/if}
@@ -164,7 +163,7 @@
 			<div class="stack">
 			<Ladder
 				label={t("선택 가능한 추론 강도")}
-				options={ALL_LEVELS.map((l) => ({ id: l, label: thinkingLabel(l), level: l, disabled: isLastLevel(r, matched, l), title: isLastLevel(r, matched, l) ? t("하나는 남겨 두어야 합니다") : undefined }))}
+				options={ALL_LEVELS.map((l) => ({ id: l, label: l, level: l, disabled: isLastLevel(r, matched, l), title: isLastLevel(r, matched, l) ? t("하나는 남겨 두어야 합니다") : undefined }))}
 				selected={shown}
 				ontoggle={(l) => toggleLevel(r, matched, l)}
 			/>
@@ -174,7 +173,7 @@
 				{:else if matched}
 					{t("OpenRouter에서 찾은 모델이 지원하는 강도를 따릅니다. 눌러서 제외할 수 있습니다.")}
 				{:else}
-					{t("고르지 않으면 모델 이름으로 자동 설정하고, 찾지 못하면 Minimal부터 High까지 보여줍니다.")}
+					{t("고르지 않으면 모델 이름으로 자동 설정하고, 찾지 못하면 minimal부터 high까지 보여줍니다.")}
 				{/if}
 			</p>
 			</div>
@@ -183,11 +182,11 @@
 			<div class="stack">
 			<Ladder
 				label={t("새 대화 기본 강도")}
-				options={[{ id: "auto" as const, label: t("자동") }, ...levels.map((l) => ({ id: l, label: thinkingLabel(l), level: l }))]}
+				options={[{ id: "auto" as const, label: t("자동") }, ...levels.map((l) => ({ id: l, label: l, level: l }))]}
 				value={fallbackLevel}
 				onchange={(l) => (r.defaultThinkingLevel = l === "auto" ? undefined : l)}
 			/>
-			<p class="hint note">{r.defaultThinkingLevel ? t("이 모델로 새 대화를 시작하면 {level}로 시작합니다.", { level: thinkingLabel(r.defaultThinkingLevel) }) : t("자동이면 이 기기의 지난 강도로 시작합니다.")}</p>
+			<p class="hint note">{r.defaultThinkingLevel ? t("이 모델로 새 대화를 시작하면 {level}로 시작합니다.", { level: r.defaultThinkingLevel }) : t("자동이면 이 기기의 지난 강도로 시작합니다.")}</p>
 			</div>
 		</section>
 	{/if}
@@ -213,7 +212,7 @@
 				{:else if matched && !r.serviceTiers}
 					{t("OpenRouter에서 찾은 모델은 속도 등급을 지원하지 않습니다.")}
 				{:else}
-					{t("프록시가 속도 지정(service_tier)을 처리하는 모델만 켜세요. CLIProxyAPI는 GPT 모델에서 Fast를 처리합니다.")}
+					{t("프록시가 속도 지정(service_tier)을 처리하는 모델만 켜세요. CLIProxyAPI는 GPT 모델에서 fast를 처리합니다.")}
 				{/if}
 			</p>
 			</div>

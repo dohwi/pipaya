@@ -10,7 +10,6 @@
 	import { connectionState } from "../../lib/sidebar-model";
 	import { ROLE_STALE_MS, type Card, type DelegateRun, type Graph } from "../../lib/graph";
 	import { modelDisplayName, modelIcon, providerDisplayName, splitModelRef } from "../../lib/model-name";
-	import { thinkingLabel } from "../../lib/thinking";
 	import { callState, roleStats, settingsTarget, splitLive, under, type CallState } from "../../lib/graph-detail";
 	import { graphRuns } from "../../lib/graph-runs.svelte";
 	import { activityOf } from "../../lib/activity";
@@ -300,7 +299,7 @@
 						<dt>{t("최대 출력")}</dt>
 						<dd><span class="mono">{compact(modelInfo.maxTokens)}</span></dd>
 						<dt>{t("추론")}</dt>
-						<dd>{#if modelInfo.thinkingLevels.length}<span class="mono">{modelInfo.thinkingLevels.map(thinkingLabel).join(" · ")}</span>{:else}{t("지원 안 함")}{/if}</dd>
+						<dd>{#if modelInfo.thinkingLevels.length}<span class="mono">{modelInfo.thinkingLevels.join(" · ")}</span>{:else}{t("지원 안 함")}{/if}</dd>
 						<dt>{t("이미지 입력")}</dt>
 						<dd>{modelInfo.vision ? t("지원") : t("지원 안 함")}</dd>
 						{#if !modelInfo.configured || !modelInfo.available}

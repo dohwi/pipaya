@@ -17,7 +17,6 @@
 	import ProviderAccounts from "./ProviderAccounts.svelte";
 	import ConnectModal from "../server/ConnectModal.svelte";
 	import { takesTier, tierLabel } from "../../lib/service-tier";
-	import { thinkingLabel } from "../../lib/thinking";
 	import { modelDisplayName } from "../../lib/model-name";
 	import { flash } from "../../lib/settings-focus";
 	import { keepDraft } from "../../lib/settings-drafts.svelte";
@@ -302,7 +301,7 @@
 				{:else if shownInfo && !shownInfo.reasoning}
 					{t("이 모델은 추론을 지원하지 않아 추론 강도는 쓰이지 않습니다.")}
 				{:else if saved.thinkingLevel}
-					{t("새 대화는 추론 강도 {level}로 시작합니다.", { level: thinkingLabel(saved.thinkingLevel) })}
+					{t("새 대화는 추론 강도 {level}로 시작합니다.", { level: saved.thinkingLevel })}
 				{:else}
 					{t("추론 강도를 지정하지 않아 새 대화는 이 기기의 마지막 설정으로 시작합니다.")}
 				{/if}
