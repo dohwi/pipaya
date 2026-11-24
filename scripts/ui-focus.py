@@ -72,7 +72,7 @@ SEED = {"pipaya.servers": json.dumps([{"id": "dev", "name": "dev", "baseUrl": ba
 
 # The screens and how to reach each one. A step is a selector to click; "key:<Key>" presses a key, "open:<text>" opens a
 # conversation from the sidebar (through the drawer on a narrow window). Settings panes are listed by their nav label.
-SETTINGS = ["내 설정", "단축키", "백업", "정보", "모델", "음성 입력", "에이전트 도구", "MCP", "대화", "예약 작업", "확장", "기기"]
+SETTINGS = ["내 설정", "단축키", "백업", "서버", "모델", "에이전트", "MCP", "대화", "예약 작업", "확장"]
 
 def settings(label):
     return ["button.settings", f'.nav [role="tab"]:has(.nl:text-is("{label}"))']

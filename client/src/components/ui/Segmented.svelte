@@ -110,6 +110,9 @@
 		white-space: nowrap;
 		transition: color var(--motion-fast) var(--ease-std);
 	}
+	.utabs > button:focus-visible {
+		outline-offset: -2px;
+	}
 	.utabs.full > button {
 		flex: 1 0 auto;
 	}
