@@ -1,5 +1,8 @@
 import type { ChatState } from "./chat.svelte";
 
+/** Custom drag-and-drop MIME type for dragging workspace files/folders from the file tree or file tabs onto the chat composer. */
+export const WORKSPACE_FILE_MIME = "application/x-pipaya-workspace-file";
+
 export interface WorkspaceEntry {
 	name: string;
 	path: string;

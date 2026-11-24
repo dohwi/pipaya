@@ -2,6 +2,7 @@
 	import { t } from "../../lib/i18n";
 	import { workDir } from "../../lib/nav";
 	import { app } from "../../lib/store.svelte";
+	import { WORKSPACE_FILE_MIME } from "../../lib/workspace-edits";
 	import { workspaceViewer, type WorkspaceEntry } from "../../lib/workspace-viewer.svelte";
 	import EmptyState from "../ui/EmptyState.svelte";
 	import Icon from "../ui/Icon.svelte";
@@ -79,6 +80,13 @@
 		if (status === "D" || status === "U") return "st-del";
 		return "st-mod";
 	}
+
+	function startFileDrag(e: DragEvent, path: string, dir: boolean) {
+		if (!e.dataTransfer) return;
+		e.dataTransfer.setData(WORKSPACE_FILE_MIME, JSON.stringify({ path, dir }));
+		e.dataTransfer.setData("text/plain", dir ? `${path}/` : path);
+		e.dataTransfer.effectAllowed = "copy";
+	}
 </script>
 
 {#snippet treeNodes(entries: WorkspaceEntry[], depth: number)}
@@ -91,6 +99,8 @@
 			<button
 				type="button"
 				class="trow dir"
+				draggable="true"
+				ondragstart={(e) => startFileDrag(e, entry.path, true)}
 				style:padding-left="{8 + depth * 12}px"
 				onclick={() => workspaceViewer.toggleDir(entry.path)}
 				title={entry.path}
@@ -107,6 +117,8 @@
 			<button
 				type="button"
 				class="trow file"
+				draggable="true"
+				ondragstart={(e) => startFileDrag(e, entry.path, false)}
 				class:on={workspaceViewer.activeFile === entry.path}
 				class:opened={workspaceViewer.openFiles.includes(entry.path) && workspaceViewer.activeFile !== entry.path}
 				class:recent
@@ -186,6 +198,8 @@
 							<button
 								type="button"
 								class="trow file search-row"
+								draggable="true"
+								ondragstart={(e) => startFileDrag(e, entry.path, false)}
 								class:on={workspaceViewer.activeFile === entry.path}
 								class:opened={workspaceViewer.openFiles.includes(entry.path) && workspaceViewer.activeFile !== entry.path}
 								class:recent={workspaceViewer.isRecent(entry.path)}
@@ -213,6 +227,8 @@
 						<button
 							type="button"
 							class="trow file changed-row"
+							draggable="true"
+							ondragstart={(e) => startFileDrag(e, ch.path, false)}
 							class:on={workspaceViewer.activeFile === ch.path}
 							class:opened={workspaceViewer.openFiles.includes(ch.path) && workspaceViewer.activeFile !== ch.path}
 							class:recent={workspaceViewer.isRecent(ch.path) || ch.pending}

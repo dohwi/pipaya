@@ -19,7 +19,8 @@
 	import { fileRows, folderRows, mentionRows, menuKey, menuKindOf, menuOpen, optionRows, PROMPT_PREFIX, slashRows, slashScopeOf } from "../../lib/slash-menu";
 	import { htmlImages, pastedMessage, shiftImageTokens } from "../../lib/rich-copy";
 	import type { ImageBlock } from "../../lib/types";
-	import { MAX_IMAGES } from "../../lib/files";
+	import { baseName, MAX_IMAGES, previewKind } from "../../lib/files";
+	import { WORKSPACE_FILE_MIME } from "../../lib/workspace-edits";
 	import { dropImageToken, extractSkillNames, insertToken, mentionAt, mergeReturned, mirrorHtml, replaceMention, slashAt, type Mention } from "../../lib/composer-text";
 	import IconButton from "../ui/IconButton.svelte";
 	import ModelPicker from "../models/ModelPicker.svelte";
@@ -887,24 +888,76 @@
 	/** This pane's input is the recording surface (recording or transcribing). */
 	const voiceActive = $derived((voice.recording || voice.transcribing) && voice.paneId === (pane.id ?? ""));
 
+	function attachWorkspacePath(path: string, dir: boolean) {
+		const tokenPath = dir ? `${path.replace(/\/+$/, "")}/` : path;
+		if (!pickedPaths.includes(tokenPath)) pickedPaths.push(tokenPath);
+		const pos = ta && document.activeElement === ta ? (ta.selectionStart ?? text.length) : text.length;
+		const next = insertToken(text, Math.min(pos, text.length), `#${tokenPath}`);
+		text = next.text;
+		caret = next.caret;
+		queueMicrotask(() => {
+			ta?.focus();
+			ta?.setSelectionRange(next.caret, next.caret);
+			syncCaret();
+		});
+	}
+
+	async function onDropWorkspaceFile(raw: string) {
+		let parsed: { path?: string; dir?: boolean };
+		try {
+			parsed = JSON.parse(raw) as { path?: string; dir?: boolean };
+		} catch {
+			return;
+		}
+		const path = typeof parsed.path === "string" ? parsed.path.trim() : "";
+		if (!path) return;
+		const dir = !!parsed.dir;
+		// Images dropped onto a vision-capable model attach as real inline image thumbnails so the model can see them directly.
+		if (!dir && vision && app.api && pane.id && previewKind(baseName(path)) === "image") {
+			try {
+				const blob = await app.api.fetchFile(pane.id, path);
+				const file = new File([blob], baseName(path), { type: blob.type || "image/png" });
+				await attached.add([file]);
+				queueMicrotask(() => ta?.focus());
+				return;
+			} catch {
+				// Fall back to `#path` mention if the file could not be fetched as an image.
+			}
+		}
+		attachWorkspacePath(path, dir);
+	}
+
 	function onDrop(e: DragEvent) {
 		if (!pane.focused) return;
+		const wsRaw = e.dataTransfer?.getData(WORKSPACE_FILE_MIME);
+		if (wsRaw) {
+			e.preventDefault();
+			dragging = false;
+			void onDropWorkspaceFile(wsRaw);
+			return;
+		}
 		e.preventDefault();
 		dragging = false;
-		if (e.dataTransfer?.files) void attached.add(e.dataTransfer.files);
+		if (e.dataTransfer?.files?.length) void attached.add(e.dataTransfer.files);
 	}
 </script>
 
 <svelte:window
 	onkeydown={onWindowKey}
 	ondragover={(e) => {
-		if (pane.focused && e.dataTransfer?.types.includes("Files")) {
+		if (
+			pane.focused &&
+			(e.dataTransfer?.types.includes("Files") || e.dataTransfer?.types.includes(WORKSPACE_FILE_MIME))
+		) {
 			e.preventDefault();
 			dragging = true;
 		}
 	}}
 	ondragleave={(e) => {
 		if (!e.relatedTarget) dragging = false;
+	}}
+	ondragend={() => {
+		dragging = false;
 	}}
 	ondrop={onDrop}
 />

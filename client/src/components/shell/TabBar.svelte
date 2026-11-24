@@ -29,6 +29,7 @@
 	import { tabPanes, type Tab } from "../../lib/nav";
 	import { isManualRoot, tabLead, type TabLead } from "../../lib/projects";
 	import { app } from "../../lib/store.svelte";
+	import { WORKSPACE_FILE_MIME } from "../../lib/workspace-edits";
 	import { workspaceViewer } from "../../lib/workspace-viewer.svelte";
 
 	/**
@@ -359,6 +360,13 @@
 					class="tab filetab"
 					class:on
 					data-file-tab={fp}
+					draggable="true"
+					ondragstart={(e) => {
+						if (!e.dataTransfer) return;
+						e.dataTransfer.setData(WORKSPACE_FILE_MIME, JSON.stringify({ path: fp, dir: false }));
+						e.dataTransfer.setData("text/plain", fp);
+						e.dataTransfer.effectAllowed = "copy";
+					}}
 					role="tab"
 					tabindex={on ? 0 : -1}
 					aria-selected={on}
