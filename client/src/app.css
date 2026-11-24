@@ -470,6 +470,10 @@ select:focus-visible {
 	outline: 2px solid var(--accent);
 	outline-offset: -1px;
 }
+/* a visually hidden file input: its label draws the ring instead (the input's own would be clipped by the label) */
+input[type="file"]:focus-visible {
+	outline: none;
+}
 /* a slider has no border to light up like a text field does, so it keeps the ring */
 input[type="range"]:focus-visible {
 	outline: 2px solid var(--accent);
@@ -954,23 +958,6 @@ kbd {
 	color: var(--text-faint);
 }
 
-/* `$ command` prompt with a blinking block cursor */
-.prompt-line {
-	display: inline-flex;
-	align-items: center;
-	font-family: var(--mono);
-	font-size: var(--fs-md);
-	color: var(--text-faint);
-	white-space: nowrap;
-}
-.prompt-line .cursor {
-	display: inline-block;
-	width: 0.48em;
-	height: 1.05em;
-	margin-left: 0.35em; /* the cursor block follows the hint's font size */
-	background: currentColor;
-	animation: blink-cursor 1.2s steps(1, end) infinite;
-}
 @keyframes blink-cursor {
 	50% {
 		opacity: 0;
@@ -1278,28 +1265,6 @@ dialog[data-closing]::backdrop {
 		transform var(--motion-normal) var(--ease),
 		width var(--motion-normal) var(--ease),
 		height var(--motion-normal) var(--ease) !important;
-}
-
-/* connection status dot (server switcher + settings) */
-.sdot {
-	flex: none;
-	width: 8px;
-	height: 8px;
-	border-radius: 50%;
-	background: var(--text-faint);
-}
-.sdot.online {
-	background: var(--ok);
-}
-.sdot.offline {
-	background: var(--danger);
-}
-.sdot.unauthorized {
-	background: var(--warn);
-}
-.sdot.checking {
-	background: var(--text-faint);
-	animation: blink-cursor 1s ease-in-out infinite;
 }
 
 /*

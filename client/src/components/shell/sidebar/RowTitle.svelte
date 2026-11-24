@@ -26,6 +26,7 @@
 		text-overflow: ellipsis;
 		white-space: nowrap;
 		font-size: var(--fs-sm);
+		line-height: 20px; /* whole-pixel line box (DESIGN rule 3) */
 	}
 	/* a title that does not fit flows by while the row is hovered or focused, looping back to its start */
 	.title .track {
