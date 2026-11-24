@@ -314,8 +314,14 @@ device_scale_factor 4 over every screen (`main`, the settings sections, the serv
 model picker, a row menu) at 1440 / 820 / 390. From **1px** apart it is a bug; 0.5px is the half-pixel limit. Two labels are exempt and
 reported separately as *light glyph*: their ink has no height of its own (`..`, `—`, a lone `.`), so a centred box still paints low.
 Rows whose label inherits the body's 1.55 line box are listed as
-*fractional line box*: that is what once put the working-directory path 1.5px below its folder glyph, so give the label `line-height: 20px`
-before hunting anywhere else. A label made only of a light glyph is rewritten rather than exempted: the folder picker's up row reads
+*fractional line box*: that is what once put the working-directory path 1.5px below its folder glyph, so give the label a whole-pixel
+`line-height` (`16px` / `20px` / `24px`, including shared `.btn`, `.section-label`, `.hint`) before hunting anywhere else. Every icon
+`<svg>` sets `display: block` (`Icon.svelte` `:where(.ic)` and `.btn svg`) so an icon wrapped in a non-flex `<span>` never rides on the
+inline baseline strut; every path in `client/src/lib/icons.ts` is centred on `(12, 12)` in its 24×24 viewBox (`getBBox()` ±0.25); icons
+beside text inside even-height controls use even sizes (`12`/`14`/`16`/`18px`); and fixed-height underline tabs mirror `border-bottom: 2px`
+with `border-top: 2px solid transparent`. The script measures both element children and bare `TEXT_NODE`s (`Range.getBoundingClientRect()`)
+against the inner `<svg>`/`<img>` rect (not its wrapper `<span>`), seeds a favourite model with `--seed`, and opens `dir-picker` before a
+chat session so no screen is skipped. A label made only of a light glyph is rewritten rather than exempted: the folder picker's up row reads
 "상위 폴더" beside its arrow, with `..` as the faint hint on the right. Only the label right after the icon is compared (a trailing unit
 such as `tps` is not beside the glyph), and ink is the rows that reach half of the crop's peak contrast, so the faint background grid
 does not count. The script exits 1 when a pair is 1px or more off. Audit result at the time of writing: 224 pairs over every screen at
