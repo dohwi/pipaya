@@ -2,7 +2,7 @@
  * Pull-down-to-dismiss for phone bottom sheets, one implementation for every modal.
  *
  * `use:sheetPull={{ onclose }}` goes on the sheet's header (the handle). It finds the sheet itself
- * (the nearest `<dialog>` / `[role=dialog]`), and on a phone lets the finger drag it down:
+ * (the nearest `<dialog>`, `[role=dialog]` or `[role=alertdialog]`), and on a phone lets the finger drag it down:
  *  - the pull is written straight to the DOM as `--pull` (no component state, no re-render per move);
  *    app.css turns it into a compositor-only `transform`, so the drag never lays out;
  *  - a scrim that is the sheet's previous sibling fades with the pull;
@@ -27,7 +27,7 @@ const IGNORE = "button, a, input, select, textarea, [role=button], [contentedita
 
 export function sheetPull(node: HTMLElement, initial: SheetPullOpts) {
 	let opts = initial;
-	const sheet = node.closest<HTMLElement>('dialog, [role="dialog"]');
+	const sheet = node.closest<HTMLElement>('dialog, [role="dialog"], [role="alertdialog"]');
 	if (!sheet) return {};
 
 	// A disabled handle (e.g. a form drawn as a page inside another dialog) must not look or act like one.
