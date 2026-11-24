@@ -161,13 +161,13 @@
 				autocomplete="off"
 			/>
 			<span class="n mono" class:none={!!query.trim() && !ranges.length}>{query.trim() ? (ranges.length ? `${index + 1}/${count}` : "0") : ""}</span>
-			<button class="b" onclick={() => step(-1)} disabled={!ranges.length} aria-label={t("이전 결과")} title={t("이전 결과 (Shift+Enter)")}>
+			<button class="b tap" onclick={() => step(-1)} disabled={!ranges.length} aria-label={t("이전 결과")} title={t("이전 결과 (Shift+Enter)")}>
 				<Icon name="chevron-left" />
 			</button>
-			<button class="b" onclick={() => step(1)} disabled={!ranges.length} aria-label={t("다음 결과")} title={t("다음 결과 (Enter)")}>
+			<button class="b tap" onclick={() => step(1)} disabled={!ranges.length} aria-label={t("다음 결과")} title={t("다음 결과 (Enter)")}>
 				<Icon name="chevron-right" />
 			</button>
-			<button class="b" onclick={close} aria-label={t("닫기")} title={t("닫기 (Esc)")}><Icon name="x" /></button>
+			<button class="b tap" onclick={close} aria-label={t("닫기")} title={t("닫기 (Esc)")}><Icon name="x" /></button>
 		</div>
 	{/if}
 </div>
@@ -176,7 +176,7 @@
 	.slot {
 		position: absolute;
 		top: 8px;
-		right: 14px;
+		right: 16px;
 		z-index: 6;
 	}
 	.find {
@@ -231,8 +231,8 @@
 	.b {
 		display: grid;
 		place-items: center;
-		width: 26px;
-		height: 26px;
+		width: 28px;
+		height: 28px;
 		border-radius: var(--radius-sm);
 		color: var(--text);
 	}
@@ -246,5 +246,11 @@
 	}
 	.b:disabled {
 		color: var(--disabled-fg);
+	}
+	/* touch: the 44px hit box fills the 4px gap edge to edge (height stays 44px) without covering a neighbour */
+	@media (pointer: coarse) {
+		.b.tap::after {
+			width: calc(100% + 4px);
+		}
 	}
 </style>

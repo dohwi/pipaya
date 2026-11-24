@@ -432,7 +432,7 @@
 {#if chat.ready && chat.items.length > 0}<div class="fade" aria-hidden="true"></div>{/if}
 
 {#if showJump}
-	<button class="jump" onclick={() => toBottom(true)} in:fadeIn out:fadeOut aria-label={t("최신 메시지로 이동")}>
+	<button class="jump tap" onclick={() => toBottom(true)} in:fadeIn out:fadeOut aria-label={t("최신 메시지로 이동")}>
 		<Icon name="arrow-down" />
 	</button>
 {/if}

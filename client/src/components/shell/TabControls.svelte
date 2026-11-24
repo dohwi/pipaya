@@ -74,7 +74,7 @@
 		height: 16px;
 		stroke-width: 1.9;
 	}
-	/* the header's tool buttons: 32 wide, 40 tall, round, a 19px glyph (Header.svelte `.tool` on a phone) */
+	/* the header's tool buttons: 28 wide, 40 tall, round, a 19px glyph (Header.svelte `.tool` on a phone) */
 	.header .add {
 		width: 28px;
 		height: 40px;

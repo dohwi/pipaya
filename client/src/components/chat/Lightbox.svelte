@@ -300,16 +300,16 @@
 		<div class="bar top">
 			{#if many}<span class="count mono">{set.index + 1} / {set.images.length}</span>{/if}
 			<span class="grow"></span>
-			<button class="ctl" onclick={() => zoomTo(scale / 1.4)} disabled={scale <= MIN} aria-label={t("축소")} title={t("축소") + " (-)"}>−</button>
-			<button class="ctl pct mono" onclick={reset} aria-label={t("원래 크기로")} title={t("맞춤") + " (0)"}>{Math.round(scale * 100)}%</button>
-			<button class="ctl" onclick={() => zoomTo(scale * 1.4)} disabled={scale >= MAX} aria-label={t("확대")} title={t("확대") + " (+)"}>+</button>
-			<button class="ctl" onclick={copy} aria-label={t("이미지 복사")} title={t("이미지 복사") + " (Ctrl+C)"}>
+			<button class="ctl tap" onclick={() => zoomTo(scale / 1.4)} disabled={scale <= MIN} aria-label={t("축소")} title={t("축소") + " (-)"}>−</button>
+			<button class="ctl tap pct mono" onclick={reset} aria-label={t("원래 크기로")} title={t("맞춤") + " (0)"}>{Math.round(scale * 100)}%</button>
+			<button class="ctl tap" onclick={() => zoomTo(scale * 1.4)} disabled={scale >= MAX} aria-label={t("확대")} title={t("확대") + " (+)"}>+</button>
+			<button class="ctl tap" onclick={copy} aria-label={t("이미지 복사")} title={t("이미지 복사") + " (Ctrl+C)"}>
 				<Icon name="copy" />
 			</button>
-			<button class="ctl" onclick={save} aria-label={t("저장")} title={t("저장")}>
+			<button class="ctl tap" onclick={save} aria-label={t("저장")} title={t("저장")}>
 				<Icon name="download" />
 			</button>
-			<button class="ctl" onclick={onclose} aria-label={t("닫기")} title={t("닫기") + " (Esc)"}><Icon name="x" /></button>
+			<button class="ctl tap" onclick={onclose} aria-label={t("닫기")} title={t("닫기") + " (Esc)"}><Icon name="x" /></button>
 		</div>
 
 		{#if many && set.images.length <= 12}
@@ -500,13 +500,13 @@
 		stroke-width: 2;
 	}
 	.prev {
-		left: 14px;
+		left: 16px;
 	}
 	.prev :global(svg) {
 		rotate: 90deg;
 	}
 	.next {
-		right: 14px;
+		right: 16px;
 	}
 	.next :global(svg) {
 		rotate: -90deg;
@@ -520,6 +520,12 @@
 	@media (prefers-reduced-motion: reduce) {
 		img.snap {
 			transition: none;
+		}
+	}
+	/* touch: the 44px hit box fills the 4px gap edge to edge (height stays 44px) without covering a neighbour */
+	@media (pointer: coarse) {
+		.ctl.tap::after {
+			width: calc(100% + 4px);
 		}
 	}
 </style>

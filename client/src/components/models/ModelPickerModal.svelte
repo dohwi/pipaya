@@ -141,7 +141,7 @@
 		{#snippet meta()}{#if inFavs}<span>{providerName(m.provider)}</span>{/if}{#if m.available === false}<span>{t("불러오지 못함")}</span>{:else if !m.configured}<span>{t("키 없음")}</span>{/if}{/snippet}
 		{#snippet trailing()}
 			{#if onfav}
-				<button type="button" class="fav" class:on={fav} onclick={() => onfav(m.provider, m.id)} aria-pressed={fav} aria-label={t("{name} 즐겨찾기", { name: m.name })} title={fav ? t("즐겨찾기 해제") : t("즐겨찾기")}>
+				<button type="button" class="fav tap" class:on={fav} onclick={() => onfav(m.provider, m.id)} aria-pressed={fav} aria-label={t("{name} 즐겨찾기", { name: m.name })} title={fav ? t("즐겨찾기 해제") : t("즐겨찾기")}>
 					<Icon name="star" />
 				</button>
 			{/if}

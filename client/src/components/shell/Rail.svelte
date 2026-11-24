@@ -124,14 +124,14 @@
 
 	<div class="bottom">
 		<!-- the graph view is a place of its own: while it is open, its button is the selected one (no folder is) -->
-		<button class="nav" class:on={app.graphOpen} onclick={() => app.toggleGraph()} aria-label={t("그래프 뷰")} aria-pressed={app.graphOpen} aria-current={app.graphOpen ? "page" : undefined} title={graphTip}><Icon name="fork" /></button>
+		<button class="nav tap" class:on={app.graphOpen} onclick={() => app.toggleGraph()} aria-label={t("그래프 뷰")} aria-pressed={app.graphOpen} aria-current={app.graphOpen ? "page" : undefined} title={graphTip}><Icon name="fork" /></button>
 		{#if schedulesShown}
-			<button class="nav" onclick={() => (app.schedulesDialog = true)} aria-label={t("예약 작업")} title={schedulesTip}>
+			<button class="nav tap" onclick={() => (app.schedulesDialog = true)} aria-label={t("예약 작업")} title={schedulesTip}>
 				<Icon name="clock" />
 				{#if scheduled.count}<span class="cnt"><span class="cbadge">{scheduled.count}</span></span>{/if}
 			</button>
 		{/if}
-		<button class="nav" onclick={() => app.openSettings()} aria-label={t("설정")} title={settingsTip}>
+		<button class="nav tap" onclick={() => app.openSettings()} aria-label={t("설정")} title={settingsTip}>
 			<Icon name="settings" />
 			{#if settingsAlert || extensionUpdates.any}<Pin tone={alertTone} label={settingsAlert || t("업데이트 있음")} />{/if}
 		</button>
@@ -324,5 +324,11 @@
 		width: 100%;
 		padding: 8px 0 calc(8px + var(--sab));
 		border-top: 1px solid var(--border);
+	}
+	/* touch: the 44px hit box fills the 4px gap edge to edge (width stays 44px) without covering a neighbour */
+	@media (pointer: coarse) {
+		.nav.tap::after {
+			height: calc(100% + 4px);
+		}
 	}
 </style>

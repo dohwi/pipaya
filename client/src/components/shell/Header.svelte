@@ -74,7 +74,7 @@
 	<div class="capsule">
 		<!-- the extension parts of the bar move to the graph view's header while it covers this one (GraphView .head) -->
 		{#if !app.graphOpen}<ExtensionMount slot="header.start" />{/if}
-		<button class="tool menu" onclick={() => (app.sidebar.open = true)} aria-label={t("사이드바 열기")} aria-expanded={app.sidebar.open} aria-controls="app-sidebar" title={t("사이드바 열기") + hint}>
+		<button class="tool menu tap" onclick={() => (app.sidebar.open = true)} aria-label={t("사이드바 열기")} aria-expanded={app.sidebar.open} aria-controls="app-sidebar" title={t("사이드바 열기") + hint}>
 			<Icon name="sidebar" />
 		</button>
 
@@ -264,7 +264,10 @@
 		/* the nav slot pads 2px here */
 		.capsule { padding-right: 12px; }
 		.title { padding: 0 4px; }
-		.tool { width: 32px; }
+		.tool {
+			width: 32px;
+			border-radius: min(var(--radius-pill), 16px); /* 32 x 40: a rounded slot, not a 50% oval */
+		}
 	}
 	@media (max-width: 860px) {
 		.capsule { padding-left: 4px; }

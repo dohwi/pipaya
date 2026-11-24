@@ -155,9 +155,9 @@
 				{/if}
 			</span>
 			{/if}
-			<button class="x" onpointerdown={(e) => e.stopPropagation()} onclick={toggleZoom} aria-label={zoomed ? t("작게 보기") : t("크게 보기")} title={zoomed ? (full ? t("작게 보기") : t("작게 보기 (Esc)")) : t("크게 보기")}><Icon name={zoomed ? "shrink" : "expand"} /></button>
-			<button class="x" onpointerdown={(e) => e.stopPropagation()} onclick={() => app.leaveGroup(id)} aria-label={t("그룹에서 빼기")} title={t("그룹에서 빼기")}><Icon name="unlink" /></button>
-			{#if isTerm}<button class="x" onpointerdown={(e) => e.stopPropagation()} onclick={() => app.closeTerminal(id)} aria-label={t("터미널 닫기")} title={t("터미널 닫기 (셸 종료)")}><Icon name="x" /></button>{/if}
+			<button class="x tap" onpointerdown={(e) => e.stopPropagation()} onclick={toggleZoom} aria-label={zoomed ? t("작게 보기") : t("크게 보기")} title={zoomed ? (full ? t("작게 보기") : t("작게 보기 (Esc)")) : t("크게 보기")}><Icon name={zoomed ? "shrink" : "expand"} /></button>
+			<button class="x tap" onpointerdown={(e) => e.stopPropagation()} onclick={() => app.leaveGroup(id)} aria-label={t("그룹에서 빼기")} title={t("그룹에서 빼기")}><Icon name="unlink" /></button>
+			{#if isTerm}<button class="x tap" onpointerdown={(e) => e.stopPropagation()} onclick={() => app.closeTerminal(id)} aria-label={t("터미널 닫기")} title={t("터미널 닫기 (셸 종료)")}><Icon name="x" /></button>{/if}
 		</header>
 	{/if}
 
@@ -276,8 +276,8 @@
 		color: var(--text-dim);
 	}
 	.ticon :global(svg) {
-		width: 15px;
-		height: 15px;
+		width: 14px;
+		height: 14px;
 		stroke-width: 1.9;
 	}
 	.os {
@@ -450,5 +450,11 @@
 	}
 	.empty > :global(.welcome) {
 		position: relative;
+	}
+	/* touch: the 44px hit box fills the 8px gap edge to edge (height stays 44px) without covering a neighbour */
+	@media (pointer: coarse) {
+		.bar .x.tap::after {
+			width: calc(100% + 8px);
+		}
 	}
 </style>

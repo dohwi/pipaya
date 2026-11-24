@@ -12,7 +12,7 @@
 <button class="dirnew listbtn tap" onclick={() => app.openSessions(serverId, filter)} aria-label={name} title={tip}><Icon name="list" /></button>
 
 <style>
-	/* flush against the "+" beside it: 20px buttons, centres 20px apart (x 234 and 254), so it takes no margin of its own */
+	/* flush against the "+" beside it: 20px buttons, centres 20px apart (x 236 and 256), so it takes no margin of its own */
 	:global(:where(.side) .dirnew.listbtn) {
 		margin-right: 0;
 	}

@@ -415,7 +415,7 @@
 		align-items: center;
 		justify-content: space-between;
 		gap: 8px;
-		padding: var(--dlg-head-t) calc(var(--dlg-px) - 9px) var(--dlg-head-b) var(--dlg-px);
+		padding: var(--dlg-head-t) calc(var(--dlg-px) - 9.5px) var(--dlg-head-b) var(--dlg-px); /* 19px glyph lands on the body's right line */
 		border-bottom: 1px solid var(--border);
 	}
 	.ftitle {
@@ -436,7 +436,7 @@
 	@media (max-width: 640px) {
 		/* align with ModalHeader's mobile padding so the grabber sits cleanly above the title */
 		.fform > header {
-			padding: 12px calc(var(--dlg-px) - 9px) 8px var(--dlg-px);
+			padding: var(--dlg-head-t) calc(var(--dlg-px) - 9.5px) 8px var(--dlg-px); /* 16px top keeps the grabber 6px clear */
 		}
 	}
 	.fsub {

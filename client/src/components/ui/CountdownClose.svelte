@@ -6,7 +6,7 @@
 	let { ms, onclick, label = t("알림 닫기"), paused = false }: { ms: number; onclick: () => void; label?: string; paused?: boolean } = $props();
 </script>
 
-<button class="close" {onclick} aria-label={label}>
+<button class="close tap" {onclick} aria-label={label}>
 	<svg class="ring" viewBox="0 0 28 28" aria-hidden="true">
 		<circle class="track" cx="14" cy="14" r="12" />
 		<circle class="left" class:paused cx="14" cy="14" r="12" pathLength="100" style="animation-duration:{ms}ms" />
@@ -26,8 +26,8 @@
 		/* the strip sets --tone (ok / error / ...); the ring takes it */
 	}
 	.close :global(svg:not(.ring)) {
-		width: 13px;
-		height: 13px;
+		width: 14px;
+		height: 14px;
 		stroke: currentColor;
 		fill: none;
 		stroke-width: 2;

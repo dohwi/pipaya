@@ -185,7 +185,7 @@
 		<section class="addbody" aria-label={t("폰 추가")}>
 			<div class="addhead">
 				<h4 class="section-label">{t("폰 추가")}</h4>
-				<IconButton icon="x" size="sm" label={t("닫기")} tip onclick={() => (adding = false)} />
+				<IconButton icon="x" size="sm" label={t("닫기")} tip class="addclose" onclick={() => (adding = false)} />
 			</div>
 			{#key serverId}<PairPanel {serverId} />{/key}
 		</section>
@@ -254,6 +254,9 @@
 		align-items: center;
 		justify-content: space-between;
 		gap: 8px;
+	}
+	.addhead :global(.iconbtn.addclose) {
+		margin-right: -8px; /* the 32px box's 16px glyph lands on .addbody's 16px right edge */
 	}
 	.addhead h4 {
 		margin: 0;

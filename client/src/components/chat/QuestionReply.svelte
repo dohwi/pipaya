@@ -169,7 +169,7 @@
 				onkeydown={(e) => e.key === "Enter" && !e.isComposing && (cur.multiple ? sendPicks() : reply(typed))}
 			/>
 			{#if !cur.multiple}
-				<button class="go" disabled={!typed.trim()} onclick={() => reply(typed)} aria-label={items ? t("저장") : t("보내기")} title={items ? t("저장") : t("보내기")}>
+				<button class="go tap" disabled={!typed.trim()} onclick={() => reply(typed)} aria-label={items ? t("저장") : t("보내기")} title={items ? t("저장") : t("보내기")}>
 					<Icon name={items ? "check" : "send"} />
 				</button>
 			{/if}

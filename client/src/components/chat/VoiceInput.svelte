@@ -92,6 +92,17 @@
 		width: 19px;
 		height: 19px;
 	}
+	/* the same pane container as SendControls: its circles shrink to 32px at this width, and the microphone follows */
+	@container (max-width: 340px) {
+		.mic {
+			width: 32px;
+			height: 32px;
+		}
+		.mic :global(svg) {
+			width: 16px;
+			height: 16px;
+		}
+	}
 	@media (hover: hover) {
 		.mic:hover:not(:disabled) {
 			background: var(--bg-hover);
