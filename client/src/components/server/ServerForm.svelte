@@ -167,7 +167,7 @@
 			<section class="set-group wd-group">
 				<div class="section-label">{t("기본 작업 폴더")}</div>
 	{#if wdError && !shownWd}
-			<Notice tone="danger">{wdError}</Notice>
+			<Notice tone="danger" raised>{wdError}</Notice>
 	{:else}
 			<div class="wd">
 				<Icon name="folder" />
@@ -219,8 +219,8 @@
 					</div>
 				</FormField>
 
-				{#if openHttp}<Notice tone="warn">{t("암호화되지 않은 http 주소입니다. Tailscale 주소나 https를 권장합니다.")}</Notice>{/if}
-				{#if error}<Notice tone="danger">{error}</Notice>{/if}
+				{#if openHttp}<Notice tone="warn" raised>{t("암호화되지 않은 http 주소입니다. Tailscale 주소나 https를 권장합니다.")}</Notice>{/if}
+				{#if error}<Notice tone="danger" raised>{error}</Notice>{/if}
 				<p class="hint">{t("토큰은 이 기기에만 저장됩니다.")}</p>
 				</div>
 				{#if editing && isOpen}<section class="set-group"><ServerUpdate /></section>{/if}
@@ -356,14 +356,14 @@
 		flex-direction: column;
 		gap: 8px;
 	}
+	/* borderless page-tinted surface inside .set-group (no box-in-box, matching ListItem) */
 	.wd {
 		display: flex;
 		align-items: center;
 		gap: 8px;
 		padding: 8px 12px;
-		border: 1px solid var(--border);
-		border-radius: var(--radius);
-		background: var(--bg);
+		border-radius: var(--radius-sm);
+		background: var(--item-bg, var(--bg));
 	}
 	.wd > :global(svg) {
 		flex: none;

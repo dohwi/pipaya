@@ -122,7 +122,7 @@
 		gap: 8px;
 		padding: 12px;
 		border-bottom: 1px solid var(--border);
-		background: var(--bg-elev);
+		background: transparent;
 	}
 	.phead {
 		display: flex;
@@ -158,7 +158,7 @@
 	.actions {
 		display: flex;
 		flex-wrap: wrap;
-		gap: 4px;
+		gap: 8px;
 	}
 	.keyform {
 		display: flex;

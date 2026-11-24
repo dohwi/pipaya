@@ -46,7 +46,7 @@
 <div class="section-label">{t("시스템 알림")}</div>
 <SettingRow label={t("알림 보내기")} hint={background ? t("작업 완료 · 실패 · 승인 필요 때. 앱이 닫혀 있어도 받습니다") : t("작업 완료 · 실패 · 승인 필요 때. 앱을 보고 있으면 보내지 않습니다")}><Switch checked={enabled} label={t("시스템 알림")} onchange={toggle} /></SettingRow>
 {#if busy}<p class="hint" in:collapseIn out:collapseOut>{t("알림 권한을 확인하는 중…")}</p>{/if}
-{#if error}<Notice tone="danger" size="sm" animated>{error}</Notice>{/if}
+{#if error}<Notice tone="danger" size="sm" raised animated>{error}</Notice>{/if}
 
 <SettingRow label={t("에이전트 간 대화는 알림 안 함")} hint={t("다른 대화의 메시지로 시작된 작업은 알리지 않습니다. 내 메시지에 대한 답과 확인 질문만 알립니다 · 모든 기기 공통")}><Switch checked={app.quietPeers} label={t("에이전트 간 대화는 알림 안 함")} onchange={(on) => app.setQuietPeers(on)} /></SettingRow>
 

@@ -225,6 +225,12 @@
 	.paired h4 {
 		margin: 0;
 	}
+	/* borderless page-tinted surface inside .set-group (no box-in-box, matching ListItem) */
+	.paired ul {
+		border: 0;
+		border-radius: var(--radius-sm);
+		background: var(--item-bg, var(--bg));
+	}
 	.adds {
 		display: flex;
 		flex-wrap: wrap;

@@ -529,11 +529,6 @@ input[type="range"]:focus-visible {
 .btn:active:not(:disabled) {
 	transform: scale(0.94);
 }
-.btn:disabled {
-	background: var(--disabled-bg);
-	border-color: var(--disabled-border);
-	color: var(--disabled-fg);
-}
 /* the one compact size; `small` was an alias and is gone */
 .btn.sm {
 	height: var(--control-h-sm);
@@ -617,6 +612,20 @@ input[type="range"]:focus-visible {
 	.btn.danger-text:hover:not(:disabled) {
 		background: var(--danger-soft);
 	}
+}
+/* Declared after all button variants so disabled state overrides primary, update, danger and dashed fills/colors. */
+.btn:disabled {
+	background: var(--disabled-bg);
+	border-color: var(--disabled-border);
+	color: var(--disabled-fg);
+}
+.btn.ghost:disabled {
+	background: transparent;
+	border-color: transparent;
+}
+.btn.dashed:disabled {
+	background: transparent;
+	border-color: var(--disabled-border);
 }
 
 .iconbtn {
