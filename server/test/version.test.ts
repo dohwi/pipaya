@@ -134,22 +134,54 @@ describe("version handshake", () => {
 		test("needs the token", async () => {
 			expect((await call("GET", "/server/update", {})).status).toBe(401);
 			expect((await call("POST", "/server/update", {}, {})).status).toBe(401);
+			expect((await call("DELETE", "/server/update", {})).status).toBe(401);
 		});
 
-		test("a paired device may not update the server", async () => {
+		test("a paired device may not update or cancel the server update", async () => {
 			const code = (await call("POST", "/pairing", auth, {})).json.code;
 			const redeemed = await call("POST", "/pairing/redeem", {}, { code, name: "phone" });
 			const device = redeemed.json.token as string;
 			expect((await call("POST", "/server/update", { authorization: `Bearer ${device}` }, {})).status).toBe(403);
+			expect((await call("DELETE", "/server/update", { authorization: `Bearer ${device}` })).status).toBe(403);
 		});
 
-		test("refuses while a session is running, unless forced", async () => {
+		test("refuses while a session is running, unless forced or queued", async () => {
 			running = 1;
 			const r = await call("POST", "/server/update", auth, {});
 			expect(r.status).toBe(409);
 			expect(r.json.error.code).toBe("sessions_running");
 			expect(restarts).toBe(0);
 			expect(head).toBe(OLD);
+			running = 0;
+		});
+
+		test("queues while sessions are running when queue is true, and can be cancelled", async () => {
+			running = 2;
+			const q = await call("POST", "/server/update", auth, { queue: true });
+			expect(q.status).toBe(200);
+			expect(q.json).toMatchObject({ ok: true, from: OLD, to: NEW, restarting: false, pending: true, runningSessions: 2 });
+			expect(restarts).toBe(0);
+			expect(head).toBe(OLD);
+
+			const st = await call("GET", "/server/update");
+			expect(st.status).toBe(200);
+			expect(st.json).toMatchObject({ available: true, pending: true, runningSessions: 2 });
+
+			// Idempotent repeat press while still pending
+			const q2 = await call("POST", "/server/update", auth, { queue: true });
+			expect(q2.status).toBe(200);
+			expect(q2.json).toMatchObject({ ok: true, restarting: false, pending: true, runningSessions: 2 });
+
+			const c1 = await call("DELETE", "/server/update");
+			expect(c1.status).toBe(200);
+			expect(c1.json).toEqual({ ok: true, cancelled: true });
+
+			const c2 = await call("DELETE", "/server/update");
+			expect(c2.status).toBe(200);
+			expect(c2.json).toEqual({ ok: true, cancelled: false });
+
+			const stAfter = await call("GET", "/server/update");
+			expect(stAfter.json).toMatchObject({ pending: false, runningSessions: 2 });
 			running = 0;
 		});
 
@@ -305,7 +337,7 @@ describe("SelfUpdater", () => {
 			return fine(cmd, cwd, t);
 		};
 		const { dir, u } = make({ env: { PIPAYA_SELF_UPDATE: "1" }, run, version: "0.4.9", install: async () => true, restart: () => {} });
-		expect(await u.apply()).toEqual({ from: OLD, to: NEW, fromVersion: "0.4.9", toVersion: "0.5.0" });
+		expect(await u.apply()).toEqual({ from: OLD, to: NEW, fromVersion: "0.4.9", toVersion: "0.5.0", pending: false, runningSessions: 0 });
 		rmSync(dir, { recursive: true, force: true });
 	});
 
@@ -514,5 +546,115 @@ describe("SelfUpdater", () => {
 		release();
 		await first;
 		rmSync(dir, { recursive: true, force: true });
+	});
+
+	describe("queued update while sessions are running", () => {
+		test("applies automatically once the last running session finishes", async () => {
+			let running = 2;
+			let restarted = 0;
+			let installs = 0;
+			const events: string[] = [];
+			const { dir, u } = make({
+				env: { PIPAYA_SELF_UPDATE: "1" },
+				run: fine,
+				running: () => running,
+				install: async () => (installs++, true),
+				restart: () => void restarted++,
+				onChange: (ev) => events.push(`${ev.phase}:${ev.runningSessions}`),
+			});
+			const res = await u.apply({ queue: true });
+			expect(res).toMatchObject({ pending: true, runningSessions: 2 });
+			expect(u.isPending).toBe(true);
+			expect(restarted).toBe(0);
+
+			// One session finishes, one still running: broadcast count update, do not restart yet.
+			running = 1;
+			u.onActivityChange();
+			await Bun.sleep(20);
+			expect(restarted).toBe(0);
+			expect(u.isPending).toBe(true);
+
+			// Last session finishes: automatically applies and restarts.
+			running = 0;
+			u.onActivityChange();
+			await Bun.sleep(50);
+			expect(restarted).toBe(1);
+			expect(installs).toBe(1);
+			expect(u.isPending).toBe(false);
+			expect(events).toEqual(["pending:2", "pending:1", "updating:0", "restarting:0"]);
+			rmSync(dir, { recursive: true, force: true });
+		});
+
+		test("force: true overrides a queued update and restarts immediately", async () => {
+			let restarted = 0;
+			const { dir, u } = make({
+				env: { PIPAYA_SELF_UPDATE: "1" },
+				run: fine,
+				running: () => 2,
+				install: async () => true,
+				restart: () => void restarted++,
+			});
+			expect((await u.apply({ queue: true })).pending).toBe(true);
+			expect(u.isPending).toBe(true);
+			const forced = await u.apply({ force: true });
+			expect(forced.pending).toBe(false);
+			expect(u.isPending).toBe(false);
+			expect(restarted).toBe(1);
+			rmSync(dir, { recursive: true, force: true });
+		});
+
+		test("applies immediately if running sessions finish during fetch/provenance", async () => {
+			let running = 1;
+			let restarted = 0;
+			const run: Run = async (cmd, cwd, t) => {
+				if (cmd[1] === "fetch") running = 0;
+				return fine(cmd, cwd, t);
+			};
+			const { dir, u } = make({
+				env: { PIPAYA_SELF_UPDATE: "1" },
+				run,
+				running: () => running,
+				install: async () => true,
+				restart: () => void restarted++,
+			});
+			const res = await u.apply({ queue: true });
+			expect(res.pending).toBe(false);
+			expect(u.isPending).toBe(false);
+			expect(restarted).toBe(1);
+			rmSync(dir, { recursive: true, force: true });
+		});
+
+		test("refuses dirty checkout up front without queuing", async () => {
+			const edited: Run = async (cmd, cwd, t) => (cmd[1] === "status" ? { code: 0, out: " M server/src/app.ts" } : fine(cmd, cwd, t));
+			const { dir, u } = make({ env: { PIPAYA_SELF_UPDATE: "1" }, run: edited, running: () => 1, install: async () => true });
+			await expect(u.apply({ queue: true })).rejects.toMatchObject({ status: 409, code: "dirty_checkout" });
+			expect(u.isPending).toBe(false);
+			rmSync(dir, { recursive: true, force: true });
+		});
+
+		test("clears pending and emits error when auto-apply fails later, and ignores throwing listeners", async () => {
+			let running = 1;
+			let dirty = false;
+			const phases: string[] = [];
+			const run: Run = async (cmd, cwd, t) => (dirty && cmd[1] === "status" ? { code: 0, out: " M x.ts" } : fine(cmd, cwd, t));
+			const { dir, u } = make({
+				env: { PIPAYA_SELF_UPDATE: "1" },
+				run,
+				running: () => running,
+				install: async () => true,
+				onChange: (ev) => {
+					phases.push(`${ev.phase}:${ev.code ?? ""}`);
+					throw new Error("listener boom");
+				},
+			});
+			expect((await u.apply({ queue: true })).pending).toBe(true);
+			dirty = true;
+			running = 0;
+			u.onActivityChange();
+			await Bun.sleep(50);
+			expect(u.isPending).toBe(false);
+			expect(phases).toEqual(["pending:", "error:dirty_checkout"]);
+			rmSync(dir, { recursive: true, force: true });
+		});
 	});
 });

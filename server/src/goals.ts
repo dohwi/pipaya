@@ -103,6 +103,8 @@ export interface GoalManagerOptions {
 	now?: () => number;
 	timers?: GoalTimers;
 	continueDelayMs?: number;
+	/** While true (e.g. a server update is queued waiting for idle), automatic goal continuations are deferred instead of starting a new turn. */
+	deferContinue?: () => boolean;
 	onChange?: (change: GoalChange) => void;
 	log?: (message: string) => void;
 }
@@ -152,6 +154,7 @@ export class GoalManager {
 	private readonly now: () => number;
 	private readonly timers: GoalTimers;
 	private readonly continueDelayMs: number;
+	private readonly deferContinue?: () => boolean;
 	private readonly onChange?: (c: GoalChange) => void;
 	private readonly log?: (m: string) => void;
 	private readonly activeRuns = new Map<string, RunTracker>();
@@ -168,6 +171,7 @@ export class GoalManager {
 		this.now = opts.now ?? (() => Date.now());
 		this.timers = opts.timers ?? DEFAULT_TIMERS;
 		this.continueDelayMs = opts.continueDelayMs ?? DEFAULT_CONTINUE_DELAY_MS;
+		this.deferContinue = opts.deferContinue;
 		this.onChange = opts.onChange;
 		this.log = opts.log;
 	}
@@ -550,12 +554,16 @@ export class GoalManager {
 		}
 	}
 
-	private scheduleContinue(sessionId: string): void {
+	private scheduleContinue(sessionId: string, delayMs = this.continueDelayMs): void {
 		if (this.stopped) return;
 		this.cancelPending(sessionId);
 		const timer = this.timers.set(() => {
 			this.pendingContinue.delete(sessionId);
 			if (this.stopped) return;
+			if (this.deferContinue?.()) {
+				this.scheduleContinue(sessionId, Math.max(this.continueDelayMs, 1000));
+				return;
+			}
 			const session = this.host.session(sessionId);
 			if (!session || session.closed || this.host.isRunning(sessionId)) return;
 			const g = this.get(sessionId);
@@ -568,7 +576,7 @@ export class GoalManager {
 					this.transitionStatus(sessionId, g.goalId, USAGE_LIMIT_RE.test(msg) ? "usage_limited" : "blocked");
 				}
 			});
-		}, this.continueDelayMs);
+		}, delayMs);
 		this.pendingContinue.set(sessionId, timer);
 	}
 

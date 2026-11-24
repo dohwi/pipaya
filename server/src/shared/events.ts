@@ -42,6 +42,7 @@ export const EVENT_TYPES = [
 	"mcp_updated",
 	"schedules_updated",
 	"goals_updated",
+	"server_update_changed",
 	"locales_updated",
 	"client_settings_updated",
 	"extension_settings_updated",

@@ -403,10 +403,28 @@ export const UpdateStatus = Type.Object({
 	currentVersion: Nullable(Type.String({ description: "The version this server runs, e.g. 0.5.0" })),
 	latestVersion: Nullable(Type.String({ description: "The version at the release tag; null when it could not be read" })),
 	available: Type.Boolean(),
+	pending: Type.Boolean({ description: "True when an update is queued to run as soon as running sessions finish" }),
+	runningSessions: Type.Integer({ description: "Number of sessions currently mid-turn" }),
 	checkedAt: Type.Integer(),
 });
-export const UpdateResult = Type.Object({ ok: Type.Boolean(), from: Type.String(), to: Type.String(), fromVersion: Nullable(Type.String()), toVersion: Nullable(Type.String()), restarting: Type.Boolean() });
-export const UpdateBody = Type.Object({ force: Type.Optional(Type.Boolean()) }, { additionalProperties: false });
+export const UpdateResult = Type.Object({
+	ok: Type.Boolean(),
+	from: Type.String(),
+	to: Type.String(),
+	fromVersion: Nullable(Type.String()),
+	toVersion: Nullable(Type.String()),
+	restarting: Type.Boolean(),
+	pending: Type.Optional(Type.Boolean()),
+	runningSessions: Type.Optional(Type.Integer()),
+});
+export const UpdateCancelResult = Type.Object({ ok: Type.Boolean(), cancelled: Type.Boolean() });
+export const UpdateBody = Type.Object(
+	{
+		force: Type.Optional(Type.Boolean()),
+		queue: Type.Optional(Type.Boolean({ description: "When sessions are running, wait for them to finish and apply automatically instead of failing with 409" })),
+	},
+	{ additionalProperties: false },
+);
 
 // ── Events ──────────────────────────────────────────────────────────────────
 
@@ -464,6 +482,18 @@ export const EVENTS: EventDef[] = [
 		type: "goals_updated", persisted: false,
 		description: "A session's goal was set, updated, accounted or cleared (sessionId is null; refetch GET /goals). Live only: a client that reconnects refetches anyway",
 		data: Type.Object({ sessionId: Type.String(), action: Type.Union([Type.Literal("set"), Type.Literal("updated"), Type.Literal("cleared")]) }),
+	},
+	{
+		type: "server_update_changed", persisted: false,
+		description: "Server self-update state changed (queued while sessions run, running count changed, applying, restarting, failed, or cancelled; sessionId is null)",
+		data: Type.Object({
+			phase: Type.Union([Type.Literal("idle"), Type.Literal("pending"), Type.Literal("updating"), Type.Literal("restarting"), Type.Literal("error")]),
+			pending: Type.Boolean(),
+			runningSessions: Type.Integer(),
+			toVersion: Type.Optional(Nullable(Type.String())),
+			code: Type.Optional(Type.String()),
+			message: Type.Optional(Type.String()),
+		}),
 	},
 	{
 		type: "skills_updated", persisted: true,

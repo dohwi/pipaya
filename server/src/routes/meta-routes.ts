@@ -58,9 +58,13 @@ export function registerMetaRoutes(server: FastifyInstance, deps: MetaRoutesDeps
 	app.post("/server/update", {
 		schema: { body: S.UpdateBody, response: { 200: S.UpdateResult, ...S.errors(400, 401, 403, 409, 502) } },
 		handler: async (req) => {
-			const done = await updater.apply(req.body?.force === true);
-			return { ok: true, ...done, restarting: true };
+			const done = await updater.apply({ force: req.body?.force === true, queue: req.body?.queue === true });
+			return { ok: true, from: done.from, to: done.to, fromVersion: done.fromVersion, toVersion: done.toVersion, restarting: !done.pending, pending: done.pending, runningSessions: done.runningSessions };
 		},
+	});
+	app.delete("/server/update", {
+		schema: { response: { 200: S.UpdateCancelResult, ...S.errors(401, 403) } },
+		handler: async () => ({ ok: true, cancelled: updater.cancelPending() }),
 	});
 
 	app.get("/tools", {

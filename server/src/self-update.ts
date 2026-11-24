@@ -40,7 +40,34 @@ export interface UpdateStatus {
 	/** The version the release tag holds, or null when it could not be read (no update is offered without a newer version). */
 	latestVersion: string | null;
 	available: boolean;
+	/** True when an update has been queued to apply automatically as soon as running sessions finish. */
+	pending: boolean;
+	/** Number of sessions currently mid-turn. */
+	runningSessions: number;
 	checkedAt: number;
+}
+
+export interface SelfUpdateStateEvent {
+	phase: "idle" | "pending" | "updating" | "restarting" | "error";
+	pending: boolean;
+	runningSessions: number;
+	toVersion?: string | null;
+	code?: string;
+	message?: string;
+}
+
+export interface ApplyOptions {
+	force?: boolean;
+	queue?: boolean;
+}
+
+export interface ApplyResult {
+	from: string;
+	to: string;
+	fromVersion: string | null;
+	toVersion: string | null;
+	pending: boolean;
+	runningSessions: number;
 }
 
 export interface SelfUpdateOptions {
@@ -56,6 +83,10 @@ export interface SelfUpdateOptions {
 	restart?: () => void;
 	/** Sessions that are mid-turn right now: a restart would cut them off. */
 	running?: () => number;
+	/** Notified whenever the update state changes (queued, running count changed, applying, restarting, failed, cancelled). */
+	onChange?: (event: SelfUpdateStateEvent) => void;
+	/** Optional logger for background auto-apply failures. */
+	log?: (message: string) => void;
 	/** How long a check is reused. */
 	cacheMs?: number;
 	now?: () => number;
@@ -102,8 +133,11 @@ export class SelfUpdater {
 	private readonly install: (serverDir: string) => Promise<boolean>;
 	private readonly now: () => number;
 	private readonly cacheMs: number;
-	private cached: UpdateStatus | null = null;
+	private cached: Omit<UpdateStatus, "pending" | "runningSessions"> | null = null;
 	private applying = false;
+	private queued = false;
+	private queuedTarget: { from: string; to: string; fromVersion: string | null; toVersion: string | null } | null = null;
+	private lastReportedRunning = -1;
 	/** The version found at a release commit never changes, so each commit is read once. */
 	private readonly versionAt = new Map<string, string | null>();
 
@@ -198,11 +232,73 @@ export class SelfUpdater {
 		return "off_branch";
 	}
 
+	get isPending(): boolean {
+		return this.queued;
+	}
+
+	private runningCount(): number {
+		return Math.max(0, this.o.running?.() ?? 0);
+	}
+
+	private withLive(base: Omit<UpdateStatus, "pending" | "runningSessions">): UpdateStatus {
+		return { ...base, pending: this.queued, runningSessions: this.runningCount() };
+	}
+
+	private emit(event: SelfUpdateStateEvent): void {
+		try {
+			this.o.onChange?.(event);
+		} catch {
+			/* listener errors never break self-update */
+		}
+	}
+
+	/** Cancels a queued update waiting for running sessions to finish. Returns true if one was queued. */
+	cancelPending(): boolean {
+		if (!this.queued) return false;
+		this.queued = false;
+		this.queuedTarget = null;
+		this.lastReportedRunning = -1;
+		this.emit({ phase: "idle", pending: false, runningSessions: this.runningCount() });
+		return true;
+	}
+
+	/**
+	 * Called whenever a session starts or finishes a turn. If an update is waiting for sessions to finish, either
+	 * broadcasts the new running count or runs the update immediately once none remain.
+	 */
+	onActivityChange(): void {
+		if (!this.queued || this.applying) return;
+		const running = this.runningCount();
+		if (running === 0) {
+			void this.runQueued();
+		} else if (running !== this.lastReportedRunning) {
+			this.lastReportedRunning = running;
+			this.emit({ phase: "pending", pending: true, runningSessions: running, toVersion: this.queuedTarget?.toVersion ?? null });
+		}
+	}
+
+	private async runQueued(): Promise<void> {
+		if (!this.queued || this.applying || this.runningCount() > 0) return;
+		this.queued = false;
+		this.queuedTarget = null;
+		this.lastReportedRunning = -1;
+		try {
+			await this.apply({ force: false, queue: true });
+		} catch (e) {
+			const code = e instanceof HttpError ? e.code : "update_failed";
+			const message = e instanceof Error ? e.message : String(e);
+			this.o.log?.(`queued server update failed (${code}): ${message}`);
+			this.emit({ phase: "error", pending: false, runningSessions: this.runningCount(), code, message });
+		}
+	}
+
 	async status(refresh = false): Promise<UpdateStatus> {
-		if (!refresh && this.cached && this.now() - this.cached.checkedAt < this.cacheMs) return this.cached;
+		if (!refresh && this.cached && this.now() - this.cached.checkedAt < this.cacheMs) return this.withLive(this.cached);
 		const checkedAt = this.now();
-		const none = (reason: UnavailableReason, extra: Partial<UpdateStatus> = {}): UpdateStatus =>
-			(this.cached = { managed: false, reason, ref: null, current: null, latest: null, currentVersion: this.runningVersion, latestVersion: null, available: false, checkedAt, ...extra });
+		const none = (reason: UnavailableReason, extra: Partial<Omit<UpdateStatus, "pending" | "runningSessions">> = {}): UpdateStatus => {
+			this.cached = { managed: false, reason, ref: null, current: null, latest: null, currentVersion: this.runningVersion, latestVersion: null, available: false, checkedAt, ...extra };
+			return this.withLive(this.cached);
+		};
 
 		const reason = this.unmanagedReason();
 		if (reason) return none(reason);
@@ -223,7 +319,7 @@ export class SelfUpdater {
 		const latest = tip && SHA_PATTERN.test(tip) ? tip : null;
 		if (!latest) return none("fetch_failed", { ref, current });
 		if (latest === current) {
-			return (this.cached = {
+			this.cached = {
 				managed: true,
 				ref,
 				current,
@@ -232,7 +328,8 @@ export class SelfUpdater {
 				latestVersion: this.runningVersion,
 				available: false,
 				checkedAt,
-			});
+			};
+			return this.withLive(this.cached);
 		}
 		// Only offer an update when the release tag actually carries a newer version, matching the client updater.
 		const read = await this.readVersionAt(latest);
@@ -240,27 +337,49 @@ export class SelfUpdater {
 		const latestVersion = read.version;
 		const cmp = compareVersions(latestVersion, this.runningVersion);
 		const available = cmp !== null && cmp > 0;
-		return (this.cached = { managed: true, ref, current, latest, currentVersion: this.runningVersion, latestVersion, available, checkedAt });
+		this.cached = { managed: true, ref, current, latest, currentVersion: this.runningVersion, latestVersion, available, checkedAt };
+		return this.withLive(this.cached);
 	}
 
-	/** Moves to the newest commit and asks the process to restart. Throws HttpError with a reason the client can show. */
-	async apply(force = false): Promise<{ from: string; to: string; fromVersion: string | null; toVersion: string | null }> {
+	/**
+	 * Moves to the newest commit and asks the process to restart. Throws HttpError with a reason the client can show.
+	 * When `queue` is true and sessions are running, validates and fetches the release first, then queues the update
+	 * to run automatically once all running sessions finish (returning `pending: true`).
+	 */
+	async apply(opts: boolean | ApplyOptions = false): Promise<ApplyResult> {
+		const force = typeof opts === "boolean" ? opts : Boolean(opts.force);
+		const queue = typeof opts === "boolean" ? false : Boolean(opts.queue);
 		if (this.applying) throw new HttpError(409, "update_in_progress", "an update is already running");
+
+		// Already waiting for sessions to finish: a repeat queued press is idempotent while sessions are still running.
+		if (queue && !force && this.queued && this.queuedTarget) {
+			const running = this.runningCount();
+			if (running > 0) return { ...this.queuedTarget, pending: true, runningSessions: running };
+		}
+
 		this.applying = true;
 		try {
 			const st = await this.status(true);
 			if (!st.managed || !st.current) {
+				this.queued = false;
+				this.queuedTarget = null;
 				throw new HttpError(400, "update_unavailable", `this server cannot update itself (${st.reason ?? "unknown"})`);
 			}
-			if (!st.available || !st.latest) throw new HttpError(409, "up_to_date", "the server is already up to date");
-			const busy = this.o.running?.() ?? 0;
-			if (busy > 0 && !force) {
+			if (!st.available || !st.latest) {
+				this.queued = false;
+				this.queuedTarget = null;
+				throw new HttpError(409, "up_to_date", "the server is already up to date");
+			}
+			const busy = this.runningCount();
+			if (busy > 0 && !force && !queue) {
 				throw new HttpError(409, "sessions_running", `${busy} session(s) are running; a restart would interrupt them`);
 			}
 
-			// `reset --hard` below would silently discard edits made in this checkout: refuse instead.
+			// `reset --hard` below would silently discard edits made in this checkout: refuse before queuing or touching anything.
 			const dirty = await this.git(["status", "--porcelain", "--untracked-files=no"]);
 			if (dirty.code === 0 && dirty.out.length > 0) {
+				this.queued = false;
+				this.queuedTarget = null;
 				throw new HttpError(409, "dirty_checkout", "the server's checkout has local changes; commit or discard them before updating");
 			}
 
@@ -270,13 +389,37 @@ export class SelfUpdater {
 				const origin = await this.provenance(st.latest);
 				if (origin === "off_branch") {
 					this.cached = null;
+					this.queued = false;
+					this.queuedTarget = null;
 					throw new HttpError(409, "update_untrusted", "the release tag points at a commit that is not on the release branch; the update was refused");
 				}
 				if (origin === "unknown") {
 					this.cached = null;
+					this.queued = false;
+					this.queuedTarget = null;
 					throw new HttpError(502, "update_unverified", "the release could not be checked against the release branch; nothing was changed");
 				}
 			}
+
+			// Re-check running sessions after network fetch/provenance: if they finished meanwhile, apply immediately.
+			const busyAfter = this.runningCount();
+			if (fetched.code === 0 && busyAfter > 0 && !force) {
+				if (!queue) {
+					throw new HttpError(409, "sessions_running", `${busyAfter} session(s) are running; a restart would interrupt them`);
+				}
+				const target = { from: st.current, to: st.latest, fromVersion: st.currentVersion, toVersion: st.latestVersion };
+				this.queued = true;
+				this.queuedTarget = target;
+				this.lastReportedRunning = busyAfter;
+				this.emit({ phase: "pending", pending: true, runningSessions: busyAfter, toVersion: st.latestVersion });
+				return { ...target, pending: true, runningSessions: busyAfter };
+			}
+
+			this.queued = false;
+			this.queuedTarget = null;
+			this.lastReportedRunning = -1;
+			this.emit({ phase: "updating", pending: false, runningSessions: busyAfter, toVersion: st.latestVersion });
+
 			// Dependencies are reinstalled only when the manifest or lockfile differ between the two commits (unknown = reinstall).
 			const diff = fetched.code === 0 ? await this.git(["diff", "--name-only", st.current, st.latest, "--", "server/package.json", "server/bun.lock"]) : null;
 			const depsChanged = !diff || diff.code !== 0 || diff.out.length > 0;
@@ -294,8 +437,9 @@ export class SelfUpdater {
 				throw new HttpError(502, "update_failed", "the update could not be installed; the previous version was restored");
 			}
 			this.cached = null;
+			this.emit({ phase: "restarting", pending: false, runningSessions: 0, toVersion: st.latestVersion });
 			this.o.restart?.();
-			return { from: st.current, to: st.latest, fromVersion: st.currentVersion, toVersion: st.latestVersion };
+			return { from: st.current, to: st.latest, fromVersion: st.currentVersion, toVersion: st.latestVersion, pending: false, runningSessions: 0 };
 		} finally {
 			this.applying = false;
 		}

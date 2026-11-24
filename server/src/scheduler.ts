@@ -157,6 +157,8 @@ const realTimers: Timers = {
 export interface SchedulerOptions {
 	now?: () => number;
 	timers?: Timers;
+	/** While true (e.g. a server update is queued waiting for idle), timer-triggered tasks wait until the next tick. */
+	deferRun?: () => boolean;
 	/** Something changed (create / update / delete / a run): the app tells the clients. */
 	onChange?: (change: { id: string | null; action: "created" | "updated" | "deleted" | "ran" }) => void;
 	log?: (msg: string) => void;
@@ -194,12 +196,14 @@ export class Scheduler {
 	private lastPruneAt = -Infinity;
 	private now: () => number;
 	private timers: Timers;
+	private deferRun?: () => boolean;
 	private onChange: NonNullable<SchedulerOptions["onChange"]>;
 	private log: (msg: string) => void;
 
 	constructor(private db: Database, private host: SchedulerHost, opts: SchedulerOptions = {}) {
 		this.now = opts.now ?? Date.now;
 		this.timers = opts.timers ?? realTimers;
+		this.deferRun = opts.deferRun;
 		this.onChange = opts.onChange ?? (() => {});
 		this.log = opts.log ?? (() => {});
 	}
@@ -377,6 +381,10 @@ export class Scheduler {
 	/** Runs everything that is due, then arms the timer for what comes next. */
 	async tick(): Promise<void> {
 		if (this.ticking) return;
+		if (this.deferRun?.()) {
+			this.arm(RETRY_FLOOR_MS);
+			return;
+		}
 		this.ticking = true;
 		try {
 			await this.runDue();
