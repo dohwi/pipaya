@@ -7,6 +7,8 @@ export interface UpstreamRetryOptions {
 	maxRetries: number;
 	/** Cap on consecutive zero-output retries on the same model/context (defaults to `maxRetries`). */
 	maxZeroOutputRetries?: number;
+	/** Cap on proxy/gateway warm-up retries such as CLIProxyAPI's startup "unknown provider for model" 400 (defaults to `maxRetries`). */
+	maxWarmupRetries?: number;
 	/** Wait before the first retry; doubles each time (capped at maxDelayMs). */
 	baseDelayMs: number;
 	maxDelayMs: number;
@@ -19,18 +21,20 @@ export interface UpstreamRetryOptions {
 /**
  * 2s, 4s, 8s, 16s, 30s, 30s: about 90 seconds of patience for a gateway that drops for a moment (502/503/504, reset, timeout).
  * Zero-output failures are capped at 2 retries (2s, 4s) because deterministic empty generations waste ~10-18s per attempt.
+ * Proxy warm-up errors (e.g. CLIProxyAPI returning 400 "unknown provider for model" right after restart) are capped at 4 retries (~30s)
+ * so restarts recover seamlessly while genuinely misconfigured models still fail fast.
  */
-export const DEFAULT_UPSTREAM_RETRY: UpstreamRetryOptions = { maxRetries: 6, maxZeroOutputRetries: 2, baseDelayMs: 2000, maxDelayMs: 30_000 };
+export const DEFAULT_UPSTREAM_RETRY: UpstreamRetryOptions = { maxRetries: 6, maxZeroOutputRetries: 2, maxWarmupRetries: 4, baseDelayMs: 2000, maxDelayMs: 30_000 };
 
 /**
  * A stream that broke after part of the reply had already been sent (a proxy or gateway closed the socket mid-answer).
  * The partial reply cannot be resumed, so the whole request is repeated: fewer tries than DEFAULT_UPSTREAM_RETRY
  * (2s, 4s, 8s) because the user is already waiting on an answer that disappeared.
  */
-export const STREAM_RETRY: UpstreamRetryOptions = { maxRetries: 3, maxZeroOutputRetries: 2, baseDelayMs: 2000, maxDelayMs: 10_000 };
+export const STREAM_RETRY: UpstreamRetryOptions = { maxRetries: 3, maxZeroOutputRetries: 2, maxWarmupRetries: 3, baseDelayMs: 2000, maxDelayMs: 10_000 };
 
 /** 1s, 2s, 4s: short backoff for one-shot completions (/compact, /llm/complete, session titles). */
-export const COMPLETION_RETRY: UpstreamRetryOptions = { maxRetries: 3, maxZeroOutputRetries: 2, baseDelayMs: 1000, maxDelayMs: 8000 };
+export const COMPLETION_RETRY: UpstreamRetryOptions = { maxRetries: 3, maxZeroOutputRetries: 2, maxWarmupRetries: 3, baseDelayMs: 1000, maxDelayMs: 8000 };
 
 /**
  * A short, safe reason for the "retrying" notice: one line, at most 200 characters, with URL queries/credentials,
@@ -91,13 +95,25 @@ const TRANSPORT_ERROR = /reset by peer|ECONNRESET|ECONNREFUSED|ECONNABORTED|ETIM
  */
 const ZERO_OUTPUT_ERROR = /zero output|(?:Gemini|upstream) (?:response|stream) (?:finished|closed) with (?:zero output|MALFORMED_FUNCTION_CALL|UNEXPECTED_TOOL_CALL|MALFORMED_RESPONSE)|finishReason (?:MALFORMED_FUNCTION_CALL|UNEXPECTED_TOOL_CALL|MALFORMED_RESPONSE)/i;
 
+/**
+ * Gateway/proxy startup warm-up error: right after a restart (e.g. CLIProxyAPI), the HTTP listener accepts
+ * requests before auth/provider registries finish loading and responds with 400 invalid_request_error /
+ * model_not_found ("unknown provider for model …"). Checked before PERMANENT_ERROR and capped by maxWarmupRetries
+ * so genuinely misconfigured models still fail fast.
+ */
+const PROXY_WARMUP_ERROR = /\bunknown provider for model\b/i;
+
 /** True when the failure is a transient empty/malformed upstream generation rather than a pure network drop or permanent error. */
 export const isZeroOutputError = (message: string | undefined): boolean =>
 	!!message && !PERMANENT_ERROR.test(message) && ZERO_OUTPUT_ERROR.test(message);
 
+/** True when the failure matches a gateway/proxy startup warm-up response rather than a permanent 4xx. */
+export const isProxyWarmupError = (message: string | undefined): boolean =>
+	!!message && PROXY_WARMUP_ERROR.test(message);
+
 /**
  * How a failed reply should be handled:
- * - `transient`: a gateway or provider hiccup (5xx, 429, reset, timeout, zero output …), retried with full backoff.
+ * - `transient`: a gateway or provider hiccup (5xx, 429, reset, timeout, zero output, proxy warm-up …), retried with backoff.
  * - `permanent`: will fail the same way again (4xx, auth, quota, refusal, context overflow, abort), never retried.
  * - `unknown`: anything else, e.g. a new wording from a proxy; retried once and logged so it can be classified later.
  * A reply that did not end in an error is `permanent` (there is nothing to retry).
@@ -107,7 +123,9 @@ export type UpstreamErrorKind = "transient" | "permanent" | "unknown";
 export function classifyUpstreamError(message: AssistantMessage): UpstreamErrorKind {
 	if (message.stopReason !== "error") return "permanent";
 	const text = message.errorMessage ?? "";
-	if (isContextOverflow(message) || PERMANENT_ERROR.test(text)) return "permanent";
+	if (isContextOverflow(message)) return "permanent";
+	if (PROXY_WARMUP_ERROR.test(text)) return "transient";
+	if (PERMANENT_ERROR.test(text)) return "permanent";
 	if (isRetryableAssistantError(message) || TRANSPORT_ERROR.test(text) || ZERO_OUTPUT_ERROR.test(text)) return "transient";
 	return "unknown";
 }
@@ -196,14 +214,17 @@ export function withUpstreamRetry<A extends [unknown, unknown, { signal?: AbortS
 		const out = createAssistantMessageEventStream();
 		void (async () => {
 			let attempt = 0;
+			let warmupAttempts = 0;
 			let unknownUsed = false;
 			const zeroCap = opts.maxZeroOutputRetries !== undefined ? Math.min(opts.maxRetries, opts.maxZeroOutputRetries) : opts.maxRetries;
+			const warmupCap = opts.maxWarmupRetries !== undefined ? Math.min(opts.maxRetries, opts.maxWarmupRetries) : opts.maxRetries;
 			// Worth another try: transient errors while the budget lasts, an unclassified one only once per call.
 			const retryable = (m: AssistantMessage) => {
 				if (attempt >= opts.maxRetries || signal?.aborted) return undefined;
 				const kind = classifyUpstreamError(m);
 				if (kind === "transient") {
 					if (isZeroOutputError(m.errorMessage) && attempt >= zeroCap) return undefined;
+					if (isProxyWarmupError(m.errorMessage) && warmupAttempts >= warmupCap) return undefined;
 					return kind;
 				}
 				return kind === "unknown" && !unknownUsed ? kind : undefined;
@@ -240,6 +261,8 @@ export function withUpstreamRetry<A extends [unknown, unknown, { signal?: AbortS
 				}
 				if (!failure) return out.end();
 				attempt++;
+				const warmup = isProxyWarmupError(failure.errorMessage);
+				if (warmup) warmupAttempts++;
 				if (kind === "unknown") {
 					unknownUsed = true;
 					(opts.onUnknown ?? logUnknownUpstreamError)(failure.errorMessage ?? "");
@@ -247,7 +270,11 @@ export function withUpstreamRetry<A extends [unknown, unknown, { signal?: AbortS
 				// An unclassified error waits the shortest step and is announced as the last try.
 				const maxAnnounced = kind === "unknown"
 					? attempt
-					: (isZeroOutputError(failure.errorMessage) && opts.maxZeroOutputRetries !== undefined ? zeroCap : opts.maxRetries);
+					: isZeroOutputError(failure.errorMessage) && opts.maxZeroOutputRetries !== undefined
+						? zeroCap
+						: warmup && opts.maxWarmupRetries !== undefined
+							? Math.min(opts.maxRetries, attempt + (warmupCap - warmupAttempts))
+							: opts.maxRetries;
 				const delay = kind === "unknown" ? opts.baseDelayMs : retryDelayMs({ baseDelayMs: opts.baseDelayMs, maxAgentDelayMs: opts.maxDelayMs }, attempt);
 				opts.onRetry?.(attempt, maxAnnounced, delay, failure.errorMessage ?? "");
 				await wait(delay, signal);
@@ -270,7 +297,7 @@ export function withUpstreamRetry<A extends [unknown, unknown, { signal?: AbortS
 }
 
 /**
- * Retries a one-shot `completeSimple` call on known transient upstream errors (502/503/504, socket reset, zero output).
+ * Retries a one-shot `completeSimple` call on known transient upstream errors (502/503/504, socket reset, zero output, proxy warm-up).
  * Permanent and unknown errors return immediately so deterministic failures and mocks do not block one-shot endpoints.
  */
 export async function completeWithUpstreamRetry(
@@ -281,7 +308,9 @@ export async function completeWithUpstreamRetry(
 ): Promise<AssistantMessage> {
 	const wait = opts.sleep ?? sleepAbortable;
 	const zeroCap = opts.maxZeroOutputRetries !== undefined ? Math.min(opts.maxRetries, opts.maxZeroOutputRetries) : opts.maxRetries;
+	const warmupCap = opts.maxWarmupRetries !== undefined ? Math.min(opts.maxRetries, opts.maxWarmupRetries) : opts.maxRetries;
 	let attempt = 0;
+	let warmupAttempts = 0;
 	let zeroOutputStreak = 0;
 	for (;;) {
 		const callCtx = zeroOutputStreak >= 2 ? nudgeZeroOutputContext(ctx, zeroOutputStreak) : ctx;
@@ -295,9 +324,16 @@ export async function completeWithUpstreamRetry(
 			if (classifyUpstreamError(probe) !== "transient") throw e;
 			const zero = isZeroOutputError(message);
 			if (zero && attempt >= zeroCap) throw e;
+			const warmup = isProxyWarmupError(message);
+			if (warmup && warmupAttempts >= warmupCap) throw e;
 			zeroOutputStreak = zero ? zeroOutputStreak + 1 : 0;
 			attempt++;
-			const maxAnnounced = zero && opts.maxZeroOutputRetries !== undefined ? zeroCap : opts.maxRetries;
+			if (warmup) warmupAttempts++;
+			const maxAnnounced = zero && opts.maxZeroOutputRetries !== undefined
+				? zeroCap
+				: warmup && opts.maxWarmupRetries !== undefined
+					? Math.min(opts.maxRetries, attempt + (warmupCap - warmupAttempts))
+					: opts.maxRetries;
 			const delay = retryDelayMs({ baseDelayMs: opts.baseDelayMs, maxAgentDelayMs: opts.maxDelayMs }, attempt);
 			opts.onRetry?.(attempt, maxAnnounced, delay, message);
 			await wait(delay, signal);
@@ -309,9 +345,16 @@ export async function completeWithUpstreamRetry(
 		}
 		const zero = isZeroOutputError(reply.errorMessage);
 		if (zero && attempt >= zeroCap) return reply;
+		const warmup = isProxyWarmupError(reply.errorMessage);
+		if (warmup && warmupAttempts >= warmupCap) return reply;
 		zeroOutputStreak = zero ? zeroOutputStreak + 1 : 0;
 		attempt++;
-		const maxAnnounced = zero && opts.maxZeroOutputRetries !== undefined ? zeroCap : opts.maxRetries;
+		if (warmup) warmupAttempts++;
+		const maxAnnounced = zero && opts.maxZeroOutputRetries !== undefined
+			? zeroCap
+			: warmup && opts.maxWarmupRetries !== undefined
+				? Math.min(opts.maxRetries, attempt + (warmupCap - warmupAttempts))
+				: opts.maxRetries;
 		const delay = retryDelayMs({ baseDelayMs: opts.baseDelayMs, maxAgentDelayMs: opts.maxDelayMs }, attempt);
 		opts.onRetry?.(attempt, maxAnnounced, delay, reply.errorMessage ?? "");
 		await wait(delay, signal);

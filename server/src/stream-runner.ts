@@ -1,6 +1,6 @@
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import { retryDelayMs } from "@earendil-works/pi-ai";
-import { classifyUpstreamError, isZeroOutputError, logUnknownUpstreamError, retryReason, STREAM_RETRY, type UpstreamRetryOptions } from "./upstream-retry.ts";
+import { classifyUpstreamError, isProxyWarmupError, isZeroOutputError, logUnknownUpstreamError, retryReason, STREAM_RETRY, type UpstreamRetryOptions } from "./upstream-retry.ts";
 
 export interface RetrySleepResult {
 	aborted: boolean;
@@ -41,7 +41,9 @@ export interface MidStreamRetryResult {
 export async function retryDroppedMidStream(opts: MidStreamRetryOptions): Promise<MidStreamRetryResult> {
 	const cfg = opts.retryOpts ?? STREAM_RETRY;
 	const zeroCap = cfg.maxZeroOutputRetries !== undefined ? Math.min(cfg.maxRetries, cfg.maxZeroOutputRetries) : cfg.maxRetries;
+	const warmupCap = cfg.maxWarmupRetries !== undefined ? Math.min(cfg.maxRetries, cfg.maxWarmupRetries) : cfg.maxRetries;
 	let attempts = 0;
+	let warmupAttempts = 0;
 
 	for (let attempt = 1, unknownUsed = false; !opts.shouldStop() && attempt <= cfg.maxRetries; attempt++) {
 		const last = opts.getLastMessage();
@@ -51,8 +53,15 @@ export async function retryDroppedMidStream(opts: MidStreamRetryOptions): Promis
 
 		const zero = isZeroOutputError(last.errorMessage);
 		if (zero && attempt > zeroCap) break;
+		const warmup = isProxyWarmupError(last.errorMessage);
+		if (warmup && warmupAttempts >= warmupCap) break;
+		if (warmup) warmupAttempts++;
 
-		let maxRetries = zero ? zeroCap : cfg.maxRetries;
+		let maxRetries = zero
+			? zeroCap
+			: warmup && cfg.maxWarmupRetries !== undefined
+				? Math.min(cfg.maxRetries, attempt + (warmupCap - warmupAttempts))
+				: cfg.maxRetries;
 		if (kind === "unknown") {
 			unknownUsed = true;
 			maxRetries = attempt;
