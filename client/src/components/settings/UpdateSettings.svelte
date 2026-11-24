@@ -55,7 +55,7 @@
 			</div>
 		{/if}
 	</div>
-	{#if updater.error}<div class="err-gap"><Notice tone="danger" size="sm" raised animated>{updater.error}</Notice></div>{/if}
+	{#if updater.error}<div class="err-gap" in:collapseIn out:collapseOut><Notice tone="danger" size="sm" raised>{updater.error}</Notice></div>{/if}
 	<p class="hint note">
 		{android ? t("앱 안에서 내려받은 뒤 시스템 설치 화면이 열립니다. 설치를 한 번 확인해 주세요.") : t("업데이트는 서명을 확인한 뒤 설치하고 앱을 다시 시작합니다.")}
 	</p>

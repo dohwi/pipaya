@@ -51,7 +51,7 @@
 	let rtKey = $state("");
 	let rtKeyTouched = $state(false);
 	let saving = $state(false);
-	let message = $state<{ ok: boolean; text: string } | null>(null);
+	let error = $state("");
 
 	/**
 	 * Unsaved input survives leaving this section (another tab, another server, closing Settings) and coming back: both
@@ -96,7 +96,7 @@
 		keywordText = (target.settings.realtime?.keywords ?? []).join("\n");
 		key = rtKey = "";
 		keyTouched = rtKeyTouched = false;
-		message = null;
+		error = "";
 	}
 
 	/** The old microphone extension, if it is installed: two microphones with two settings would confuse anyone. */
@@ -132,28 +132,29 @@
 			draft.language !== target.settings.language,
 	);
 
-	async function save(): Promise<boolean> {
+	async function save(silent = false): Promise<boolean> {
 		saving = true;
-		message = null;
+		error = "";
 		const next: VoiceSettings = hasModes ? { ...draft, realtime: { ...rt, keywords } } : { enabled: draft.enabled, baseUrl: draft.baseUrl, path: draft.path, model: draft.model, language: draft.language };
-		const error = await target.save(next, keyTouched ? key : undefined, rtKeyTouched ? rtKey : undefined);
+		const err = await target.save(next, keyTouched ? key : undefined, rtKeyTouched ? rtKey : undefined);
 		saving = false;
-		if (error) {
-			message = { ok: false, text: error };
+		if (err) {
+			error = err;
 			return false;
 		}
 		// what the server stored (it trims and drops repeated keywords) becomes the form again
 		revert();
-		message = { ok: true, text: t("저장했습니다") };
+		if (!silent) app.toast(t("저장했습니다"), "ok");
 		return true;
 	}
 
 	async function test() {
-		message = null;
+		error = "";
 		// A failed save is the answer; testing would only repeat it.
-		if (dirty && !(await save())) return;
+		if (dirty && !(await save(true))) return;
 		const result = await target.test();
-		message = { ok: result.ok, text: result.message };
+		if (result.ok) app.toast(result.message, "ok");
+		else error = result.message;
 	}
 </script>
 
@@ -181,7 +182,7 @@
 			label={t("변환 방식")}
 			value={draft.mode ?? "file"}
 			options={[{ id: "file", label: t("녹음 후 변환") }, { id: "realtime", label: t("실시간") }]}
-			onchange={(id) => (draft = { ...draft, mode: id })}
+			onchange={(id) => { draft = { ...draft, mode: id }; error = ""; }}
 		/>
 		<span class="hint">{realtime ? t("말하는 동안 소리를 보내고, 들리는 단어를 입력창에 바로 넣습니다. 키워드로 이름 표기를 맞출 수 있습니다. 마이크를 켜 둔 시간만큼 연결의 사용량이 듭니다.") : t("녹음을 끝내면 한 번에 보내 글로 바꿉니다. OpenAI 호환 변환 서버면 어디든 됩니다.")}</span>
 	</section>
@@ -232,12 +233,12 @@
 		<textarea class="field area" rows="2" maxlength="300" placeholder={t("예: 한국어로 말하는 개발 작업 지시")} value={rt.prompt} oninput={(e) => setRt({ prompt: e.currentTarget.value })} aria-label={t("문맥")}></textarea>
 	</label>
 	<div class="actions">
-		<Button size="sm" variant="primary" disabled={!dirty || saving || keywords.length > 20} onclick={save}>{t("저장")}</Button>
+		<Button size="sm" variant="primary" disabled={!dirty || saving || keywords.length > 20} onclick={() => void save()}>{t("저장")}</Button>
 		<Button size="sm" disabled={target.testing || target.loading} onclick={test}>{target.testing ? t("확인 중…") : t("연결 확인")}</Button>
 		{#if dirty}<Button size="sm" variant="ghost" disabled={saving} onclick={revert}>{t("변경 취소")}</Button>{/if}
 	</div>
-	{#if dirty && !message}<span class="note" role="status">{t("저장하지 않은 변경이 있습니다. 다른 화면에 다녀와도 남아 있습니다.")}</span>{/if}
-	{#if message}<span class="note" class:bad={!message.ok} role="status">{message.text}</span>{/if}
+	{#if dirty && !error}<span class="note" role="status">{t("저장하지 않은 변경이 있습니다. 다른 화면에 다녀와도 남아 있습니다.")}</span>{/if}
+	{#if error}<Notice tone="danger" size="sm" raised animated>{error}</Notice>{/if}
 </section>
 {:else}
 <section class="set-group">
@@ -279,12 +280,12 @@
 	</label>
 	<span class="hint">{t("비우면 서버가 알아서 판단합니다. 두 글자 언어 코드를 넣으면 인식이 안정됩니다.")}</span>
 	<div class="actions">
-		<Button size="sm" variant="primary" disabled={!dirty || saving} onclick={save}>{t("저장")}</Button>
+		<Button size="sm" variant="primary" disabled={!dirty || saving} onclick={() => void save()}>{t("저장")}</Button>
 		<Button size="sm" disabled={target.testing || target.loading} onclick={test}>{target.testing ? t("확인 중…") : t("연결 확인")}</Button>
 		{#if dirty}<Button size="sm" variant="ghost" disabled={saving} onclick={revert}>{t("변경 취소")}</Button>{/if}
 	</div>
-	{#if dirty && !message}<span class="note" role="status">{t("저장하지 않은 변경이 있습니다. 다른 화면에 다녀와도 남아 있습니다.")}</span>{/if}
-	{#if message}<span class="note" class:bad={!message.ok} role="status">{message.text}</span>{/if}
+	{#if dirty && !error}<span class="note" role="status">{t("저장하지 않은 변경이 있습니다. 다른 화면에 다녀와도 남아 있습니다.")}</span>{/if}
+	{#if error}<Notice tone="danger" size="sm" raised animated>{error}</Notice>{/if}
 </section>
 {/if}
 
@@ -294,7 +295,7 @@
 		<span class="state" class:on={target.state === "ready"} class:blocked={target.state === "unusable"}>{target.state === "ready" ? t("사용 가능") : target.state === "off" ? t("꺼짐") : t("사용 안 함")}</span>
 	</SettingRow>
 	{#if target.realtime ? target.realtimeEndpoint : target.endpoint}<span class="hint mono">{target.realtime ? target.realtimeEndpoint : target.endpoint}</span>{/if}
-	{#if isOpenServer && voice.failure}<span class="note bad" role="status">{t("마지막 오류")}: {t("녹음 또는 변환에 실패했습니다. 위의 연결 확인으로 상태를 다시 확인하세요.")}</span>{/if}
+	{#if isOpenServer && voice.failure}<Notice tone="danger" size="sm" raised role="status">{t("마지막 오류")}: {t("녹음 또는 변환에 실패했습니다. 위의 연결 확인으로 상태를 다시 확인하세요.")}</Notice>{/if}
 </section>
 
 <style>
@@ -329,7 +330,6 @@
 		font-size: var(--fs-xs);
 		color: var(--text-dim);
 	}
-	.note.bad,
 	.hint.bad {
 		color: var(--danger);
 	}

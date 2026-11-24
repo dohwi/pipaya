@@ -130,7 +130,7 @@
 		{#if form.fields}
 			<SettingsForm id={ext.settingsId} fields={form.fields} value={settings ?? {}} disabled={busy} saveLabel={t("설정 저장")} {onsave} componentOwners={owners} ownComponents={ownReady?.components} />
 		{:else if form.problem}
-			<Notice tone="warn" size="sm" role="status">{form.problem}</Notice>
+			<Notice tone="warn" size="sm" raised role="status">{form.problem}</Notice>
 		{:else}
 			<p class="hint">{t("이 확장은 편집할 수 있는 설정이 없습니다.")}</p>
 		{/if}
@@ -150,28 +150,28 @@
 	{/if}
 	{#if serverText(ext)}<p class="description">{serverText(ext)}</p>{/if}
 	<div class="notices">
-		{#if ext.error}<Notice tone="danger" size="sm" role="status">{ext.error}</Notice>{/if}
+		{#if ext.error}<Notice tone="danger" animated role="status">{ext.error}</Notice>{/if}
 		{#if missingClient}
-			<Notice tone="warn" size="sm" icon="clip" role="status">
+			<Notice tone="warn" icon="clip" animated role="status">
 				{t("‘{name}’ 확장도 설치해야 동작합니다.", { name: (ext.companion && extensionUpdates.clientName(ext.companion)) || ext.companion || "" })}
 				{#snippet action()}<button type="button" disabled={busy} onclick={() => oninstallclient(ext.companion ?? "")}>{t("설치")}</button>{/snippet}
 			</Notice>
 		{/if}
 
 		{#if client && clientOff}
-			<Notice tone="warn" size="sm" icon="clip" role="status">
+			<Notice tone="warn" icon="clip" animated role="status">
 				{t("함께 쓰는 ‘{name}’ 확장이 꺼져 있습니다. 켜야 제대로 동작합니다.", { name: client.name })}
 				{#snippet action()}{#if onenableclient}<button type="button" disabled={busy} onclick={() => onenableclient(client.id)}>{t("켜기")}</button>{/if}{/snippet}
 			</Notice>
 		{:else if client && onopenclient}
-			<Notice tone="info" size="sm" icon="clip" role="status">
+			<Notice tone="info" icon="clip" animated role="status">
 				{t("‘{name}’ 확장과 함께 작동합니다.", { name: client.name })}
 				{#snippet action()}<button type="button" onclick={() => onopenclient(client.id)}>{t("열기")}</button>{/snippet}
 			</Notice>
 		{/if}
 
 		{#if own.status === "ask" || own.status === "changed"}
-			<Notice tone="danger" size="sm" icon="shield" role="status">
+			<Notice tone="danger" icon="shield" animated role="status">
 				<span>
 					{own.status === "changed" ? t("이 확장이 화면 코드를 바꿨습니다.") : t("이 확장은 자기 설정 화면을 직접 그리는 코드를 가지고 있습니다.")}
 					{t("격리 없이 앱 안에서 직접 실행되어 대화와 서버 토큰을 포함한 모든 데이터에 접근합니다. 신뢰하는 확장만 허용하세요.")}
@@ -180,12 +180,12 @@
 				{#snippet action()}<button type="button" disabled={busy} onclick={() => ownPageUis.allow(uiServer, ext.name, ext.settingsId)}>{t("이 기기에서 허용")}</button>{/snippet}
 			</Notice>
 		{:else if own.status === "ready"}
-			<Notice tone="info" size="sm" icon="shield" role="status">
+			<Notice tone="info" icon="shield" animated role="status">
 				{t("이 기기에서 이 확장의 화면 코드를 실행 중입니다.")}
 				{#snippet action()}<button type="button" onclick={() => ownPageUis.revoke(uiServer, ext.name)}>{t("허용 취소")}</button>{/snippet}
 			</Notice>
 		{:else if own.status === "error"}
-			<Notice tone="warn" size="sm" role="status">{t("확장의 화면 코드를 실행하지 못했습니다: {message}", { message: own.message })}</Notice>
+			<Notice tone="warn" animated role="status">{t("확장의 화면 코드를 실행하지 못했습니다: {message}", { message: own.message })}</Notice>
 		{/if}
 	</div>
 	{@render top()}
@@ -197,7 +197,7 @@
 			<ExtensionSurface panel={surface} />
 		</section>
 	{:else if shownPage.problem}
-		<Notice tone="warn" size="sm" role="status">{t("확장이 보낸 화면을 표시하지 못했습니다.")}</Notice>
+		<Notice tone="warn" role="status">{t("확장이 보낸 화면을 표시하지 못했습니다.")}</Notice>
 	{/if}
 
 	{#if ext.tools.length || ext.commands.length || ext.flags.length}

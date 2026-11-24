@@ -109,6 +109,10 @@
 		background: color-mix(in srgb, var(--notice-tint) 14%, var(--bg-lift));
 		box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--notice-tint) 34%, transparent); /* a hairline, zero elevation */
 	}
+	/* a 1px ring around 4px vertical padding leaves only 3px around the 16px icon (reads cramped inside .set-group): give raised sm notices 8px vertical breathing room (32px tall, matching 34px .btn.sm) */
+	.sm.raised {
+		padding: 8px 12px;
+	}
 	.raised.info {
 		--notice-tint: var(--info);
 	}

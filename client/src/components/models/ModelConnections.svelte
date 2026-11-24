@@ -46,9 +46,6 @@
 	const chatModels = $derived(models.filter((m) => !m.imageGeneration));
 	let loading = $state(false);
 	let loadError = $state("");
-	/** The last failed provider action, shown beside the list (a toast would land behind this dialog). */
-	let actionError = $state("");
-	const setError = (m: string) => (actionError = m);
 	let busy = $state(false);
 	let keyFor = $state<string | null>(null);
 	let keyValue = $state("");
@@ -161,7 +158,7 @@
 			await a.deleteCustomProvider(p.id);
 			await reload();
 		} catch (e) {
-			setError(t("삭제하지 못했습니다: {error}", { error: errorText(e) }));
+			app.toast(t("삭제하지 못했습니다: {error}", { error: errorText(e) }), "error");
 		} finally {
 			busy = false;
 		}
@@ -229,7 +226,6 @@
 	{:else if loadError}
 		<Notice tone="danger" onretry={() => load(serverId)}>{loadError}</Notice>
 	{:else if cfg}
-		{#if actionError}<Notice tone="danger" role="alert">{actionError}</Notice>{/if}
 		{#if problems.length}
 			<Notice tone="danger">
 				<strong>{t("설정 문제 {n}", { n: problems.length })}</strong>

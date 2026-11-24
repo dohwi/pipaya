@@ -21,7 +21,6 @@
 
 	let info = $state<RetentionInfo | null>(null);
 	let error = $state("");
-	let note = $state("");
 	let busy = $state(false);
 	let seq = 0;
 
@@ -51,7 +50,7 @@
 		const before = info;
 		info = { ...info, settings: next };
 		busy = true;
-		error = note = "";
+		error = "";
 		try {
 			info = await a.setRetention(next);
 		} catch (e) {
@@ -66,12 +65,12 @@
 		const a = api();
 		if (!a) return;
 		busy = true;
-		error = note = "";
+		error = "";
 		try {
 			const { deleted } = await a.runRetention();
-			note = t("{n}개를 지웠습니다.", { n: deleted });
 			await load();
 			if (deleted) onrun?.();
+			app.toast(t("{n}개를 지웠습니다.", { n: deleted }), "ok");
 		} catch (e) {
 			error = errorText(e);
 		} finally {
@@ -107,8 +106,7 @@
 				<Button size="sm" disabled={busy || info.due === 0} onclick={() => void runNow()}>{t("지금 정리")}</Button>
 			</div>
 		{/if}
-		{#if note}<p class="hint" role="status">{note}</p>{/if}
-		{#if error}<Notice tone="danger" size="sm" raised>{error}</Notice>{/if}
+		{#if error}<Notice tone="danger" size="sm" raised animated>{error}</Notice>{/if}
 	</section>
 {/if}
 
