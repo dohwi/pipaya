@@ -100,7 +100,7 @@
 			const fields = serverFields(ext).fields;
 			// The JSON editor may carry keys of the form's read-only fields; only the form's own keys are written.
 			await putServerSettings(ext, settings, formKeys(fields) ?? Object.keys(settings));
-			tasks.notice = t("설정을 저장했습니다.");
+			app.toast(t("설정을 저장했습니다."), "ok");
 		});
 	}
 	/** `save(partial)` of an extension's own settings section: same rules as the form, no busy state or notice of its own. */
@@ -155,7 +155,7 @@
 				const { repo, dir, ref, commit } = entry.source;
 				await api.installServerExtension({ id: entry.id, repo, ...(dir ? { dir } : {}), ref, commit });
 				await reloadServer();
-				tasks.notice = t("{name}을(를) v{version}(으)로 업데이트했습니다.", { name: entry.name, version: entry.version });
+				app.toast(t("{name}을(를) v{version}(으)로 업데이트했습니다.", { name: entry.name, version: entry.version }), "ok");
 			} finally {
 				delete updating[key];
 			}
@@ -193,11 +193,13 @@
 				} catch { failed++; }
 			}
 			await reloadServer();
-			tasks.notice = [
+			const summary = [
 				t("{n}개를 업데이트했습니다.", { n: done }),
 				needsConsent ? t("새 권한이 필요한 {n}개는 각각 확인해 주세요.", { n: needsConsent }) : "",
 				failed ? t("{n}개는 실패했습니다.", { n: failed }) : "",
 			].filter(Boolean).join(" ");
+			if (needsConsent || failed) tasks.notice = summary;
+			else if (done) app.toast(summary, "ok");
 		}, t("업데이트하지 못했습니다"));
 	}
 	/** A package picked in the marketplace goes through the same preview (permissions) as an imported file. */
@@ -355,9 +357,9 @@
 			drafts[id] = JSON.stringify(src.find(id)?.settings ?? entry.settings, null, 2);
 			if (entry.state === "active" && !extensions.safeMode) {
 				await src.enable(id);
-				tasks.notice = t("설정을 저장하고 확장을 다시 불러왔습니다.");
+				app.toast(t("설정을 저장하고 확장을 다시 불러왔습니다."), "ok");
 			} else {
-				tasks.notice = t("설정을 저장했습니다. 다음에 켤 때 적용됩니다.");
+				app.toast(t("설정을 저장했습니다. 다음에 켤 때 적용됩니다."), "ok");
 			}
 		});
 	}
@@ -394,7 +396,7 @@
 			await src.remove(id, { keepSettings });
 			delete drafts[id];
 			tasks.closeRemove();
-			tasks.notice = keepSettings ? t("확장을 삭제했습니다. 설정값은 유지했습니다.") : t("확장과 설정값을 삭제했습니다.");
+			app.toast(keepSettings ? t("확장을 삭제했습니다. 설정값은 유지했습니다.") : t("확장과 설정값을 삭제했습니다."), "ok");
 		});
 	}
 
@@ -406,7 +408,7 @@
 			tasks.closeRemove();
 			selected = null;
 			await reloadServer();
-			tasks.notice = keepSettings ? t("확장을 삭제했습니다. 설정값은 유지했습니다.") : t("확장과 설정값을 삭제했습니다.");
+			app.toast(keepSettings ? t("확장을 삭제했습니다. 설정값은 유지했습니다.") : t("확장과 설정값을 삭제했습니다."), "ok");
 		}, t("삭제하지 못했습니다"));
 	}
 
@@ -414,14 +416,14 @@
 		void run(`unreadable:${index}`, async () => {
 			await src.removeUnreadable(index, { keepSettings });
 			tasks.closeRemove();
-			tasks.notice = keepSettings ? t("확장을 삭제했습니다. 설정값은 유지했습니다.") : t("확장과 설정값을 삭제했습니다.");
+			app.toast(keepSettings ? t("확장을 삭제했습니다. 설정값은 유지했습니다.") : t("확장과 설정값을 삭제했습니다."), "ok");
 		});
 	}
 
 	function setSafeMode(on: boolean) {
 		void run("$safe", () => {
 			extensions.setSafeMode(on);
-			tasks.notice = on ? t("모든 확장의 실행을 중지했습니다.") : t("안전 모드를 해제했습니다. 각 확장을 직접 켜세요.");
+			app.toast(on ? t("모든 확장의 실행을 중지했습니다.") : t("안전 모드를 해제했습니다. 각 확장을 직접 켜세요."), on ? "warn" : "ok");
 		});
 	}
 </script>
@@ -475,11 +477,11 @@
 
 <div class="extensions">
 	<div class="feedback" aria-live="polite" aria-atomic="true">
-		{#if tasks.error}<Notice tone="danger" size="sm" animated>{tasks.error}</Notice>{/if}
-		{#if tasks.notice}<Notice tone="ok" size="sm" animated>{tasks.notice}</Notice>{/if}
+		{#if tasks.error}<Notice tone="danger" animated>{tasks.error}</Notice>{/if}
+		{#if tasks.notice}<Notice tone="warn" animated>{tasks.notice}</Notice>{/if}
 	</div>
-	{#if src.runs && extensions.syncNotice}<Notice tone="warn" size="sm" animated role="status">{extensions.syncNotice}</Notice>{/if}
-	{#if src.loadError()}<Notice tone="danger" size="sm" animated role="status">{src.loadError()}</Notice>{/if}
+	{#if src.runs && extensions.syncNotice}<Notice tone="warn" animated role="status">{extensions.syncNotice}</Notice>{/if}
+	{#if src.loadError()}<Notice tone="danger" animated role="status">{src.loadError()}</Notice>{/if}
 	{#if pendingStore}<p class="hint" role="status">{t("목록을 불러오는 중…")}</p>{/if}
 
 	{#if openEntry}
@@ -546,10 +548,10 @@
 		</div>
 		{#if tasks.busy.$import}<p class="hint" role="status">{t("파일을 읽는 중…")}</p>{/if}
 		{#if extensions.safeMode}
-			<Notice tone="warn" size="sm" icon="shield" role="status">{t("안전 모드라서 모든 확장이 멈춰 있습니다. 아래 “문제 해결”에서 해제할 수 있습니다.")}</Notice>
+			<Notice tone="warn" icon="shield" role="status">{t("안전 모드라서 모든 확장이 멈춰 있습니다. 아래 “문제 해결”에서 해제할 수 있습니다.")}</Notice>
 		{/if}
 		{#if unreadable.length}
-			<Notice tone="warn" size="sm" role="status">{t("이 버전에서 읽을 수 없는 확장 {n}개가 있습니다. 원본은 지우지 않고 그대로 보관합니다.", { n: unreadable.length })}</Notice>
+			<Notice tone="warn" role="status">{t("이 버전에서 읽을 수 없는 확장 {n}개가 있습니다. 원본은 지우지 않고 그대로 보관합니다.", { n: unreadable.length })}</Notice>
 		{/if}
 		<p class="hint">{t("{name}에 설치되어 접속한 모든 기기가 함께 씁니다.", { name: serverName })}</p>
 		{#each list as entry (entry.package.manifest.id)}

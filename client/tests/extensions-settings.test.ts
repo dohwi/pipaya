@@ -846,6 +846,19 @@ describe("components", () => {
 		expect(navbar).toContain("max-width: min(40%, 160px)");
 		expect(navbar).toContain("gap: 4px"); // spacing scale 4 / 8 / 12 / 16 / 24 (docs/design-system.md)
 	});
+
+	test("extension completions use toasts and pane-level notices stay md-sized", async () => {
+		const ext = await Bun.file("src/components/extensions/Extensions.svelte").text();
+		expect(ext).toContain('app.toast(t("{name}을(를) v{version}(으)로 업데이트했습니다."');
+		expect(ext).toContain("if (needsConsent || failed) tasks.notice = summary;");
+		expect(ext).toContain('else if (done) app.toast(summary, "ok");');
+		const feedback = ext.match(/<div class="feedback"[\s\S]*?<\/div>/)?.[0] ?? "";
+		expect(feedback).toContain('<Notice tone="danger" animated>{tasks.error}</Notice>');
+		expect(feedback).toContain('<Notice tone="warn" animated>{tasks.notice}</Notice>');
+		expect(feedback).not.toContain('size="sm"');
+		const extPage = await Bun.file("src/components/extensions/ExtensionPage.svelte").text();
+		expect(extPage).toContain('<Notice tone="ok" icon="arrow-up" animated role="status">');
+	});
 });
 
 describe("language packs carried by an extension", () => {
