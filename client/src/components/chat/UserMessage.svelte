@@ -197,6 +197,7 @@
 	}
 	.txt {
 		white-space: pre-wrap;
+		line-height: 24px; /* whole-pixel line box (vs body's 23.25px) so inline chips do not snap by 1px at fractional DPR */
 	}
 	.txt.clamp {
 		display: -webkit-box;
