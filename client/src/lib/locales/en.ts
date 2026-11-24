@@ -1609,7 +1609,6 @@ export const en: Record<string, string> = {
 	"변경하지 못했습니다": "Couldn't change",
 	"잘못된 앱 백업": "Invalid app backup",
 	"잘못된 서버 백업": "Invalid server backup",
-	"새 버전 {version}": "New version {version}",
 	"업데이트를 내려받는 중…": "Downloading the update…",
 	"재시작하는 중…": "Restarting…",
 	"업데이트 진행률": "Update progress",

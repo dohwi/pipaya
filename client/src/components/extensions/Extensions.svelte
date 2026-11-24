@@ -632,6 +632,9 @@
 	.market-copy strong { font-size: var(--fs-md); line-height: 20px; font-weight: 600; color: var(--text); }
 	.market-copy span { font-size: var(--fs-xs); line-height: 18px; color: var(--text-dim); }
 	.market-card :global(.btn) { flex: none; margin-left: auto; white-space: nowrap; }
+	@media (max-width: 640px) {
+		.market-card :global(.btn) { width: 100%; margin-left: 0; }
+	}
 	.adds { display: flex; gap: 8px; }
 	.adds > :global(.btn) { flex: 1 1 0; min-width: 0; }
 	/* a <label> styled as the button: the file input fills it, invisible, so a click anywhere opens the picker; the ring follows the input */

@@ -66,19 +66,30 @@
 	<ul class="list">
 		{#each connected as p (p.id)}
 			<li data-provider={p.id}>
-				<span class="pname">{p.name}{#if p.accountEmail}<span class="email">{p.accountEmail}</span>{/if}</span>
-				<Badge variant="outline" size="sm" mono>{p.storedCredential === "oauth" ? "OAuth" : "API KEY"}</Badge>
-				{#if p.configured}<Badge tone="ok" size="sm"><Icon name="check" /> {t("사용 가능")}</Badge>{/if}
-				<Button variant="ghost" size="sm" disabled={busy} onclick={() => logout(p)}>{t("연결 해제")}</Button>
+				<div class="meta">
+					<span class="pname">{p.name}{#if p.accountEmail}<span class="email">{p.accountEmail}</span>{/if}</span>
+					<div class="tags">
+						<Badge variant="outline" size="sm" mono>{p.storedCredential === "oauth" ? "OAuth" : "API KEY"}</Badge>
+						{#if p.configured}<Badge tone="ok" size="sm"><Icon name="check" /> {t("사용 가능")}</Badge>{/if}
+					</div>
+				</div>
+				<Button size="sm" class="act" disabled={busy} onclick={() => logout(p)}>{t("연결 해제")}</Button>
 			</li>
 		{/each}
 	</ul>
 {/if}
 
 <style>
-	.list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
-	li { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--radius); }
-	.pname { flex: 1; min-width: 120px; font-size: var(--fs-sm); line-height: 20px; display: flex; flex-direction: column; }
-	.email { font-size: var(--fs-xs); line-height: 16px; color: var(--text-dim); overflow-wrap: anywhere; }
+	.list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+	/* borderless page-tinted surface inside .set-group (no box-in-box, matching ListItem) */
+	li { display: flex; align-items: center; gap: 8px 12px; flex-wrap: wrap; padding: 12px; border-radius: var(--radius-sm); background: var(--item-bg, var(--bg)); }
+	.meta { flex: 1 1 160px; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+	.pname { font-size: var(--fs-sm); line-height: 20px; font-weight: 500; display: flex; flex-direction: column; }
+	.email { font-size: var(--fs-xs); line-height: 16px; font-weight: 400; color: var(--text-dim); overflow-wrap: anywhere; }
+	.tags { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+	li :global(.act) { flex: none; margin-left: auto; white-space: nowrap; }
+	@media (max-width: 640px) {
+		li :global(.act) { width: 100%; margin-left: 0; }
+	}
 	.bad { color: var(--danger); margin: 0; font-size: var(--fs-sm); }
 </style>
