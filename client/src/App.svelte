@@ -29,7 +29,6 @@
 	import Lazy, { preload } from "./components/ui/Lazy.svelte";
 	import UpdateBanner from "./components/shell/UpdateBanner.svelte";
 	import VersionNotice from "./components/shell/VersionNotice.svelte";
-	import DoneNotice from "./components/shell/DoneNotice.svelte";
 	import ChordStrip from "./components/shell/ChordStrip.svelte";
 	import { updater } from "./lib/updater.svelte";
 	import ExtensionPanels from "./components/extensions/ExtensionPanels.svelte";
@@ -404,7 +403,6 @@
 				<div class="overlay">
 					{#if app.graphOpen}{@render netBanner()}{/if}
 					<VersionNotice />
-					<DoneNotice />
 					<div class="extension-launcher">{@render launcher()}</div>
 				</div>
 				<!-- hidden, not unmounted, under the graph: a narrow screen's dock (--z-dock) would cover the graph; its panel keeps its state -->
@@ -594,7 +592,7 @@
 	.scrim {
 		display: none;
 	}
-	/* a connection strip: the same box, tint and hairline as the toast / "done" strips (ToastStrip, DoneNotice) */
+	/* a connection strip: the same box, tint and hairline as the toast strip (ToastStrip) */
 	.banner {
 		--tone: var(--text-faint);
 		display: flex;

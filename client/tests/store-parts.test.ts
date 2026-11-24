@@ -229,6 +229,23 @@ describe("feedback", () => {
 		expect(f.notices[0]!.sid).toBe(`s${NOTICE_MAX + 1}`);
 		for (const n of [...f.notices]) f.dismissNotice(n.id);
 	});
+	test("pauseNotice and resumeNotice are safe on missing, double-called, and dismissed ids", () => {
+		const f = new Feedback();
+		f.announce("s1", "done");
+		const id = f.notices[0]!.id;
+		f.pauseNotice(999999);
+		f.resumeNotice(999999);
+		f.pauseNotice(id);
+		f.pauseNotice(id);
+		expect(f.notices.length).toBe(1);
+		f.resumeNotice(id);
+		f.resumeNotice(id);
+		expect(f.notices.length).toBe(1);
+		f.pauseNotice(id);
+		f.dismissNotice(id);
+		f.resumeNotice(id);
+		expect(f.notices).toEqual([]);
+	});
 	test("a finished run is announced for any session but the focused one", () => {
 		// another folder's session is on no pane at all: it is announced too, not only a pane of the open group
 		expect(announces("other-folder", "here", "completed", false)).toBe(true);
