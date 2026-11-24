@@ -608,6 +608,7 @@
 		flex: 1;
 		overflow-y: auto;
 		padding: 8px 0 16px; /* 8 below the brand row, 16 above the window edge */
+		scroll-padding-block: 8px;
 		overscroll-behavior: contain;
 	}
 	/* the line where a carried server, folder or tab would land: its own rules below only place it */
