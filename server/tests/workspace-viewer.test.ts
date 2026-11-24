@@ -142,6 +142,25 @@ describe("workspace viewer routes", () => {
 			const uDiffRes = await app.inject({ method: "GET", url: "/sessions/s1/workspace/diff?path=src/new.ts" });
 			expect(uDiffRes.statusCode).toBe(200);
 			expect(uDiffRes.json().additions).toBe(1);
+
+			// Save edited file
+			const putRes = await app.inject({
+				method: "PUT",
+				url: "/sessions/s1/workspace/file",
+				payload: { path: "src/app.ts", content: "export const x = 42;\n" },
+			});
+			expect(putRes.statusCode).toBe(200);
+			expect(putRes.json().lineCount).toBe(2);
+			const verifyRes = await app.inject({ method: "GET", url: "/sessions/s1/workspace/file?path=src/app.ts" });
+			expect(verifyRes.json().content).toBe("export const x = 42;\n");
+
+			// Traversal refused on save
+			const badPut = await app.inject({
+				method: "PUT",
+				url: "/sessions/s1/workspace/file",
+				payload: { path: "../escape.ts", content: "nope" },
+			});
+			expect(badPut.statusCode).toBe(400);
 		} finally {
 			await app.close();
 			db.close();

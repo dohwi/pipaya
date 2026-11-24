@@ -1,4 +1,4 @@
-import { closeSync, existsSync, lstatSync, openSync, readdirSync, readSync, realpathSync } from "node:fs";
+import { closeSync, existsSync, lstatSync, openSync, readdirSync, readSync, realpathSync, writeFileSync } from "node:fs";
 import { isAbsolute, join, relative, resolve } from "node:path";
 import type { FastifyInstance } from "fastify";
 import Type from "typebox";
@@ -422,6 +422,33 @@ export function registerWorkspaceViewerRoutes(server: FastifyInstance, deps: { s
 		const content = buf.toString("utf-8");
 		const lineCount = content ? content.split(/\r?\n/).length : 0;
 		return { path, content, binary: false, truncated, size, lineCount };
+	});
+
+	server.put("/sessions/:id/workspace/file", {
+		schema: {
+			params: Type.Object({ id: Type.String() }),
+			body: Type.Object({
+				path: Type.String({ minLength: 1 }),
+				content: Type.String(),
+			}),
+		},
+	}, async (req) => {
+		const { id } = req.params as { id: string };
+		const { path, content } = req.body as { path: string; content: string };
+		const root = workDirFor(id);
+		const abs = safeInsideRoot(root, path);
+		if (!abs) throw badRequest("invalid path");
+		if (Buffer.byteLength(content, "utf-8") > 2 * 1024 * 1024) {
+			throw badRequest("file content too large");
+		}
+		if (existsSync(abs)) {
+			const st = lstatSync(abs);
+			if (!st.isFile()) throw badRequest("not a regular file");
+		}
+		writeFileSync(abs, content, "utf-8");
+		const size = Buffer.byteLength(content, "utf-8");
+		const lineCount = content ? content.split(/\r?\n/).length : 0;
+		return { path, size, lineCount };
 	});
 
 	server.get("/sessions/:id/workspace/diff", {

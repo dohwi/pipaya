@@ -6,6 +6,7 @@
 	import { schedule, unschedule } from "../../lib/frame";
 	import Handle from "../ui/Handle.svelte";
 	import Icon from "../ui/Icon.svelte";
+	import FileIcon from "../workspace/FileIcon.svelte";
 	import InlineRenameField from "../ui/InlineRenameField.svelte";
 	import SessionStrip from "./SessionStrip.svelte";
 	import AgentBadge from "./AgentBadge.svelte";
@@ -381,7 +382,7 @@
 					}}
 				>
 					<span class="fill" aria-hidden="true"></span>
-					<span class="ico"><Icon name="file" /></span>
+					<span class="ico"><FileIcon name={base} /></span>
 					<span class="t mono">{base}</span>
 					{#if ch}<span class="fdot" class:add={ch.status === "A" || ch.status === "?"} class:del={ch.status === "D"} aria-hidden="true"></span>{/if}
 					<button

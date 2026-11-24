@@ -9,6 +9,7 @@
 	import IconButton from "../ui/IconButton.svelte";
 	import Notice from "../ui/Notice.svelte";
 	import Segmented from "../ui/Segmented.svelte";
+	import FileIcon from "./FileIcon.svelte";
 
 	const session = $derived(app.current);
 	const sessionId = $derived(session?.id ?? workspaceViewer.sessionId);
@@ -106,7 +107,7 @@
 				title={entry.path}
 			>
 				<span class="chev" class:open={isOpen}><Icon name="chevron-right" /></span>
-				<span class="fico"><Icon name="folder" /></span>
+				<span class="fico"><FileIcon name={entry.name} dir open={isOpen} /></span>
 				<span class="tname">{entry.name}</span>
 				{#if dirDirty}<span class="dot" aria-label={t("변경 있음")}></span>{/if}
 			</button>
@@ -126,7 +127,7 @@
 				onclick={() => pickFile(entry.path)}
 				title={entry.path}
 			>
-				<span class="fico"><Icon name="file" /></span>
+				<span class="fico"><FileIcon name={entry.name} /></span>
 				<span class="tname">{entry.name}</span>
 				{#if ch}
 					<span class="st mono {statusClass(ch.status)}">{ch.status}</span>
@@ -206,7 +207,7 @@
 								onclick={() => pickFile(entry.path)}
 								title={entry.path}
 							>
-								<span class="fico"><Icon name="file" /></span>
+								<span class="fico"><FileIcon name={entry.name} /></span>
 								<span class="tname mono">{entry.path}</span>
 								{#if ch}<span class="st mono {statusClass(ch.status)}">{ch.status}</span>{/if}
 							</button>
@@ -235,6 +236,7 @@
 							onclick={() => pickFile(ch.path, "diff")}
 							title={ch.path}
 						>
+							<span class="fico"><FileIcon name={ch.path.split("/").pop() ?? ch.path} /></span>
 							<span class="st mono {statusClass(ch.status)}">{ch.status}</span>
 							<span class="tname mono">{ch.path}</span>
 							{#if ch.pending}

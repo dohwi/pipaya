@@ -819,6 +819,15 @@ export class Api {
 		}>("GET", `/sessions/${encodeURIComponent(sessionId)}/workspace/file?path=${encodeURIComponent(path)}`, undefined, signal);
 	}
 
+	workspaceSaveFile(sessionId: string, path: string, content: string, signal?: AbortSignal) {
+		return this.req<{ path: string; size: number; lineCount: number }>(
+			"PUT",
+			`/sessions/${encodeURIComponent(sessionId)}/workspace/file`,
+			{ path, content },
+			signal,
+		);
+	}
+
 	workspaceDiff(sessionId: string, path: string, signal?: AbortSignal) {
 		return this.req<{
 			path: string;

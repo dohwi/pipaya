@@ -369,7 +369,13 @@ export class WorkspaceViewerStore {
 
 	async selectFile(path: string, preferredMode?: "file" | "diff") {
 		const clean = normalizeRelPath(path, this.workDir);
+		const changedPath = this.selectedPath !== clean;
 		this.selectedPath = clean;
+		if (changedPath) {
+			this.fileData = null;
+			this.diffData = null;
+			this.fileError = null;
+		}
 		this.syncRecentChanges();
 		const hasChange = !!this.changeFor(clean);
 		this.viewMode = preferredMode ?? (hasChange ? "diff" : "file");
@@ -378,6 +384,30 @@ export class WorkspaceViewerStore {
 			await this.loadDiff(clean);
 		} else {
 			this.diffData = null;
+		}
+	}
+
+	async saveFile(path: string, content: string): Promise<{ ok: true } | { ok: false; error: string }> {
+		const api = this.api;
+		const sid = this.sessionId;
+		if (!api || !sid) return { ok: false, error: "no active session" };
+		const clean = normalizeRelPath(path, this.workDir);
+		try {
+			const res = await api.workspaceSaveFile(sid, clean, content);
+			if (this.selectedPath === clean) {
+				this.fileData = {
+					path: clean,
+					content,
+					binary: false,
+					truncated: false,
+					size: res.size,
+					lineCount: res.lineCount,
+				};
+				this.syncRecentChanges();
+			}
+			return { ok: true };
+		} catch (e) {
+			return { ok: false, error: errorText(e) };
 		}
 	}
 

@@ -249,6 +249,61 @@ export function deriveLatestTurnEdits(
 	return { turnKey: null, changes: [], diffs: new Map() };
 }
 
+/** Format sorted or unsorted 1-based line numbers into compact ranges (e.g. `[3,4,5,9,14,15]` -> `"3-5,9,14-15"`). */
+export function formatLineSpec(lines: readonly number[]): string {
+	const uniq = [...new Set(lines.filter((n) => Number.isFinite(n) && n >= 1))].sort((a, b) => a - b);
+	if (uniq.length === 0) return "";
+	const parts: string[] = [];
+	let start = uniq[0]!;
+	let prev = start;
+	for (let i = 1; i < uniq.length; i++) {
+		const cur = uniq[i]!;
+		if (cur === prev + 1) {
+			prev = cur;
+		} else {
+			parts.push(start === prev ? `${start}` : `${start}-${prev}`);
+			start = cur;
+			prev = cur;
+		}
+	}
+	parts.push(start === prev ? `${start}` : `${start}-${prev}`);
+	return parts.join(",");
+}
+
+/** Find the best 1-based starting line of a hunk's post-edit lines inside `fileLines`, searching from `minIdx` (0-based). */
+function snapHunkStart(fileLines: readonly string[], hunk: DiffHunk, minIdx: number): number {
+	const postLines = hunk.lines.filter((l) => l.type !== "del" && l.type !== "meta").map((l) => l.text);
+	const hinted = Math.max(1, hunk.lines.find((l) => l.newLine !== null)?.newLine ?? hunk.newStart ?? 1);
+	if (postLines.length === 0) return Math.max(minIdx + 1, hinted);
+
+	// Fast check: does the hinted position already match the first post-edit line?
+	const hintIdx = hinted - 1;
+	if (hintIdx >= minIdx && hintIdx + postLines.length <= fileLines.length) {
+		let ok = true;
+		for (let k = 0; k < postLines.length; k++) {
+			if (fileLines[hintIdx + k] !== postLines[k]) {
+				ok = false;
+				break;
+			}
+		}
+		if (ok) return hinted;
+	}
+
+	// Fallback: scan forward from minIdx for an exact sequence match of postLines.
+	for (let i = Math.max(0, minIdx); i + postLines.length <= fileLines.length; i++) {
+		let ok = true;
+		for (let k = 0; k < postLines.length; k++) {
+			if (fileLines[i + k] !== postLines[k]) {
+				ok = false;
+				break;
+			}
+		}
+		if (ok) return i + 1;
+	}
+
+	return Math.max(minIdx + 1, Math.min(fileLines.length + 1, hinted));
+}
+
 /**
  * Merge diff hunks into the complete current file contents so changed files are always shown in full context
  * with inline deleted (`del`) and added (`add`) lines highlighted right where they happened.
@@ -264,7 +319,7 @@ export function buildFullFileDiff(fileContent: string | null | undefined, hunks:
 		return rows;
 	};
 
-	if (!fileContent) {
+	if (fileContent === null || fileContent === undefined) {
 		const fallback: FullDiffRow[] = [];
 		for (const h of hunks) {
 			for (const l of h.lines) {
@@ -278,11 +333,7 @@ export function buildFullFileDiff(fileContent: string | null | undefined, hunks:
 	const fileLines = fileContent.split(/\r?\n/);
 	const validHunks = hunks
 		.filter((h) => h.lines.some((l) => l.type !== "meta"))
-		.map((h) => {
-			const firstNew = h.lines.find((l) => l.newLine !== null)?.newLine;
-			const startNew = Math.max(1, firstNew ?? h.newStart ?? 1);
-			return { hunk: h, startNew };
-		})
+		.map((h) => ({ hunk: h, startNew: snapHunkStart(fileLines, h, 0) }))
 		.sort((a, b) => a.startNew - b.startNew);
 
 	if (validHunks.length === 0) {
@@ -299,8 +350,9 @@ export function buildFullFileDiff(fileContent: string | null | undefined, hunks:
 	// oldLine = newLine - oldDelta (increases when lines are added, decreases when lines are deleted)
 	let oldDelta = 0;
 
-	for (const { hunk, startNew } of validHunks) {
-		const targetNew = Math.min(fileLines.length + 1, Math.max(newCur, startNew));
+	for (const { hunk } of validHunks) {
+		const snapped = snapHunkStart(fileLines, hunk, newCur - 1);
+		const targetNew = Math.min(fileLines.length + 1, Math.max(newCur, snapped));
 		while (newCur < targetNew && newCur <= fileLines.length) {
 			out.push({
 				type: "context",
@@ -318,15 +370,12 @@ export function buildFullFileDiff(fileContent: string | null | undefined, hunks:
 				out.push({ type: "del", oldLine: ol, newLine: null, text: dl.text });
 				oldDelta--;
 			} else if (dl.type === "add") {
-				if (dl.newLine !== null && dl.newLine < newCur) continue;
 				const lineNum = newCur;
 				const text = lineNum <= fileLines.length ? fileLines[lineNum - 1]! : dl.text;
 				out.push({ type: "add", oldLine: null, newLine: lineNum, text });
 				oldDelta++;
 				newCur++;
 			} else {
-				// Context line from hunk: skip if already emitted by an overlapping prior hunk.
-				if (dl.newLine !== null && dl.newLine < newCur) continue;
 				if (newCur > fileLines.length) continue;
 				out.push({
 					type: "context",

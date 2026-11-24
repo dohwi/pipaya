@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { buildEditHunk, buildFullFileDiff, deriveLatestTurnEdits } from "../src/lib/workspace-edits";
+import { buildEditHunk, buildFullFileDiff, deriveLatestTurnEdits, formatLineSpec } from "../src/lib/workspace-edits";
 import type { ChatState } from "../src/lib/chat.svelte";
 
 function fakeChat(items: ChatState["items"], tools: ChatState["tools"] = {}): ChatState {
@@ -85,5 +85,29 @@ describe("workspace-viewer recent edits", () => {
 		expect(rows.filter((r) => r.changeStart).map((r) => r.text)).toEqual(["oldLine3"]);
 		expect(rows.find((r) => r.text === "line6")?.newLine).toBe(7);
 		expect(rows.find((r) => r.text === "line6")?.oldLine).toBe(6);
+	});
+
+	it("snaps hunks with unanchored line numbers to their actual position in the full file", () => {
+		const content = ["a", "b", "c", "d", "NEW_LINE", "f", "g"].join("\n");
+		// Simulate a hunk whose newStart was 1 (created before file content was loaded)
+		const { hunk } = buildEditHunk("d\nOLD_LINE\nf", "d\nNEW_LINE\nf");
+		expect(hunk.newStart).toBe(1);
+		const rows = buildFullFileDiff(content, [hunk]);
+		expect(rows.map((r) => `${r.type}:${r.text}`)).toEqual([
+			"context:a",
+			"context:b",
+			"context:c",
+			"context:d",
+			"del:OLD_LINE",
+			"add:NEW_LINE",
+			"context:f",
+			"context:g",
+		]);
+	});
+
+	it("formats non-contiguous and contiguous line numbers cleanly", () => {
+		expect(formatLineSpec([6])).toBe("6");
+		expect(formatLineSpec([3, 4, 5, 6])).toBe("3-6");
+		expect(formatLineSpec([14, 3, 5, 4, 9, 15])).toBe("3-5,9,14-15");
 	});
 });

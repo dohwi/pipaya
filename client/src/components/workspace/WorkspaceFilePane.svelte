@@ -9,7 +9,7 @@
 	import { saveFile } from "../../lib/save-file";
 	import { app } from "../../lib/store.svelte";
 	import { closeVideoView, videoPlayer } from "../../lib/video-view";
-	import { buildFullFileDiff, type FullDiffRow } from "../../lib/workspace-edits";
+	import { buildFullFileDiff, formatLineSpec, type FullDiffRow } from "../../lib/workspace-edits";
 	import { workspaceViewer } from "../../lib/workspace-viewer.svelte";
 	import Markdown from "../chat/Markdown.svelte";
 	import Button from "../ui/Button.svelte";
@@ -17,6 +17,7 @@
 	import IconButton from "../ui/IconButton.svelte";
 	import Notice from "../ui/Notice.svelte";
 	import Segmented from "../ui/Segmented.svelte";
+	import FileIcon from "./FileIcon.svelte";
 
 	const IMAGE_PREVIEW_MAX = 1600;
 
@@ -25,12 +26,26 @@
 	const fileName = $derived(selectedPath ? baseName(selectedPath) : "");
 	const selectedChange = $derived(selectedPath ? workspaceViewer.changeFor(selectedPath) : undefined);
 
+	// Only treat `fileData` as valid for the currently active tab (prevents stale content from another tab).
+	const currentFileData = $derived(
+		workspaceViewer.fileData && workspaceViewer.fileData.path === selectedPath ? workspaceViewer.fileData : null,
+	);
+
 	// Syntax highlight readiness tick (re-runs derived highlighting when a lazy grammar finishes loading).
 	let hlTick = $state(0);
 	onMount(() => onHighlightReady(() => hlTick++));
 
 	// Preview mode for rich text-backed formats (markdown, html, csv/tsv): preview vs source.
 	let richPreview = $state(true);
+
+	// Direct inline edit state (triggered by double-clicking code lines or clicking the edit icon).
+	let editing = $state(false);
+	let editDraft = $state("");
+	let editSaving = $state(false);
+	let editArea = $state<HTMLTextAreaElement>();
+	let editGutter = $state<HTMLElement>();
+	const editDirty = $derived(editing && currentFileData !== null && editDraft !== currentFileData.content);
+	const editLineCount = $derived(editing ? (editDraft ? editDraft.split(/\r?\n/).length : 1) : 0);
 
 	// Media / blob preview state (image, pdf, audio, video, html sandbox).
 	let mediaUrl = $state<string | null>(null);
@@ -49,7 +64,15 @@
 	const isMediaKind = $derived(kind === "image" || kind === "pdf" || kind === "audio" || kind === "video");
 	const hasRichPreview = $derived(kind === "markdown" || kind === "html" || kind === "table");
 	const showRichPreview = $derived(
-		hasRichPreview && richPreview && workspaceViewer.viewMode === "file" && !!workspaceViewer.fileData && !workspaceViewer.fileData.binary,
+		!editing &&
+			hasRichPreview &&
+			richPreview &&
+			workspaceViewer.viewMode === "file" &&
+			!!currentFileData &&
+			!currentFileData.binary,
+	);
+	const canEditText = $derived(
+		!isMediaKind && !!currentFileData && !currentFileData.binary && !currentFileData.truncated,
 	);
 
 	function revokeMedia() {
@@ -73,6 +96,8 @@
 		mediaFailed = false;
 		imgDims = null;
 		richPreview = k === "markdown" || k === "html" || k === "table";
+		editing = false;
+		editDraft = "";
 
 		if (!path || !sid || !api) {
 			mediaLoading = false;
@@ -89,7 +114,7 @@
 			.then((blob) => {
 				if (ctl.signal.aborted) return;
 				mediaMime = blob.type;
-				mediaSize = k === "image" ? (workspaceViewer.fileData?.size ?? blob.size) : blob.size;
+				mediaSize = k === "image" ? (currentFileData?.size ?? blob.size) : blob.size;
 				mediaUrl = URL.createObjectURL(blob);
 			})
 			.catch((e) => {
@@ -103,8 +128,8 @@
 
 	// Build sandboxed blob URL for HTML preview when file content is loaded.
 	$effect(() => {
-		if (kind !== "html" || !showRichPreview || !workspaceViewer.fileData?.content) return;
-		const blobUrl = URL.createObjectURL(new Blob([workspaceViewer.fileData.content], { type: "text/html;charset=utf-8" }));
+		if (kind !== "html" || !showRichPreview || !currentFileData?.content) return;
+		const blobUrl = URL.createObjectURL(new Blob([currentFileData.content], { type: "text/html;charset=utf-8" }));
 		htmlUrl = blobUrl;
 		return () => {
 			URL.revokeObjectURL(blobUrl);
@@ -122,8 +147,8 @@
 	});
 
 	const table = $derived(
-		kind === "table" && showRichPreview && workspaceViewer.fileData?.content
-			? parseTable(workspaceViewer.fileData.content, /\.tsv$/i.test(fileName) ? "\t" : ",")
+		kind === "table" && showRichPreview && currentFileData?.content
+			? parseTable(currentFileData.content, /\.tsv$/i.test(fileName) ? "\t" : ",")
 			: null,
 	);
 
@@ -152,6 +177,7 @@
 	});
 
 	function onModeChange(id: string) {
+		editing = false;
 		if (id === "diff") {
 			workspaceViewer.viewMode = "diff";
 			if (selectedPath) void workspaceViewer.loadDiff(selectedPath);
@@ -174,13 +200,13 @@
 	});
 
 	const rawLines = $derived.by(() => {
-		const content = workspaceViewer.fileData?.content ?? "";
+		const content = currentFileData?.content ?? "";
 		return content ? content.split(/\r?\n/) : [];
 	});
 
 	const highlightedLines = $derived.by<string[] | null>(() => {
 		void hlTick;
-		const content = workspaceViewer.fileData?.content ?? "";
+		const content = currentFileData?.content ?? "";
 		if (!content || rawLines.length > 2500) return null;
 		const res = highlightCode(content, fileExt);
 		if (!res || res === "wait") return null;
@@ -199,15 +225,15 @@
 	// Full-file inline diff: merges changed hunks into the complete file so changed files always show full context.
 	const fullDiffRows = $derived.by<FullDiffRow[]>(() => {
 		const diff = workspaceViewer.diffData;
-		if (!diff || diff.binary) return [];
-		const content = workspaceViewer.fileData && !workspaceViewer.fileData.binary ? workspaceViewer.fileData.content : null;
+		if (!diff || diff.binary || diff.path !== selectedPath) return [];
+		const content = currentFileData && !currentFileData.binary ? currentFileData.content : null;
 		return buildFullFileDiff(content, diff.hunks);
 	});
 
 	const highlightedDiffLines = $derived.by<string[] | null>(() => {
 		void hlTick;
 		if (fullDiffRows.length === 0 || fullDiffRows.length > 2500) return null;
-		const sample = workspaceViewer.fileData?.content ?? fullDiffRows.map((r) => r.text).join("\n");
+		const sample = currentFileData?.content ?? fullDiffRows.map((r) => r.text).join("\n");
 		const probe = highlightCode(sample.slice(0, 4000), fileExt);
 		if (!probe || probe === "wait") return null;
 		const out: string[] = [];
@@ -259,37 +285,157 @@
 		});
 	});
 
-	// --- Range & file-level comment state ---
+	// --- Direct double-click editing ---
+	function startEdit(focusLine?: number) {
+		if (!canEditText || !currentFileData) return;
+		clearSelection();
+		editDraft = currentFileData.content;
+		editing = true;
+		requestAnimationFrame(() => {
+			const ta = editArea;
+			if (!ta) return;
+			ta.focus();
+			if (focusLine && focusLine > 1) {
+				const lines = editDraft.split(/\r?\n/);
+				let offset = 0;
+				for (let i = 0; i < Math.min(focusLine - 1, lines.length); i++) {
+					offset += (lines[i]?.length ?? 0) + 1;
+				}
+				ta.setSelectionRange(offset, offset);
+				ta.scrollTop = Math.max(0, (focusLine - 6) * 20);
+				if (editGutter) editGutter.scrollTop = ta.scrollTop;
+			}
+		});
+	}
+
+	function cancelEdit() {
+		editing = false;
+		editDraft = "";
+	}
+
+	async function commitEdit() {
+		if (!editing || !selectedPath || editSaving) return;
+		editSaving = true;
+		try {
+			const res = await workspaceViewer.saveFile(selectedPath, editDraft);
+			if (res.ok) {
+				editing = false;
+				app.toast(t("저장했습니다"), "ok", sessionId ?? undefined);
+			} else {
+				app.toast(`${t("저장하지 못했습니다")}: ${res.error}`, "error", sessionId ?? undefined);
+			}
+		} finally {
+			editSaving = false;
+		}
+	}
+
+	function onEditorKey(e: KeyboardEvent) {
+		if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
+			e.preventDefault();
+			void commitEdit();
+			return;
+		}
+		if (e.key === "Escape") {
+			e.preventDefault();
+			cancelEdit();
+			return;
+		}
+		if (e.key === "Tab" && editArea) {
+			e.preventDefault();
+			const start = editArea.selectionStart;
+			const end = editArea.selectionEnd;
+			editDraft = `${editDraft.slice(0, start)}\t${editDraft.slice(end)}`;
+			requestAnimationFrame(() => {
+				editArea?.setSelectionRange(start + 1, start + 1);
+			});
+		}
+	}
+
+	// --- Multi-line / range / Ctrl-click / text-drag selection + Floating comment popover ---
 	type CommentSelection =
 		| { kind: "file"; path: string }
-		| { kind: "lines"; mode: "file" | "diff"; path: string; anchorIdx: number; focusIdx: number };
+		| { kind: "lines"; mode: "file" | "diff"; path: string; indices: number[]; anchorIdx: number };
 
 	let selection = $state<CommentSelection | null>(null);
+	/** True when the floating popover is expanded to full comment box; false shows compact floating action pill after text drag. */
+	let popoverOpen = $state(false);
+	let popoverPos = $state<{ top: number; left: number }>({ top: 120, left: 24 });
 	let draggingRange = $state(false);
+	let dragBaseIndices = $state<number[]>([]);
 	let commentText = $state("");
 	let sending = $state(false);
+	let popoverEl = $state<HTMLElement>();
 
-	const lineRange = $derived.by(() => {
-		if (!selection || selection.kind !== "lines") return null;
-		const startIdx = Math.min(selection.anchorIdx, selection.focusIdx);
-		const endIdx = Math.max(selection.anchorIdx, selection.focusIdx);
-		if (selection.mode === "file") {
-			const startLine = startIdx + 1;
-			const endLine = endIdx + 1;
-			const lines = rawLines.slice(startIdx, endIdx + 1);
-			return { mode: "file" as const, path: selection.path, startIdx, endIdx, startLine, endLine, lines };
+	function clearSelection() {
+		selection = null;
+		popoverOpen = false;
+		draggingRange = false;
+		dragBaseIndices = [];
+		commentText = "";
+	}
+
+	/** Place the floating popover/pill right below an anchor rect, clamped safely within the viewport. */
+	function positionBelow(rect: DOMRect, estimatedW = 460, estimatedH = 190) {
+		if (typeof window === "undefined") return;
+		const margin = 12;
+		const vw = window.innerWidth;
+		const vh = window.innerHeight;
+		const width = Math.min(estimatedW, vw - margin * 2);
+		let left = Math.max(margin, Math.min(rect.left, vw - width - margin));
+		let top = rect.bottom + 8;
+		if (top + estimatedH > vh - margin) {
+			top = Math.max(margin, rect.top - estimatedH - 8);
 		}
-		const slice = fullDiffRows.slice(startIdx, endIdx + 1);
-		if (slice.length === 0) return null;
-		const nums = slice.map((x) => x.newLine ?? x.oldLine ?? 1);
+		popoverPos = { top: Math.round(top), left: Math.round(left) };
+	}
+
+	function positionBelowRow(mode: "file" | "diff", idx: number, openFull: boolean) {
+		const attr = mode === "diff" ? `[data-drow="${idx}"]` : `[data-frow="${idx}"]`;
+		const row = scrollHost?.querySelector<HTMLElement>(attr);
+		if (!row) return;
+		const rect = row.getBoundingClientRect();
+		const paneRect = scrollHost?.getBoundingClientRect();
+		const anchorLeft = Math.max(paneRect ? paneRect.left + 56 : rect.left + 56, 24);
+		positionBelow(
+			new DOMRect(anchorLeft, rect.top, rect.width, rect.height),
+			openFull ? 480 : 240,
+			openFull ? 196 : 44,
+		);
+	}
+
+	const selectedIndexSet = $derived.by(() => {
+		if (!selection || selection.kind !== "lines") return new Set<number>();
+		return new Set(selection.indices);
+	});
+
+	const selectedLineInfo = $derived.by(() => {
+		if (!selection || selection.kind !== "lines") return null;
+		const sorted = [...new Set(selection.indices)].sort((a, b) => a - b);
+		if (sorted.length === 0) return null;
+		if (selection.mode === "file") {
+			const lineNums = sorted.map((i) => i + 1);
+			const lines = sorted.map((i) => rawLines[i] ?? "");
+			return {
+				mode: "file" as const,
+				path: selection.path,
+				sorted,
+				lineNums,
+				spec: formatLineSpec(lineNums),
+				lines,
+				contiguous: sorted[sorted.length - 1]! - sorted[0]! + 1 === sorted.length,
+			};
+		}
+		const rows = sorted.map((i) => fullDiffRows[i]).filter((r): r is FullDiffRow => !!r);
+		if (rows.length === 0) return null;
+		const lineNums = rows.map((r) => r.newLine ?? r.oldLine ?? 1);
 		return {
 			mode: "diff" as const,
 			path: selection.path,
-			startIdx,
-			endIdx,
-			startLine: Math.min(...nums),
-			endLine: Math.max(...nums),
-			lines: slice.map((x) => x.text),
+			sorted,
+			lineNums,
+			spec: formatLineSpec(lineNums),
+			lines: rows.map((r) => r.text),
+			contiguous: sorted[sorted.length - 1]! - sorted[0]! + 1 === sorted.length,
 		};
 	});
 
@@ -297,19 +443,22 @@
 	$effect(() => {
 		void selectedPath;
 		void activeModeId;
-		selection = null;
-		draggingRange = false;
-		commentText = "";
+		clearSelection();
 	});
 
-	// Finish drag-selection cleanly on window pointerup.
+	// Finish drag-selection on window pointerup and float the comment popover right below the end line.
 	$effect(() => {
 		if (!draggingRange) return;
 		const onUp = () => {
 			draggingRange = false;
-			requestAnimationFrame(() => {
-				document.querySelector<HTMLTextAreaElement>('[data-part="workspace-file-pane"] textarea.cta')?.focus();
-			});
+			if (selection?.kind === "lines" && selection.indices.length > 0) {
+				const last = Math.max(...selection.indices);
+				popoverOpen = true;
+				positionBelowRow(selection.mode, last, true);
+				requestAnimationFrame(() => {
+					popoverEl?.querySelector<HTMLTextAreaElement>("textarea.cta")?.focus();
+				});
+			}
 		};
 		window.addEventListener("pointerup", onUp);
 		window.addEventListener("pointercancel", onUp);
@@ -319,77 +468,149 @@
 		};
 	});
 
+	// Close floating popover when clicking outside (unless clicking a line number or comment trigger).
+	$effect(() => {
+		if (!selection) return;
+		const onDocDown = (e: PointerEvent) => {
+			const target = e.target as HTMLElement | null;
+			if (!target) return;
+			if (popoverEl?.contains(target)) return;
+			if (target.closest(".lnbtn, [data-file-comment-btn]")) return;
+			if (draggingRange) return;
+			if (target.closest('[data-part="workspace-file-pane"] .lines') && !popoverOpen) return;
+			clearSelection();
+		};
+		window.addEventListener("pointerdown", onDocDown);
+		return () => window.removeEventListener("pointerdown", onDocDown);
+	});
+
+	function rangeArray(a: number, b: number): number[] {
+		const s = Math.min(a, b);
+		const e = Math.max(a, b);
+		const out: number[] = [];
+		for (let i = s; i <= e; i++) out.push(i);
+		return out;
+	}
+
 	function onLinePointerDown(e: PointerEvent, mode: "file" | "diff", idx: number) {
 		if (e.button !== 0 || !selectedPath) return;
 		e.preventDefault();
-		if (e.shiftKey && selection?.kind === "lines" && selection.mode === mode && selection.path === selectedPath) {
-			selection = { ...selection, focusIdx: idx };
-			requestAnimationFrame(() => {
-				document.querySelector<HTMLTextAreaElement>('[data-part="workspace-file-pane"] textarea.cta')?.focus();
-			});
+		const cur = selection?.kind === "lines" && selection.mode === mode && selection.path === selectedPath ? selection : null;
+
+		// Ctrl/Cmd + Click: toggle individual non-contiguous lines into/out of the selection!
+		if (e.ctrlKey || e.metaKey) {
+			const prev = cur ? cur.indices : [];
+			const next = prev.includes(idx) ? prev.filter((i) => i !== idx) : [...prev, idx].sort((a, b) => a - b);
+			if (next.length === 0) {
+				clearSelection();
+				return;
+			}
+			selection = { kind: "lines", mode, path: selectedPath, indices: next, anchorIdx: idx };
+			popoverOpen = true;
+			positionBelowRow(mode, idx, true);
+			requestAnimationFrame(() => popoverEl?.querySelector<HTMLTextAreaElement>("textarea.cta")?.focus());
 			return;
 		}
-		// Clicking the exact same single selected line toggles the comment box closed.
-		if (
-			!e.shiftKey &&
-			selection?.kind === "lines" &&
-			selection.mode === mode &&
-			selection.path === selectedPath &&
-			selection.anchorIdx === idx &&
-			selection.focusIdx === idx
-		) {
-			selection = null;
-			commentText = "";
+
+		// Shift + Click: extend range from anchor line to clicked line!
+		if (e.shiftKey && cur) {
+			const next = rangeArray(cur.anchorIdx, idx);
+			selection = { ...cur, indices: next };
+			popoverOpen = true;
+			positionBelowRow(mode, Math.max(cur.anchorIdx, idx), true);
+			requestAnimationFrame(() => popoverEl?.querySelector<HTMLTextAreaElement>("textarea.cta")?.focus());
 			return;
 		}
-		selection = { kind: "lines", mode, path: selectedPath, anchorIdx: idx, focusIdx: idx };
+
+		// Plain click on the exact same single selected line toggles closed.
+		if (cur && cur.indices.length === 1 && cur.indices[0] === idx) {
+			clearSelection();
+			return;
+		}
+
+		selection = { kind: "lines", mode, path: selectedPath, indices: [idx], anchorIdx: idx };
 		commentText = "";
+		popoverOpen = false;
+		dragBaseIndices = [];
 		draggingRange = true;
 	}
 
 	function onLinePointerEnter(mode: "file" | "diff", idx: number) {
 		if (!draggingRange || !selection || selection.kind !== "lines" || selection.mode !== mode) return;
-		if (selection.focusIdx !== idx) {
-			selection = { ...selection, focusIdx: idx };
-		}
+		const next = [...new Set([...dragBaseIndices, ...rangeArray(selection.anchorIdx, idx)])].sort((a, b) => a - b);
+		selection = { ...selection, indices: next };
 	}
 
 	function onLineKeyClick(e: KeyboardEvent, mode: "file" | "diff", idx: number) {
 		if (e.key !== "Enter" && e.key !== " ") return;
 		if (!selectedPath) return;
 		e.preventDefault();
-		if (e.shiftKey && selection?.kind === "lines" && selection.mode === mode && selection.path === selectedPath) {
-			selection = { ...selection, focusIdx: idx };
+		const cur = selection?.kind === "lines" && selection.mode === mode && selection.path === selectedPath ? selection : null;
+		if (e.shiftKey && cur) {
+			selection = { ...cur, indices: rangeArray(cur.anchorIdx, idx) };
 		} else {
-			selection = { kind: "lines", mode, path: selectedPath, anchorIdx: idx, focusIdx: idx };
+			selection = { kind: "lines", mode, path: selectedPath, indices: [idx], anchorIdx: idx };
 			commentText = "";
 		}
-		requestAnimationFrame(() => {
-			document.querySelector<HTMLTextAreaElement>('[data-part="workspace-file-pane"] textarea.cta')?.focus();
-		});
+		popoverOpen = true;
+		positionBelowRow(mode, idx, true);
+		requestAnimationFrame(() => popoverEl?.querySelector<HTMLTextAreaElement>("textarea.cta")?.focus());
 	}
 
-	function toggleFileComment() {
+	/** Allow drag-selecting directly across code text (without even touching the line-number gutter!) */
+	function onCodeMouseUp(mode: "file" | "diff") {
+		if (draggingRange || !selectedPath) return;
+		const winSel = window.getSelection();
+		if (!winSel || winSel.isCollapsed || !winSel.toString().trim()) return;
+		const range = winSel.rangeCount > 0 ? winSel.getRangeAt(0) : null;
+		if (!range) return;
+		const attr = mode === "diff" ? "data-drow" : "data-frow";
+		const findRowIdx = (node: Node | null): number | null => {
+			let el: HTMLElement | null = node instanceof HTMLElement ? node : node?.parentElement ?? null;
+			while (el && !el.hasAttribute(attr)) el = el.parentElement;
+			if (!el) return null;
+			const n = Number(el.getAttribute(attr));
+			return Number.isFinite(n) ? n : null;
+		};
+		const a = findRowIdx(range.startContainer);
+		const b = findRowIdx(range.endContainer);
+		if (a === null || b === null) return;
+		const indices = rangeArray(a, b);
+		selection = { kind: "lines", mode, path: selectedPath, indices, anchorIdx: a };
+		popoverOpen = false;
+		const rect = range.getBoundingClientRect();
+		positionBelow(rect, 260, 44);
+	}
+
+	function toggleFileComment(e: MouseEvent) {
 		if (!selectedPath) return;
 		if (selection?.kind === "file" && selection.path === selectedPath) {
-			selection = null;
-			commentText = "";
+			clearSelection();
 			return;
 		}
 		selection = { kind: "file", path: selectedPath };
 		commentText = "";
-		requestAnimationFrame(() => {
-			document.querySelector<HTMLTextAreaElement>('[data-part="workspace-file-pane"] textarea.cta')?.focus();
-		});
+		popoverOpen = true;
+		const btn = e.currentTarget as HTMLElement | null;
+		if (btn) positionBelow(btn.getBoundingClientRect(), 460, 186);
+		requestAnimationFrame(() => popoverEl?.querySelector<HTMLTextAreaElement>("textarea.cta")?.focus());
+	}
+
+	function expandFloatingPill() {
+		if (!selection || selection.kind !== "lines") return;
+		popoverOpen = true;
+		const last = Math.max(...selection.indices);
+		positionBelowRow(selection.mode, last, true);
+		requestAnimationFrame(() => popoverEl?.querySelector<HTMLTextAreaElement>("textarea.cta")?.focus());
 	}
 
 	function commentHeaderLabel(): string {
 		if (!selection) return "";
 		if (selection.kind === "file") return selection.path;
-		if (!lineRange) return selection.path;
-		if (lineRange.startLine === lineRange.endLine) return `${lineRange.path}:${lineRange.startLine}`;
-		const count = lineRange.endIdx - lineRange.startIdx + 1;
-		return `${lineRange.path}:${lineRange.startLine}-${lineRange.endLine} (${t("{n}줄", { n: count })})`;
+		if (!selectedLineInfo) return selection.path;
+		const count = selectedLineInfo.sorted.length;
+		if (count === 1) return `${selectedLineInfo.path}:${selectedLineInfo.spec}`;
+		return `${selectedLineInfo.path}:${selectedLineInfo.spec} (${t("{n}줄", { n: count })})`;
 	}
 
 	function formatCommentText(note: string): string {
@@ -399,20 +620,20 @@
 			const ref = `\`${selection.path}\``;
 			return trimmed ? `${ref} — ${trimmed}` : `${ref} `;
 		}
-		if (!lineRange) return trimmed;
+		if (!selectedLineInfo) return trimmed;
 
-		if (lineRange.startLine === lineRange.endLine && lineRange.lines.length === 1) {
-			const ref = `\`${lineRange.path}:${lineRange.startLine}\``;
-			const snippet = (lineRange.lines[0] ?? "").trim().slice(0, 140);
+		if (selectedLineInfo.sorted.length === 1) {
+			const ref = `\`${selectedLineInfo.path}:${selectedLineInfo.spec}\``;
+			const snippet = (selectedLineInfo.lines[0] ?? "").trim().slice(0, 140);
 			const code = snippet ? ` (\`${snippet.replace(/`/g, "'")}\`)` : "";
 			return trimmed ? `${ref}${code} — ${trimmed}` : `${ref}${code} `;
 		}
 
-		const count = lineRange.endIdx - lineRange.startIdx + 1;
-		const loc = `\`${lineRange.path}:${lineRange.startLine}-${lineRange.endLine}\``;
-		const joined = lineRange.lines.join("\n").trimEnd();
+		const count = selectedLineInfo.sorted.length;
+		const loc = `\`${selectedLineInfo.path}:${selectedLineInfo.spec}\``;
+		const joined = selectedLineInfo.lines.join("\n").trimEnd();
 		const head = trimmed ? `${loc} — ${trimmed}` : `${loc} (${t("{n}줄", { n: count })})`;
-		if (joined && lineRange.lines.length <= 10 && joined.length <= 600 && !joined.includes("```")) {
+		if (joined && selectedLineInfo.lines.length <= 12 && joined.length <= 700 && !joined.includes("```")) {
 			return `${head}\n\`\`\`${fileExt}\n${joined}\n\`\`\``;
 		}
 		return trimmed ? `${loc} (${t("{n}줄", { n: count })}) — ${trimmed}` : `${loc} `;
@@ -422,8 +643,7 @@
 		if (!selection || !sessionId) return;
 		const formatted = formatCommentText(commentText);
 		app.insertText = { paneId: sessionId, text: formatted };
-		selection = null;
-		commentText = "";
+		clearSelection();
 		// Switch back from the file tab to the chat tab and focus its composer.
 		workspaceViewer.deactivateFile();
 		app.toast(t("입력창에 추가했습니다"), "ok", sessionId);
@@ -446,8 +666,7 @@
 			const formatted = formatCommentText(commentText);
 			if (app.running[sessionId]) await app.queue(formatted, [], sessionId);
 			else await app.send(formatted, [], sessionId);
-			selection = null;
-			commentText = "";
+			clearSelection();
 		} finally {
 			sending = false;
 		}
@@ -456,8 +675,7 @@
 	function onCommentKey(e: KeyboardEvent) {
 		if (e.key === "Escape") {
 			e.preventDefault();
-			selection = null;
-			commentText = "";
+			clearSelection();
 		} else if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
 			e.preventDefault();
 			if (commentText.trim()) void sendNow();
@@ -469,7 +687,7 @@
 	}
 
 	async function copyFileText() {
-		const txt = workspaceViewer.fileData?.content;
+		const txt = currentFileData?.content;
 		if (!txt) return;
 		if (await copyText(txt)) {
 			copied = true;
@@ -496,272 +714,329 @@
 		}
 	}
 
-	const displaySize = $derived(mediaSize ?? workspaceViewer.fileData?.size);
+	const displaySize = $derived(mediaSize ?? currentFileData?.size);
 </script>
-
-{#snippet inlineCommentBox(showRangeHint: boolean)}
-	<div class="cbox">
-		<div class="cbox-in">
-			<div class="chead">
-				<span class="cloc mono">{commentHeaderLabel()}</span>
-				<span class="chint">
-					{showRangeHint
-						? t("Shift+클릭·드래그로 범위 선택 · Enter 입력창에 넣기 · Ctrl+Enter 바로 보내기")
-						: t("Enter 입력창에 넣기 · Ctrl+Enter 바로 보내기")}
-				</span>
-			</div>
-			<!-- svelte-ignore a11y_autofocus -->
-			<textarea
-				class="cta"
-				rows="2"
-				autofocus
-				bind:value={commentText}
-				onkeydown={onCommentKey}
-				placeholder={t("수정 요청을 입력하거나 비우고 Enter로 줄 위치만 입력창에 넣으세요…")}
-			></textarea>
-			<div class="cact">
-				<Button size="sm" variant="primary" onclick={insertToComposer}>{t("입력창에 넣기")}</Button>
-				<Button size="sm" variant="default" disabled={sending || !commentText.trim()} onclick={sendNow}>{t("바로 보내기")}</Button>
-				<Button size="sm" variant="default" onclick={() => ((selection = null), (commentText = ""))}>{t("취소")}</Button>
-			</div>
-		</div>
-	</div>
-{/snippet}
 
 <section class="fpane" data-part="workspace-file-pane" aria-label={selectedPath ?? t("파일 뷰어")}>
 	{#if selectedPath}
 		<div class="fbar">
 			<div class="fmeta">
+				<FileIcon name={fileName} />
 				<span class="fpath mono" title={selectedPath}>{selectedPath}</span>
+				{#if editDirty}
+					<span class="edirty">{t("수정됨")}</span>
+				{/if}
 				{#if imgDims}
 					<span class="fsub mono">{imgDims.w}×{imgDims.h}</span>
 				{/if}
-				{#if displaySize !== undefined}
+				{#if displaySize !== undefined && !editing}
 					<span class="fsub mono">{sizeLabel(displaySize)}</span>
 				{/if}
-				{#if selectedChange && (selectedChange.additions > 0 || selectedChange.deletions > 0)}
+				{#if !editing && selectedChange && (selectedChange.additions > 0 || selectedChange.deletions > 0)}
 					<span class="cstat mono">
 						{#if selectedChange.additions > 0}<span class="add">+{selectedChange.additions}</span>{/if}
 						{#if selectedChange.deletions > 0}<span class="del">-{selectedChange.deletions}</span>{/if}
 					</span>
 				{/if}
 			</div>
+
 			<div class="ftools">
-				{#if workspaceViewer.viewMode === "diff" && selectedChange && changeAnchors.length > 1}
-					<div class="cnav">
-						<IconButton icon="arrow-up" size="sm" label={t("이전 변경")} onclick={() => jumpToChange(activeChangeIdx - 1)} />
-						<span class="cidx mono">{activeChangeIdx + 1}/{changeAnchors.length}</span>
-						<IconButton icon="arrow-down" size="sm" label={t("다음 변경")} onclick={() => jumpToChange(activeChangeIdx + 1)} />
-					</div>
-				{/if}
-				{#if modeOptions.length > 0}
-					<div class="mtoggle">
-						<Segmented
-							label={t("보기 모드")}
-							options={modeOptions}
-							value={activeModeId}
+				{#if editing}
+					<Button size="sm" variant="primary" disabled={editSaving} onclick={() => void commitEdit()}>
+						{t("저장")}
+					</Button>
+					<Button size="sm" variant="default" disabled={editSaving} onclick={cancelEdit}>
+						{t("취소")}
+					</Button>
+				{:else}
+					{#if workspaceViewer.viewMode === "diff" && selectedChange && changeAnchors.length > 1}
+						<div class="cnav">
+							<IconButton icon="arrow-up" size="sm" label={t("이전 변경")} onclick={() => jumpToChange(activeChangeIdx - 1)} />
+							<span class="cidx mono">{activeChangeIdx + 1}/{changeAnchors.length}</span>
+							<IconButton icon="arrow-down" size="sm" label={t("다음 변경")} onclick={() => jumpToChange(activeChangeIdx + 1)} />
+						</div>
+					{/if}
+					{#if modeOptions.length > 0}
+						<div class="mtoggle">
+							<Segmented
+								label={t("보기 모드")}
+								options={modeOptions}
+								value={activeModeId}
+								size="sm"
+								full={false}
+								onchange={onModeChange}
+							/>
+						</div>
+					{/if}
+					{#if canEditText}
+						<IconButton
+							icon="pencil"
 							size="sm"
-							full={false}
-							onchange={onModeChange}
+							label={t("직접 수정 (더블클릭)")}
+							tip
+							onclick={() => startEdit()}
 						/>
-					</div>
+					{/if}
+					<span data-file-comment-btn="true">
+						<IconButton
+							icon="chat"
+							size="sm"
+							label={t("이 파일에 코멘트")}
+							tip
+							class={{ on: selection?.kind === "file" }}
+							onclick={toggleFileComment}
+						/>
+					</span>
+					{#if currentFileData && !currentFileData.binary && !isMediaKind}
+						<IconButton icon={copied ? "check" : "copy"} size="sm" label={t("복사")} tip onclick={copyFileText} />
+					{/if}
+					<IconButton icon="download" size="sm" label={t("저장")} tip disabled={saving} onclick={downloadCurrentFile} />
+					<IconButton
+						icon="retry"
+						size="sm"
+						label={t("새로고침")}
+						onclick={() => void workspaceViewer.selectFile(selectedPath, workspaceViewer.viewMode)}
+					/>
 				{/if}
-				<IconButton
-					icon="chat"
-					size="sm"
-					label={t("이 파일에 코멘트")}
-					tip
-					class={{ on: selection?.kind === "file" }}
-					onclick={toggleFileComment}
-				/>
-				{#if workspaceViewer.fileData && !workspaceViewer.fileData.binary && !isMediaKind}
-					<IconButton icon={copied ? "check" : "copy"} size="sm" label={t("복사")} tip onclick={copyFileText} />
-				{/if}
-				<IconButton icon="download" size="sm" label={t("저장")} tip disabled={saving} onclick={downloadCurrentFile} />
-				<IconButton
-					icon="retry"
-					size="sm"
-					label={t("새로고침")}
-					onclick={() => void workspaceViewer.selectFile(selectedPath, workspaceViewer.viewMode)}
-				/>
 			</div>
 		</div>
 
-		{#if selection?.kind === "file"}
-			{@render inlineCommentBox(false)}
-		{/if}
-
-		<div class="cscroll" bind:this={scrollHost} class:media-bg={isMediaKind || showRichPreview}>
-			{#if workspaceViewer.viewMode === "diff" && selectedChange}
-				{#if !workspaceViewer.diffData}
-					<div class="pad"><EmptyState loading compact>{t("Diff를 불러오는 중…")}</EmptyState></div>
-				{:else if workspaceViewer.diffData.binary}
-					<div class="pad"><EmptyState compact>{t("바이너리 파일은 Diff로 표시할 수 없습니다.")}</EmptyState></div>
-				{:else if fullDiffRows.length === 0}
-					<div class="pad"><EmptyState compact>{t("표시할 변경 라인이 없습니다.")}</EmptyState></div>
-				{:else}
-					{#if workspaceViewer.fileData?.truncated}
-						<div class="trunc">{t("파일이 커서 앞부분만 표시합니다 (읽기 전용).")}</div>
-					{/if}
-					<div class="lines mono" class:selecting={draggingRange}>
-						{#each fullDiffRows as dl, idx (idx)}
-							{@const html = highlightedDiffLines?.[idx]}
-							{@const inRange =
-								lineRange?.mode === "diff" && idx >= lineRange.startIdx && idx <= lineRange.endIdx}
-							{@const isEnd = lineRange?.mode === "diff" && idx === lineRange.endIdx}
-							{@const ln = dl.newLine ?? dl.oldLine ?? idx + 1}
-							<!-- svelte-ignore a11y_no_static_element_interactions -->
-							<div
-								class="row d-{dl.type}"
-								class:picked={inRange}
-								data-drow={idx}
-								data-change-start={dl.changeStart ? "true" : undefined}
-								onpointerenter={() => onLinePointerEnter("diff", idx)}
-							>
-								<button
-									type="button"
-									class="lnbtn diff-ln"
-									title={t("{line}번 줄에 코멘트 달기", { line: ln })}
-									onpointerdown={(e) => onLinePointerDown(e, "diff", idx)}
-									onkeydown={(e) => onLineKeyClick(e, "diff", idx)}
-								>
-									<span class="lplus" aria-hidden="true">+</span>
-									<span class="dln">{dl.oldLine ?? ""}</span>
-									<span class="dln">{dl.newLine ?? ""}</span>
-								</button>
-								<span class="dsig" aria-hidden="true">{dl.type === "add" ? "+" : dl.type === "del" ? "-" : " "}</span>
-								{#if html}
-									<span class="txt">{@html html}</span>
-								{:else}
-									<span class="txt">{dl.text}</span>
-								{/if}
-							</div>
-							{#if isEnd}
-								{@render inlineCommentBox(true)}
-							{/if}
-						{/each}
-					</div>
-				{/if}
-			{:else if isMediaKind}
-				{#if mediaLoading}
-					<div class="pad"><EmptyState loading compact>{t("파일을 불러오는 중…")}</EmptyState></div>
-				{:else if mediaError}
-					<div class="pad"><Notice tone="danger" size="sm">{mediaError}</Notice></div>
-				{:else if kind === "image" && mediaUrl}
-					<div class="media-wrap">
-						<button
-							type="button"
-							class="pic"
-							onclick={() => app.openImage([{ src: mediaUrl!, mimeType: mediaMime || "image/png" }])}
-							aria-label={t("이미지 크게 보기")}
-						>
-							<img
-								src={mediaUrl}
-								alt={fileName}
-								onload={(e) => {
-									const el = e.currentTarget as HTMLImageElement;
-									if (el.naturalWidth && el.naturalHeight) imgDims = { w: el.naturalWidth, h: el.naturalHeight };
-								}}
-							/>
-						</button>
-					</div>
-				{:else if kind === "pdf" && mediaUrl}
-					<iframe class="pdf" src={mediaUrl} title={fileName}></iframe>
-				{:else if (kind === "audio" || kind === "video") && mediaFailed}
-					<div class="pad">
-						<EmptyState compact>{t("재생할 수 없는 파일입니다. 파일이 깨졌거나 이 기기가 지원하지 않는 코덱일 수 있습니다. 저장해서 열어 보세요.")}</EmptyState>
-					</div>
-				{:else if kind === "audio" && mediaUrl}
-					<div class="media-wrap">
-						<!-- svelte-ignore a11y_media_has_caption -->
-						<audio class="audio" src={mediaUrl} controls preload="metadata" onerror={() => (mediaFailed = true)}></audio>
-					</div>
-				{:else if kind === "video" && mediaUrl}
-					<div class="media-wrap">
-						<div class="videohost" bind:this={videoHost}></div>
-					</div>
-				{/if}
-			{:else if workspaceViewer.fileLoading && !workspaceViewer.fileData}
-				<div class="pad"><EmptyState loading compact>{t("파일을 불러오는 중…")}</EmptyState></div>
-			{:else if workspaceViewer.fileError}
-				<div class="pad">
-					<Notice tone="danger" size="sm" onretry={() => selectedPath && workspaceViewer.loadFile(selectedPath)}>
-						{workspaceViewer.fileError}
-					</Notice>
+		{#if editing}
+			<div class="editor-wrap">
+				<div class="egutter mono" bind:this={editGutter} aria-hidden="true">
+					{#each Array(editLineCount) as _, i (i)}
+						<div class="eln">{i + 1}</div>
+					{/each}
 				</div>
-			{:else if workspaceViewer.fileData?.binary}
-				<div class="bcard-wrap">
-					<div class="bcard">
-						<span class="bext mono">{extOf(fileName)}</span>
-						<span class="bname mono">{fileName}</span>
-						{#if displaySize !== undefined}<span class="bsize mono">{sizeLabel(displaySize)}</span>{/if}
-						<div class="bact">
-							<Button size="sm" variant="primary" disabled={saving} onclick={downloadCurrentFile}>{t("저장")}</Button>
-							<Button size="sm" variant="default" onclick={toggleFileComment}>{t("이 파일에 코멘트")}</Button>
+				<textarea
+					class="earea mono"
+					bind:this={editArea}
+					bind:value={editDraft}
+					spellcheck="false"
+					onkeydown={onEditorKey}
+					onscroll={() => {
+						if (editGutter && editArea) editGutter.scrollTop = editArea.scrollTop;
+					}}
+					aria-label={selectedPath}
+				></textarea>
+			</div>
+		{:else}
+			<div class="cscroll" bind:this={scrollHost} class:media-bg={isMediaKind || showRichPreview}>
+				{#if workspaceViewer.viewMode === "diff" && selectedChange}
+					{#if (workspaceViewer.fileLoading && !currentFileData) || !workspaceViewer.diffData}
+						<div class="pad"><EmptyState loading compact>{t("Diff를 불러오는 중…")}</EmptyState></div>
+					{:else if workspaceViewer.diffData.binary}
+						<div class="pad"><EmptyState compact>{t("바이너리 파일은 Diff로 표시할 수 없습니다.")}</EmptyState></div>
+					{:else if fullDiffRows.length === 0}
+						<div class="pad"><EmptyState compact>{t("표시할 변경 라인이 없습니다.")}</EmptyState></div>
+					{:else}
+						{#if currentFileData?.truncated}
+							<div class="trunc">{t("파일이 커서 앞부분만 표시합니다 (읽기 전용).")}</div>
+						{/if}
+						<!-- svelte-ignore a11y_no_static_element_interactions -->
+						<div class="lines mono" class:selecting={draggingRange} onmouseup={() => onCodeMouseUp("diff")}>
+							{#each fullDiffRows as dl, idx (idx)}
+								{@const html = highlightedDiffLines?.[idx]}
+								{@const inRange = selection?.kind === "lines" && selection.mode === "diff" && selectedIndexSet.has(idx)}
+								{@const ln = dl.newLine ?? dl.oldLine ?? idx + 1}
+								<!-- svelte-ignore a11y_no_static_element_interactions -->
+								<div
+									class="row d-{dl.type}"
+									class:picked={inRange}
+									data-drow={idx}
+									data-change-start={dl.changeStart ? "true" : undefined}
+									onpointerenter={() => onLinePointerEnter("diff", idx)}
+									ondblclick={() => canEditText && startEdit(ln)}
+								>
+									<button
+										type="button"
+										class="lnbtn diff-ln"
+										title={t("{line}번 줄에 코멘트 달기", { line: ln })}
+										onpointerdown={(e) => onLinePointerDown(e, "diff", idx)}
+										onkeydown={(e) => onLineKeyClick(e, "diff", idx)}
+									>
+										<span class="lplus" aria-hidden="true">+</span>
+										<span class="dln">{dl.oldLine ?? ""}</span>
+										<span class="dln">{dl.newLine ?? ""}</span>
+									</button>
+									<span class="dsig" aria-hidden="true">{dl.type === "add" ? "+" : dl.type === "del" ? "-" : " "}</span>
+									{#if html}
+										<span class="txt">{@html html}</span>
+									{:else}
+										<span class="txt">{dl.text}</span>
+									{/if}
+								</div>
+							{/each}
+						</div>
+					{/if}
+				{:else if isMediaKind}
+					{#if mediaLoading}
+						<div class="pad"><EmptyState loading compact>{t("파일을 불러오는 중…")}</EmptyState></div>
+					{:else if mediaError}
+						<div class="pad"><Notice tone="danger" size="sm">{mediaError}</Notice></div>
+					{:else if kind === "image" && mediaUrl}
+						<div class="media-wrap">
+							<button
+								type="button"
+								class="pic"
+								onclick={() => app.openImage([{ src: mediaUrl!, mimeType: mediaMime || "image/png" }])}
+								aria-label={t("이미지 크게 보기")}
+							>
+								<img
+									src={mediaUrl}
+									alt={fileName}
+									onload={(e) => {
+										const el = e.currentTarget as HTMLImageElement;
+										if (el.naturalWidth && el.naturalHeight) imgDims = { w: el.naturalWidth, h: el.naturalHeight };
+									}}
+								/>
+							</button>
+						</div>
+					{:else if kind === "pdf" && mediaUrl}
+						<iframe class="pdf" src={mediaUrl} title={fileName}></iframe>
+					{:else if (kind === "audio" || kind === "video") && mediaFailed}
+						<div class="pad">
+							<EmptyState compact>{t("재생할 수 없는 파일입니다. 파일이 깨졌거나 이 기기가 지원하지 않는 코덱일 수 있습니다. 저장해서 열어 보세요.")}</EmptyState>
+						</div>
+					{:else if kind === "audio" && mediaUrl}
+						<div class="media-wrap">
+							<!-- svelte-ignore a11y_media_has_caption -->
+							<audio class="audio" src={mediaUrl} controls preload="metadata" onerror={() => (mediaFailed = true)}></audio>
+						</div>
+					{:else if kind === "video" && mediaUrl}
+						<div class="media-wrap">
+							<div class="videohost" bind:this={videoHost}></div>
+						</div>
+					{/if}
+				{:else if workspaceViewer.fileLoading && !currentFileData}
+					<div class="pad"><EmptyState loading compact>{t("파일을 불러오는 중…")}</EmptyState></div>
+				{:else if workspaceViewer.fileError}
+					<div class="pad">
+						<Notice tone="danger" size="sm" onretry={() => selectedPath && workspaceViewer.loadFile(selectedPath)}>
+							{workspaceViewer.fileError}
+						</Notice>
+					</div>
+				{:else if currentFileData?.binary}
+					<div class="bcard-wrap">
+						<div class="bcard">
+							<span class="bext mono">{extOf(fileName)}</span>
+							<span class="bname mono">{fileName}</span>
+							{#if displaySize !== undefined}<span class="bsize mono">{sizeLabel(displaySize)}</span>{/if}
+							<div class="bact">
+								<Button size="sm" variant="primary" disabled={saving} onclick={downloadCurrentFile}>{t("저장")}</Button>
+								<Button size="sm" variant="default" onclick={toggleFileComment}>{t("이 파일에 코멘트")}</Button>
+							</div>
 						</div>
 					</div>
-				</div>
-			{:else if workspaceViewer.fileData}
-				{#if workspaceViewer.fileData.truncated}
-					<div class="trunc">{t("파일이 커서 앞부분만 표시합니다 (읽기 전용).")}</div>
-				{/if}
-				{#if kind === "markdown" && showRichPreview}
-					<div class="md-wrap">
-						<Markdown text={workspaceViewer.fileData.content} sessionId={sessionId ?? undefined} />
-					</div>
-				{:else if kind === "html" && showRichPreview && htmlUrl}
-					<!-- fully sandboxed: no scripts, no same-origin, no forms, no navigation -->
-					<iframe class="html" src={htmlUrl} sandbox="" referrerpolicy="no-referrer" title={fileName}></iframe>
-				{:else if table}
-					<div class="tablewrap">
-						<table>
-							<tbody>
-								{#each table.rows as r, ri (ri)}
-									<tr>
-										{#each r as c, ci (ci)}
-											{#if ri === 0}<th>{c}</th>{:else}<td>{c}</td>{/if}
-										{/each}
-									</tr>
-								{/each}
-							</tbody>
-						</table>
-					</div>
-				{:else}
-					<div class="lines mono" class:selecting={draggingRange}>
-						{#each rawLines as line, idx (idx)}
-							{@const ln = idx + 1}
-							{@const html = highlightedLines?.[idx]}
-							{@const inRange =
-								lineRange?.mode === "file" && idx >= lineRange.startIdx && idx <= lineRange.endIdx}
-							{@const isEnd = lineRange?.mode === "file" && idx === lineRange.endIdx}
-							<!-- svelte-ignore a11y_no_static_element_interactions -->
-							<div
-								class="row"
-								class:picked={inRange}
-								onpointerenter={() => onLinePointerEnter("file", idx)}
-							>
-								<button
-									type="button"
-									class="lnbtn"
-									title={t("{line}번 줄에 코멘트 달기", { line: ln })}
-									onpointerdown={(e) => onLinePointerDown(e, "file", idx)}
-									onkeydown={(e) => onLineKeyClick(e, "file", idx)}
+				{:else if currentFileData}
+					{#if currentFileData.truncated}
+						<div class="trunc">{t("파일이 커서 앞부분만 표시합니다 (읽기 전용).")}</div>
+					{/if}
+					{#if kind === "markdown" && showRichPreview}
+						<div class="md-wrap">
+							<Markdown text={currentFileData.content} sessionId={sessionId ?? undefined} />
+						</div>
+					{:else if kind === "html" && showRichPreview && htmlUrl}
+						<!-- fully sandboxed: no scripts, no same-origin, no forms, no navigation -->
+						<iframe class="html" src={htmlUrl} sandbox="" referrerpolicy="no-referrer" title={fileName}></iframe>
+					{:else if table}
+						<div class="tablewrap">
+							<table>
+								<tbody>
+									{#each table.rows as r, ri (ri)}
+										<tr>
+											{#each r as c, ci (ci)}
+												{#if ri === 0}<th>{c}</th>{:else}<td>{c}</td>{/if}
+											{/each}
+										</tr>
+									{/each}
+								</tbody>
+							</table>
+						</div>
+					{:else}
+						<!-- svelte-ignore a11y_no_static_element_interactions -->
+						<div class="lines mono" class:selecting={draggingRange} onmouseup={() => onCodeMouseUp("file")}>
+							{#each rawLines as line, idx (idx)}
+								{@const ln = idx + 1}
+								{@const html = highlightedLines?.[idx]}
+								{@const inRange = selection?.kind === "lines" && selection.mode === "file" && selectedIndexSet.has(idx)}
+								<!-- svelte-ignore a11y_no_static_element_interactions -->
+								<div
+									class="row"
+									class:picked={inRange}
+									data-frow={idx}
+									onpointerenter={() => onLinePointerEnter("file", idx)}
+									ondblclick={() => canEditText && startEdit(ln)}
 								>
-									<span class="lnum">{ln}</span>
-									<span class="lplus" aria-hidden="true">+</span>
-								</button>
-								{#if html}
-									<span class="txt">{@html html}</span>
-								{:else}
-									<span class="txt">{line}</span>
-								{/if}
-							</div>
-							{#if isEnd}
-								{@render inlineCommentBox(true)}
-							{/if}
-						{/each}
-					</div>
+									<button
+										type="button"
+										class="lnbtn"
+										title={t("{line}번 줄에 코멘트 달기", { line: ln })}
+										onpointerdown={(e) => onLinePointerDown(e, "file", idx)}
+										onkeydown={(e) => onLineKeyClick(e, "file", idx)}
+									>
+										<span class="lnum">{ln}</span>
+										<span class="lplus" aria-hidden="true">+</span>
+									</button>
+									{#if html}
+										<span class="txt">{@html html}</span>
+									{:else}
+										<span class="txt">{line}</span>
+									{/if}
+								</div>
+							{/each}
+						</div>
+					{/if}
 				{/if}
+			</div>
+		{/if}
+	{/if}
+
+	<!-- Floating Comment Popover / Pill anchored right below the clicked line, range, text drag, or file button -->
+	{#if selection && !editing}
+		<div
+			class="float-pop"
+			class:pill={!popoverOpen}
+			bind:this={popoverEl}
+			style:top="{popoverPos.top}px"
+			style:left="{popoverPos.left}px"
+			role="dialog"
+			aria-label={t("이 파일에 코멘트")}
+		>
+			{#if !popoverOpen && selection.kind === "lines"}
+				<div class="fpill">
+					<span class="cloc mono">{commentHeaderLabel()}</span>
+					<Button size="sm" variant="primary" onclick={expandFloatingPill}>{t("코멘트")}</Button>
+					<Button size="sm" variant="default" onclick={insertToComposer}>{t("입력창에 넣기")}</Button>
+					<IconButton icon="x" size="sm" label={t("닫기")} onclick={clearSelection} />
+				</div>
+			{:else}
+				<div class="fcard">
+					<div class="chead">
+						<span class="cloc mono">{commentHeaderLabel()}</span>
+						<IconButton icon="x" size="sm" label={t("닫기")} onclick={clearSelection} />
+					</div>
+					<!-- svelte-ignore a11y_autofocus -->
+					<textarea
+						class="cta"
+						rows="2"
+						autofocus
+						bind:value={commentText}
+						onkeydown={onCommentKey}
+						placeholder={t("수정 요청을 입력하거나 비우고 Enter로 줄 위치만 입력창에 넣으세요…")}
+					></textarea>
+					<div class="cfoot">
+						<div class="cact">
+							<Button size="sm" variant="primary" onclick={insertToComposer}>{t("입력창에 넣기")}</Button>
+							<Button size="sm" variant="default" disabled={sending || !commentText.trim()} onclick={sendNow}>{t("바로 보내기")}</Button>
+						</div>
+						<span class="chint">
+							{selection.kind === "lines"
+								? t("Shift·Ctrl+클릭·드래그로 다중 선택")
+								: t("Enter 입력창에 넣기 · Ctrl+Enter 바로 보내기")}
+						</span>
+					</div>
+				</div>
 			{/if}
 		</div>
 	{/if}
@@ -769,6 +1044,7 @@
 
 <style>
 	.fpane {
+		position: relative;
 		flex: 1;
 		min-width: 0;
 		min-height: 0;
@@ -803,6 +1079,12 @@
 		text-overflow: ellipsis;
 		white-space: nowrap;
 		line-height: 20px;
+	}
+	.edirty {
+		font-size: var(--fs-2xs);
+		color: var(--warn);
+		flex: none;
+		line-height: 16px;
 	}
 	.fsub {
 		font-size: var(--fs-2xs);
@@ -860,6 +1142,47 @@
 		background: var(--warn-soft);
 		border-bottom: 1px solid var(--border);
 	}
+
+	/* Direct inline editor */
+	.editor-wrap {
+		flex: 1;
+		min-height: 0;
+		display: flex;
+		background: var(--bg-code);
+	}
+	.egutter {
+		flex: none;
+		width: 48px;
+		padding: 8px 8px 8px 4px;
+		overflow: hidden;
+		text-align: right;
+		font-size: var(--fs-xs);
+		line-height: 20px;
+		color: var(--text-faint);
+		background: var(--bg-side);
+		border-right: 1px solid var(--border);
+		user-select: none;
+	}
+	.eln {
+		line-height: 20px;
+	}
+	.earea {
+		flex: 1;
+		min-width: 0;
+		min-height: 0;
+		padding: 8px 12px;
+		border: 0;
+		outline: none;
+		resize: none;
+		background: transparent;
+		color: var(--text);
+		font-size: var(--fs-xs);
+		line-height: 20px;
+		tab-size: 4;
+		white-space: pre;
+		overflow: auto;
+	}
+
 	.lines {
 		padding: 8px 0;
 		font-size: var(--fs-xs);
@@ -1102,35 +1425,54 @@
 		padding-top: 8px;
 	}
 
-	/* Inline comment composer */
-	.cbox {
-		position: sticky;
-		left: 0;
-		padding: 8px 16px;
+	/* Floating comment popover & selection pill */
+	.float-pop {
+		position: fixed;
+		z-index: var(--z-popover);
+		width: min(480px, calc(100vw - 24px));
+		border-radius: var(--radius-md);
+		border: 1px solid var(--border-strong);
 		background: var(--bg-elev);
-		border-top: 1px solid var(--border-strong);
-		border-bottom: 1px solid var(--border-strong);
-		font-family: var(--font);
+		box-shadow: var(--shadow-overlay);
 	}
-	.cbox-in {
-		max-width: 680px;
+	.float-pop.pill {
+		width: auto;
+		max-width: calc(100vw - 24px);
+	}
+	.fpill {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		padding: 4px 8px;
+	}
+	.fcard {
 		display: flex;
 		flex-direction: column;
 		gap: 8px;
+		padding: 12px;
 	}
 	.chead {
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
 		gap: 8px;
-		flex-wrap: wrap;
-		line-height: 16px;
+		line-height: 20px;
 	}
 	.cloc {
 		font-size: var(--fs-xs);
 		font-weight: 600;
 		color: var(--accent);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 		line-height: 16px;
+	}
+	.cfoot {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 8px;
+		flex-wrap: wrap;
 	}
 	.chint {
 		font-size: var(--fs-2xs);
