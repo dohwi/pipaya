@@ -226,6 +226,7 @@
 		align-items: center;
 		margin-top: 4px;
 		font-size: 12px;
+		line-height: 16px;
 		color: var(--muted, inherit);
 		opacity: 0.8;
 	}

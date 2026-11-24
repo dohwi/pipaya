@@ -293,10 +293,11 @@
 		margin-top: 8px;
 	}
 	.error :global(svg) {
-		width: 17px;
-		height: 17px;
+		width: 16px;
+		height: 16px;
 		flex: none;
-		margin-top: 1px;
+		/* 16px icon centred on the 20px first line: (20 - 16) / 2 = 2px */
+		margin-top: 2px;
 		stroke-width: 1.8;
 	}
 

@@ -61,7 +61,7 @@ def check_modals(p):
         ("ctx", ['button[aria-label^="AGENTS.md"]']),
         ("settings", ["SET"]),
         # the server's panes are in the same settings nav (srvtab); on a phone the nav item opens the pane as its own page
-        ("settings-agent", ["SET", '.nav button.srvtab:has-text("에이전트 도구")']),
+        ("settings-agent", ["SET", '.nav button.srvtab:has-text("에이전트")']),
         ("add-conn", ["SET", '.nav button.srvtab:has-text("모델")', 'button:has-text("연결 추가")']),
         ("model-picker", ["button.trigger"]),
     ]

@@ -252,6 +252,7 @@
 		display: flex;
 		align-items: center;
 		gap: 4px;
+		line-height: 16px;
 	}
 	.src :global(svg) {
 		width: 14px;
@@ -281,6 +282,7 @@
 		border-radius: var(--radius-control);
 		color: var(--text);
 		font-size: var(--fs-md);
+		line-height: 20px;
 		text-align: left;
 		transition: border-color var(--motion-fast) var(--ease-std);
 	}
@@ -316,8 +318,8 @@
 		}
 	}
 	.iconpick :global(svg:not(.model):not(.logo)) {
-		width: 13px;
-		height: 13px;
+		width: 14px;
+		height: 14px;
 		stroke: var(--text-dim);
 		stroke-width: 2;
 	}
@@ -333,8 +335,8 @@
 		color: var(--text-dim);
 	}
 	.mtrigger :global(svg:not(.model):not(.logo)) {
-		width: 15px;
-		height: 15px;
+		width: 16px;
+		height: 16px;
 		flex: none;
 		stroke-width: 2;
 		color: var(--text-dim);

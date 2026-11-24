@@ -62,6 +62,7 @@
 		align-items: center;
 		gap: 8px;
 		font-size: var(--fs-md);
+		line-height: 20px;
 		color: var(--text-dim);
 	}
 	.ver b {
@@ -78,6 +79,7 @@
 		gap: 12px;
 		margin-top: 4px;
 		font-size: var(--fs-sm);
+		line-height: 20px;
 		color: var(--text);
 	}
 	.warn {

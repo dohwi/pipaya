@@ -29,6 +29,7 @@
 		gap: 4px 12px;
 		color: var(--text-faint);
 		font-size: var(--fs-2xs);
+		line-height: 16px;
 		white-space: nowrap;
 	}
 	/* the context size is plain text like the abilities, only in the mono face so the digits line up */
@@ -51,8 +52,8 @@
 		gap: 4px;
 	}
 	.cap :global(svg) {
-		width: 13px;
-		height: 13px;
+		width: 12px;
+		height: 12px;
 		stroke: currentColor;
 		stroke-width: 1.9;
 		flex: none;

@@ -280,6 +280,7 @@
 		gap: 8px;
 		padding: 0 8px;
 		font-size: var(--fs-xs);
+		line-height: 16px;
 		color: var(--text-dim);
 	}
 	/* same yellow as the composer's compaction glow */
@@ -406,6 +407,7 @@
 		width: 100%;
 		min-height: 40px;
 		padding: 4px 12px;
+		line-height: 20px;
 		text-align: left;
 	}
 	.opt:active {

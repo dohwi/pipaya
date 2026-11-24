@@ -81,6 +81,7 @@
 		gap: 8px;
 		height: 40px;
 		font-size: var(--fs-md);
+		line-height: 20px;
 		color: var(--text);
 	}
 	.item.off .name,

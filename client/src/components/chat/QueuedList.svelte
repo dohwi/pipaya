@@ -288,8 +288,8 @@
 		color: var(--info);
 	}
 	.count :global(svg) {
-		width: 11px;
-		height: 11px;
+		width: 12px;
+		height: 12px;
 		stroke-width: 2.2;
 	}
 	.scroll {

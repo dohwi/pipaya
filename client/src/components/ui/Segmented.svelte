@@ -107,6 +107,7 @@
 		justify-content: center;
 		height: 40px;
 		padding: 0 12px;
+		border-top: 2px solid transparent; /* mirrors the bottom bar so the label centres on the 40px tab */
 		border-bottom: 2px solid transparent; /* the selected tab's bar covers the hairline */
 		color: var(--text-dim);
 		font-size: var(--fs-sm);
@@ -149,6 +150,7 @@
 		gap: 8px;
 		height: var(--control-h);
 		padding: 0 8px;
+		line-height: 20px;
 		border-radius: var(--radius-control);
 		border: 1px solid var(--card-border, var(--border));
 		background: var(--card-bg, var(--bg-elev));
@@ -186,8 +188,8 @@
 		border-color: var(--border);
 	}
 	.cards > button :global(svg) {
-		width: 17px;
-		height: 17px;
+		width: 16px;
+		height: 16px;
 		stroke-width: 1.9;
 	}
 </style>

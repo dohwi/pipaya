@@ -189,12 +189,12 @@
 
 <style>
 	.panel-toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; }
-	.launcher { display: inline-flex; align-items: center; gap: 8px; max-width: 100%; padding: 8px 12px; color: var(--text-dim); background: var(--bg-elev); border: 1px solid var(--border); border-radius: var(--radius-control); font-size: var(--fs-xs); white-space: nowrap; }
+	.launcher { display: inline-flex; align-items: center; gap: 8px; max-width: 100%; padding: 8px 12px; color: var(--text-dim); background: var(--bg-elev); border: 1px solid var(--border); border-radius: var(--radius-control); font-size: var(--fs-xs); line-height: 16px; white-space: nowrap; }
 	@media (hover: hover) {
 		.launcher:hover:not(:disabled) { background: var(--bg-hover); border-color: var(--border-strong); color: var(--text); }
 	}
 	.launcher:disabled { color: var(--disabled-fg); cursor: not-allowed; }
-	.launcher :global(svg) { flex: none; width: 15px; height: 15px; stroke-width: 1.8; }
+	.launcher :global(svg) { flex: none; width: 16px; height: 16px; stroke-width: 1.8; }
 	.launcher.danger { color: var(--danger); border-color: var(--danger); }
 	.toolbar-hint { font-size: var(--fs-2xs); color: var(--text-faint); }
 	.feedback { color: var(--danger); font-size: var(--fs-xs); line-height: 1.6; overflow-wrap: anywhere; }
@@ -212,7 +212,7 @@
 	:global(.iconbtn.step) { position: absolute; top: calc(50% - 14px); /* centred on the rail (a -12px margin left it 2px low) */ z-index: 2; width: 28px; height: 28px; background: var(--bg-side); box-shadow: 0 0 0 1px var(--border); transition: opacity var(--motion-fast) var(--ease-std); }
 	:global(.iconbtn.step.prev) { left: 0; }
 	:global(.iconbtn.step.next) { right: 0; }
-	:global(.iconbtn.step svg) { width: 15px; height: 15px; }
+	:global(.iconbtn.step svg) { width: 16px; height: 16px; }
 	/* only the arrow that can scroll is shown */
 	:global(.iconbtn.step.idle) { opacity: 0; pointer-events: none; }
 	.nav-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--fs-xs); font-weight: 600; }

@@ -78,7 +78,7 @@
 	.who { display: flex; flex-direction: column; min-width: 0; line-height: 1.35; flex: 1; gap: 4px; }
 	.top { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 8px; min-width: 0; }
 	h4 { margin: 0; font-size: var(--fs-lg); font-weight: 600; overflow-wrap: anywhere; }
-	.back { align-self: flex-start; display: inline-flex; align-items: center; gap: 4px; padding: 4px 8px 4px 4px; border-radius: var(--radius-control); color: var(--text-dim); font-size: var(--fs-sm); }
+	.back { align-self: flex-start; display: inline-flex; align-items: center; gap: 4px; padding: 4px 8px 4px 4px; border-radius: var(--radius-control); color: var(--text-dim); font-size: var(--fs-sm); line-height: 20px; }
 	@media (hover: hover) {
 		.back:hover { color: var(--text); }
 	}
@@ -90,7 +90,7 @@
 		.line { padding: 12px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg-elev); }
 	}
 	.back:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-	.chev { flex: none; display: inline-flex; color: var(--text-faint); transition: transform var(--motion-fast) var(--ease-exit); }
+	.chev { flex: none; display: inline-flex; align-items: center; color: var(--text-faint); transition: transform var(--motion-fast) var(--ease-exit); }
 	.chev.flip { transform: rotate(180deg); }
 	.chev :global(svg) { width: 16px; height: 16px; stroke-width: 2; }
 </style>

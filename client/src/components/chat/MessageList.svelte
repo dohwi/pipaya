@@ -551,10 +551,11 @@
 		background: var(--danger-soft);
 		color: var(--danger);
 		font-size: var(--fs-sm);
+		line-height: 20px;
 	}
 	.notice :global(svg) {
-		width: 17px;
-		height: 17px;
+		width: 16px;
+		height: 16px;
 		flex: none;
 		stroke-width: 1.8;
 	}
