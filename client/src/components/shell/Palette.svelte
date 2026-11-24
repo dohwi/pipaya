@@ -7,6 +7,7 @@
 	import Icon from "../ui/Icon.svelte";
 	import { app } from "../../lib/store.svelte";
 	import { uniqueBy } from "../../lib/unique";
+	import { verticalFade } from "../../lib/edge-fade";
 	import { fullTime } from "../../lib/format";
 	import { livePast } from "../../lib/minute-clock.svelte";
 
@@ -103,7 +104,8 @@
 				aria-activedescendant={items.length ? optionId(index) : undefined}
 			/>
 		</div>
-		<div class="list" id="{uid}-list" bind:this={listEl} role="listbox" aria-label={spec.title}>
+		<div class="listwrap vfade">
+		<div class="list" id="{uid}-list" bind:this={listEl} use:verticalFade role="listbox" aria-label={spec.title}>
 			{#each items as it, i (it.id)}
 				<div
 					class="it"
@@ -146,6 +148,7 @@
 			{:else}
 				<EmptyState tone="plain">{query ? t("일치하는 항목이 없습니다") : t(spec.empty)}</EmptyState>
 			{/each}
+		</div>
 		</div>
 		<div class="foot mono"><span>↑↓ {t("이동")}</span><span>Enter {t("선택")}</span><span>Esc {t("닫기")}</span></div>
 	</div>
@@ -228,7 +231,12 @@
 		font-size: var(--fs-md);
 		color: var(--text);
 	}
+	.listwrap {
+		flex: 0 1 auto;
+		--fade-bg: var(--bg-elev);
+	}
 	.list {
+		flex: 1 1 auto;
 		overflow-x: hidden;
 		overflow-y: auto;
 		padding: 8px; /* the same 8px above the first row as below the last: the highlighted first row no longer touches the rule */

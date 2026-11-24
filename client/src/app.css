@@ -1093,6 +1093,40 @@ button:is(.wide, [aria-expanded], [role="option"], [role="tab"]):active:not(:dis
 	mask-image: linear-gradient(to right, transparent, #000 16px, #000 calc(100% - 16px), transparent);
 }
 
+/* lib/edge-fade verticalFade: a vertical scroller's host fades the edge that hides content. Background-coloured
+   overlays, not mask-image (a mask forces an offscreen layer that stutters on redraw in WebKit), like MessageList's ramps.
+   z-index 4 sits above the sidebar tree paths (z-index 3). */
+.vfade {
+	position: relative;
+	isolation: isolate;
+	min-height: 0;
+	display: flex;
+	flex-direction: column;
+}
+.vfade::before,
+.vfade::after {
+	content: "";
+	position: absolute;
+	inset-inline: 0;
+	height: var(--fade-h, 24px);
+	pointer-events: none;
+	z-index: 4;
+	opacity: 0;
+	transition: opacity var(--motion-fast) var(--ease-std);
+}
+.vfade::before {
+	top: 0;
+	background: linear-gradient(to bottom, var(--fade-bg, var(--bg)), transparent);
+}
+.vfade::after {
+	bottom: 0;
+	background: linear-gradient(to top, var(--fade-bg, var(--bg)), transparent);
+}
+.vfade[data-fade-top]::before,
+.vfade[data-fade-bottom]::after {
+	opacity: 1;
+}
+
 /* Sliding selection marker (lib/sliding-indicator.ts, Tabs). Only a change of target animates:
    the action snaps the marker with an inline `transition: none` for first placement and layout reflow. */
 .slide-ind {

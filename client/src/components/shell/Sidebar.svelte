@@ -25,6 +25,7 @@
 	import { extensionUpdates } from "../../lib/extension-updates.svelte";
 	import { tilde } from "../../lib/format";
 	import { copyText } from "../../lib/clipboard";
+	import { verticalFade } from "../../lib/edge-fade";
 	import { chooseGroup } from "../../lib/group-picker";
 	import { chooseWorkdir } from "../../lib/workdir-picker";
 	import type { Point } from "../../lib/press-menu";
@@ -530,11 +531,13 @@
 	</div>
 	<ExtensionMount slot="sidebar.top" />
 
-	<nav class="list" bind:this={listEl} use:treeKeys use:slidingIndicator={{ selector: OPEN_ROW, radius: "var(--radius-sm)" }} onscroll={onListScroll}>
+	<div class="listwrap vfade">
+	<nav class="list" bind:this={listEl} use:verticalFade use:treeKeys use:slidingIndicator={{ selector: OPEN_ROW, radius: "var(--radius-sm)" }} onscroll={onListScroll}>
 		{#each nodes as n (n.server.id)}
 			<ServerBlock {n} single={nodes.length < 2} />
 		{/each}
 	</nav>
+	</div>
 
 	<div class="bottom" data-part="sidebar.bottom">
 		<ExtensionPanels placement="sidebar" />
@@ -605,10 +608,16 @@
 			width: clamp(220px, var(--sidebar-w), 560px); /* the wrapper animates its width; the content must not reflow. SIDEBAR_W, like App.svelte */
 		}
 	}
+	.listwrap {
+		flex: 1;
+		--fade-bg: var(--bg-side);
+		--fade-h: 32px;
+	}
 	.list {
 		--band: color-mix(in srgb, var(--text) 3.5%, var(--bg-side));
 		position: relative;
 		flex: 1;
+		min-height: 0;
 		overflow-x: hidden;
 		overflow-y: auto;
 		padding: 8px 0 16px; /* 8 below the brand row, 16 above the window edge */
