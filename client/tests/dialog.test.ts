@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { backLayer, handleBack, toggleLayer, trapTab, type LayerOpts } from "../src/lib/dialog";
+import { backLayer, handleBack, modalCount, modalLayer, onModalStackChange, toggleLayer, trapTab, type LayerOpts } from "../src/lib/dialog";
 
 /** Just enough DOM for the Tab trap: focusable children with a layout box, and a document focus pointer. */
 type Fake = { name: string; tabIndex: number; focus: () => void; getClientRects: () => unknown[]; closest: () => null };
@@ -202,5 +202,72 @@ describe("toggleLayer", () => {
 		toggleLayer(k3.e, locked);
 		expect(k3.prevented).toBe(true);
 		expect(closed).toBe(0);
+	});
+});
+
+describe("modalCount and onModalStackChange", () => {
+	const g = globalThis as unknown as {
+		window?: unknown;
+		document?: unknown;
+		history?: unknown;
+		HTMLElement?: unknown;
+	};
+	const prev = { window: g.window, document: g.document, history: g.history, HTMLElement: g.HTMLElement };
+	afterEach(() => {
+		g.window = prev.window;
+		g.document = prev.document;
+		g.history = prev.history;
+		g.HTMLElement = prev.HTMLElement;
+	});
+
+	function fakeNode() {
+		return {
+			tabIndex: -1,
+			isConnected: true,
+			hasAttribute: () => true,
+			addEventListener: () => {},
+			removeEventListener: () => {},
+			contains: () => false,
+			focus: () => {},
+		} as unknown as HTMLElement;
+	}
+
+	function setupEnv() {
+		g.HTMLElement = class {};
+		g.window = { addEventListener: () => {}, removeEventListener: () => {} };
+		g.document = { activeElement: null, body: {} };
+		g.history = { state: null, pushState: () => {}, go: () => {} };
+	}
+
+	test("tracks nested modal stack depth and supports unsubscribing during notifications", async () => {
+		setupEnv();
+		expect(modalCount()).toBe(0);
+		const seen: number[] = [];
+		const offA = onModalStackChange((n) => seen.push(n));
+		let bCalls = 0;
+		let offB = () => {};
+		offB = onModalStackChange(() => {
+			bCalls++;
+			offB();
+		});
+
+		const m1 = modalLayer(fakeNode(), {});
+		const m2 = modalLayer(fakeNode(), {});
+		expect(modalCount()).toBe(2);
+		m2.destroy();
+		expect(modalCount()).toBe(1);
+		m1.destroy();
+		// destroying twice does not emit duplicate notifications or underflow
+		m1.destroy();
+		expect(modalCount()).toBe(0);
+		expect(seen).toEqual([1, 2, 1, 0]);
+		expect(bCalls).toBe(1);
+
+		offA();
+		offA(); // double unsubscribe is safe
+		const m3 = modalLayer(fakeNode(), {});
+		m3.destroy();
+		expect(seen).toEqual([1, 2, 1, 0]);
+		await Promise.resolve();
 	});
 });
