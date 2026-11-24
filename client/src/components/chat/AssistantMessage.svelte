@@ -193,8 +193,8 @@
 					{#if tail.ts}<time class="when" use:tapTitle datetime={new Date(tail.ts).toISOString()} title={fullTime(tail.ts)}>{liveMessageTime(tail.ts)}</time>{/if}
 					{#if tail.ts && (tail.model || level || hasSpeed || statsMore)}<span class="sep" aria-hidden="true">·</span>{/if}
 					{#if tail.model}<span class="slogo"><ModelLogo icon={tailModel?.icon} provider={tail.provider} model={tail.model} size={14} colored /></span>{/if}
-					<!-- at rest: model, thinking level, and non-default speed (level/speed); tokens and duration come with the buttons (hover, focus, or a tap on touch) -->
-					{#if modelName || level || hasSpeed || statsMore}<span class="stext">{modelName}{#if level || hasSpeed}{modelName ? " · " : ""}{level}{#if level && hasSpeed}/{/if}{#if speed.kind === "fell"}<!-- a fallback stays slightly brighter: the reply was billed at a speed other than the one chosen --><span class="fell">{speed.label}</span>{:else if speed.kind === "tier"}{speed.label}{/if}{/if}{#if statsMore}<span class="more">{modelName || level || hasSpeed ? " · " : ""}{statsMore}</span>{/if}</span>{/if}
+					<!-- at rest: model, thinking level, and non-default speed (dot-separated); tokens and duration come with the buttons (hover, focus, or a tap on touch) -->
+					{#if modelName || level || hasSpeed || statsMore}<span class="stext">{modelName}{#if level || hasSpeed}{modelName ? " · " : ""}{level}{#if level && hasSpeed}{" · "}{/if}{#if speed.kind === "fell"}<!-- a fallback stays slightly brighter: the reply was billed at a speed other than the one chosen --><span class="fell">{speed.label}</span>{:else if speed.kind === "tier"}{speed.label}{/if}{/if}{#if statsMore}<span class="more">{modelName || level || hasSpeed ? " · " : ""}{statsMore}</span>{/if}</span>{/if}
 				</span>
 				<!-- retry is what a failed answer needs, so it always shows; the everyday actions wait for the pointer -->
 				{#if actions.retry}
