@@ -1,7 +1,5 @@
 <script lang="ts" module>
-	/** Where each session's reader left the list: px between the view's end and the content's end. Absent = parked at the bottom.
-	 *  The list is re-mounted per session, so this lives outside the component. Memory only. */
-	const leftAt = new Map<string, number>();
+	import { messageScroll as leftAt } from "../../lib/chat-scroll";
 </script>
 
 <script lang="ts">

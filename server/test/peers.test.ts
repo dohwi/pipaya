@@ -203,6 +203,8 @@ describe("peer sessions: names, peer / peer read and @mentions", () => {
 		// close and resume
 		await call("peer", { name: "builder-1", action: "close" });
 		expect((await api("GET", `/sessions/${kid.id}`)).json.closed).toBe(true);
+		expect(await said(boss)).toContain("it keeps its name");
+		expect(await said(boss)).not.toContain("given back");
 		await call("peer", { name: "builder-1", action: "resume" });
 		expect((await api("GET", `/sessions/${kid.id}`)).json.closed).toBe(false);
 		// delete works on what the boss created, and only on that
@@ -303,5 +305,47 @@ describe("peerMessage", () => {
 		const text = peerMessage("ana", "price is ${sender} and ${message}");
 		expect(text).toContain("[from @ana, another session");
 		expect(text.endsWith("price is ${sender} and ${message}")).toBe(true);
+	});
+});
+
+describe("PeerService.forget", () => {
+	test("clears per-session sends, chains and reported entries on deletion", async () => {
+		const { PeerService } = await import("../src/peers.ts");
+		const svc = new PeerService({
+			store: {} as any,
+			deliver: async () => {},
+			create: async () => ({} as any),
+			update: () => {},
+			rename: () => {},
+			remove: () => {},
+			abort: () => false,
+			questions: () => [],
+			answer: () => "not_found",
+			isRunning: () => false,
+			groups: () => [],
+			onRunFinished: () => {},
+			onQuestion: () => {},
+			queued: () => [],
+			cancelQueued: () => false,
+			groupOps: {} as any,
+		});
+		// Seed sends/chains via settleRun & internal fields to verify forget() drops all entries for that session only.
+		(svc as any).sends.set("s1", 2);
+		(svc as any).sends.set("s2", 1);
+		expect(svc.settleRun("s1", "user", "ok")).toBe("user");
+		expect((svc as any).chains.has("s1")).toBe(true);
+		(svc as any).reported.add("s1:tc-1");
+		(svc as any).reported.add("s1:tc-2");
+		(svc as any).reported.add("s2:tc-1");
+
+		svc.forget("s1");
+		expect((svc as any).sends.has("s1")).toBe(false);
+		expect((svc as any).sends.get("s2")).toBe(1);
+		expect((svc as any).chains.has("s1")).toBe(false);
+		expect((svc as any).reported.has("s1:tc-1")).toBe(false);
+		expect((svc as any).reported.has("s1:tc-2")).toBe(false);
+		expect((svc as any).reported.has("s2:tc-1")).toBe(true);
+		// After forget, a peer run no longer promotes to "user".
+		expect(svc.settleRun("s1", "peer", "ok")).toBe("peer");
 	});
 });

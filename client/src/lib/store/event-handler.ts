@@ -55,6 +55,9 @@ export interface OpenEventContext {
   leave(next?: string): void;
   dropFull(groupId: string): void;
   dropTerminal(id: string): void;
+  onSessionClosed?(id: string): void;
+  onSessionDeleted?(id: string): void;
+  onGroupDeleted?(id: string): void;
   cue(kind: "done" | "failed" | "ask"): void;
   announce(sessionId: string, kind: "done" | "failed"): void;
   bumpSkills(): void;
@@ -125,6 +128,7 @@ export function handleOpenServerEvent(ctx: OpenEventContext, e: PipayaEvent): vo
         ctx.awaiting[s.id] = 0;
         delete ctx.unread[s.id];
         delete ctx.failed[s.id];
+        ctx.onSessionClosed?.(s.id);
         if (ctx.activeId === s.id) ctx.leave(next);
         break;
       }
@@ -143,6 +147,7 @@ export function handleOpenServerEvent(ctx: OpenEventContext, e: PipayaEvent): vo
       const id = (e.data as { id: string }).id;
       ctx.setGroups(ctx.groups.filter((x) => x.id !== id));
       ctx.dropFull(id);
+      ctx.onGroupDeleted?.(id);
       break;
     }
     case "terminal_created":
@@ -166,6 +171,7 @@ export function handleOpenServerEvent(ctx: OpenEventContext, e: PipayaEvent): vo
       delete ctx.awaiting[id];
       delete ctx.unread[id];
       delete ctx.failed[id];
+      ctx.onSessionDeleted?.(id);
       if (ctx.activeId === id) ctx.leave(next);
       break;
     }

@@ -83,6 +83,8 @@ export class ServerLink {
 	loaded = $state(false);
 	/** True once what the sidebar draws (sessions, groups, terminals, workspace, activity) was read; comes before `loaded`. */
 	listed = $state(false);
+	/** True when the last `listSessions` response returned every active session (`!hasMore`). */
+	sessionsComplete = false;
 	/**
 	 * The lists on screen are the ones this device kept from its last visit (see list-cache), not read from the server yet:
 	 * the sidebar draws them at once and marks them as waiting, and nothing that acts on a session trusts them.
@@ -531,6 +533,7 @@ export class ServerLink {
 			};
 			this.workspace = workspace;
 			this.terminalSupport = terminalSupport;
+			this.sessionsComplete = list.nextBefore == null;
 			this.listed = true;
 			this.cached = false;
 			this.followLists();

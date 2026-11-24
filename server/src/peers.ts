@@ -211,6 +211,14 @@ export class PeerService {
 		this.sends.delete(id);
 	}
 
+	/** Drops per-session in-memory bookkeeping when a session is permanently deleted. */
+	forget(id: string): void {
+		this.sends.delete(id);
+		this.chains.delete(id);
+		const prefix = `${id}:`;
+		for (const k of this.reported) if (k.startsWith(prefix)) this.reported.delete(k);
+	}
+
 	// ── names ───────────────────────────────────────────────────────────────
 
 	/** Lower-cased names a session must not take: every session's (a closed one keeps its name) and the tags of the groups. */
@@ -356,7 +364,7 @@ export class PeerService {
 		switch (action) {
 			case "close":
 				this.host.update(peer.id, { closed: true });
-				return `Closed @${peer.name} (its work is stopped; resume it later with action resume, its name is given back).`;
+				return `Closed @${peer.name} (its work is stopped; resume it later with action resume, it keeps its name).`;
 			case "resume":
 				if (!peer.closed) return `@${peer.name} is already open.`;
 				this.host.update(peer.id, { closed: false });

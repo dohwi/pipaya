@@ -94,7 +94,10 @@ import type { Draft, PaletteSpec, Server } from "./store-model";
 import type { ServiceTier } from "./types";
 import type { SettingsProblem } from "./settings-problems";
 import { forgetDraft } from "./composer/saved-drafts";
+import { forgetMemoryDraft } from "./composer/memory-drafts";
 import { forgetAttachments } from "./composer/saved-attachments";
+import { forgetMessageScroll } from "./chat-scroll";
+import { forgetGraphPin } from "./graph-pins";
 
 const NO_DIRS: DirBlock[] = [];
 
@@ -1133,6 +1136,10 @@ class AppStore {
     } else if (e.type === "device_revoked") notifications.revoked((e.data as { deviceId: string }).deviceId, link.api);
     this.cueBackground(link, e);
     applyLinkEvent(link.data, e, () => { void link.refreshActivity(); });
+    if (e.type === "session_updated" && (e.data as Session).closed) this.cleanupClosedSession(link.id, (e.data as Session).id);
+    else if (e.type === "session_deleted") this.cleanupDeletedSession(link.id, (e.data as { id: string }).id);
+    else if (e.type === "group_deleted") this.cleanupDeletedGroup(link.id, (e.data as { id: string }).id);
+    else if (e.type === "terminal_closed") this.cleanupClosedTerminal(link.id, (e.data as { id: string }).id);
     if (e.type === "provider_updated" || e.type === "configuration_updated") {
       void link.refreshCatalog();
       if (e.type === "configuration_updated") void link.refreshWorkspace();
@@ -1240,6 +1247,9 @@ class AppStore {
         leave: (next) => this.leave(next),
         dropFull: (id) => this.dropFull(id),
         dropTerminal: (id) => this.dropTerminal(id),
+        onSessionClosed: (id) => { if (this.serverId) this.cleanupClosedSession(this.serverId, id); },
+        onSessionDeleted: (id) => { if (this.serverId) this.cleanupDeletedSession(this.serverId, id); },
+        onGroupDeleted: (id) => { if (this.serverId) this.cleanupDeletedGroup(this.serverId, id); },
         cue: (kind) => this.prefs.cue(kind),
         announce: (sid, kind) => this.feedback.announce(sid, kind),
         bumpSkills: () => { this.skillsTick++; },
@@ -1254,7 +1264,10 @@ class AppStore {
         refreshServerExtensions: () => { void this.refreshServerExtensions(); },
         refreshActivity: () => { void link.refreshActivity(); },
         syncLocales: () => { void this.syncLocales(); },
-        onClientSettings: (data) => { void this.settingsSync?.onEvent(data); },
+        onClientSettings: (data) => {
+          const sid = this.serverId;
+          void this.settingsSync?.onEvent(data).then(() => { if (sid && data.key === "sidebar") this.prunePinnedTabsOn(sid); });
+        },
         refreshUsage: (chat) => { void this.refreshUsage(chat); },
         flushHeld: (chat) => { void this.flushHeld(chat); },
       },
@@ -1405,7 +1418,22 @@ class AppStore {
     });
     this.settingsSync = sync;
     this.sidebar.onEdit = (id) => { if (id === serverId) sync.changed("sidebar"); };
-    void sync.pull().catch(() => {});
+    void sync.pull().then(() => this.prunePinnedTabsOn(serverId)).catch(() => {});
+  }
+
+  /**
+   * Drop pinned tab ids for sessions/groups/terminals that are no longer open on `serverId` (e.g. closed while offline
+   * or on another server). Only runs when the link has the complete active session list (`listed && sessionsComplete`).
+   */
+  private prunePinnedTabsOn(serverId: string) {
+    const link = this.links[serverId];
+    if (!link?.listed || !link.sessionsComplete || link.cached) return;
+    const active = new Set<string>([
+      ...link.data.sessions.map((s) => s.id),
+      ...link.data.groups.map((g) => g.id),
+      ...link.data.terminals.map((t) => t.id),
+    ]);
+    this.sidebar.prunePinnedTabs(serverId, active);
   }
 
   /** Hand-set directory order of the open server (empty = by recent activity). */
@@ -1607,6 +1635,52 @@ class AppStore {
     return true;
   }
 
+  /** Unpin a closed session so resuming it later starts unpinned, and drop its manual graph pin. */
+  cleanupClosedSession(serverId: string, id: string) {
+    if (!serverId || !id) return;
+    this.sidebar.unpinTab(serverId, id);
+    forgetGraphPin(serverId, id);
+  }
+
+  /** Drop every persisted and in-memory trace of a permanently deleted session. */
+  cleanupDeletedSession(serverId: string, id: string) {
+    if (!serverId || !id) return;
+    this.sidebar.forgetTab(serverId, id);
+    forgetGraphPin(serverId, id);
+    forgetDraft(id);
+    forgetMemoryDraft(id);
+    forgetAttachments(id);
+    forgetMessageScroll(id);
+    notifications.forgetSession(id);
+    if (this.serverId === serverId) {
+      if (Object.hasOwn(this.chats, id)) {
+        const { [id]: _, ...rest } = this.chats;
+        this.chats = rest;
+      }
+      this.chatUsed.delete(id);
+      this.lastVisible.delete(id);
+    }
+    if (this.parkedChats[serverId]) delete this.parkedChats[serverId]![id];
+    if (this.previousId === id && this.previousServer === serverId) {
+      this.previousId = null;
+      this.previousServer = null;
+    }
+  }
+
+  /** Drop every persisted and in-memory trace of a dissolved split group. */
+  cleanupDeletedGroup(serverId: string, id: string) {
+    if (!serverId || !id) return;
+    this.sidebar.forgetTab(serverId, id);
+    this.dropFull(id);
+    delete this.lastPane[id];
+  }
+
+  /** Drop sidebar state of a closed terminal (terminals cannot be resumed). */
+  cleanupClosedTerminal(serverId: string, id: string) {
+    if (!serverId || !id) return;
+    this.sidebar.forgetTab(serverId, id);
+  }
+
   /* ---------- close / resume ---------- */
 
   /**
@@ -1632,6 +1706,7 @@ class AppStore {
       link.data.awaiting[id] = 0;
       delete link.data.unread[id];
       delete link.data.failed[id];
+      this.cleanupClosedSession(sid, id);
       if (this.graphPeek?.server === sid && this.graphPeek?.session === id) this.graphPeek = null;
       if (this.graphFrom?.server === sid && this.graphFrom?.session === id) this.graphFrom = next ? { server: sid, session: next } : null;
       if (this.serverId === sid && this.activeId === id) {
@@ -2460,8 +2535,6 @@ class AppStore {
       const next = this.serverId === sid ? this.neighbourOf(id) : undefined;
       await link.api.deleteSession(id);
       if (this.links[sid] !== link) return false;
-      forgetDraft(id);
-      forgetAttachments(id);
       this.forgetInGroupsOn(link, id);
       link.data.sessions = link.data.sessions.filter((x) => x.id !== id);
       delete link.data.running[id];
@@ -2469,6 +2542,7 @@ class AppStore {
       delete link.data.awaiting[id];
       delete link.data.unread[id];
       delete link.data.failed[id];
+      this.cleanupDeletedSession(sid, id);
       if (this.serverId === sid && this.activeId === id) this.leave(next);
       void link.refreshWorkspace();
       return true;
@@ -2720,6 +2794,7 @@ class AppStore {
   }
 
   private dropTerminalOn(link: ServerLink, id: string) {
+    this.cleanupClosedTerminal(link.id, id);
     if (!link.data.terminals.some((x) => x.id === id)) return;
     const isOpen = this.serverId === link.id;
     const next = isOpen ? this.neighbourOf(id) : undefined;
@@ -2819,7 +2894,7 @@ class AppStore {
       const showsOnLink = (x: string) => link.sessionById.has(x) || link.data.terminals.some((t) => t.id === x);
       if (g) this.replaceTabs(before, [id], panesOf(g.layout).filter(showsOnLink), sid);
       link.data.groups = link.data.groups.filter((x) => x.id !== id);
-      this.dropFull(id);
+      this.cleanupDeletedGroup(sid, id);
     } catch (e) {
       this.probeIfNetwork(link, e);
       this.fail(e, t("그룹을 해제하지 못했습니다"));
