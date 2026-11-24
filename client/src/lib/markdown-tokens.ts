@@ -3,12 +3,12 @@
  * paths in inline `<code>`) inside rendered assistant markdown.
  * Runs as a DOM pass on `<template>` content right before `patchHtml` merges it into the DOM, so:
  *  - `renderMarkdown` / `renderStreaming` caches stay untouched when sessions open, rename or close
- *  - `<pre>`, `<a>`, `<button>` are never entered (inline `<code>` is converted only when its sole text is an unambiguous file path)
+ *  - `<pre>`, `<a>`, `<button>` are never entered (inline `<code>` is converted only when its sole text is a known `@mention` or an unambiguous file path)
  *  - every chip is built with `createElement` + `textContent` + `dataset` (no raw HTML concatenation)
  */
 import { FILE_TOKEN, knownMention } from "./composer-text";
 import { formatFileLine, parseInlineCodeFilePath, splitFilePath, splitFileRef, type ParsedFileRef } from "./files";
-import type { MentionIndex } from "./peers";
+import type { MentionIndex, MentionTarget } from "./peers";
 
 export type MarkdownTokenPart = { text: string; kind?: "mention" | "skill" | "prompt" | "file"; name?: string };
 
@@ -149,10 +149,24 @@ function buildFileButton(doc: Document, ref: ParsedFileRef, label: (name: string
 	return btn;
 }
 
+function buildMentionButton(doc: Document, text: string, target: MentionTarget, labels: DecorateLabels): HTMLButtonElement {
+	const btn = doc.createElement("button");
+	btn.type = "button";
+	btn.className = "wd-mention";
+	btn.dataset.mentionKind = target.kind;
+	btn.dataset.mentionId = target.id;
+	btn.title = target.kind === "group" ? labels.openGroup(text) : labels.openSession(text);
+	const span = doc.createElement("span");
+	span.className = "wd-lbl";
+	span.textContent = text;
+	btn.appendChild(span);
+	return btn;
+}
+
 /**
  * Walk `root` in place and replace known `@session` / `@group`, `/skill:name`, `/prompt:name`, `#path` prose tokens,
- * and sole repo-relative file paths inside inline `<code>` with interactive `<button type="button">` chips.
- * Never enters `<pre>`, `<a>`, `<button>`, or non-file `<code>`.
+ * and sole known `@mention` or repo-relative file paths inside inline `<code>` with interactive `<button type="button">`
+ * chips. Never enters `<pre>`, `<a>`, `<button>`, or other `<code>`.
  */
 export function decorateMarkdownTokens(
 	root: ParentNode,
@@ -177,10 +191,21 @@ export function decorateMarkdownTokens(
 				const el = child as Element;
 				const tag = el.tagName.toUpperCase();
 				if (tag === "CODE") {
-					// Convert an inline `<code>` whose sole text is an unambiguous repo-relative file path (`src/a.ts:42`).
-					if (opts.files && el.childNodes.length === 1 && el.firstChild?.nodeType === TEXT_NODE) {
-						const ref = parseInlineCodeFilePath(el.firstChild.nodeValue ?? "");
-						if (ref) parent.replaceChild(buildFileButton(doc, ref, opts.labels.openFile), el);
+					// Convert an inline `<code>` whose sole text is a known `@session`/`@group` or an unambiguous repo-relative file path.
+					if (el.childNodes.length === 1 && el.firstChild?.nodeType === TEXT_NODE) {
+						const raw = el.firstChild.nodeValue ?? "";
+						const trimmed = raw.trim();
+						if (/^@[^\s@]+$/.test(trimmed)) {
+							const target = opts.index.resolve(trimmed.slice(1));
+							if (target) {
+								parent.replaceChild(buildMentionButton(doc, trimmed, target, opts.labels), el);
+								continue;
+							}
+						}
+						if (opts.files) {
+							const ref = parseInlineCodeFilePath(raw);
+							if (ref) parent.replaceChild(buildFileButton(doc, ref, opts.labels.openFile), el);
+						}
 					}
 					continue;
 				}
@@ -205,17 +230,7 @@ export function decorateMarkdownTokens(
 				if (p.kind === "mention" && p.name) {
 					const target = opts.index.resolve(p.name);
 					if (target) {
-						const btn = doc.createElement("button");
-						btn.type = "button";
-						btn.className = "wd-mention";
-						btn.dataset.mentionKind = target.kind;
-						btn.dataset.mentionId = target.id;
-						btn.title = target.kind === "group" ? opts.labels.openGroup(p.text) : opts.labels.openSession(p.text);
-						const span = doc.createElement("span");
-						span.className = "wd-lbl";
-						span.textContent = p.text;
-						btn.appendChild(span);
-						frag.appendChild(btn);
+						frag.appendChild(buildMentionButton(doc, p.text, target, opts.labels));
 						continue;
 					}
 				} else if (p.kind === "skill" && p.name) {

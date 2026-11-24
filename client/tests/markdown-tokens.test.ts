@@ -125,15 +125,16 @@ describe("decorateMarkdownTokens + patchHtml", () => {
 		expect(host.querySelectorAll("code button")).toHaveLength(0);
 	});
 
-	test("never modifies code blocks, inline code, external links, workdir file links, or existing buttons", () => {
+	test("converts sole known @session/@group inside inline code, while leaving non-sole/unknown inline code, code blocks, and links untouched", () => {
 		const md = [
-			"Inline `@서아` and `/skill:release`.",
+			"워커(`@서아`, `@FRONT-TEAM`)와 `/skill:release`, `@닫힘`, `@unknown`, `@@서아`, `@서아랑`, `@서아 extra`, `@`.",
 			"",
 			"```",
+			"@서아",
 			"// @서아 /skill:release",
 			"```",
 			"",
-			"Link [@서아](https://example.com) and file [@서아](out/report.md).",
+			"Link [@서아](https://example.com), [`@서아`](https://example.com) and file [@서아](out/report.md).",
 		].join("\n");
 		const html = renderMarkdown(md, { cache: false });
 		const host = dom.document.createElement("div");
@@ -141,9 +142,17 @@ describe("decorateMarkdownTokens + patchHtml", () => {
 			html,
 			decorate: (frag) => decorateMarkdownTokens(frag, { index, skills: true, labels }),
 		});
-		expect(host.querySelectorAll("button.wd-mention")).toHaveLength(0);
+		const mentions = [...host.querySelectorAll<HTMLButtonElement>("button.wd-mention")];
+		expect(mentions.map((b) => [b.textContent, b.dataset.mentionKind, b.dataset.mentionId, b.title])).toEqual([
+			["@서아", "session", "s1", "Open @서아 chat"],
+			["@FRONT-TEAM", "group", "g1", "Open @FRONT-TEAM group"],
+		]);
 		expect(host.querySelectorAll("button.wd-skill")).toHaveLength(0);
-		expect(host.querySelector("a[data-ext]")?.textContent).toBe("@서아");
+		expect(host.querySelectorAll("pre button")).toHaveLength(0);
+		expect(
+			[...host.querySelectorAll("code")].filter((c) => !c.closest("pre")).map((c) => c.textContent),
+		).toEqual(["/skill:release", "@닫힘", "@unknown", "@@서아", "@서아랑", "@서아 extra", "@", "@서아"]);
+		expect([...host.querySelectorAll("a[data-ext]")].map((a) => a.textContent)).toEqual(["@서아", "@서아"]);
 		expect(host.querySelector("a[data-file]")?.textContent).toBe("@서아");
 	});
 
@@ -264,8 +273,9 @@ describe("mentionSignature", () => {
 		expect(mentionSignature(html, idx3)).toBe("");
 	});
 
-	test("handles HTML entities around and inside group names", () => {
+	test("handles HTML entities around and inside group names and inline code mentions", () => {
 		const idx = buildMentionIndex([{ id: "s1", name: "서아", closed: false }], [{ id: "g1", name: "R&D" }]);
 		expect(mentionSignature("<p>&lt;@서아&gt; and @R&amp;D</p>", idx)).toBe("서아:session:s1;r&d:group:g1;");
+		expect(mentionSignature("<p>워커(<code>@서아</code>)</p>", idx)).toBe("서아:session:s1;");
 	});
 });
