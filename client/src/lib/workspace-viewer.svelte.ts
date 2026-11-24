@@ -173,6 +173,11 @@ export class WorkspaceViewerStore {
 	/** Recently touched paths (path -> expiry timestamp) for subtle live highlight when the agent edits files. */
 	recentTouched = $state<Record<string, number>>({});
 
+	/** Open read-only file tabs belonging to the current `workDir`, shown inline in the TabBar. */
+	openFiles = $state<string[]>([]);
+	/** Currently focused file tab in the main stage (`null` = showing the active chat/terminal pane). */
+	activeFile = $state<string | null>(null);
+
 	selectedPath = $state<string | null>(null);
 	fileData = $state<WorkspaceFileData | null>(null);
 	diffData = $state<WorkspaceDiffData | null>(null);
@@ -191,11 +196,12 @@ export class WorkspaceViewerStore {
 
 	bind(api: Api | null, sessionId: string | null, workDir: string, getChat?: (id: string) => ChatState | null | undefined) {
 		const serverChanged = this.api !== api;
-		const sessionChanged = this.sessionId !== sessionId || this.workDir !== workDir;
+		const dirChanged = this.workDir !== workDir;
+		const sessionChanged = this.sessionId !== sessionId;
 		this.api = api;
 		this.getChat = getChat ?? this.getChat;
 		if (serverChanged) this.supported = true;
-		if (serverChanged || sessionChanged) {
+		if (serverChanged || dirChanged) {
 			this.sessionId = sessionId;
 			this.workDir = workDir;
 			this.isRepo = false;
@@ -207,6 +213,8 @@ export class WorkspaceViewerStore {
 			this.searchEntries = [];
 			this.changes = [];
 			this.recentTouched = {};
+			this.openFiles = [];
+			this.activeFile = null;
 			this.selectedPath = null;
 			this.fileData = null;
 			this.diffData = null;
@@ -217,6 +225,55 @@ export class WorkspaceViewerStore {
 			this.seq.search++;
 			this.seq.file++;
 			this.seq.diff++;
+		} else if (sessionChanged) {
+			// Same workDir, different session: keep open file tabs & expanded folders intact.
+			this.sessionId = sessionId;
+		}
+	}
+
+	/** Open a file in the TabBar for the current workDir and focus it. */
+	async openFile(path: string, preferredMode?: "file" | "diff") {
+		const clean = path.replace(/^\.\//, "");
+		if (!clean) return;
+		if (!this.openFiles.includes(clean)) {
+			this.openFiles = [...this.openFiles, clean];
+		}
+		this.activeFile = clean;
+		await this.selectFile(clean, preferredMode);
+	}
+
+	/** Switch focus to an already-open file tab. */
+	async activateFile(path: string) {
+		const clean = path.replace(/^\.\//, "");
+		if (!this.openFiles.includes(clean)) return;
+		this.activeFile = clean;
+		if (this.selectedPath !== clean || !this.fileData) {
+			await this.selectFile(clean);
+		}
+	}
+
+	/** Return focus from any file tab back to the active chat/terminal pane. */
+	deactivateFile() {
+		this.activeFile = null;
+	}
+
+	/** Close an open file tab; if it was focused, switch to an adjacent file tab or back to the chat pane. */
+	closeFile(path: string) {
+		const idx = this.openFiles.indexOf(path);
+		if (idx < 0) return;
+		const next = this.openFiles.filter((p) => p !== path);
+		this.openFiles = next;
+		if (this.activeFile === path) {
+			const fallback = next[Math.min(idx, next.length - 1)] ?? null;
+			this.activeFile = fallback;
+			if (fallback) {
+				void this.selectFile(fallback);
+			}
+		}
+		if (this.selectedPath === path && !this.activeFile) {
+			this.selectedPath = null;
+			this.fileData = null;
+			this.diffData = null;
 		}
 	}
 

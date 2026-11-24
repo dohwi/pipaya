@@ -29,6 +29,7 @@
 	import { tabPanes, type Tab } from "../../lib/nav";
 	import { isManualRoot, tabLead, type TabLead } from "../../lib/projects";
 	import { app } from "../../lib/store.svelte";
+	import { workspaceViewer } from "../../lib/workspace-viewer.svelte";
 
 	/**
 	 * The tabs of the working directory in front of the user, like an editor's: a lone conversation, a lone terminal,
@@ -39,7 +40,9 @@
 	const dirs = $derived(app.stripDirs);
 	const multi = $derived(dirs.length > 1);
 	const tabs = $derived(dirs.flatMap((d) => d.tabs));
-	const activeTab = $derived(app.activeTab?.tab.id ?? null);
+	const fileTabs = $derived(workspaceViewer.openFiles);
+	const activeFile = $derived(workspaceViewer.activeFile);
+	const activeTab = $derived(activeFile ? null : (app.activeTab?.tab.id ?? null));
 	const ids = $derived(tabs.map((x) => x.id));
 	/** The folder a tab (or a pane of one of its groups) is listed in */
 	const dirOf = (id: string) => dirs.find((d) => d.tabs.some((x) => x.id === id || tabPanes(x).includes(id)))?.path ?? null;
@@ -209,6 +212,7 @@
 	let strip: HTMLElement | undefined = $state();
 	$effect(() => {
 		void activeTab;
+		void activeFile;
 		void app.activeId;
 		const host = strip;
 		if (!host) return;
@@ -273,6 +277,7 @@
 				use:dropTarget={tabTarget(x)}
 				onclick={() => {
 					if (rename.is(x.id)) return;
+					workspaceViewer.deactivateFile();
 					app.openTab(x.id);
 				}}
 				onauxclick={(e) => e.button === 1 && close(x)}
@@ -315,7 +320,7 @@
 {#if app.serverId && app.net !== "idle"}
 	<!-- a double click on the bar's empty part starts a new chat in this folder, as in a browser's tab strip -->
 	<!-- svelte-ignore a11y_no_static_element_interactions -->
-	<div class="bar" data-part="tabbar" class:solo={tabs.length <= 1 && tabs[0]?.kind !== "group"} class:group={app.activeTab?.tab.kind === "group"} use:dropTarget={stripTarget} ondblclick={blankDouble}>
+	<div class="bar" data-part="tabbar" class:solo={tabs.length <= 1 && tabs[0]?.kind !== "group" && fileTabs.length === 0} class:group={!activeFile && app.activeTab?.tab.kind === "group"} use:dropTarget={stripTarget} ondblclick={blankDouble}>
 		<!-- svelte-ignore a11y_no_static_element_interactions -->
 		<div class="tabs" role="tablist" aria-label={t("탭")} bind:this={strip} onwheel={wheel} onfocusin={reveal} use:rovingKeys={{ item: '[role="tab"], .gchip' }} use:dragScroll use:edgeFade use:slidingIndicator={{ selector: ".tab.on, .gchip.on" }}>
 			{#each tabs as x (x.id)}
@@ -344,6 +349,46 @@
 				{:else}
 					{@render tabItem(x, on, st)}
 				{/if}
+			{/each}
+			{#each fileTabs as fp (fp)}
+				{@const on = fp === activeFile}
+				{@const ch = workspaceViewer.changeFor(fp)}
+				{@const base = fp.split("/").pop() ?? fp}
+				<!-- svelte-ignore a11y_no_static_element_interactions -->
+				<div
+					class="tab filetab"
+					class:on
+					data-file-tab={fp}
+					role="tab"
+					tabindex={on ? 0 : -1}
+					aria-selected={on}
+					title={fp}
+					onclick={() => void workspaceViewer.activateFile(fp)}
+					onauxclick={(e) => e.button === 1 && workspaceViewer.closeFile(fp)}
+					onkeydown={(e) => {
+						if ((e.key === "Enter" || e.key === " ") && e.target === e.currentTarget) {
+							e.preventDefault();
+							void workspaceViewer.activateFile(fp);
+						}
+					}}
+				>
+					<span class="fill" aria-hidden="true"></span>
+					<span class="ico"><Icon name="file" /></span>
+					<span class="t mono">{base}</span>
+					{#if ch}<span class="fdot" class:add={ch.status === "A" || ch.status === "?"} class:del={ch.status === "D"} aria-hidden="true"></span>{/if}
+					<button
+						class="x tap"
+						onpointerdown={(e) => e.stopPropagation()}
+						onclick={(e) => {
+							e.stopPropagation();
+							workspaceViewer.closeFile(fp);
+						}}
+						aria-label={t("닫기")}
+						title={t("닫기")}
+					>
+						<Icon name="x" />
+					</button>
+				</div>
 			{/each}
 			<div class="tail" class:over={end && !slot}></div>
 		</div>
@@ -851,5 +896,19 @@
 			top: 4px;
 			bottom: 4px;
 		}
+	}
+
+	.fdot {
+		flex: none;
+		width: 6px; /* optical 6px indicator matching sidebar status dots */
+		height: 6px; /* optical 6px indicator matching sidebar status dots */
+		border-radius: var(--radius-pill);
+		background: var(--warn);
+	}
+	.fdot.add {
+		background: var(--ok);
+	}
+	.fdot.del {
+		background: var(--danger);
 	}
 </style>

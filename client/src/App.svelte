@@ -47,7 +47,8 @@
 	import { updater } from "./lib/updater.svelte";
 	import ExtensionPanels from "./components/extensions/ExtensionPanels.svelte";
 	import ExtensionDock from "./components/extensions/ExtensionDock.svelte";
-	import WorkspaceViewer from "./components/workspace/WorkspaceViewer.svelte";
+	import WorkspaceFileTree from "./components/workspace/WorkspaceFileTree.svelte";
+	import WorkspaceFilePane from "./components/workspace/WorkspaceFilePane.svelte";
 	import { workspaceViewer } from "./lib/workspace-viewer.svelte";
 	import { workDir } from "./lib/nav";
 	import ExtensionFloating from "./components/extensions/ExtensionFloating.svelte";
@@ -242,13 +243,25 @@
 		if (serverId && (online || !untrack(() => voice.loaded))) void voice.load(api, serverId);
 	});
 
-	// Keep the read-only workspace file viewer bound to the active session's working directory.
+	// Keep the read-only workspace file viewer bound to the active working directory.
+	let lastActivePaneId: string | null = null;
+	$effect(() => {
+		const id = app.activeId;
+		if (lastActivePaneId !== null && id !== lastActivePaneId) {
+			workspaceViewer.deactivateFile();
+		}
+		lastActivePaneId = id;
+	});
+
 	$effect(() => {
 		const api = app.api;
 		const s = app.current;
+		const fallbackSession = !s && app.tabDir ? app.sessions.find((x) => workDir(x) === app.tabDir?.path) ?? null : null;
+		const boundSession = s ?? fallbackSession;
+		const dir = boundSession ? workDir(boundSession) : (app.tabDir?.path ?? "");
 		const online = app.net === "online";
-		workspaceViewer.bind(api, s?.id ?? null, s ? workDir(s) : "", (id) => app.chatOf(id));
-		if (api && online && s) {
+		workspaceViewer.bind(api, boundSession?.id ?? null, dir, (id) => app.chatOf(id));
+		if (api && online && boundSession) {
 			void workspaceViewer.refreshTree();
 		}
 	});
@@ -440,14 +453,16 @@
 						<!-- under the graph view nothing is drawn: its quick look holds the one live pane (one input, one set of
 						     window listeners); the chat comes back as it was when the graph closes -->
 						{#if !app.graphOpen}
-							{#if group}
+							{#if workspaceViewer.activeFile}
+								<WorkspaceFilePane />
+							{:else if group}
 								<GroupView {group} />
 							{:else}
 								<Pane id={app.activeId} />
 							{/if}
 						{/if}
 					</div>
-					{#if app.filesOpen && !app.graphOpen}<WorkspaceViewer />{/if}
+					{#if app.filesOpen && !app.graphOpen}<WorkspaceFileTree />{/if}
 					<ExtensionDock />
 				</div>
 			</div>

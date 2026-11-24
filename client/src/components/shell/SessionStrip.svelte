@@ -12,6 +12,7 @@
 	import type { Tab } from "../../lib/nav";
 	import { panesOf } from "../../lib/layout";
 	import { app } from "../../lib/store.svelte";
+	import { workspaceViewer } from "../../lib/workspace-viewer.svelte";
 	import { closeContextMenu, openContextMenu } from "../../lib/context-menu";
 	import type { Point } from "../../lib/press-menu";
 	import { drag, dragSource } from "../../lib/dnd.svelte";
@@ -36,7 +37,7 @@
 	let { tab }: { tab: Extract<Tab, { kind: "group" }> } = $props();
 	const group = $derived(tab.group);
 	/** only the open group marks one of its sessions as the current one */
-	const open = $derived(app.activeTab?.tab.id === tab.id);
+	const open = $derived(!workspaceViewer.activeFile && app.activeTab?.tab.id === tab.id);
 	const items = $derived(group ? panesOf(group.layout).map((id) => app.session(id) ?? app.terminal(id)).filter((s) => !!s) : []);
 	/** The `@name` handle of a conversation (a terminal has none), as the sidebar row and the tab bar show it. */
 	const whoOf = (id: string) => {
@@ -64,7 +65,7 @@
 				/>
 			{:else}
 				<span class="gitem">
-				<button class="gchip tap" tabindex={open && x.id === app.activeId ? 0 : -1} class:on={open && x.id === app.activeId} aria-current={open && x.id === app.activeId ? "true" : undefined} onclick={() => app.openSession(x.id)} onkeydown={(e) => e.key === RENAME_KEY && (e.preventDefault(), rename.start(x.id, x.title))} class:carried={drag.id === x.id} use:dragSource={{ id: x.id, menu: (pt) => chipMenu(pt, x.id, x.title) }} title="{who ? `${who.title} · ` : ''}{sessionTitle(x.title)} · {ACTIVITY_LABEL[st]}">
+				<button class="gchip tap" tabindex={open && x.id === app.activeId ? 0 : -1} class:on={open && x.id === app.activeId} aria-current={open && x.id === app.activeId ? "true" : undefined} onclick={() => (workspaceViewer.deactivateFile(), app.openSession(x.id))} onkeydown={(e) => e.key === RENAME_KEY && (e.preventDefault(), rename.start(x.id, x.title))} class:carried={drag.id === x.id} use:dragSource={{ id: x.id, menu: (pt) => chipMenu(pt, x.id, x.title) }} title="{who ? `${who.title} · ` : ''}{sessionTitle(x.title)} · {ACTIVITY_LABEL[st]}">
 					{#if app.terminal(x.id)}<span class="tico"><Icon name="terminal" /></span>{:else}<AgentBadge id={x.id} state={st} size={16} />{/if}
 					{#if who}<Handle text={who.text} state={st} />{/if}<span class="t">{sessionTitle(x.title)}</span>
 				</button>
