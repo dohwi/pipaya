@@ -147,7 +147,7 @@
 				<Button class={["opt", on && "picked", cur.recommended === o && "rec"]} aria-pressed={cur.multiple ? on : undefined} onclick={() => (cur.multiple ? toggle(o) : reply(o))}>
 					{#if cur.multiple}<span class="box" class:on aria-hidden="true">{#if on}<Icon name="check" />{/if}</span>{/if}
 					<span class="txt">
-						<span class="lab">{#if cur.recommended === o}<span class="rec-mark" title={t("추천")} role="img" aria-label={t("추천")}><Icon name="sparkles" /></span>{/if}{o}</span>
+						<span class="lab">{#if cur.recommended === o}<span class="rec-mark" title={t("추천")} role="img" aria-label={t("추천")}><Icon name="sparkles" /></span>&#8288;{/if}{o}</span>
 						{#if descOf(o)}<span class="desc">{descOf(o)}</span>{/if}
 					</span>
 					{#if !cur.multiple && on}<Icon name="check" />{/if}

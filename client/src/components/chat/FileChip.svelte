@@ -29,13 +29,14 @@
 		position: relative;
 		display: inline-flex;
 		flex: none;
-		max-width: 260px;
+		max-width: min(260px, 100%);
 	}
 	.open {
 		display: flex;
 		align-items: center;
 		gap: 8px;
 		min-width: 0;
+		max-width: 100%;
 		height: 48px;
 		padding: 0 12px 0 4px;
 		text-align: left;

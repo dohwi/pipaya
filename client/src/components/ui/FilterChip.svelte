@@ -61,12 +61,16 @@
 		background: var(--bg);
 		color: var(--text-dim);
 		font-size: var(--fs-xs);
+		overflow: hidden;
 		white-space: nowrap;
 		cursor: pointer;
 		transition:
 			background var(--motion-fast) var(--ease-std),
 			border-color var(--motion-fast) var(--ease-std),
 			color var(--motion-fast) var(--ease-std);
+	}
+	.fchip :global(svg) {
+		flex: none;
 	}
 	.sm {
 		height: 26px; /* = Badge md + 4: a chip you can press sits a step above a label */

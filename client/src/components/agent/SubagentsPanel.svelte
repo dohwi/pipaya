@@ -188,7 +188,7 @@
 			<FormField label={t("쓸 수 있는 도구")} group>
 				<div class="chips" role="group" aria-label={t("쓸 수 있는 도구")}>
 					{#each list?.tools ?? [] as name (name)}
-						<FilterChip size="sm" mono on={form.tools.includes(name)} onclick={() => toggleTool(name)}>{name}</FilterChip>
+						<FilterChip size="sm" mono on={form.tools.includes(name)} title={name} onclick={() => toggleTool(name)}><span class="flbl">{name}</span></FilterChip>
 					{/each}
 				</div>
 			</FormField>
@@ -255,6 +255,7 @@
 	.ftitle { display: flex; align-items: center; gap: 8px; min-height: 22px; }
 	.ftitle .name { font-size: var(--fs-sm); line-height: 20px; font-weight: 600; overflow-wrap: anywhere; }
 	.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+	.flbl { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 	.area { height: auto; padding: 8px 12px; resize: vertical; font-size: var(--fs-sm); line-height: 1.5; }
 	.actions { display: flex; justify-content: flex-end; gap: 8px; }
 </style>
