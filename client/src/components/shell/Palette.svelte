@@ -3,7 +3,8 @@
 	import { modalLayer } from "../../lib/dialog";
 	import Badge from "../ui/Badge.svelte";
 	import { t } from "../../lib/i18n";
-	import { fadeIn, fadeOut, isPhone, surfaceIn, surfaceOut } from "../../lib/motion";
+	import { fadeIn, fadeOut, isPhone, modalIn, modalOut, surfaceIn, surfaceOut } from "../../lib/motion";
+	import { sheetPull } from "../../lib/sheet";
 	import Icon from "../ui/Icon.svelte";
 	import { app } from "../../lib/store.svelte";
 	import { uniqueBy } from "../../lib/unique";
@@ -74,6 +75,8 @@
 			void spec.ondelete(items[index]!);
 		}
 	}
+	const paletteIn = (node: Element) => (isPhone() ? modalIn(node) : surfaceIn(node, { y: -12 }));
+	const paletteOut = (node: Element) => (isPhone() ? modalOut(node) : surfaceOut(node, { y: -12 }));
 </script>
 
 {#if spec}
@@ -81,8 +84,8 @@
 	<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
 	<div class="scrim" onclick={close} in:fadeIn out:fadeOut></div>
 	<!-- Esc, Tab kept inside, focus back to the opener, app shortcuts muted: the same layer every modal uses -->
-	<div class="pal" data-part="palette" role="dialog" aria-modal="true" aria-label={spec.title} use:modalLayer={{ onclose: close, closeBinding: spec.closeShortcut && app.prefs.bindings[spec.closeShortcut] }} in:surfaceIn={{ y: -12 }} out:surfaceOut={{ y: -12 }}>
-		<div class="head">
+	<div class="pal sheet" data-part="palette" role="dialog" aria-modal="true" aria-label={spec.title} use:modalLayer={{ onclose: close, closeBinding: spec.closeShortcut && app.prefs.bindings[spec.closeShortcut] }} in:paletteIn out:paletteOut>
+		<div class="head" use:sheetPull={{ onclose: close }}>
 			<span class="ttl">{spec.title}</span>
 			<button class="x" onclick={close} aria-label={t("닫기")}><Icon name="x" /></button>
 		</div>
@@ -245,6 +248,18 @@
 		color: var(--text);
 	}
 	@media (max-width: 640px) {
+		.pal.sheet {
+			top: auto;
+			bottom: 0;
+			width: var(--vw);
+			max-height: calc(var(--dvh) * 0.9);
+			border-bottom: 0;
+			border-radius: var(--radius-panel) var(--radius-panel) 0 0;
+			padding-bottom: var(--sab);
+		}
+		.head {
+			padding: 16px 8px 4px 16px; /* room above the title for the 4px grabber bar (.sheet-handle::before) */
+		}
 		/* prevent iOS Safari auto-zoom on focus (design-system.md) */
 		.sw input {
 			font-size: var(--fs-lg);

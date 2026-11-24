@@ -235,7 +235,7 @@ A control smaller than 44px stays visually small but must carry `.tap` (`app.css
 
 ### Mobile bottom sheets (`<= 640px`)
 
-- Every non-fullscreen `<Modal>` (including confirmations, pickers and workspace dialogs) opens as a bottom sheet on phones (`bottom: 0`, `width: var(--vw)`, `max-height: calc(var(--dvh) * 0.9)`, `border-bottom: 0`, top corners `--radius-panel`). Reserve `sheet={false}` strictly for small centered status/quit cards (`StatusCard`, `CloseConfirm`).
+- Every non-fullscreen `<Modal>` and `Palette` (including confirmations, pickers, layout/command palettes and workspace dialogs) opens as a bottom sheet on phones (`bottom: 0`, `width: var(--vw)`, `max-height: calc(var(--dvh) * 0.9)`, `border-bottom: 0`, top corners `--radius-panel`). Reserve `sheet={false}` strictly for small centered status/quit cards (`StatusCard`, `CloseConfirm`), which also keep the centered dialog transition and symmetric padding rather than bottom-sheet slide or `--sab`.
 - Every bottom sheet (`sheet={true}` and not `full`) carries the shared top grabber bar (`.sheet-handle::before`, `38×4px`, `top: 6px`, `--border-strong`) and pull-down-to-dismiss (`use:sheetPull` in `lib/sheet.ts`, supporting `<dialog>`, `[role="dialog"]` and `[role="alertdialog"]`). Desktop (`> 640px`) and full-screen `100dvh` sheets (`full`) hide the grabber (`pull={sheet && !full}`).
 - Every bottom sheet clears the home indicator via `safeArea` on `<Modal>`, `<DialogFooter safe>`, or explicit `calc(... + var(--sab))` on its lowest band — never double-padded when embedded inside a `safeArea` modal. Full-screen overlays (`Lightbox`, `full` sheets) also clear `--sat` at the top.
 

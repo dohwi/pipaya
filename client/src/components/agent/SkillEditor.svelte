@@ -67,5 +67,9 @@
 	.form { display: flex; flex-direction: column; gap: var(--dlg-gap); }
 	.hint { margin: 0; font-size: var(--fs-xs); line-height: 1.5; color: var(--text-faint); }
 	.area { height: auto; padding: 8px 12px; resize: vertical; font-size: var(--fs-sm); line-height: 1.5; }
+	@media (max-width: 640px) {
+		/* prevent iOS Safari auto-zoom on focus (design-system.md) */
+		.area { font-size: var(--fs-lg); }
+	}
 	.actions { display: flex; justify-content: flex-end; gap: 8px; }
 </style>

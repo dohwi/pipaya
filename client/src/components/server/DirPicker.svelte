@@ -254,6 +254,13 @@
 		outline: none;
 		border-color: var(--text-faint);
 	}
+	@media (max-width: 640px) {
+		/* prevent iOS Safari auto-zoom on focus (design-system.md) */
+		input.mono,
+		.mk input {
+			font-size: var(--fs-lg);
+		}
+	}
 	.recent {
 		display: flex;
 		align-items: center;
