@@ -290,8 +290,8 @@
 	}
 	.fold :global(svg) {
 		flex: none;
-		width: 15px;
-		height: 15px;
+		width: 16px;
+		height: 16px;
 		stroke-width: 1.8;
 		color: var(--text-dim);
 	}

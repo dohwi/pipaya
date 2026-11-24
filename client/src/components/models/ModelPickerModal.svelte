@@ -236,6 +236,11 @@
 	.fav.on :global(svg) {
 		fill: currentColor;
 	}
+	.gstar {
+		flex: none;
+		display: inline-flex;
+		align-items: center;
+	}
 	.gstar :global(svg) {
 		width: 12px;
 		height: 12px;
@@ -259,6 +264,7 @@
 		border-radius: var(--radius-control);
 		color: var(--text-dim);
 		font-size: var(--fs-sm);
+		line-height: 20px;
 		transition:
 			background var(--motion-fast) var(--ease-std),
 			color var(--motion-fast) var(--ease-std);
@@ -270,8 +276,8 @@
 		}
 	}
 	.manage :global(svg) {
-		width: 15px;
-		height: 15px;
+		width: 16px;
+		height: 16px;
 		stroke-width: 1.9;
 	}
 </style>
