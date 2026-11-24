@@ -68,9 +68,13 @@
 		return max;
 	});
 
-	// Clear touch-pinned state once all items are dismissed.
+	// Clear interaction states once all items are dismissed (removing a hovered card can skip pointerleave).
 	$effect(() => {
-		if (ordered.length === 0 && pinned) pinned = false;
+		if (ordered.length === 0) {
+			if (pinned) pinned = false;
+			if (hovered) hovered = false;
+			if (focused) focused = false;
+		}
 	});
 
 	// Prune stale measurements for dismissed items.

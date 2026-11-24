@@ -1,4 +1,6 @@
 import { describe, expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { layoutToastStack, STACK_DEFAULT_HEIGHT, STACK_GAP, STACK_PEEK, STACK_VISIBLE, stageToastBox } from "../src/lib/toast-stack";
 
 describe("layoutToastStack", () => {
@@ -83,5 +85,13 @@ describe("stageToastBox", () => {
 			width: 1152,
 			top: 120,
 		});
+	});
+});
+
+describe("CountdownClose pause behavior", () => {
+	test("CountdownClose pauses the SVG ring animation when paused is true", () => {
+		const src = readFileSync(join(import.meta.dir, "../src/components/ui/CountdownClose.svelte"), "utf8");
+		expect(src).toContain('class="left" class:paused');
+		expect(src).toMatch(/\.left\.paused\s*\{[^}]*animation-play-state:\s*paused;/);
 	});
 });

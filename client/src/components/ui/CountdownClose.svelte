@@ -55,6 +55,9 @@
 		stroke-dashoffset: 0;
 		animation: drain linear forwards;
 	}
+	.left.paused {
+		animation-play-state: paused;
+	}
 	@keyframes drain {
 		to {
 			stroke-dashoffset: 100;
