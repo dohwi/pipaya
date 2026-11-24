@@ -10,18 +10,22 @@
  * of it (measured on a 12k-character list answer: p99 22ms against 17ms, with visible stutter). So same-kind nodes are
  * merged in place all the way down: only the text node that grew, and the list item that appeared, are touched.
  */
-export function patchHtml(node: HTMLElement, html: string) {
-	apply(node, html);
+export type PatchInput = string | { html: string; decorate?: (root: DocumentFragment) => void };
+
+export function patchHtml(node: HTMLElement, input: PatchInput) {
+	apply(node, input);
 	return {
-		update(next: string) {
+		update(next: PatchInput) {
 			apply(node, next);
 		},
 	};
 }
 
-function apply(node: HTMLElement, html: string) {
+function apply(node: HTMLElement, input: PatchInput) {
+	const html = typeof input === "string" ? input : input.html;
 	const tpl = document.createElement("template");
 	tpl.innerHTML = html;
+	if (typeof input !== "string" && input.decorate) input.decorate(tpl.content);
 	merge(node, Array.from(tpl.content.childNodes));
 }
 

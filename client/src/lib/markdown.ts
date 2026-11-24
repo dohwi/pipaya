@@ -136,6 +136,10 @@ function purifier(): DOMPurify {
 		cachedWindow = globalThis.window;
 		cachedPurifier = createDOMPurify(globalThis.window as unknown as Parameters<typeof createDOMPurify>[0]);
 		cachedPurifier.addHook("afterSanitizeAttributes", (node) => {
+			// Mention and skill chips are injected only after sanitization (decorateMarkdownTokens); strip any raw HTML spoof.
+			node.removeAttribute("data-mention-id");
+			node.removeAttribute("data-mention-kind");
+			node.removeAttribute("data-skill");
 			if (node.tagName?.toUpperCase() === "A") {
 				if (!node.hasAttribute("data-file")) {
 					const href = node.getAttribute("href") ?? "";
@@ -180,6 +184,7 @@ export function renderMarkdown(src: string, opts: { cache?: boolean } = {}): str
 	const html = groupPictures(purifier().sanitize(parsed, {
 		ALLOWED_URI_REGEXP: SAFE_URI_REGEXP,
 		ADD_ATTR: ["data-copy", "data-ext", "data-img-src", "data-alt", "data-file", "data-wd-src", "data-kind", "data-hl-wait"],
+		FORBID_ATTR: ["data-mention-id", "data-mention-kind", "data-skill"],
 		FORBID_TAGS: ["style", "form", "input", "iframe", "object", "embed", "img", "picture", "source", "video", "audio", "link", "meta"],
 	}));
 	// Finished messages are re-rendered on every sidebar toggle; keep a small cache for them. Not while a grammar loads:

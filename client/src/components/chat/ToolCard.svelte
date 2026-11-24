@@ -6,7 +6,7 @@
 	import { app } from "../../lib/store.svelte";
 	import { getPane } from "../../lib/pane";
 	import { clip, duration, fullTime } from "../../lib/format";
-	import { splitCd, toolArgStr as str, toolIcon, toolLabel, toolSummary } from "../../lib/tools";
+	import { peerTargetsOf, skillOf, splitCd, toolArgStr as str, toolIcon, toolLabel, toolSummary } from "../../lib/tools";
 	import type { ToolRun } from "../../lib/types";
 	import { extensions } from "../../lib/extensions/host.svelte";
 	import ExtensionView from "../extensions/ExtensionView.svelte";
@@ -72,6 +72,17 @@
 		return str(args.command ?? "");
 	});
 
+	/** For `peer` calls, link straight to the session or group it acted on when still open (falls back to old name on rename). */
+	const peerResolved = $derived.by(() => {
+		if (name !== "peer") return null;
+		for (const handle of peerTargetsOf(args, run.output)) {
+			const target = app.mentionIndex.resolve(handle);
+			if (target) return { handle, target };
+		}
+		return null;
+	});
+	const skillName = $derived(skillOf(name, args));
+
 </script>
 
 <div class="call" data-part="tool" data-fold class:awaiting class:failed data-state={run.state}>
@@ -94,6 +105,25 @@
 
 	{#if open && !questionOnly}
 		<div class="body" in:collapseIn out:collapseOut>
+			{#if peerResolved}
+				<div class="jump">
+					<button
+						type="button"
+						class="jump-tok mention"
+						title={peerResolved.target.kind === "group" ? t("{name} 그룹 열기", { name: `@${peerResolved.handle}` }) : t("{name} 대화 열기", { name: `@${peerResolved.handle}` })}
+						onclick={() => app.openMention(peerResolved.target)}
+					><span class="jlabel">@{peerResolved.handle}</span></button>
+				</div>
+			{:else if skillName}
+				<div class="jump">
+					<button
+						type="button"
+						class="jump-tok skill"
+						title={t("스킬 {name} 보기", { name: skillName })}
+						onclick={() => app.openSkills(pane.id, skillName)}
+					><Icon name="skill" /><span class="jlabel">/skill:{skillName}</span></button>
+				</div>
+			{/if}
 			{#if name === "edit"}
 				<div class="diff mono">
 					<div class="del">{str(args.oldText)}</div>
@@ -257,6 +287,49 @@
 	/* what the call carried and gave back, under its name (16px icon + 8px gap = 24 in), 8 below its line */
 	.body {
 		padding: 4px 0 8px 24px;
+	}
+	.jump {
+		display: flex;
+		margin-bottom: 8px;
+	}
+	.jump-tok {
+		--hue: var(--mark-mention);
+		display: inline-flex;
+		align-items: center;
+		gap: 4px;
+		max-width: 100%;
+		padding: 1px 8px;
+		border-radius: var(--radius-sm);
+		background: color-mix(in srgb, var(--hue) 12%, transparent);
+		box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--hue) 22%, transparent);
+		color: inherit;
+		font-size: var(--fs-xs);
+		font-weight: 600;
+		line-height: 18px; /* whole-pixel 20px chip (18 + 2 padding), matching TokenText */
+		transition: background var(--motion-fast) var(--ease-std);
+	}
+	.jump-tok.mention {
+		color: var(--hue);
+	}
+	.jump-tok.skill {
+		--hue: var(--accent);
+	}
+	.jump-tok :global(svg) {
+		flex: none;
+		width: 12px;
+		height: 12px;
+		opacity: 0.7;
+	}
+	.jlabel {
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	@media (hover: hover) {
+		.jump-tok:hover {
+			background: color-mix(in srgb, var(--hue) 22%, transparent);
+		}
 	}
 	.label {
 		margin: 8px 0 4px;

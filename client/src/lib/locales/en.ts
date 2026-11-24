@@ -154,6 +154,7 @@ export const en: Record<string, string> = {
 	"이미 전달되었습니다": "Already delivered",
 	"{name} 취소": "Cancel {name}",
 	"{name} 대화 열기": "Open the {name} chat",
+	"{name} 그룹 열기": "Open the {name} group",
 	"{name} 미리 보기": "Preview {name}",
 	"{n}개 대기 중": "{n} waiting",
 	"대기열 높이 조절": "Resize the queue",

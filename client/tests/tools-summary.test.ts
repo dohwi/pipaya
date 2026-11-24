@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { splitCd, toolIcon, toolSummary } from "../src/lib/tools";
+import { peerTargetOf, peerTargetsOf, splitCd, toolIcon, toolSummary } from "../src/lib/tools";
 
 describe("toolSummary for ask_user", () => {
 	test("shows the question text, not its JSON", () => {
@@ -25,11 +25,36 @@ describe("toolSummary for ask_user", () => {
 });
 
 describe("tool icons", () => {
-	test("the shell, a file read and a skill load each have their own icon", () => {
+	test("the shell, a file read, a peer call and a skill load each have their own icon", () => {
 		expect(toolIcon("bash")).toBe("terminal");
 		expect(toolIcon("read", { path: "a.ts" })).toBe("file");
 		expect(toolIcon("read", { path: "skills/x/SKILL.md" })).toBe("skill");
+		expect(toolIcon("peer")).toBe("chat");
 		expect(toolIcon("some_mcp_tool")).toBe("bolt");
+	});
+});
+
+describe("peer tool summary and target", () => {
+	test("formats peer actions cleanly instead of dumping JSON", () => {
+		expect(toolSummary("peer", { action: "send", to: "서아", message: "작업 확인해줘\n둘째 줄" })).toBe("send · @서아 · 작업 확인해줘");
+		expect(toolSummary("peer", { action: "create", title: "UI 전담 세션", message: "구현해줘" })).toBe("create · UI 전담 세션");
+		expect(toolSummary("peer", { action: "read", name: "@서아" })).toBe("read · @서아");
+		expect(toolSummary("peer", { action: "rename", name: "서아", newName: "지우" })).toBe("rename · @서아 · → @지우");
+		expect(toolSummary("peer", { action: "group_create", groupName: "front", members: ["서아", "민수"] })).toBe("group_create · @front · @서아, @민수");
+		expect(toolSummary("peer", { action: "list" })).toBe("list");
+		expect(toolSummary("peer", {})).toBe("");
+	});
+
+	test("resolves the target handle from args or create/group_create output", () => {
+		expect(peerTargetOf({ action: "send", to: "@서아" })).toBe("서아");
+		expect(peerTargetOf({ action: "read", name: "서아" })).toBe("서아");
+		expect(peerTargetOf({ action: "rename", name: "서아", newName: "지우" })).toBe("지우");
+		expect(peerTargetOf({ action: "create" }, "Created @서아 (cliproxy/claude-sonnet-5.5, /tmp) and gave it the task.")).toBe("서아");
+		expect(peerTargetOf({ action: "create" }, "")).toBeNull();
+		expect(peerTargetOf({ action: "group_create" }, "Group @front-team created with 2 sessions.")).toBe("front-team");
+		expect(peerTargetOf({ action: "group_add", group: "front-team" })).toBe("front-team");
+		expect(peerTargetOf({ action: "list" })).toBeNull();
+		expect(peerTargetsOf({ action: "rename", name: "서아", newName: "지우" })).toEqual(["지우", "서아"]);
 	});
 });
 

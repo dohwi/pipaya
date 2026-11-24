@@ -144,7 +144,7 @@
 			{#if seg.kind === "work"}
 				<WorkBox steps={seg.steps} live={n === liveSeg} />
 			{:else}
-				<Markdown text={seg.text} streaming={live && n === segments.length - 1} sessionId={session?.id ?? null} />
+				<Markdown text={seg.text} streaming={live && n === segments.length - 1} sessionId={session?.id ?? null} mentions />
 				{#if n < segments.length - 1 && blockTs[seg.i]}
 					{@const ts = blockTs[seg.i]!}
 					<time class="note-when" use:tapTitle datetime={new Date(ts).toISOString()} title={fullTime(ts)}>{liveMessageTime(ts)}</time>

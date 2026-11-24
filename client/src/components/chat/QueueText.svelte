@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { t } from "../../lib/i18n";
 	import Icon from "../ui/Icon.svelte";
 	import TokenText from "./TokenText.svelte";
 	import { app } from "../../lib/store.svelte";
@@ -17,10 +18,31 @@
 	const head = $derived(parsePeer(text) ?? extensions.headerOf(text));
 	const body = $derived(head ? head.body : text);
 	const server = $derived(!!head && "server" in head && !!head.server);
+	const headTarget = $derived.by(() => {
+		if (!full || !head || server || !head.from.startsWith("@")) return undefined;
+		return app.mentionIndex.resolve(head.from);
+	});
+	const openHeadTarget = () => {
+		if (headTarget) app.openMention(headTarget);
+	};
 </script>
 
 {#if full}
-	{#if head}<p class="from"><Icon name={server ? "server" : "chat"} /><span>{head.from}</span></p>{/if}
+	{#if head}
+		<p class="from">
+			<Icon name={server ? "server" : "chat"} />
+			{#if headTarget}
+				<button
+					type="button"
+					class="from-link"
+					title={headTarget.kind === "group" ? t("{name} 그룹 열기", { name: head.from }) : t("{name} 대화 열기", { name: head.from })}
+					onclick={openHeadTarget}
+				>{head.from}</button>
+			{:else}
+				<span>{head.from}</span>
+			{/if}
+		</p>
+	{/if}
 	<p class="full"><TokenText text={body} sessionId={app.queueDialog} /></p>
 {:else}
 	<span class="line">
@@ -57,6 +79,16 @@
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
+	}
+	.from-link {
+		font: inherit;
+		color: inherit;
+		text-underline-offset: 3px;
+	}
+	@media (hover: hover) {
+		.from-link:hover {
+			text-decoration: underline;
+		}
 	}
 	.qt {
 		flex: 1;
