@@ -7,6 +7,8 @@
 	import { getPane } from "../../lib/pane";
 	import { clip, duration, fullTime } from "../../lib/format";
 	import { baseName, formatFileLine, splitFilePath } from "../../lib/files";
+	import { highlightCode, highlightLines, languageFromPath, onHighlightReady } from "../../lib/code-highlight";
+	import { computeLineDiff, lineCount } from "../../lib/line-diff";
 	import { peerTargetsOf, scheduleIdOf, skillOf, splitCd, toolArgStr as str, toolIcon, toolLabel, toolSummary } from "../../lib/tools";
 	import type { ToolRun } from "../../lib/types";
 	import { extensions } from "../../lib/extensions/host.svelte";
@@ -103,6 +105,78 @@
 	const delegateRole = $derived(name === "delegate" && pane.id ? str(args.role).trim() || null : null);
 	const scheduleId = $derived(name === "schedule" ? scheduleIdOf(args, run.details ?? null) : null);
 
+	/** Re-render highlighted lines once lazy highlight.js grammars finish loading. */
+	let hlTick = $state(0);
+	$effect(() => onHighlightReady(() => { hlTick++; }));
+
+	const fileLang = $derived(languageFromPath(str(args.path)));
+	const editDiff = $derived(name === "edit" ? computeLineDiff(str(args.oldText), str(args.newText)) : null);
+	const editOldHl = $derived.by(() => {
+		void hlTick;
+		return open && name === "edit" ? highlightLines(str(args.oldText), fileLang) : null;
+	});
+	const editNewHl = $derived.by(() => {
+		void hlTick;
+		return open && name === "edit" ? highlightLines(str(args.newText), fileLang) : null;
+	});
+
+	const writeText = $derived(name === "write" ? clip(body ?? "", 6000) : "");
+	const writeLinesCount = $derived(name === "write" ? lineCount(body ?? "") : 0);
+	const writeLines = $derived(open && name === "write" && writeText ? writeText.replace(/\r\n?/g, "\n").split("\n") : []);
+	const writeHl = $derived.by(() => {
+		void hlTick;
+		return open && name === "write" && writeText ? highlightLines(writeText, fileLang) : null;
+	});
+
+	const isImageRead = $derived(name === "read" && !!run.details?.image);
+	const readFrom = $derived(
+		typeof run.details?.from === "number"
+			? (run.details.from as number)
+			: typeof args.offset === "number" && Number.isSafeInteger(args.offset) && args.offset >= 1
+				? (args.offset as number)
+				: 1,
+	);
+	const readTo = $derived(typeof run.details?.to === "number" ? (run.details.to as number) : null);
+	const readTotal = $derived(typeof run.details?.totalLines === "number" ? (run.details.totalLines as number) : null);
+	const readRangeLabel = $derived.by(() => {
+		if (name !== "read" || skillName || isImageRead) return "";
+		if (readTo != null) return readFrom === readTo ? `L${readFrom}` : `L${readFrom}–${readTo}`;
+		if (typeof args.offset === "number" && args.offset >= 1) {
+			return typeof args.limit === "number" && args.limit >= 1 ? `L${args.offset}–${args.offset + args.limit - 1}` : `L${args.offset}+`;
+		}
+		return "";
+	});
+	const readParsed = $derived.by(() => {
+		if (name !== "read" || isImageRead || failed || !run.output) return null;
+		const m = /\n\[(\d+ more lines;[^\]]+)\]\s*$/.exec(run.output);
+		const raw = m ? run.output.slice(0, m.index) : run.output;
+		const moreNote = m ? m[1]! : "";
+		const code = clip(raw, 12000);
+		return { code, lines: code.replace(/\r\n?/g, "\n").split("\n"), moreNote };
+	});
+	const readHl = $derived.by(() => {
+		void hlTick;
+		return open && readParsed ? highlightLines(readParsed.code, fileLang) : null;
+	});
+	const readCodeView = $derived(!!readParsed && !custom);
+
+	const bashCmdHl = $derived.by(() => {
+		void hlTick;
+		if (!open || name !== "bash") return null;
+		const res = highlightCode(str(args.command), "bash");
+		return res && res !== "wait" ? res : null;
+	});
+
+	/** edit / write / read / bash fold their own output into the code frame unless a custom renderer or an error needs raw output. */
+	const showStandaloneOutput = $derived.by(() => {
+		if (!run.output || asked || custom) return false;
+		if (name === "bash") return false;
+		if (readCodeView) return false;
+		if ((name === "edit" || name === "write") && !failed) return false;
+		return true;
+	});
+
+	const usesCodeFrame = $derived(name === "edit" || name === "write" || readCodeView);
 </script>
 
 <div class="call" data-part="tool" data-fold class:awaiting class:failed data-state={run.state}>
@@ -112,6 +186,16 @@
 		<span class="name mono" class:shimmer={working}>{toolLabel(name, args)}</span>
 		{#if summary}<span class="sum mono" title={fullLine}>{summary}</span>{/if}
 		<span class="meta">
+			{#if editDiff && (editDiff.added || editDiff.removed)}
+				<span class="stat mono" aria-label={`+${editDiff.added} -${editDiff.removed}`}>
+					{#if editDiff.added}<span class="stat-add">+{editDiff.added}</span>{/if}
+					{#if editDiff.removed}<span class="stat-del">-{editDiff.removed}</span>{/if}
+				</span>
+			{:else if name === "write" && writeLinesCount > 0}
+				<span class="stat mono"><span class="stat-add">+{writeLinesCount}</span></span>
+			{:else if readRangeLabel}
+				<span class="stat mono stat-range">{readRangeLabel}</span>
+			{/if}
 			{#if working}<span class="dots" role="status" aria-label={label}><i></i><i></i><i></i></span>
 			{:else if awaiting}<span class="need">{label}</span>
 			{:else if failed || run.state === "skipped"}<span class="note">{label}</span>{/if}
@@ -143,7 +227,7 @@
 						onclick={() => app.openSkills(pane.id, skillName)}
 					><Icon name="skill" /><span class="jlabel">/skill:{skillName}</span></button>
 				</div>
-			{:else if fileTarget && pane.id}
+			{:else if fileTarget && pane.id && !usesCodeFrame}
 				{@const fp = splitFilePath(fileTarget.path)}
 				{@const suffix = formatFileLine(fileTarget.line)}
 				<div class="jump">
@@ -189,19 +273,62 @@
 					><Icon name="target" /><span class="jlabel">{t("목표")}</span></button>
 				</div>
 			{/if}
-			{#if name === "edit"}
-				<div class="diffs">
-					{#each editItems as item}
-						<div class="diff mono">
-							<div class="del">{item.oldText}</div>
-							<div class="add">{item.newText}</div>
-						</div>
-					{/each}
+			{#if name === "edit" && editDiff}
+				<div class="codeframe">
+					{@render fileHeader(editDiff.added, editDiff.removed, "")}
+					<div class="codescroll mono">
+						{#each editDiff.rows as r, i (i)}
+							{#if r.kind === "skip"}
+								<div class="diff-skip">⋯ {r.count}</div>
+							{:else}
+								{@const hl = r.kind === "del" ? editOldHl?.[r.oldLine - 1] : editNewHl?.[r.newLine - 1]}
+								<div class="cline diff-{r.kind}">
+									<span class="lno">{r.oldLine ?? ""}</span>
+									<span class="lno">{r.newLine ?? ""}</span>
+									<span class="sig" aria-hidden="true">{r.kind === "del" ? "−" : r.kind === "add" ? "+" : " "}</span>
+									<span class="code">{#if hl != null}{@html hl}{:else}{r.text || " "}{/if}</span>
+								</div>
+							{/if}
+						{/each}
+					</div>
+				</div>
+			{:else if name === "write"}
+				<div class="codeframe">
+					{@render fileHeader(writeLinesCount, 0, "")}
+					<div class="codescroll mono">
+						{#each writeLines as line, i (i)}
+							{@const hl = writeHl?.[i]}
+							<div class="cline diff-add">
+								<span class="lno">{i + 1}</span>
+								<span class="sig" aria-hidden="true">+</span>
+								<span class="code">{#if hl != null}{@html hl}{:else}{line || " "}{/if}</span>
+							</div>
+						{/each}
+					</div>
+				</div>
+			{:else if readCodeView && readParsed}
+				<div class="codeframe">
+					{@render fileHeader(0, 0, readRangeLabel && readTotal ? `${readRangeLabel} / ${readTotal}` : readRangeLabel || (readTotal ? `${readTotal}` : ""))}
+					<div class="codescroll mono">
+						{#each readParsed.lines as line, i (i)}
+							{@const hl = readHl?.[i]}
+							<div class="cline">
+								<span class="lno">{readFrom + i}</span>
+								<span class="code">{#if hl != null}{@html hl}{:else}{line || " "}{/if}</span>
+							</div>
+						{/each}
+					</div>
+					{#if readParsed.moreNote}
+						<div class="codefoot mono">{readParsed.moreNote}</div>
+					{/if}
 				</div>
 			{:else if name === "bash"}
-				<pre class="mono cmd"><span class="prompt">$</span> {str(args.command)}</pre>
-			{:else if name === "write"}
-				<pre class="mono">{clip(body ?? "", 6000)}</pre>
+				<div class="codeframe term">
+					<pre class="mono cmd"><span class="prompt">$</span> {#if bashCmdHl != null}{@html bashCmdHl}{:else}{str(args.command)}{/if}</pre>
+					{#if run.output && !custom}
+						<pre class="mono term-out">{clip(run.output, 12000)}</pre>
+					{/if}
+				</div>
 			{:else if asked}
 				<!-- while it waits, the reply block under the card asks the question itself; show it here only once answered -->
 				{#if !awaiting}<div class="q">{run.question?.question ?? str(args.question)}</div>{/if}
@@ -212,9 +339,9 @@
 
 			{#if custom}
 				<div class="custom"><ExtensionView node={custom} namespace={`tool-${renderer?.owner ?? ""}-${id}`} values={{}} onchange={noop} ondispatch={none} /></div>
-			{:else if run.output && !asked}
+			{:else if showStandaloneOutput}
 				<div class="label">{t("출력")}</div>
-				{#if run.output}<pre class="mono out">{clip(run.output, 12000)}</pre>{/if}
+				<pre class="mono out">{clip(run.output, 12000)}</pre>
 			{/if}
 		</div>
 	{/if}
@@ -223,6 +350,35 @@
 		<div class="ask" in:collapseIn out:collapseOut><QuestionReply {id} paneId={pane.id} question={run.question} /></div>
 	{/if}
 </div>
+
+{#snippet fileHeader(added: number, removed: number, info: string)}
+	{#if fileTarget && pane.id}
+		{@const fp = splitFilePath(fileTarget.path)}
+		{@const suffix = formatFileLine(fileTarget.line)}
+		<div class="codebar">
+			<button
+				type="button"
+				class="codebar-file mono"
+				title={t("{name} 미리 보기", { name: `${fileTarget.path}${suffix}` })}
+				onclick={() => app.openFile(pane.id!, { path: fileTarget.path, name: baseName(fileTarget.path), ...(fileTarget.line ? { line: fileTarget.line } : {}) })}
+			>
+				<Icon name="file" />
+				{#if fp}
+					<span class="jpath"><span class="jdir">{fp.dir}</span><span class="jbase">{fp.base}{suffix}</span></span>
+				{:else}
+					<span class="jlabel">{fileTarget.path}{suffix}</span>
+				{/if}
+			</button>
+			{#if added || removed || info}
+				<span class="codebar-meta mono">
+					{#if added}<span class="stat-add">+{added}</span>{/if}
+					{#if removed}<span class="stat-del">-{removed}</span>{/if}
+					{#if info}<span class="stat-range">{info}</span>{/if}
+				</span>
+			{/if}
+		</div>
+	{/if}
+{/snippet}
 
 <style>
 	.custom { margin-top: 8px; min-width: 0; }
@@ -464,6 +620,7 @@
 		color: var(--text-faint);
 		user-select: none;
 	}
+<<<<<<< HEAD
 	.diffs {
 		display: flex;
 		flex-direction: column;
@@ -473,22 +630,154 @@
 		border-radius: var(--radius-sm);
 		overflow: hidden;
 		font-size: var(--fs-xs);
+=======
+	.stat {
+		flex: none;
+		display: inline-flex;
+		align-items: center;
+		gap: 4px;
+		font-size: var(--fs-2xs);
+		line-height: 16px;
+		font-variant-numeric: tabular-nums;
+>>>>>>> f5285801 (feat(chat): add unified diff, syntax-highlighted code and terminal frames to tool cards)
 	}
-	.diff div {
-		padding: 8px 12px;
-		white-space: pre-wrap;
-		word-break: break-all;
-		max-height: 200px;
-		overflow-x: hidden;
-		overflow-y: auto;
+	.stat-add {
+		color: var(--ok);
 	}
-	.del {
-		background: var(--danger-soft);
+	.stat-del {
 		color: var(--danger);
 	}
-	.add {
+	.stat-range {
+		color: var(--text-faint);
+	}
+	.codeframe {
+		border: 1px solid var(--border);
+		border-radius: var(--radius-sm);
+		background: var(--bg-code);
+		overflow: hidden;
+	}
+	.codebar {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 8px;
+		padding: 4px 12px;
+		border-bottom: 1px solid var(--border);
+		background: var(--bg-group);
+		font-size: var(--fs-2xs);
+		line-height: 20px;
+	}
+	.codebar-file {
+		display: inline-flex;
+		align-items: center;
+		gap: 8px;
+		min-width: 0;
+		padding: 0;
+		color: var(--text-dim);
+		font-size: var(--fs-2xs);
+		line-height: 20px;
+		text-align: left;
+		transition: color var(--motion-fast) var(--ease-std);
+	}
+	.codebar-file :global(svg) {
+		flex: none;
+		width: 12px;
+		height: 12px;
+		color: var(--text-faint);
+	}
+	@media (hover: hover) {
+		.codebar-file:hover {
+			color: var(--text);
+		}
+	}
+	.codebar-meta {
+		flex: none;
+		display: inline-flex;
+		align-items: center;
+		gap: 8px;
+		font-variant-numeric: tabular-nums;
+	}
+	.codescroll {
+		max-height: 320px;
+		overflow: auto;
+		padding: 4px 0;
+		font-size: var(--fs-xs);
+		line-height: 20px;
+	}
+	.cline {
+		display: flex;
+		align-items: flex-start;
+		min-width: max-content;
+		padding-right: 12px;
+	}
+	.lno {
+		flex: none;
+		min-width: 3.5ch;
+		padding-right: 8px;
+		text-align: right;
+		color: var(--text-faint);
+		opacity: 0.6;
+		user-select: none;
+		font-variant-numeric: tabular-nums;
+	}
+	.sig {
+		flex: none;
+		width: 2ch;
+		text-align: center;
+		color: var(--text-faint);
+		user-select: none;
+	}
+	.code {
+		flex: 1 0 auto;
+		padding-left: 4px;
+		white-space: pre;
+	}
+	.diff-del {
+		background: var(--danger-soft);
+	}
+	.diff-del .sig {
+		color: var(--danger);
+		font-weight: 600;
+	}
+	.diff-del .lno {
+		color: var(--danger);
+		opacity: 0.7;
+	}
+	.diff-add {
 		background: var(--ok-soft);
+	}
+	.diff-add .sig {
 		color: var(--ok);
+		font-weight: 600;
+	}
+	.diff-add .lno {
+		color: var(--ok);
+		opacity: 0.7;
+	}
+	.diff-ctx .code {
+		color: var(--text-dim);
+	}
+	.diff-skip {
+		padding: 4px 12px;
+		color: var(--text-faint);
+		font-size: var(--fs-2xs);
+		line-height: 16px;
+		user-select: none;
+	}
+	.codefoot {
+		padding: 4px 12px;
+		border-top: 1px solid var(--border);
+		color: var(--text-faint);
+		font-size: var(--fs-2xs);
+		line-height: 16px;
+	}
+	.codeframe.term pre {
+		border-radius: 0;
+		background: transparent;
+	}
+	.codeframe.term .term-out {
+		border-top: 1px solid var(--border);
+		color: var(--text-dim);
 	}
 	.q {
 		font-size: var(--fs-sm);

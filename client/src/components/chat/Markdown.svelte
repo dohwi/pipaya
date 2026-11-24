@@ -431,34 +431,6 @@
 		font-family: inherit;
 		white-space: pre;
 	}
-	/* syntax colours (code-highlight.ts): colour only, never weight or size, so a block keeps its layout when it is coloured in */
-	.md :global(:is(.hljs-keyword, .hljs-doctag, .hljs-template-tag, .hljs-template-variable, .hljs-type, .hljs-variable.language_, .hljs-meta .hljs-keyword)) {
-		color: var(--syn-keyword);
-	}
-	.md :global(:is(.hljs-title, .hljs-title.class_, .hljs-title.function_)) {
-		color: var(--syn-title);
-	}
-	.md :global(:is(.hljs-attr, .hljs-attribute, .hljs-literal, .hljs-meta, .hljs-number, .hljs-operator, .hljs-variable, .hljs-selector-attr, .hljs-selector-class, .hljs-selector-id, .hljs-section)) {
-		color: var(--syn-number);
-	}
-	.md :global(:is(.hljs-string, .hljs-regexp, .hljs-meta .hljs-string)) {
-		color: var(--syn-string);
-	}
-	.md :global(:is(.hljs-built_in, .hljs-symbol)) {
-		color: var(--syn-builtin);
-	}
-	.md :global(:is(.hljs-comment, .hljs-code, .hljs-formula)) {
-		color: var(--syn-comment);
-	}
-	.md :global(:is(.hljs-name, .hljs-quote, .hljs-selector-tag, .hljs-selector-pseudo, .hljs-addition)) {
-		color: var(--syn-name);
-	}
-	.md :global(:is(.hljs-bullet, .hljs-link)) {
-		color: var(--syn-bullet);
-	}
-	.md :global(.hljs-deletion) {
-		color: var(--syn-keyword);
-	}
 	.md :global(.tablewrap) {
 		overflow-x: auto;
 		overflow-y: hidden;
