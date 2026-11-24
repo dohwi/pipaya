@@ -481,7 +481,6 @@
 		});
 	});
 	const ghostById = $derived(new Map(ghostCards.map((c) => [c.id, c])));
-<<<<<<< HEAD
 	const ghostEdgeIds = $derived(new Set(ghostEdges.map((e) => e.id)));
 	const orderedEdges = $derived.by(() => {
 		const idle: Edge[] = [];
@@ -490,10 +489,6 @@
 		return [...idle, ...live, ...ghostEdges];
 	});
 	const allCards = $derived([...graph.cards.values(), ...ghostCards]);
-=======
-	const ghostEdgeSet = $derived(new Set(ghostEdges));
-	const orderedEdges = $derived([...graph.edges.filter((x) => !x.live), ...graph.edges.filter((x) => x.live), ...ghostEdges]);
->>>>>>> origin/main
 	/** A card where it is drawn this frame (the layout's place once it has settled). */
 	function at(c: Card): Card {
 		void frame;

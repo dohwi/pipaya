@@ -109,7 +109,7 @@ describe("migrations", () => {
 		db.query("INSERT INTO events (id, session_id, type, data, ts) VALUES (2, 's1', 'session_created', '{}', 20)").run();
 		db.query("INSERT INTO events (id, session_id, type, data, ts) VALUES (3, 'orphan', 'session_updated', '{}', 30)").run();
 
-		const step = MIGRATIONS[41]!;
+		const step = MIGRATIONS[42]!;
 		expect(typeof step).toBe("function");
 		db.transaction(() => (step as (d: typeof db) => void)(db))();
 
