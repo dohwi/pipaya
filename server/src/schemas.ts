@@ -187,6 +187,10 @@ export const CreateSessionBody = Type.Object({
 	tools: Type.Optional(Type.Array(Type.String(), { description: "Defaults to all tools. See GET /tools." })),
 });
 
+export const PatchSessionQuery = Type.Object({
+	deleteIfEmpty: Type.Optional(Type.Boolean({ description: "When true alongside closed=true, permanently delete the session (204) instead of closing it if it has no messages, context, goal, schedules, or active run" })),
+});
+
 export const PatchSessionBody = Type.Object({
 	title: Type.Optional(Type.String({ minLength: 1, maxLength: 200 })),
 	purpose: Type.Optional(Type.String({ maxLength: 200, description: "What this session works on; \"\" clears it so the system model writes it again" })),

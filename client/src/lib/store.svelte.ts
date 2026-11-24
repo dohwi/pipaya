@@ -1704,7 +1704,7 @@ class AppStore {
     if (this.links[sid] !== link) return;
     const next = this.serverId === sid ? this.neighbourOf(id) : undefined;
     try {
-      await api.patchSession(id, { closed: true });
+      const closed = await api.closeSession(id);
       if (this.links[sid] !== link) return;
       this.forgetInGroupsOn(link, id);
       link.data.sessions = link.data.sessions.filter((x) => x.id !== id);
@@ -1713,7 +1713,8 @@ class AppStore {
       link.data.awaiting[id] = 0;
       delete link.data.unread[id];
       delete link.data.failed[id];
-      this.cleanupClosedSession(sid, id);
+      if (closed === undefined) this.cleanupDeletedSession(sid, id);
+      else this.cleanupClosedSession(sid, id);
       if (this.graphPeek?.server === sid && this.graphPeek?.session === id) this.graphPeek = null;
       if (this.graphFrom?.server === sid && this.graphFrom?.session === id) this.graphFrom = next ? { server: sid, session: next } : null;
       if (this.serverId === sid && this.activeId === id) {

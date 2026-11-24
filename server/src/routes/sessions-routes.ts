@@ -120,9 +120,18 @@ export function registerSessionRoutes(server: FastifyInstance, deps: SessionRout
 		},
 	});
 	app.patch("/sessions/:id", {
-		schema: { params: S.IdParams, body: S.PatchSessionBody, response: { 200: S.Session, ...S.errors(400, 401, 404, 409, 502) } },
-		handler: async (req) => {
+		schema: {
+			params: S.IdParams,
+			querystring: S.PatchSessionQuery,
+			body: S.PatchSessionBody,
+			response: { 200: S.Session, 204: Type.Null(), ...S.errors(400, 401, 404, 409, 502) },
+		},
+		handler: async (req, reply) => {
 			const { workDir, ...rest } = req.body;
+			if (rest.closed && req.query.deleteIfEmpty && sessions.isEmpty(req.params.id)) {
+				sessions.delete(req.params.id);
+				return reply.status(204).send();
+			}
 			if (workDir !== undefined) sessions.moveWorkdir(req.params.id, workDir === null || workDir === "" ? null : workDir, "user");
 			return Object.keys(rest).length || workDir === undefined ? sessions.configureSession(req.params.id, rest) : sessions.get(req.params.id);
 		},

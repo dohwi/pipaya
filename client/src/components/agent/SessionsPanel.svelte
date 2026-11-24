@@ -153,12 +153,18 @@
 			for (const id of ids) await api!.patchSession(id, { closed: false });
 			return t("{n}개를 복원했습니다.", { n: ids.length });
 		});
-	/** Move what is ticked to the closed sessions (out of the list, still resumable). */
+	/** Move what is ticked to the closed sessions (empty ones are removed instead of kept closed). */
 	const close = (list: Session[]) =>
 		bulk(list, canClose, async (ids) => {
-			for (const id of ids) await api!.patchSession(id, { closed: true });
+			const deleted: string[] = [];
+			const closed: string[] = [];
+			for (const id of ids) {
+				const res = await api!.closeSession(id);
+				(res === undefined ? deleted : closed).push(id);
+			}
 			dropFromLink(ids);
-			for (const id of ids) app.cleanupClosedSession(serverId, id);
+			for (const id of deleted) app.cleanupDeletedSession(serverId, id);
+			for (const id of closed) app.cleanupClosedSession(serverId, id);
 			return t("{n}개를 닫았습니다.", { n: ids.length });
 		});
 	/** Delete what is ticked in one folder. Ticks in other folders stay untouched. */

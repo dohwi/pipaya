@@ -163,3 +163,32 @@ describe("Api.send progress, cancellation, and clientRequestId", () => {
 		}
 	});
 });
+
+describe("Api.closeSession", () => {
+	test("sends deleteIfEmpty=true by default, returns undefined on 204 and Session on 200", async () => {
+		const seen: { method: string; url: string; body: unknown }[] = [];
+		const srv = Bun.serve({
+			port: 0,
+			hostname: "127.0.0.1",
+			fetch: async (req) => {
+				const u = new URL(req.url);
+				seen.push({ method: req.method, url: u.pathname + u.search, body: await req.json() });
+				if (u.pathname.endsWith("/empty")) return new Response(null, { status: 204 });
+				return Response.json({ id: "used", closed: true });
+			},
+		});
+		try {
+			const api = new Api({ baseUrl: `http://127.0.0.1:${srv.port}`, token: "t" });
+			expect(await api.closeSession("empty")).toBeUndefined();
+			expect(await api.closeSession("used")).toMatchObject({ id: "used", closed: true });
+			expect(await api.closeSession("used", false)).toMatchObject({ id: "used", closed: true });
+			expect(seen).toEqual([
+				{ method: "PATCH", url: "/sessions/empty?deleteIfEmpty=true", body: { closed: true } },
+				{ method: "PATCH", url: "/sessions/used?deleteIfEmpty=true", body: { closed: true } },
+				{ method: "PATCH", url: "/sessions/used", body: { closed: true } },
+			]);
+		} finally {
+			srv.stop(true);
+		}
+	});
+});
