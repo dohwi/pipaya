@@ -67,6 +67,10 @@ export interface ServerUpdateStatus {
 	currentVersion?: string | null;
 	latestVersion?: string | null;
 	available: boolean;
+	/** True when an update is queued to run as soon as running sessions finish. Omitted by older servers. */
+	pending?: boolean;
+	/** Running session count on the server. Omitted by older servers. */
+	runningSessions?: number;
 	checkedAt: number;
 }
 

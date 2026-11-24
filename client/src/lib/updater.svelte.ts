@@ -43,7 +43,7 @@ class Updater {
 	/** Gives the open server connection; set by the app so this file need not import the store. */
 	connection: (() => { api: Api | null; serverId: string | null }) | null = null;
 	/** The result of the server step of the last install, for the dialog to explain. */
-	serverStep = $state<"" | "updated" | "skipped" | "failed">("");
+	serverStep = $state<"" | "updated" | "pending" | "skipped" | "failed">("");
 
 	private update: import("@tauri-apps/plugin-updater").Update | null = null;
 	private apkUrl: string | null = null;
@@ -182,8 +182,8 @@ class Updater {
 		const conn = this.connection?.();
 		if (!conn?.api || !serverUpdater.available || !serverUpdater.withApp) return;
 		this.phase = "downloading";
-		const ok = await serverUpdater.apply(conn.api);
-		this.serverStep = ok ? "updated" : serverUpdater.error ? "failed" : "skipped";
+		const outcome = await serverUpdater.apply(conn.api);
+		this.serverStep = outcome === "updated" ? "updated" : outcome === "pending" ? "pending" : serverUpdater.error ? "failed" : "skipped";
 	}
 
 	/** Desktop: download, verify, install, restart. Android: download in the app and open the system installer. */

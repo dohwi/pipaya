@@ -381,8 +381,25 @@ export class Api {
 
 	/** Is there a newer server build, and can this server update itself? (admin token only) */
 	serverUpdateStatus = (signal?: AbortSignal) => this.req<ServerUpdateStatus>("GET", "/server/update", undefined, signal ?? AbortSignal.timeout(90_000));
-	/** Update the server's code and restart it. The connection drops while it restarts. */
-	updateServer = (force = false) => this.req<{ ok: boolean; from: string; to: string; fromVersion?: string | null; toVersion?: string | null; restarting: boolean }>("POST", "/server/update", { force }, AbortSignal.timeout(10 * 60_000));
+	/** Update the server's code and restart it, or queue it until running sessions finish when `queue` is true. */
+	updateServer = (opts: boolean | { force?: boolean; queue?: boolean } = false) => {
+		const force = typeof opts === "boolean" ? opts : Boolean(opts.force);
+		const queue = typeof opts === "boolean" ? false : Boolean(opts.queue);
+		// Only send `queue` when requested: older servers reject unknown body keys (`additionalProperties: false`).
+		const body = queue ? { force, queue: true } : { force };
+		return this.req<{
+			ok: boolean;
+			from: string;
+			to: string;
+			fromVersion?: string | null;
+			toVersion?: string | null;
+			restarting: boolean;
+			pending?: boolean;
+			runningSessions?: number;
+		}>("POST", "/server/update", body, AbortSignal.timeout(10 * 60_000));
+	};
+	/** Cancel a server update that is waiting for running sessions to finish. */
+	cancelServerUpdate = () => this.req<{ ok: boolean; cancelled: boolean }>("DELETE", "/server/update");
 
 	/** Newest persisted event id; used as the starting cursor so we do not replay all history. */
 	latestEventId = () =>

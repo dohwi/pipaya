@@ -363,7 +363,15 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 		serverDir: join(REPO_ROOT, "server"),
 		running: () => sessions.runningCount,
 		restart: restartSoon,
+		onChange: (ev) => bus.publish(null, "server_update_changed", ev, { ephemeral: true }),
+		log: (m) => server.log.warn(m),
 		...opts.selfUpdate,
+	});
+	teardown.onClose(() => { updater.cancelPending(); });
+	// Trigger a queued self-update as soon as the last running turn settles (microtask lets synchronous follow-up drain start first).
+	bus.subscribe((e) => {
+		if (e.type === "run_started") updater.onActivityChange();
+		else if (e.type === "run_finished") queueMicrotask(() => updater.onActivityChange());
 	});
 	registerMetaRoutes(server, {
 		startedAt,
@@ -399,6 +407,7 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 	const retention = new Retention(db, store, busy, (id) => sessions.delete(id), (m) => server.log.info(m));
 	registerRetentionRoutes(server, retention, bus);
 	const scheduler = new Scheduler(db, { session: (id) => store.get(id), isRunning: (id) => sessions.isRunning(id), send: (id, input) => sessions.send(id, input) }, {
+		deferRun: () => updater.isPending,
 		onChange: (c) => bus.publish(null, "schedules_updated", c, { ephemeral: true }),
 		log: (m) => server.log.info(m),
 	});
@@ -418,6 +427,7 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 			send: (id, input) => sessions.send(id, input),
 		},
 		{
+			deferContinue: () => updater.isPending,
 			onChange: (c) => bus.publish(null, "goals_updated", c, { ephemeral: true }),
 			log: (m) => server.log.info(m),
 		},

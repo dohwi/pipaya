@@ -21,16 +21,18 @@
 	const key = $derived(`${app.serverId}:${kind}`);
 	const show = $derived(app.serverId !== null && kind !== "ok" && closed !== key && !(kind === "update-server" && app.net !== "online"));
 	const busy = $derived(serverUpdater.busy);
+	const pending = $derived(serverUpdater.pending);
 
-	// once per connection: an old-server strip leaves by itself, unless the server is being updated right now
+	// once per connection: an old-server strip leaves by itself, unless the server is being updated or waiting to update
 	$effect(() => {
-		if (!show || kind !== "update-server" || busy) return;
+		if (!show || kind !== "update-server" || busy || pending) return;
 		const k = key;
 		const timer = setTimeout(() => (closed = k), STAY_MS);
 		return () => clearTimeout(timer);
 	});
 
 	const updateServer = () => app.updateServerSoftware();
+	const cancelUpdate = () => app.cancelServerUpdate();
 	function updateApp() {
 		void updater.check(true).then(() => {
 			if (updater.phase === "available") updater.dismissed = "";
@@ -54,9 +56,14 @@
 		{#if kind === "update-app" && updater.supported}
 			<button type="button" class="act" disabled={updater.phase === "checking"} aria-busy={updater.phase === "checking" || undefined} onclick={updateApp}>{updater.phase === "checking" ? t("확인 중…") : t("업데이트 확인")}</button>
 		{:else if kind === "update-server" && serverUpdater.available}
-			<button type="button" class="act" disabled={busy} aria-busy={busy || undefined} onclick={updateServer}>
-				{busy ? t("서버를 업데이트하는 중…") : t("서버 업데이트")}
-			</button>
+			{#if pending}
+				<span class="pending">{serverUpdater.progressLabel}</span>
+				<button type="button" class="act" onclick={cancelUpdate}>{t("대기 취소")}</button>
+			{:else}
+				<button type="button" class="act" disabled={busy} aria-busy={busy || undefined} onclick={updateServer}>
+					{busy ? t("서버를 업데이트하는 중…") : t("서버 업데이트")}
+				</button>
+			{/if}
 		{/if}
 		{#if kind === "update-server"}
 			<CountdownClose ms={STAY_MS} onclick={() => (closed = key)} label={t("나중에")} />
@@ -91,6 +98,11 @@
 	.err {
 		display: block;
 		color: var(--danger);
+	}
+	.pending {
+		flex: none;
+		white-space: nowrap;
+		color: var(--text-dim);
 	}
 	/* the action is a bold underlined word, like the one in a Notice (Notice.svelte): no box to strand on the tinted strip */
 	.act {

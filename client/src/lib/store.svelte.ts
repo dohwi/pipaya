@@ -559,10 +559,28 @@ class AppStore {
    * `force` goes ahead although conversations are running: they are cut off by the restart.
    */
   async updateServerSoftware(api: Api | null = this.api, force = false): Promise<boolean> {
-    if (!api || !(await serverUpdater.apply(api, force))) return false;
-    this.toast(serverUpdater.updatedTo ? t("서버를 v{version}(으)로 업데이트했습니다", { version: serverUpdater.updatedTo }) : t("서버를 업데이트했습니다"), "ok");
-    await this.sync();
+    if (!api) return false;
+    const outcome = await serverUpdater.apply(api, force);
+    if (outcome === "pending") {
+      this.toast(t("실행 중인 대화가 끝나면 서버를 업데이트합니다"), "ok");
+      return true;
+    }
+    if (outcome !== "updated") return false;
+    this.notifyServerUpdated();
     return true;
+  }
+
+  /** Cancel a queued server update waiting for running conversations to finish. */
+  async cancelServerUpdate(api: Api | null = this.api): Promise<boolean> {
+    if (!api) return false;
+    const ok = await serverUpdater.cancel(api);
+    if (ok) this.toast(t("서버 업데이트 대기를 취소했습니다"), "ok");
+    return ok;
+  }
+
+  private notifyServerUpdated() {
+    this.toast(serverUpdater.updatedTo ? t("서버를 v{version}(으)로 업데이트했습니다", { version: serverUpdater.updatedTo }) : t("서버를 업데이트했습니다"), "ok");
+    void this.sync();
   }
 
   /** Reconnect the open server now (its stream is dropped and everything is read again). */
@@ -1183,6 +1201,10 @@ class AppStore {
   private handle(e: PipayaEvent) {
     const link = this.link;
     if (!link) return;
+    if (e.type === "server_update_changed") {
+      serverUpdater.onServerEvent(e.data as Parameters<typeof serverUpdater.onServerEvent>[0], link.api, () => this.notifyServerUpdated());
+      return;
+    }
     handleOpenServerEvent(
       {
         activeId: this.activeId,
