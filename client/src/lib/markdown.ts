@@ -2,7 +2,7 @@ import { Marked, type Tokens } from "marked";
 import createDOMPurify, { type DOMPurify } from "dompurify";
 import { getLang, t } from "./i18n";
 import { remoteImageHost } from "./remote-image";
-import { cleanWorkdirPath, filePathOf, isImagePath, isLocalFilePath, isWorkdirPath, mediaKindOf } from "./files";
+import { cleanWorkdirPath, filePathOf, isImagePath, isLocalFilePath, isWorkdirPath, mediaKindOf, splitFilePath } from "./files";
 import { groupPictures } from "./gallery";
 import { BARE_URL_END, MARKED_OPTIONS, NO_INDENTED_CODE, blocksOf, hideFenceTail, hideMarkerTail, streamSplit } from "./markdown-split";
 import { highlightCode } from "./code-highlight";
@@ -89,7 +89,15 @@ md.use({
 				}
 			}
 			// A relative link is a file in the session's working directory (the agent wrote it): preview it in the app.
-			if (isWorkdirPath(href)) return `<a href="#" class="wd-file"${t} data-file="${escapeHtml(cleanWorkdirPath(href))}">${inner}</a>`;
+			if (isWorkdirPath(href)) {
+				const clean = cleanWorkdirPath(href);
+				const tip = title ? ` title="${escapeHtml(title)}"` : ` title="${escapeHtml(clean)}"`;
+				const fp = !inner.includes("<") ? splitFilePath(inner) : null;
+				const body = fp
+					? `<span class="wd-path"><span class="wd-dir">${fp.dir}</span><span class="wd-base">${fp.base}</span></span>`
+					: `<span class="wd-lbl">${inner}</span>`;
+				return `<a href="#" class="wd-file"${tip} data-file="${escapeHtml(clean)}">${body}</a>`;
+			}
 			if (!isSafeExternalUrl(href)) return inner;
 			return `<a href="${escapeHtml(href)}"${t} data-ext rel="noopener noreferrer">${inner}</a>`;
 		},

@@ -3,6 +3,7 @@
 	import Icon from "../ui/Icon.svelte";
 	import { app } from "../../lib/store.svelte";
 	import { splitTokens } from "../../lib/composer-text";
+	import { splitFilePath } from "../../lib/files";
 	import { groupHandle } from "../../lib/peers";
 	import { nameInLang } from "../../lib/member-names";
 	import type { ImageBlock } from "../../lib/types";
@@ -35,7 +36,9 @@
 	const openFile = (path: string) => sessionId && app.openFile(sessionId, { path, name: path.split("/").filter(Boolean).pop() ?? path });
 </script>
 
-{#each parts as p, i (i)}{#if p.kind === "mention" && sessionOf(p.name!)}{@const id = sessionOf(p.name!)!}<button type="button" class="tok mention" title={t("{name} 대화 열기", { name: p.text })} onclick={() => void app.openAny(id)}><span class="lbl">{p.text}</span></button>{:else if p.kind === "mention"}<span class="tok mention" title={p.text}><span class="lbl">{p.text}</span></span>{:else if p.kind === "image"}<button type="button" class="tok image" title={t("이미지 크게 보기")} onclick={() => openImage(Number(p.name))}><Icon name="image" /><span class="lbl">{p.text.slice(1)}</span></button>{:else if p.kind === "file" && sessionId}<button type="button" class="tok file" title={t("{name} 미리 보기", { name: p.name! })} onclick={() => openFile(p.name!)}><Icon name="file" /><span class="lbl">{p.text.slice(1)}</span></button>{:else if p.kind === "file"}<span class="tok file" title={p.name!}><Icon name="file" /><span class="lbl">{p.text.slice(1)}</span></span>{:else if p.kind === "skill"}<button type="button" class="tok skill" title={t("스킬 {name} 보기", { name: p.name! })} onclick={() => app.openSkills(sessionId, p.name!)}><Icon name="skill" /><span class="lbl">{p.text}</span></button>{:else}{p.text}{/if}{/each}
+{#snippet fileLabel(raw: string)}{@const fp = splitFilePath(raw)}{#if fp}<span class="path"><span class="dir">{fp.dir}</span><span class="base">{fp.base}</span></span>{:else}<span class="tlabel">{raw}</span>{/if}{/snippet}
+
+{#each parts as p, i (i)}{#if p.kind === "mention" && sessionOf(p.name!)}{@const id = sessionOf(p.name!)!}<button type="button" class="tok mention" title={t("{name} 대화 열기", { name: p.text })} onclick={() => void app.openAny(id)}><span class="tlabel">{p.text}</span></button>{:else if p.kind === "mention"}<span class="tok mention" title={p.text}><span class="tlabel">{p.text}</span></span>{:else if p.kind === "image"}<button type="button" class="tok image" title={t("이미지 크게 보기")} onclick={() => openImage(Number(p.name))}><Icon name="image" /><span class="tlabel">{p.text.slice(1)}</span></button>{:else if p.kind === "file" && sessionId}<button type="button" class="tok file" title={t("{name} 미리 보기", { name: p.name! })} onclick={() => openFile(p.name!)}><Icon name="file" />{@render fileLabel(p.text.slice(1))}</button>{:else if p.kind === "file"}<span class="tok file" title={p.name!}><Icon name="file" />{@render fileLabel(p.text.slice(1))}</span>{:else if p.kind === "skill"}<button type="button" class="tok skill" title={t("스킬 {name} 보기", { name: p.name! })} onclick={() => app.openSkills(sessionId, p.name!)}><Icon name="skill" /><span class="tlabel">{p.text}</span></button>{:else}{p.text}{/if}{/each}
 
 <style>
 	/* Shaped like inline code in a reply (Markdown.svelte): 8px corners, em padding so the chip grows with its text, a hairline
@@ -58,7 +61,26 @@
 		vertical-align: -1px; /* measured: aligns chip text ink with surrounding 1.55 body text (<= 0.5px) */
 		transition: background var(--motion-fast) var(--ease-std);
 	}
-	.lbl {
+	.tlabel {
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	.path {
+		display: inline-flex;
+		min-width: 0;
+	}
+	.dir {
+		flex: 0 999999 auto;
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		opacity: 0.68;
+	}
+	.base {
+		flex: 0 1 auto;
 		min-width: 0;
 		overflow: hidden;
 		text-overflow: ellipsis;

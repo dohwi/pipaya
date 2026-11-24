@@ -145,4 +145,20 @@ describe("inline image and media deduplication", () => {
 		expect(root.querySelectorAll("span.wd-img")).toHaveLength(1);
 		expect(root.querySelectorAll("a.wd-file")).toHaveLength(1);
 	});
+
+	test("workdir file links split directory and basename for narrow truncation, and keep non-path labels intact", () => {
+		const root = parseHtml(
+			renderMarkdown(
+				"[client/src/App.svelte](client/src/App.svelte) [report.pdf](out/report.pdf) [`src/a.ts`](src/a.ts)",
+			),
+		);
+		const links = [...root.querySelectorAll("a.wd-file")];
+		expect(links).toHaveLength(3);
+		expect(links[0]?.getAttribute("title")).toBe("client/src/App.svelte");
+		expect(links[0]?.querySelector(".wd-dir")?.textContent).toBe("client/src/");
+		expect(links[0]?.querySelector(".wd-base")?.textContent).toBe("App.svelte");
+		expect(links[1]?.getAttribute("title")).toBe("out/report.pdf");
+		expect(links[1]?.querySelector(".wd-lbl")?.textContent).toBe("report.pdf");
+		expect(links[2]?.querySelector(".wd-lbl code")?.textContent).toBe("src/a.ts");
+	});
 });
