@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { mkdirSync, readdirSync, statSync } from "node:fs";
-import { readdir } from "node:fs/promises";
+import { mkdir, readdir, stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 import Type from "typebox";
@@ -52,10 +52,78 @@ const LIMIT = 500;
 const SCAN_LIMIT = 20000;
 const SKIP_DIRS = new Set(["node_modules", ".git", ".svn", ".hg", "dist", "build", "target", "__pycache__", ".venv", ".next", ".svelte-kit", ".cache"]);
 
-interface Indexed { path: string; dir: boolean; lower: string }
-const INDEX_TTL = 5000;
+export interface Indexed {
+	path: string;
+	dir: boolean;
+	lower: string;
+	/** Lowercase basename without trailing slash, precomputed during scan(). */
+	name: string;
+	/** Number of `/` segments + 1 (matches `lower.split("/").length`), precomputed during scan(). */
+	depth: number;
+}
+export const INDEX_TTL = 5000;
+export const INDEX_CACHE_MAX = 20;
+
+/**
+ * TTL + LRU bounded cache for directory file indexes.
+ * Stores in-flight and completed scan promises so concurrent requests for one root share one walk.
+ */
+export class FileIndexCache<T = Indexed[]> {
+	private map = new Map<string, { at: number; items: Promise<T> }>();
+
+	constructor(
+		private readonly ttl = INDEX_TTL,
+		private readonly maxEntries = INDEX_CACHE_MAX,
+		private readonly now: () => number = Date.now,
+	) {}
+
+	get size(): number {
+		return this.map.size;
+	}
+
+	has(root: string): boolean {
+		return this.map.has(root);
+	}
+
+	get(root: string): Promise<T> | undefined {
+		const hit = this.map.get(root);
+		if (!hit) return undefined;
+		if (this.now() - hit.at >= this.ttl) {
+			this.map.delete(root);
+			return undefined;
+		}
+		// Refresh LRU position on hit.
+		this.map.delete(root);
+		this.map.set(root, hit);
+		return hit.items;
+	}
+
+	set(root: string, items: Promise<T>): Promise<T> {
+		const t = this.now();
+		this.map.delete(root);
+		// Evict expired entries first so stale trees do not displace active roots.
+		for (const [k, v] of this.map) {
+			if (t - v.at >= this.ttl) this.map.delete(k);
+		}
+		// Evict least-recently-used entries until there is room for the new root.
+		while (this.map.size >= this.maxEntries) {
+			const oldest = this.map.keys().next().value;
+			if (oldest === undefined) break;
+			this.map.delete(oldest);
+		}
+		const entry = { at: t, items };
+		this.map.set(root, entry);
+		// The TTL counts from when the walk finished, not from when it started.
+		void items.then(
+			() => { entry.at = this.now(); },
+			() => { if (this.map.get(root) === entry) this.map.delete(root); },
+		);
+		return items;
+	}
+}
+
 /** Finished scans, and scans still running: concurrent requests for one root (every keystroke after "@") share one walk. */
-const indexCache = new Map<string, { at: number; items: Promise<Indexed[]> }>();
+const indexCache = new FileIndexCache<Indexed[]>();
 
 /**
  * Breadth-first so shallow files survive the scan cap. Symlinks are not followed. Async and yielding between folders,
@@ -63,9 +131,9 @@ const indexCache = new Map<string, { at: number; items: Promise<Indexed[]> }>();
  */
 async function scan(root: string): Promise<Indexed[]> {
 	const items: Indexed[] = [];
-	const queue = [""];
+	const queue: { rel: string; depth: number }[] = [{ rel: "", depth: 0 }];
 	for (let head = 0; head < queue.length && items.length < SCAN_LIMIT; head++) {
-		const rel = queue[head]!;
+		const { rel, depth } = queue[head]!;
 		let entries;
 		try {
 			entries = await readdir(rel ? join(root, rel) : root, { withFileTypes: true });
@@ -77,8 +145,14 @@ async function scan(root: string): Promise<Indexed[]> {
 			if (isDir && SKIP_DIRS.has(e.name)) continue;
 			const p = rel ? `${rel}/${e.name}` : e.name;
 			const path = isDir ? `${p}/` : p;
-			items.push({ path, dir: isDir, lower: path.toLowerCase() });
-			if (isDir) queue.push(p);
+			items.push({
+				path,
+				dir: isDir,
+				lower: path.toLowerCase(),
+				name: e.name.toLowerCase(),
+				depth: depth + (isDir ? 2 : 1),
+			});
+			if (isDir) queue.push({ rel: p, depth: depth + 1 });
 			if (items.length >= SCAN_LIMIT) break;
 		}
 	}
@@ -87,23 +161,16 @@ async function scan(root: string): Promise<Indexed[]> {
 
 function indexFiles(root: string): Promise<Indexed[]> {
 	const hit = indexCache.get(root);
-	if (hit && Date.now() - hit.at < INDEX_TTL) return hit.items;
-	const items = scan(root);
-	if (indexCache.size > 20) indexCache.clear();
-	const entry = { at: Date.now(), items };
-	indexCache.set(root, entry);
-	// The TTL counts from when the walk finished, not from when it started.
-	void items.then(() => { entry.at = Date.now(); }, () => indexCache.delete(root));
-	return items;
+	if (hit) return hit;
+	return indexCache.set(root, scan(root));
 }
 
-function rank(item: Indexed, q: string): number {
-	const name = item.lower.replace(/\/$/, "").split("/").pop()!;
-	if (!q) return item.lower.split("/").length - (item.dir ? 1.5 : 1); // shallow first, folders before files
+export function rank(item: Indexed, q: string): number {
+	if (!q) return item.depth - (item.dir ? 1.5 : 1); // shallow first, folders before files
 	if (item.lower === q || item.lower === `${q}/`) return 0;
 	if (item.lower.startsWith(q)) return 1;
-	if (name.startsWith(q)) return 2;
-	if (name.includes(q)) return 3;
+	if (item.name.startsWith(q)) return 2;
+	if (item.name.includes(q)) return 3;
 	if (item.lower.includes(q)) return 4;
 	// subsequence match: "cmps" -> "Composer.svelte"
 	let i = 0;
@@ -136,24 +203,29 @@ export function registerFsRoutes(server: FastifyInstance, defaultWorkdir: () => 
 			const given = req.query.path?.trim();
 			const raw = given || defaultWorkdir();
 			// The default directory is created lazily by the first session; browsing it must work before that.
-			if (!given) mkdirSync(raw, { recursive: true });
+			if (!given) await mkdir(raw, { recursive: true });
 			if (!isAbsolute(raw)) throw badRequest("path must be absolute");
 			const path = resolve(raw);
 			if (!inBounds(path)) throw badRequest(`browsing is limited to the workspace: ${confinedTo}`);
-			let names: string[];
+			let entries;
 			try {
-				if (!statSync(path).isDirectory()) throw new Error("not a directory");
-				names = readdirSync(path);
+				if (!(await stat(path)).isDirectory()) throw new Error("not a directory");
+				entries = await readdir(path, { withFileTypes: true });
 			} catch {
 				throw badRequest(`cannot open directory: ${path}`);
 			}
+			entries.sort((a, b) => a.name.localeCompare(b.name));
 			const dirs: { name: string; path: string }[] = [];
-			for (const name of names.sort((a, b) => a.localeCompare(b))) {
-				if (!req.query.hidden && name.startsWith(".")) continue;
-				const full = join(path, name);
-				try {
-					if (statSync(full).isDirectory()) dirs.push({ name, path: full });
-				} catch { /* broken link or no permission: skip */ }
+			for (const entry of entries) {
+				if (!req.query.hidden && entry.name.startsWith(".")) continue;
+				const full = join(path, entry.name);
+				let isDir = entry.isDirectory();
+				if (!isDir && (entry.isSymbolicLink() || (!entry.isFile() && !entry.isBlockDevice() && !entry.isCharacterDevice() && !entry.isFIFO() && !entry.isSocket()))) {
+					try {
+						isDir = (await stat(full)).isDirectory();
+					} catch { /* broken link or no permission: skip */ }
+				}
+				if (isDir) dirs.push({ name: entry.name, path: full });
 				if (dirs.length > LIMIT) break;
 			}
 			const up = dirname(path);
@@ -198,7 +270,7 @@ export function registerFsRoutes(server: FastifyInstance, defaultWorkdir: () => 
 						try { isDir = statSync(join(dir, e.name)).isDirectory(); } catch { continue; }
 					} else if (!isDir && !e.isFile()) continue;
 					const name = `${e.name}${isDir ? "/" : ""}`;
-					const s = f ? rank({ path: name, dir: isDir, lower: name.toLowerCase() }, f) : 0; // no filter yet: folders first, then by name
+					const s = f ? rank({ path: name, dir: isDir, lower: name.toLowerCase(), name: e.name.toLowerCase(), depth: isDir ? 2 : 1 }, f) : 0; // no filter yet: folders first, then by name
 					if (s < 99) ranked.push({ path: prefix + name, dir: isDir, s });
 				}
 				ranked.sort((a, b) => a.s - b.s || Number(b.dir) - Number(a.dir) || a.path.localeCompare(b.path));

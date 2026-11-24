@@ -1,6 +1,6 @@
 import type { ServiceTier } from "./openrouter-catalog.ts";
 import { parseJson } from "./json-column.ts";
-import type { Database } from "bun:sqlite";
+import type { Database, Statement } from "bun:sqlite";
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import type { ContextSnapshot } from "./context.ts";
 import type { RunOrigin } from "./session-types.ts";
@@ -114,8 +114,70 @@ export interface UsageTotals {
 	turns: number;
 }
 
+const usageSums = (col: string, base: string, cost: string) => {
+	const n = (path: string) => `COALESCE(SUM(COALESCE(json_extract(${col}, '${path}'), 0)), 0)`;
+	return `${n(`${base}.input`)} AS input, ${n(`${base}.output`)} AS output, ${n(`${base}.cacheRead`)} AS cacheRead, ` +
+		`${n(`${base}.cacheWrite`)} AS cacheWrite, ${n(`${base}.totalTokens`)} AS totalTokens, ${n(cost)} AS cost`;
+};
+
 export class SessionStore {
-	constructor(private db: Database) {}
+	private stmtGet: Statement;
+	private stmtTouch: Statement;
+	private stmtContext: Statement;
+	private stmtAppendMessage: Statement;
+	private stmtReplaceMessage: Statement;
+	private stmtDeleteLastMessage: Statement;
+	private stmtNextSeq: Statement;
+	private stmtMessagesTail: Statement;
+	private stmtMessagesPrevUser: Statement;
+	private stmtMessagesLead: Statement;
+	private stmtMessagesAll: Statement;
+	private stmtLastMessages: Statement;
+	private stmtLatestCompaction: Statement;
+	private stmtLatestAssistantText: Statement;
+	private stmtUsageMain: Statement;
+	private stmtUsageSummaries: Statement;
+	private stmtUsageSubagents: Statement;
+	private appendMessageTx: (sessionId: string, seq: number, message: AgentMessage) => void;
+	private replaceMessageTx: (sessionId: string, seq: number, message: AgentMessage) => void;
+
+	constructor(private db: Database) {
+		this.stmtGet = db.query("SELECT * FROM sessions WHERE id = $id");
+		this.stmtTouch = db.query("UPDATE sessions SET updated_at = $t WHERE id = $id");
+		this.stmtContext = db.query("SELECT data FROM session_contexts WHERE session_id = $id");
+		this.stmtAppendMessage = db.query("INSERT INTO messages (session_id, seq, role, data, created_at) VALUES ($sid, $seq, $role, $data, $t)");
+		this.stmtReplaceMessage = db.query("UPDATE messages SET role = $role, data = $data WHERE session_id = $sid AND seq = $seq");
+		this.stmtDeleteLastMessage = db.query("DELETE FROM messages WHERE session_id = $sid AND seq = (SELECT MAX(seq) FROM messages WHERE session_id = $sid)");
+		this.stmtNextSeq = db.query("SELECT COALESCE(MAX(seq), -1) + 1 AS n FROM messages WHERE session_id = $sid");
+		this.stmtMessagesTail = db.query("SELECT seq, role, data, created_at FROM messages WHERE session_id = $sid AND seq > $after AND seq < $before ORDER BY seq DESC LIMIT $n");
+		this.stmtMessagesPrevUser = db.query("SELECT MAX(seq) AS s FROM messages WHERE session_id = $sid AND role = 'user' AND seq > $after AND seq < $first");
+		this.stmtMessagesLead = db.query("SELECT seq, role, data, created_at FROM messages WHERE session_id = $sid AND seq >= $from AND seq < $first ORDER BY seq");
+		this.stmtMessagesAll = db.query("SELECT seq, role, data, created_at FROM messages WHERE session_id = $sid AND seq > $after ORDER BY seq LIMIT $limit");
+		this.stmtLastMessages = db.query("SELECT seq, role, data, created_at FROM messages WHERE session_id = $sid ORDER BY seq DESC LIMIT $n");
+		this.stmtLatestCompaction = db.query("SELECT upto_seq, summary, tokens_before, created_at FROM session_compactions WHERE session_id = $sid ORDER BY id DESC LIMIT 1");
+		this.stmtLatestAssistantText = db.query("SELECT data FROM messages WHERE session_id = $sid AND role = 'assistant' ORDER BY seq DESC LIMIT 6");
+		this.stmtUsageMain = db.query(
+			`SELECT COUNT(*) AS turns, ${usageSums("data", "$.usage", "$.usage.cost.total")}
+			 FROM messages WHERE session_id = $sid AND role = 'assistant' AND json_type(data, '$.usage') = 'object'`,
+		);
+		this.stmtUsageSummaries = db.query(
+			`SELECT ${usageSums("usage", "$", "$.cost")}
+			 FROM session_compactions WHERE session_id = $sid AND usage IS NOT NULL`,
+		);
+		this.stmtUsageSubagents = db.query(
+			`SELECT ${usageSums("data", "$.details.usage", "$.details.usage.cost")}
+			 FROM messages WHERE session_id = $sid AND role = 'toolResult' AND instr(data, '"delegate"') > 0 AND json_extract(data, '$.toolName') = 'delegate' AND json_type(data, '$.details.usage') = 'object'`,
+		);
+		this.appendMessageTx = db.transaction((sessionId: string, seq: number, message: AgentMessage) => {
+			const t = Date.now();
+			this.stmtAppendMessage.run({ sid: sessionId, seq, role: message.role, data: JSON.stringify(message), t });
+			this.stmtTouch.run({ id: sessionId, t });
+		});
+		this.replaceMessageTx = db.transaction((sessionId: string, seq: number, message: AgentMessage) => {
+			this.stmtReplaceMessage.run({ sid: sessionId, seq, role: message.role, data: JSON.stringify(message) });
+			this.stmtTouch.run({ id: sessionId, t: Date.now() });
+		});
+	}
 
 	create(r: SessionRecord): void {
 		this.db
@@ -142,7 +204,7 @@ export class SessionStore {
 	}
 
 	get(id: string): SessionRecord | undefined {
-		const row = this.db.query("SELECT * FROM sessions WHERE id = $id").get({ id }) as SessionRow | null;
+		const row = this.stmtGet.get({ id }) as SessionRow | null;
 		return row ? toRecord(row) : undefined;
 	}
 
@@ -265,7 +327,7 @@ export class SessionStore {
 	}
 
 	touch(id: string): void {
-		this.db.query("UPDATE sessions SET updated_at = $t WHERE id = $id").run({ id, t: Date.now() });
+		this.stmtTouch.run({ id, t: Date.now() });
 	}
 
 	/** Cascade-deletes messages, contexts, compactions, events, and all other per-session rows via foreign keys. */
@@ -274,7 +336,7 @@ export class SessionStore {
 	}
 
 	context(id: string): ContextSnapshot | undefined {
-		const row = this.db.query("SELECT data FROM session_contexts WHERE session_id = $id").get({ id }) as { data: string } | null;
+		const row = this.stmtContext.get({ id }) as { data: string } | null;
 		return row ? JSON.parse(row.data) : undefined;
 	}
 
@@ -320,29 +382,19 @@ export class SessionStore {
 	// ── messages ────────────────────────────────────────────────────────────
 
 	appendMessage(sessionId: string, seq: number, message: AgentMessage): void {
-		this.db
-			.query("INSERT INTO messages (session_id, seq, role, data, created_at) VALUES ($sid, $seq, $role, $data, $t)")
-			.run({ sid: sessionId, seq, role: message.role, data: JSON.stringify(message), t: Date.now() });
-		this.touch(sessionId);
+		this.appendMessageTx(sessionId, seq, message);
 	}
 
 	replaceMessage(sessionId: string, seq: number, message: AgentMessage): void {
-		this.db
-			.query("UPDATE messages SET role = $role, data = $data WHERE session_id = $sid AND seq = $seq")
-			.run({ sid: sessionId, seq, role: message.role, data: JSON.stringify(message) });
-		this.touch(sessionId);
+		this.replaceMessageTx(sessionId, seq, message);
 	}
 
 	deleteLastMessage(sessionId: string): void {
-		this.db
-			.query("DELETE FROM messages WHERE session_id = $sid AND seq = (SELECT MAX(seq) FROM messages WHERE session_id = $sid)")
-			.run({ sid: sessionId });
+		this.stmtDeleteLastMessage.run({ sid: sessionId });
 	}
 
 	nextSeq(sessionId: string): number {
-		const row = this.db
-			.query("SELECT COALESCE(MAX(seq), -1) + 1 AS n FROM messages WHERE session_id = $sid")
-			.get({ sid: sessionId }) as { n: number };
+		const row = this.stmtNextSeq.get({ sid: sessionId }) as { n: number };
 		return row.n;
 	}
 
@@ -350,27 +402,21 @@ export class SessionStore {
 		// `tail`: only the newest N (with seq below `before`), oldest first. Opening a long conversation needs just the end of it.
 		if (opts.tail) {
 			const after = opts.after ?? -1;
-			const rows = this.db
-				.query("SELECT seq, role, data, created_at FROM messages WHERE session_id = $sid AND seq > $after AND seq < $before ORDER BY seq DESC LIMIT $n")
+			const rows = this.stmtMessagesTail
 				.all({ sid: sessionId, after, before: opts.before ?? Number.MAX_SAFE_INTEGER, n: opts.tail })
 				.reverse() as MessageRow[];
 			// `wholeTurn`: a page that starts inside a reply reaches back to the prompt it answers, so the client never
 			// shows (and totals) half a reply that grows once the next page arrives. Capped for runaway agent loops.
 			const first = rows[0];
 			if (opts.wholeTurn && first && first.role !== "user" && first.seq > after + 1) {
-				const prompt = this.db
-					.query("SELECT MAX(seq) AS s FROM messages WHERE session_id = $sid AND role = 'user' AND seq > $after AND seq < $first")
-					.get({ sid: sessionId, after, first: first.seq }) as { s: number | null };
+				const prompt = this.stmtMessagesPrevUser.get({ sid: sessionId, after, first: first.seq }) as { s: number | null };
 				const from = Math.max(prompt.s ?? after + 1, first.seq - TURN_REACH_MAX);
-				const lead = this.db
-					.query("SELECT seq, role, data, created_at FROM messages WHERE session_id = $sid AND seq >= $from AND seq < $first ORDER BY seq")
-					.all({ sid: sessionId, from, first: first.seq }) as MessageRow[];
+				const lead = this.stmtMessagesLead.all({ sid: sessionId, from, first: first.seq }) as MessageRow[];
 				rows.unshift(...lead);
 			}
 			return rows.map(toStored);
 		}
-		return this.db
-			.query("SELECT seq, role, data, created_at FROM messages WHERE session_id = $sid AND seq > $after ORDER BY seq LIMIT $limit")
+		return this.stmtMessagesAll
 			.all({ sid: sessionId, after: opts.after ?? -1, limit: opts.limit ?? -1 })
 			.map((r) => toStored(r as MessageRow));
 	}
@@ -385,8 +431,7 @@ export class SessionStore {
 
 	/** The newest `n` messages, oldest first (reads only those rows, not the whole transcript). */
 	lastMessages(sessionId: string, n: number): StoredMessage[] {
-		return this.db
-			.query("SELECT seq, role, data, created_at FROM messages WHERE session_id = $sid ORDER BY seq DESC LIMIT $n")
+		return this.stmtLastMessages
 			.all({ sid: sessionId, n })
 			.reverse()
 			.map((r) => toStored(r as MessageRow));
@@ -395,7 +440,7 @@ export class SessionStore {
 	// ── compaction ──────────────────────────────────────────────────────────
 
 	latestCompaction(sessionId: string): CompactionRecord | undefined {
-		const row = this.db.query("SELECT upto_seq, summary, tokens_before, created_at FROM session_compactions WHERE session_id = $sid ORDER BY id DESC LIMIT 1").get({ sid: sessionId }) as
+		const row = this.stmtLatestCompaction.get({ sid: sessionId }) as
 			{ upto_seq: number; summary: string; tokens_before: number; created_at: number } | null;
 		return row ? { uptoSeq: row.upto_seq, summary: row.summary, tokensBefore: row.tokens_before, createdAt: row.created_at } : undefined;
 	}
@@ -413,7 +458,7 @@ export class SessionStore {
 
 	/** Text of the newest assistant message that has any (a turn that ends in a tool call has none). */
 	latestAssistantText(sessionId: string): string {
-		const rows = this.db.query("SELECT data FROM messages WHERE session_id = $sid AND role = 'assistant' ORDER BY seq DESC LIMIT 6").all({ sid: sessionId }) as { data: string }[];
+		const rows = this.stmtLatestAssistantText.all({ sid: sessionId }) as { data: string }[];
 		for (const r of rows) {
 			try {
 				const m = JSON.parse(r.data) as { content?: { type: string; text?: string }[] };
@@ -447,29 +492,13 @@ export class SessionStore {
 	 * run and on each session fetch, and a long transcript made it the hottest path on the server.
 	 */
 	usage(sessionId: string): UsageTotals {
-		// `base` is the JSON path of the usage object; `cost` the path of the cost number inside it.
-		const sums = (col: string, base: string, cost: string) => {
-			const n = (path: string) => `COALESCE(SUM(COALESCE(json_extract(${col}, '${path}'), 0)), 0)`;
-			return `${n(`${base}.input`)} AS input, ${n(`${base}.output`)} AS output, ${n(`${base}.cacheRead`)} AS cacheRead, ` +
-				`${n(`${base}.cacheWrite`)} AS cacheWrite, ${n(`${base}.totalTokens`)} AS totalTokens, ${n(cost)} AS cost`;
-		};
 		type Row = Omit<UsageTotals, "turns">;
-		const run = (sql: string) => this.db.query(sql).get({ sid: sessionId }) as Row & { turns?: number };
-
-		const main = run(
-			`SELECT COUNT(*) AS turns, ${sums("data", "$.usage", "$.usage.cost.total")}
-			 FROM messages WHERE session_id = $sid AND role = 'assistant' AND json_type(data, '$.usage') = 'object'`,
-		);
+		const params = { sid: sessionId };
+		const main = this.stmtUsageMain.get(params) as Row & { turns?: number };
 		// Summaries are model calls too.
-		const summaries = run(
-			`SELECT ${sums("usage", "$", "$.cost")}
-			 FROM session_compactions WHERE session_id = $sid AND usage IS NOT NULL`,
-		);
+		const summaries = this.stmtUsageSummaries.get(params) as Row;
 		// Subagents of `delegate` are model calls too: their totals ride on the tool result's details.
-		const subagents = run(
-			`SELECT ${sums("data", "$.details.usage", "$.details.usage.cost")}
-			 FROM messages WHERE session_id = $sid AND role = 'toolResult' AND json_extract(data, '$.toolName') = 'delegate' AND json_type(data, '$.details.usage') = 'object'`,
-		);
+		const subagents = this.stmtUsageSubagents.get(params) as Row;
 		return {
 			input: main.input + summaries.input + subagents.input,
 			output: main.output + summaries.output + subagents.output,

@@ -29,6 +29,8 @@ export const EXPIRE_AFTER_MS = DAY_MS;
 export const MAX_FAILS = 5;
 /** The longest delay setTimeout accepts (2^31 - 1 ms, about 24.8 days); a later task re-arms when this fires. */
 export const MAX_TIMER_MS = 2_147_483_647;
+/** Minimum interval between automatic history prunes triggered from read-only `list()` calls. */
+export const PRUNE_INTERVAL_MS = 60_000;
 const RETRY_FLOOR_MS = 1000;
 
 export const ScheduleStatus = Type.Union([
@@ -177,6 +179,8 @@ export class Scheduler {
 	private ticking = false;
 	/** Tasks being sent right now: a second run of the same task is refused until it is through. */
 	private inflight = new Set<string>();
+	/** Last timestamp (from `this.now()`) when `prune()` executed; throttles write locks on `list()`. */
+	private lastPruneAt = -Infinity;
 	private now: () => number;
 	private timers: Timers;
 	private onChange: NonNullable<SchedulerOptions["onChange"]>;
@@ -206,11 +210,16 @@ export class Scheduler {
 		return r;
 	}
 
-	list(sessionId?: string): ScheduleRecord[] {
-		this.prune();
+	list(sessionId?: string, opts?: { forcePrune?: boolean }): ScheduleRecord[] {
+		if (opts?.forcePrune || this.now() - this.lastPruneAt >= PRUNE_INTERVAL_MS) this.prune();
+		const before = this.now() - HISTORY_KEEP_MS;
 		const rows = (sessionId
-			? this.db.query("SELECT * FROM scheduled_tasks WHERE session_id = $sessionId ORDER BY created_at, id").all({ sessionId })
-			: this.db.query("SELECT * FROM scheduled_tasks ORDER BY created_at, id").all()) as Row[];
+			? this.db
+				.query(`SELECT * FROM scheduled_tasks WHERE session_id = $sessionId AND NOT (${FINISHED} AND COALESCE(last_run_at, updated_at) < $before) ORDER BY created_at, id`)
+				.all({ sessionId, before })
+			: this.db
+				.query(`SELECT * FROM scheduled_tasks WHERE NOT (${FINISHED} AND COALESCE(last_run_at, updated_at) < $before) ORDER BY created_at, id`)
+				.all({ before })) as Row[];
 		return rows.map(toRecord);
 	}
 
@@ -309,7 +318,9 @@ export class Scheduler {
 
 	/** Deletes finished one-time tasks whose last run is more than HISTORY_KEEP_MS ago. Returns how many went. */
 	prune(): number {
-		const n = this.db.query(`DELETE FROM scheduled_tasks WHERE ${FINISHED} AND COALESCE(last_run_at, updated_at) < $before`).run({ before: this.now() - HISTORY_KEEP_MS }).changes;
+		const now = this.now();
+		this.lastPruneAt = now;
+		const n = this.db.query(`DELETE FROM scheduled_tasks WHERE ${FINISHED} AND COALESCE(last_run_at, updated_at) < $before`).run({ before: now - HISTORY_KEEP_MS }).changes;
 		if (n) this.log(`scheduler: deleted ${n} finished task(s) older than ${HISTORY_KEEP_MS / DAY_MS} days`);
 		return n;
 	}
