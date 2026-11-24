@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { Api } from "../../lib/api";
+	import { recentreOn } from "../../lib/dialog";
 	import { t } from "../../lib/i18n";
 	import type { ServiceTier } from "../../lib/types";
 	import { tierLabel } from "../../lib/service-tier";
@@ -35,7 +36,7 @@
 
 <!-- a proxy model that follows a catalog entry without speeds has nothing to choose: no row with only auto and standard -->
 {#if onchange && (lookup || proxy || value) && !(viaProxy && !own && loaded && !tiers.length && !value)}
-	<div class="tier-row">
+	<div class="tier-row" use:recentreOn={`${loaded}:${choices.join(",")}`}>
 		<div class="section-label">{label}</div>
 		<div class="stack">
 		<Ladder {label} value={value ?? "auto"}
@@ -53,6 +54,8 @@
 	/* label, ladder, then its hint 4px under it: the same stack as the effort ladders on the model page */
 	.tier-row { display: grid; gap: 8px; }
 	.stack { display: grid; gap: 4px; }
+	/* whole-pixel line box: the body's 1.55 left the modal height fractional (547.38px) */
+	.hint { line-height: 16px; }
 	/* a <p> here sits in a flex column with its own gap: the browser's 1em margins doubled the space around it */
 	.note { margin: 0; }
 </style>

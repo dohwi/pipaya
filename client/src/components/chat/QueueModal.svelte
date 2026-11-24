@@ -185,6 +185,7 @@
 		padding: 0 4px 0 12px;
 		border-radius: var(--radius);
 		font-size: var(--fs-sm);
+		line-height: 20px;
 	}
 	ul:focus {
 		outline: none;

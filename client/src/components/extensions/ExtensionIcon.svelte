@@ -19,7 +19,7 @@
 </svg>
 
 <style>
-	.icon { flex: none; display: inline-block; max-width: 100%; overflow: hidden; color: var(--text-dim); vertical-align: middle; }
+	.icon { flex: none; display: block; max-width: 100%; overflow: hidden; color: var(--text-dim); }
 	.size-small { width: 14px; height: 14px; }
 	.size-medium { width: 20px; height: 20px; }
 	.size-large { width: 32px; height: 32px; }

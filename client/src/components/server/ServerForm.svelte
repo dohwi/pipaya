@@ -297,6 +297,7 @@
 		border-radius: var(--radius-control);
 		color: var(--text-dim);
 		font-size: var(--fs-sm);
+		line-height: 20px;
 	}
 	@media (hover: hover) {
 		.back:hover {

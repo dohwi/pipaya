@@ -150,6 +150,7 @@
 		gap: 8px;
 		width: 232px;
 		font-size: var(--fs-xs);
+		line-height: 16px;
 		color: var(--text-dim);
 	}
 	.timer.low {

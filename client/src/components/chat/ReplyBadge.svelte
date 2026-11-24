@@ -28,9 +28,10 @@
 		border-radius: var(--radius-pill);
 		background: var(--accent-soft);
 		font-size: var(--fs-xs);
+		line-height: 16px;
 		color: var(--text-dim);
 	}
-	.reply-badge :global(svg) { width: 13px; height: 13px; flex: none; stroke-width: 1.8; }
+	.reply-badge :global(svg) { width: 14px; height: 14px; flex: none; stroke-width: 1.8; }
 	.rwho { font-weight: 600; color: var(--text); flex: none; }
 	.rtext { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 	.rx { flex: none; display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; padding: 0; color: inherit; }

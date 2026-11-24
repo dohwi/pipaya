@@ -126,10 +126,10 @@
 		--notice-tint: var(--danger);
 	}
 	.notice > :global(svg) {
-		width: 17px;
-		height: 17px;
-		/* 17px icon centred on the 20px first line: (20 - 17) / 2 = 1.5px */
-		margin-top: 1.5px;
+		width: 16px;
+		height: 16px;
+		/* 16px icon centred on the 20px first line: (20 - 16) / 2 = 2px */
+		margin-top: 2px;
 		flex: none;
 		stroke-width: 1.8;
 	}

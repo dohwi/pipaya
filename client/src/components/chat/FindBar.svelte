@@ -190,8 +190,8 @@
 		box-shadow: var(--shadow-overlay);
 	}
 	.find :global(svg) {
-		width: 15px;
-		height: 15px;
+		width: 16px;
+		height: 16px;
 		flex: none;
 		stroke: currentColor;
 		fill: none;
@@ -208,6 +208,7 @@
 		color: var(--text);
 		font: inherit;
 		font-size: var(--fs-sm);
+		line-height: 20px;
 		padding: 4px 4px;
 	}
 	/* touch: 16px, or iOS zooms the page in when the field takes focus */
