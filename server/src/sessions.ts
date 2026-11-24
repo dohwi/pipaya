@@ -594,6 +594,17 @@ export class SessionManager {
 		return this.live.get(id)?.running ?? false;
 	}
 
+	/** True when the session has no messages, no saved context, no goal or scheduled tasks, and no active/pending run. */
+	isEmpty(id: string): boolean {
+		this.get(id);
+		if (this.store.nextSeq(id) > 0 || this.store.context(id)) return false;
+		if (this.goals?.list(id).length) return false;
+		if (this.scheduler?.list(id).length) return false;
+		const live = this.live.get(id);
+		if (live && (live.running || live.pendingPrompt || live.compacting || live.deferred?.length)) return false;
+		return true;
+	}
+
 	delete(id: string): void {
 		this.get(id);
 		const live = this.live.get(id);

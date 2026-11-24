@@ -648,6 +648,9 @@ export class Api {
 		return this.req<TemplateList>("DELETE", `/templates/${encodeURIComponent(name)}?${q}`);
 	};
 	patchSession = (id: string, patch: PatchSessionInput) => this.req<Session>("PATCH", `/sessions/${id}`, patch);
+	/** Close a session; with `deleteIfEmpty` (default), an empty session is permanently deleted (returns `undefined`). */
+	closeSession = (id: string, deleteIfEmpty = true) =>
+		this.req<Session | undefined>("PATCH", `/sessions/${id}${deleteIfEmpty ? "?deleteIfEmpty=true" : ""}`, { closed: true });
 	/** The working trees of the session's repository it may be moved to (`patchSession` workDir), its own first. */
 	sessionWorkdirs = (id: string) => this.req<{ workdirs: { path: string; branch: string | null; home: boolean; current: boolean }[] }>("GET", `/sessions/${encodeURIComponent(id)}/workdirs`);
 	deleteSession = (id: string) => this.req<void>("DELETE", `/sessions/${id}`);

@@ -516,6 +516,49 @@ describe("sessions", () => {
 		await untilIdle(id);
 	});
 
+	test("closing with deleteIfEmpty removes only truly empty sessions", async () => {
+		const ids = (r: any) => r.json.sessions.map((s: any) => s.id);
+
+		// 1. Empty session + deleteIfEmpty=true + closed=true -> 204 deleted
+		const emptyId = (await api("POST", "/sessions", {})).json.id as string;
+		const del = await api("PATCH", `/sessions/${emptyId}?deleteIfEmpty=true`, { closed: true });
+		expect(del.status).toBe(204);
+		expect((await api("GET", `/sessions/${emptyId}`)).status).toBe(404);
+		expect(ids(await api("GET", "/sessions?closed=true&limit=200"))).not.toContain(emptyId);
+		expect(ids(await api("GET", "/sessions?limit=200"))).not.toContain(emptyId);
+
+		// 2. Empty session + deleteIfEmpty=true WITHOUT closed=true -> kept
+		const renamedId = (await api("POST", "/sessions", {})).json.id as string;
+		const ren = await api("PATCH", `/sessions/${renamedId}?deleteIfEmpty=true`, { title: "kept" });
+		expect(ren.status).toBe(200);
+		expect(ren.json.title).toBe("kept");
+		expect(ren.json.closed).toBe(false);
+
+		// 3. Empty session WITHOUT deleteIfEmpty -> stays closed (default REST contract)
+		const keptEmpty = await api("PATCH", `/sessions/${renamedId}`, { closed: true });
+		expect(keptEmpty.status).toBe(200);
+		expect(keptEmpty.json.closed).toBe(true);
+		expect(ids(await api("GET", "/sessions?closed=true&limit=200"))).toContain(renamedId);
+
+		// 4. Non-empty session + deleteIfEmpty=true -> closed, not deleted
+		const usedId = (await api("POST", "/sessions", {})).json.id as string;
+		await api("POST", `/sessions/${usedId}/messages`, { text: "hello" });
+		await untilIdle(usedId);
+		const closedUsed = await api("PATCH", `/sessions/${usedId}?deleteIfEmpty=true`, { closed: true });
+		expect(closedUsed.status).toBe(200);
+		expect(closedUsed.json.closed).toBe(true);
+		expect(ids(await api("GET", "/sessions?closed=true&limit=200"))).toContain(usedId);
+
+		// 5. Empty session with a scheduled task + deleteIfEmpty=true -> closed, not deleted
+		const schedId = (await api("POST", "/sessions", {})).json.id as string;
+		expect((await api("POST", "/schedules", { sessionId: schedId, prompt: "ping", kind: "once", runAt: Date.now() + 60 * 60_000 })).status).toBe(201);
+		const closedSched = await api("PATCH", `/sessions/${schedId}?deleteIfEmpty=true`, { closed: true });
+		expect(closedSched.status).toBe(200);
+		expect(closedSched.json.closed).toBe(true);
+
+		// 6. Missing session -> 404
+		expect((await api("PATCH", "/sessions/does-not-exist?deleteIfEmpty=true", { closed: true })).status).toBe(404);
+	});
 
 	test("closing a running session aborts the run", async () => {
 		const id = (await api("POST", "/sessions", {})).json.id as string;
