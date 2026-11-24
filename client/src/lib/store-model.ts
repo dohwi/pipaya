@@ -2,6 +2,7 @@
 import { K, read } from "./persist";
 import { snapshotSettingsToDurable } from "./durable-storage";
 import { THINKING_LEVELS, type DefaultModelSelection, type ServiceTier, type ThinkingLevel } from "./types";
+import type { Rect } from "./layout";
 
 export interface PaletteItem {
   id: string;
@@ -13,12 +14,14 @@ export interface PaletteItem {
   tag?: string;
   /** Tree depth (indentation). */
   depth?: number;
+  /** Optional normalised (0..1) pane boxes drawn as a miniature layout preview beside the title. */
+  preview?: Rect[];
   current?: boolean;
   dim?: boolean;
 }
 /** A searchable list shown over the chat; opened by commands such as /resume and /tree. */
 export interface PaletteSpec {
-  closeShortcut?: "findChat" | "workdir";
+  closeShortcut?: "findChat" | "workdir" | "chooseLayout";
   title: string;
   items: PaletteItem[];
   empty: string;

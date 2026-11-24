@@ -27,6 +27,8 @@
 	import { copyText } from "../../lib/clipboard";
 	import { verticalFade } from "../../lib/edge-fade";
 	import { chooseGroup } from "../../lib/group-picker";
+	import { chooseGroupLayout } from "../../lib/layout-picker";
+	import { nextArrangedPreset } from "../../lib/layout-presets";
 	import { chooseWorkdir } from "../../lib/workdir-picker";
 	import type { Point } from "../../lib/press-menu";
 	import { drag } from "../../lib/dnd.svelte";
@@ -324,6 +326,7 @@
 	/** What the entries of a row's "more" menu do, scoped to that row's server so background servers work without switching. */
 	const rowActionsFor = (n: Node): RowActions => {
 		const sid = n.server.id;
+		const arrangeShortcut = app.prefs.bindings.arrangePanes ? formatCombo(app.prefs.bindings.arrangePanes) : undefined;
 		return {
 			renameTab: (id, title) => startRename(id, title, sid),
 			renameGroup: (g) => startGroupRename(g as Group, sid),
@@ -331,6 +334,14 @@
 			closeSession: (id) => void app.close(id, false, sid),
 			closeTerminal: (id) => void app.closeTerminal(id, sid),
 			dissolveGroup: (id) => void app.deleteGroup(id, sid),
+			arrangeGroup: (id) => void app.arrangeGroup(id, undefined, sid),
+			chooseLayout: (g) => chooseGroupLayout(g.id, sid),
+			nextLayoutHint: (id) => {
+				const g = app.groupById(id, sid);
+				const next = g ? nextArrangedPreset(g.layout) : null;
+				return next ? { label: next.label, recommended: next.recommended } : undefined;
+			},
+			arrangeShortcut,
 			leaveGroup: (id) => void app.leaveGroup(id, sid),
 			togglePin: (id) => app.sidebar.toggleTabPinned(sid, id),
 			isPinned: (id) => app.sidebar.isTabPinned(sid, id),

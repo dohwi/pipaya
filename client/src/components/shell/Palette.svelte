@@ -123,6 +123,19 @@
 					<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
 					<div class="hit" onclick={() => choose(i)}>
 						{#if it.depth}<span class="branch" aria-hidden="true"></span>{/if}
+						{#if it.preview?.length}
+							<svg class="lprev" viewBox="0 0 28 20" aria-hidden="true">
+								{#each it.preview as b, bi (bi)}
+									<rect
+										x={1.5 + b.x * 25 + 0.75}
+										y={1.5 + b.y * 17 + 0.75}
+										width={Math.max(1.2, b.w * 25 - 1.5)}
+										height={Math.max(1.2, b.h * 17 - 1.5)}
+										rx="1.2"
+									/>
+								{/each}
+							</svg>
+						{/if}
 						<span class="main">
 							<span class="t">{it.title}</span>
 							{#if it.sub || it.when}<span class="s">{#if it.sub}<span class="mono">{it.sub}{#if it.when}{" · "}{/if}</span>{/if}{#if it.when}<time datetime={new Date(it.when).toISOString()} title={fullTime(it.when)}>{livePast(it.when, { time: false })}</time>{/if}</span>{/if}
@@ -334,6 +347,20 @@
 		flex: none;
 		display: grid;
 		color: var(--text-dim);
+	}
+	.lprev {
+		display: block;
+		flex: none;
+		width: 28px;
+		height: 20px;
+	}
+	.lprev rect {
+		fill: var(--bg-hover);
+		stroke: var(--text-faint);
+		stroke-width: 1.1;
+	}
+	.it.on .lprev rect {
+		stroke: var(--text-dim);
 	}
 	.foot {
 		display: flex;

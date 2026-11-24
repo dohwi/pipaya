@@ -2,6 +2,7 @@ import { errorText } from "./api";
 import { app } from "./store.svelte";
 import { isTauri } from "./tauri";
 import { findChat, runCommand } from "./commands";
+import { chooseGroupLayout } from "./layout-picker";
 import { paneToward, panesOf, type Edge } from "./layout";
 import { connectionState, orderServers, unreachable } from "./sidebar-model";
 import { attentionTarget, stepRowTarget, stepWorkspaceTarget, type StepTarget } from "./step-session";
@@ -275,6 +276,18 @@ function toggleFull() {
   app.toggleFull(g.id);
 }
 
+function arrangePanes() {
+  const g = app.activeGroup;
+  if (!g) return void app.toast(t("그룹에 속한 대화가 아닙니다"), "error");
+  void app.arrangeGroup(g.id);
+}
+
+function chooseLayout() {
+  const g = app.activeGroup;
+  if (!g) return void app.toast(t("그룹에 속한 대화가 아닙니다"), "error");
+  chooseGroupLayout(g.id);
+}
+
 /** The focused pane's scroll area (each pane has its own). */
 function scroller(): HTMLElement | null {
   const pane = app.activeId ? document.querySelector(`[data-pane="${CSS.escape(app.activeId)}"]`) : null;
@@ -351,6 +364,8 @@ const RUN: Record<ActionId, () => void | Promise<void>> = {
   splitTerminalRight: () => app.splitTerminal("right"),
   zoomPane,
   toggleFull,
+  arrangePanes,
+  chooseLayout,
   workdir: () => runCommand("cd"),
   skills: () => app.openSkills(),
   toggleSound: () => app.prefs.setSound(!app.prefs.soundOn),

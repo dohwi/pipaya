@@ -24,6 +24,7 @@ import { sidebarDirs, tabOf, tabPanes, workDir, type DirBlock, type Tab } from "
 import { flattenBlocks, projectBlocks, projectKey, type SidebarBlock } from "./projects";
 import { dirKey } from "./sidebar-model";
 import { MAX_PANES, append, has as layoutHas, pair, panesOf, place, remove as layoutRemove, replaceSession, worthKeeping, type Layout, type Zone } from "./layout";
+import { findPreset, nextArrangedPreset, type LayoutPreset, type LayoutPresetId } from "./layout-presets";
 import { extensions } from "./extensions/host.svelte";
 import { extensionUpdates } from "./extension-updates.svelte";
 import { notifications } from "./notifications";
@@ -692,6 +693,10 @@ class AppStore {
 
   groupOf(sessionId: string): Group | undefined {
     return this.groups.find((g) => layoutHas(g.layout, sessionId));
+  }
+
+  groupById(id: string, serverId?: string | null): Group | undefined {
+    return this.linkOf(serverId)?.data.groups.find((g) => g.id === id);
   }
 
   /** The model and thinking level shown in the UI: the session's, or the draft's for a new chat. */
@@ -1679,6 +1684,11 @@ class AppStore {
     this.sidebar.forgetTab(serverId, id);
     this.dropFull(id);
     delete this.lastPane[id];
+    const key = `${serverId}\u0000${id}`;
+    const queued = this.layoutSavePending.get(key);
+    if (queued) for (const r of queued.resolvers) r(false);
+    this.layoutSavePending.delete(key);
+    this.layoutSaveBusy.delete(key);
   }
 
   /** Drop sidebar state of a closed terminal (terminals cannot be resumed). */
@@ -2563,25 +2573,91 @@ class AppStore {
 
   /* ---------- groups ---------- */
 
-  /** Show a new layout at once, then save it; the server's answer (or a refetch on failure) is what stays. */
-  async saveLayout(id: string, layout: Layout, persist = true, serverId?: string | null): Promise<void> {
+  /** Serialize layout PATCHes per group and coalesce rapid edits so the server always ends on the latest layout. */
+  private layoutSaveBusy = new Set<string>();
+  private layoutSavePending = new Map<string, { layout: Layout; resolvers: ((ok: boolean) => void)[] }>();
+
+  /** Show a new layout at once, then save it; rapid persists are serialized so the server keeps the latest layout. */
+  async saveLayout(id: string, layout: Layout, persist = true, serverId?: string | null): Promise<boolean> {
     const link = this.linkOf(serverId);
-    if (!link) return;
+    if (!link) return false;
     const sid = link.id;
     const i = link.data.groups.findIndex((g) => g.id === id);
-    if (i < 0) return;
+    if (i < 0) return false;
     link.data.groups[i] = { ...link.data.groups[i]!, layout };
-    if (!persist) return;
-    try {
-      const g = await link.api.patchGroup(id, { layout });
-      if (this.links[sid] !== link) return;
-      const j = link.data.groups.findIndex((x) => x.id === id);
-      if (j >= 0) link.data.groups[j] = g;
-    } catch (e) {
-      this.probeIfNetwork(link, e);
-      this.fail(e, t("그룹을 저장하지 못했습니다"));
-      void this.refreshGroups(sid);
+    if (!persist) return true;
+    const key = `${sid}\u0000${id}`;
+    if (this.layoutSaveBusy.has(key)) {
+      return new Promise<boolean>((resolve) => {
+        const queued = this.layoutSavePending.get(key);
+        if (queued) {
+          queued.layout = layout;
+          queued.resolvers.push(resolve);
+        } else {
+          this.layoutSavePending.set(key, { layout, resolvers: [resolve] });
+        }
+      });
     }
+    this.layoutSaveBusy.add(key);
+    let current = layout;
+    let ok = true;
+    let batchResolvers: ((v: boolean) => void)[] = [];
+    try {
+      while (true) {
+        try {
+          const g = await link.api.patchGroup(id, { layout: current });
+          ok = true;
+          if (this.links[sid] === link && !this.layoutSavePending.has(key)) {
+            const j = link.data.groups.findIndex((x) => x.id === id);
+            if (j >= 0) link.data.groups[j] = g;
+          }
+        } catch (e) {
+          ok = false;
+          if (!this.layoutSavePending.has(key)) {
+            this.probeIfNetwork(link, e);
+            this.fail(e, t("그룹을 저장하지 못했습니다"));
+            void this.refreshGroups(sid);
+          }
+        }
+        for (const r of batchResolvers) r(ok);
+        batchResolvers = [];
+        const next = this.layoutSavePending.get(key);
+        if (!next || this.links[sid] !== link) {
+          this.layoutSavePending.delete(key);
+          if (next) for (const r of next.resolvers) r(false);
+          break;
+        }
+        this.layoutSavePending.delete(key);
+        current = next.layout;
+        batchResolvers = next.resolvers;
+      }
+      return ok;
+    } finally {
+      this.layoutSaveBusy.delete(key);
+    }
+  }
+
+  /**
+   * Arrange a split group's panes into a clean preset layout.
+   * When `presetId` is omitted, applies the recommended layout for the pane count (or cycles to the next preset if already arranged).
+   */
+  async arrangeGroup(id: string, presetId?: LayoutPresetId, serverId?: string | null): Promise<LayoutPreset | null> {
+    const link = this.linkOf(serverId);
+    if (!link) return null;
+    const g = link.data.groups.find((x) => x.id === id);
+    if (!g) return null;
+    const preset = presetId ? findPreset(g.layout, presetId) : nextArrangedPreset(g.layout);
+    if (!preset) {
+      this.toast(t("적용할 레이아웃이 없습니다"), "error");
+      return null;
+    }
+    if (link.id === this.serverId) {
+      if (this.zoomId && layoutHas(g.layout, this.zoomId)) this.zoomId = null;
+      if (this.isFull(g.id)) this.toggleFull(g.id);
+    }
+    const saved = await this.saveLayout(g.id, preset.layout, true, serverId);
+    if (saved) this.toast(t("{name} 레이아웃을 적용했습니다", { name: preset.label }));
+    return saved ? preset : null;
   }
 
   async refreshGroups(serverId?: string | null): Promise<void> {
