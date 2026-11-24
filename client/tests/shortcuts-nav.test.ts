@@ -184,6 +184,8 @@ describe("shortcut catalogue", () => {
 		expect(DEFAULT_BINDINGS.splitDown).toBe("Mod+B+Minus");
 		expect(DEFAULT_BINDINGS.splitTerminalRight).toBe("Mod+Alt+Backslash");
 		expect(DEFAULT_BINDINGS.splitTerminal).toBe("Mod+Alt+Minus");
+		expect(DEFAULT_BINDINGS.arrangePanes).toBe("Mod+B+Space");
+		expect(DEFAULT_BINDINGS.chooseLayout).toBe("");
 	});
 
 	test("history navigation binds Mod+[ and Mod+] without colliding with tab/workspace/row stepping", () => {

@@ -70,7 +70,7 @@ export const newKey = (key: string) => `new${SEP}${key}`;
 import { t } from "./i18n";
 
 /** The icons a row's menu uses (a subset of the app's icon names, so no component import is needed here). */
-export type MenuIcon = "clock" | "columns" | "pencil" | "x" | "unlink" | "chat" | "terminal" | "copy" | "chevron-down" | "chevron-right" | "pin" | "repo" | "fork";
+export type MenuIcon = "clock" | "columns" | "group-open" | "pencil" | "x" | "unlink" | "chat" | "terminal" | "copy" | "chevron-down" | "chevron-right" | "pin" | "repo" | "fork";
 
 /** One entry of a row's "more" menu. */
 export interface MenuEntry {
@@ -96,6 +96,14 @@ export interface RowActions {
 	closeTerminal(id: string): void;
 	/** Dissolve a split tab. Only the sidebar passes it, and only the split tab's own row offers it: not its panes, the tab bar, the chips or the pane bars. */
 	dissolveGroup?(id: string): void;
+	/** Auto-arrange a split tab's panes into the recommended layout (or cycle to the next preset). */
+	arrangeGroup?(id: string): void;
+	/** Open the layout preset list for a split tab. */
+	chooseLayout?(group: { id: string; name: string }): void;
+	/** Next layout that auto-arrange will apply (shown in the auto-arrange tooltip). */
+	nextLayoutHint?(id: string): { label: string; recommended: boolean } | undefined;
+	/** Formatted shortcut hint for auto-arrange (e.g. "Ctrl+B+Space"). */
+	arrangeShortcut?: string;
 	/** Take a pane out of its split tab (only offered for a `member`) */
 	leaveGroup?(id: string): void;
 	/** Pin or unpin a tab (a conversation, terminal or whole split tab; the panes of a split tab follow it); `isPinned` says which the entry offers */
@@ -125,9 +133,18 @@ export const targetId = (target: RowTarget) => (target.kind === "group" ? target
 export function rowMenuEntries(target: RowTarget, act: RowActions, member = false): MenuEntry[] {
 	if (target.kind === "group") {
 		const g = target.g;
+		const next = act.nextLayoutHint?.(g.id);
+		const arrangeBase = next
+			? next.recommended
+				? t("추천: {option}", { option: next.label })
+				: t("다음 배치: {option}", { option: next.label })
+			: t("창 개수에 맞는 추천 레이아웃으로 정렬합니다");
+		const arrangeTitle = act.arrangeShortcut ? `${arrangeBase} · ${act.arrangeShortcut}` : arrangeBase;
 		return [
 			...pinEntry(g.id, act),
 			{ icon: "pencil", label: t("그룹 이름 바꾸기"), title: "", run: () => act.renameGroup(g) },
+			...(act.arrangeGroup ? [{ icon: "group-open", label: t("자동 정렬"), title: arrangeTitle, run: () => act.arrangeGroup!(g.id) } satisfies MenuEntry] : []),
+			...(act.chooseLayout ? [{ icon: "columns", label: t("레이아웃 선택…"), title: t("창 개수에 맞는 레이아웃 목록에서 고릅니다"), run: () => act.chooseLayout!(g) } satisfies MenuEntry] : []),
 			...(act.dissolveGroup ? [{ icon: "unlink", label: t("그룹 해제"), title: t("그룹 해제 (대화는 그대로 남습니다)"), run: () => act.dissolveGroup!(g.id) } satisfies MenuEntry] : []),
 		];
 	}

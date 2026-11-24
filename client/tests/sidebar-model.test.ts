@@ -129,6 +129,35 @@ describe("row menu", () => {
 	test("a split tab can be renamed or dissolved", () => {
 		expect(run({ kind: "group", g: { id: "g1", name: "Work" } })).toEqual({ icons: ["pencil", "unlink"], calls: ["renameGroup g1", "dissolve g1"] });
 	});
+	test("a split tab with arrange actions offers auto-arrange (with recommended/next tooltip) and layout picker before dissolve", () => {
+		calls.length = 0;
+		const entries = rowMenuEntries(
+			{ kind: "group", g: { id: "g1", name: "Work" } },
+			{
+				...act,
+				arrangeGroup: (id) => calls.push(`arrange ${id}`),
+				chooseLayout: (g) => calls.push(`choose ${g.id}`),
+				nextLayoutHint: () => ({ label: "좌우 3분할", recommended: true }),
+				arrangeShortcut: "Ctrl+B+Space",
+			},
+		);
+		expect(entries.map((e) => e.icon)).toEqual(["pencil", "group-open", "columns", "unlink"]);
+		expect(entries[1]!.title).toBe("추천: 좌우 3분할 · Ctrl+B+Space");
+		entries[1]!.run();
+		entries[2]!.run();
+		expect(calls).toEqual(["arrange g1", "choose g1"]);
+
+		const cycled = rowMenuEntries(
+			{ kind: "group", g: { id: "g1", name: "Work" } },
+			{
+				...act,
+				arrangeGroup: () => {},
+				nextLayoutHint: () => ({ label: "왼쪽 메인 (1 + 2)", recommended: false }),
+				arrangeShortcut: "Ctrl+B+Space",
+			},
+		);
+		expect(cycled[1]!.title).toBe("다음 배치: 왼쪽 메인 (1 + 2) · Ctrl+B+Space");
+	});
 	test("a menu that cannot dissolve (the tab bar, chips, pane bars) never offers it", () => {
 		const { dissolveGroup: _, ...plain } = act;
 		expect(rowMenuEntries({ kind: "group", g: { id: "g1", name: "Work" } }, plain).map((e) => e.icon)).toEqual(["pencil"]);
