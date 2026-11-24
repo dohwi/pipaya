@@ -701,6 +701,9 @@
 	.x:focus-visible {
 		opacity: 1;
 	}
+	.x:focus-visible {
+		outline-offset: -2px; /* inside the 20px target so the outer ring is never clipped by the scrolling .tabs strip */
+	}
 	/* no hover on a touch screen: the × is always there, after the title as before */
 	@media (pointer: coarse) {
 		.x {
