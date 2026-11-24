@@ -247,6 +247,13 @@
 	}
 	.mi:focus-visible {
 		background: var(--bg-hover);
+		outline: 2px solid var(--accent);
+		outline-offset: -2px;
+	}
+	.mi > span {
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
 	}
 	@media (hover: hover) {
 		.mi:hover {
