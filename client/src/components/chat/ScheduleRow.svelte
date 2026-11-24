@@ -155,7 +155,7 @@
 		height: 22px;
 		margin-left: auto;
 		margin-right: -4px; /* 22px button, 14px glyph: the glyph's right end (not the button) sits on the 16px text line */
-		border-radius: var(--radius-sm);
+		border-radius: var(--radius-xs);
 		color: var(--text-faint);
 		cursor: pointer;
 	}

@@ -67,7 +67,7 @@
 		width: 14px;
 		height: 24px;
 		margin-left: 21px; /* measured: puts the 14px chevron on the folder icon's column (x 48) */
-		border-radius: var(--radius-sm);
+		border-radius: var(--radius-xs);
 	}
 	/* the toggle stays 14px wide (that width is what puts its chevron on the folder icon's column); on touch its hit area grows
 	   to 32x40 around it with an invisible ::after, so a finger does not have to land on a 14px strip. It reaches 9px into the

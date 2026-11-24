@@ -33,7 +33,7 @@
 {#each parts as p, i (i)}{#if p.kind === "mention" && app.mentionIndex.resolve(p.name!)}{@const target = app.mentionIndex.resolve(p.name!)!}<button type="button" class="tok mention" title={target.kind === "group" ? t("{name} 그룹 열기", { name: p.text }) : t("{name} 대화 열기", { name: p.text })} onclick={() => app.openMention(target)}><span class="tlabel">{p.text}</span></button>{:else if p.kind === "mention"}<span class="tok mention" title={p.text}><span class="tlabel">{p.text}</span></span>{:else if p.kind === "image"}<button type="button" class="tok image" title={t("이미지 크게 보기")} onclick={() => openImage(Number(p.name))}><Icon name="image" /><span class="tlabel">{p.text.slice(1)}</span></button>{:else if p.kind === "file" && sessionId}<button type="button" class="tok file" title={t("{name} 미리 보기", { name: p.name! })} onclick={() => openFile(p.name!)}><Icon name="file" />{@render fileLabel(p.text.slice(1))}</button>{:else if p.kind === "file"}<span class="tok file" title={p.name!}><Icon name="file" />{@render fileLabel(p.text.slice(1))}</span>{:else if p.kind === "skill"}<button type="button" class="tok skill" title={t("스킬 {name} 보기", { name: p.name! })} onclick={() => app.openSkills(sessionId, p.name!)}><Icon name="skill" /><span class="tlabel">{p.text}</span></button>{:else if p.kind === "prompt"}<button type="button" class="tok skill" title={t("프롬프트 {name} 보기", { name: p.name! })} onclick={() => app.openTemplates(sessionId)}><Icon name="prompt" /><span class="tlabel">{p.text}</span></button>{:else}{p.text}{/if}{/each}
 
 <style>
-	/* Shaped like inline code in a reply (Markdown.svelte): 8px corners, em padding so the chip grows with its text, a hairline
+	/* Shaped like inline code in a reply (Markdown.svelte): 4px corners (--radius-xs), em padding so the chip grows with its text, a hairline
 	   ring. Atomic inline-flex keeps icon + label together as one chip when lines wrap, truncating cleanly at max-width: 100%.
 	   The hue (app.css --mark-*) tints the fill and the ring; only @names colour their text. */
 	.tok {
@@ -43,7 +43,7 @@
 		gap: 4px;
 		max-width: 100%;
 		padding: 1px 0.4em; /* em sides scale with the text, like inline code */
-		border-radius: var(--radius-sm);
+		border-radius: var(--radius-xs);
 		background: color-mix(in srgb, var(--hue) 12%, transparent);
 		box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--hue) 22%, transparent); /* a ring, not a border: the line box stays the text's */
 		color: inherit;

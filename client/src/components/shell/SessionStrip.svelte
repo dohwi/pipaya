@@ -125,7 +125,7 @@
 		height: 22px;
 		max-width: 100%; /* .gitem caps it at a tab's width */
 		padding: 0 8px;
-		border-radius: var(--radius-sm);
+		border-radius: var(--radius-xs);
 		color: var(--text-dim);
 		font-size: var(--fs-sm);
 		line-height: 20px; /* whole-pixel line box (rule 3), not the body's 1.55 (20.15px), so the title's centre lands on a whole pixel */

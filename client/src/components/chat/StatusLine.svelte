@@ -350,7 +350,7 @@
 		min-width: 24px;
 		height: 24px;
 		padding: 0 4px;
-		border-radius: var(--radius-sm);
+		border-radius: var(--radius-xs);
 		font: inherit;
 		line-height: 16px;
 		color: inherit;

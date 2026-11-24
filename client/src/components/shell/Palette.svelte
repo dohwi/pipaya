@@ -217,7 +217,7 @@
 		padding: 0 12px;
 		height: 36px;
 		border: 1px solid var(--border);
-		border-radius: var(--radius-sm);
+		border-radius: var(--radius-control);
 		color: var(--text-faint);
 	}
 	/* the field fills its 36px row: at its natural 24px a tap on the row's edge missed it */

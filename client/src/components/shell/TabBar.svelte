@@ -537,6 +537,7 @@
 		}
 		.gbox :global(.gchip) {
 			height: 28px;
+			border-radius: var(--radius-sm);
 		}
 		.gbox :global(.gchip.on) {
 			background: var(--bg-tabbar-on);

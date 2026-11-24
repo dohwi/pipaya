@@ -70,7 +70,7 @@
 	}
 	button.b {
 		cursor: pointer;
-		border-radius: var(--radius-sm);
+		border-radius: var(--radius-xs);
 	}
 	@media (hover: hover) {
 		button.b:hover {

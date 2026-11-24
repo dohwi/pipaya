@@ -189,7 +189,7 @@
 
 <style>
 	.panel-toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; }
-	.launcher { display: inline-flex; align-items: center; gap: 8px; max-width: 100%; padding: 8px 12px; color: var(--text-dim); background: var(--bg-elev); border: 1px solid var(--border); border-radius: var(--radius-pill); font-size: var(--fs-xs); white-space: nowrap; }
+	.launcher { display: inline-flex; align-items: center; gap: 8px; max-width: 100%; padding: 8px 12px; color: var(--text-dim); background: var(--bg-elev); border: 1px solid var(--border); border-radius: var(--radius-control); font-size: var(--fs-xs); white-space: nowrap; }
 	@media (hover: hover) {
 		.launcher:hover:not(:disabled) { background: var(--bg-hover); border-color: var(--border-strong); color: var(--text); }
 	}
