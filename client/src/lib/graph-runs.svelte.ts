@@ -12,6 +12,20 @@ const POLL_MS = 5000;
 /** Events that can add or finish a delegate call come in bursts: one read for the burst. */
 const SETTLE_MS = 400;
 
+/** Fast structural check so unchanged 5s polls do not trigger a full graph layout rebuild. */
+function sameRuns(a: DelegateRun[] | null | undefined, b: DelegateRun[]): boolean {
+	if (!a || a.length !== b.length) return false;
+	for (let i = 0; i < a.length; i++) {
+		const x = a[i]!, y = b[i]!;
+		if (
+			x.callId !== y.callId || x.sessionId !== y.sessionId || x.role !== y.role || x.model !== y.model ||
+			x.running !== y.running || x.error !== y.error || x.free !== y.free || x.asked !== y.asked ||
+			x.at !== y.at || x.doneAt !== y.doneAt || x.turns !== y.turns || x.tokens !== y.tokens
+		) return false;
+	}
+	return true;
+}
+
 export class GraphRuns {
 	runs = $state<Record<string, DelegateRun[] | null>>({});
 	private timers = new Map<string, ReturnType<typeof setTimeout>>();
@@ -63,7 +77,7 @@ export class GraphRuns {
 		this.busy.add(server);
 		try {
 			const runs = await api.delegates();
-			if (this.apis.get(server) === api) this.runs[server] = runs;
+			if (this.apis.get(server) === api && !sameRuns(this.runs[server], runs)) this.runs[server] = runs;
 		} catch {
 			if (this.apis.get(server) === api && !(server in this.runs)) this.runs[server] = null;
 		} finally {

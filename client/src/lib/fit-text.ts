@@ -1,4 +1,36 @@
 import { schedule, unschedule } from "./frame";
+import { fontSpecOf, measureTextWidth } from "./text-measure";
+
+/** Shared ResizeObserver so mounting many cards does not create hundreds of observer instances. */
+const roCallbacks = new WeakMap<Element, Set<() => void>>();
+let sharedRo: ResizeObserver | null = null;
+function observeResize(el: Element, cb: () => void): () => void {
+	if (typeof ResizeObserver !== "function") return () => {};
+	if (!sharedRo) {
+		sharedRo = new ResizeObserver((entries) => {
+			for (const entry of entries) {
+				const set = roCallbacks.get(entry.target);
+				if (set) for (const fn of set) fn();
+			}
+		});
+	}
+	let set = roCallbacks.get(el);
+	if (!set) {
+		set = new Set();
+		roCallbacks.set(el, set);
+		sharedRo.observe(el);
+	}
+	set.add(cb);
+	return () => {
+		const cur = roCallbacks.get(el);
+		if (!cur) return;
+		cur.delete(cb);
+		if (!cur.size) {
+			roCallbacks.delete(el);
+			sharedRo?.unobserve(el);
+		}
+	};
+}
 
 /**
  * Svelte actions that fit a line of text into its row: `tail` elides the start of a path, `marquee` lets an overlong
@@ -71,10 +103,9 @@ export function marquee(node: HTMLElement, _text: string) {
 	const later = () => schedule(node, measure);
 	// Rows mount in bulk when a conversation appears (a send, a list reload): each measured at once, every one of them forced
 	// a layout of the page. The first fit lands in the next frame instead, together with the other rows'.
-	const ro = new ResizeObserver(later);
-	ro.observe(node);
+	const stop = observeResize(node, later);
 	later();
-	return { update: later, destroy: () => (ro.disconnect(), unschedule(node)) };
+	return { update: later, destroy: () => (stop(), unschedule(node)) };
 }
 
 /** `text` cut to `keep` characters with "…" in the middle: the start (a family, a host) and the end (a size, a port) stay. */
@@ -93,10 +124,29 @@ export function middleCut(text: string, keep: number): string {
  */
 export function middle(node: HTMLElement, text: string) {
 	let full = text;
-	const fit = () => {
+	const fitRead = (): (() => void) | void => {
+		// Restore full text before reading `clientWidth` when previously truncated, so a shrink-to-fit box
+		// (like a host in `.meta > .give`) expands again when its parent widens. On mount it is already `full`.
+		if (node.textContent !== full) node.textContent = full;
+		const maxW = node.clientWidth;
+		if (maxW <= 0) return;
+		const spec = fontSpecOf(node);
+		const fullW = measureTextWidth(full, spec);
+		if (fullW !== null) {
+			if (fullW <= maxW + 0.5) return () => { if (node.textContent !== full) node.textContent = full; };
+			let lo = 1, hi = [...full].length - 1;
+			while (lo < hi) {
+				const mid = Math.ceil((lo + hi) / 2);
+				const mw = measureTextWidth(middleCut(full, mid), spec)!;
+				if (mw <= maxW) lo = mid;
+				else hi = mid - 1;
+			}
+			const out = middleCut(full, lo);
+			return () => { if (node.textContent !== out) node.textContent = out; };
+		}
+		// Fallback when Canvas 2D is unavailable (e.g. happy-dom tests).
 		node.textContent = full;
 		if (node.scrollWidth <= node.clientWidth) return;
-		// the longest cut that fits: binary search over the kept length
 		let lo = 1, hi = [...full].length - 1;
 		while (lo < hi) {
 			const mid = Math.ceil((lo + hi) / 2);
@@ -106,16 +156,19 @@ export function middle(node: HTMLElement, text: string) {
 		}
 		node.textContent = middleCut(full, lo);
 	};
-	const ro = new ResizeObserver(() => schedule(node, () => fit()));
-	ro.observe(node);
+	const later = () => schedule(node, fitRead);
+	const stopSelf = observeResize(node, later);
 	// a box sized by its own text (a host in a facts line) does not grow back by itself: watch the line it sits in too
-	if (node.parentElement) ro.observe(node.parentElement);
-	fit();
+	const stopParent = node.parentElement ? observeResize(node.parentElement, later) : () => {};
+	node.textContent = full;
+	later();
 	return {
 		update(next: string) {
+			if (next === full) return;
 			full = next;
-			fit();
+			node.textContent = full;
+			later();
 		},
-		destroy: () => (ro.disconnect(), unschedule(node)),
+		destroy: () => (stopSelf(), stopParent(), unschedule(node)),
 	};
 }

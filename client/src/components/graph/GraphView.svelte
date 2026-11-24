@@ -1,9 +1,10 @@
 <script lang="ts">
 	import { onMount, untrack } from "svelte";
 	import { glowFade } from "../../lib/motion";
-	import { marquee, middle } from "../../lib/fit-text";
+	import { middle } from "../../lib/fit-text";
+	import { fontSpecOf, measureTextWidth, onFontsLoaded, type FontSpec } from "../../lib/text-measure";
 	import { app } from "../../lib/store.svelte";
-	import { t } from "../../lib/i18n";
+	import { localeTag, t } from "../../lib/i18n";
 	import { hostOf, pastLabel } from "../../lib/format";
 	import { livePast } from "../../lib/minute-clock.svelte";
 	import { sessionTitle } from "../../lib/session-title";
@@ -22,7 +23,7 @@
 	import NavbarItems from "../extensions/NavbarItems.svelte";
 	import ExtensionMount from "../extensions/ExtensionMount.svelte";
 	import { released } from "../../lib/pointer";
-	import { modelDisplayName, modelIcon, providerDisplayName, splitModelRef } from "../../lib/model-name";
+	import { splitModelRef } from "../../lib/model-name";
 
 	/**
 	 * The graph view: every saved server's open chats as columns (server → provider → model → chat → subagent), the lines
@@ -47,12 +48,12 @@
 				queued: (id: string) => d?.queued[id]?.length ?? 0,
 				runs: graphRuns.runs[s.id] ?? null,
 				// the names the owner gave models and connections (the ids when none)
-				modelName: (provider: string, id: string) => modelDisplayName(link?.models ?? [], provider, id),
-				providerName: (id: string) => providerDisplayName(link?.providers ?? [], id),
+				modelName: (provider: string, id: string) => link?.modelByKey.get(`${provider}\u0000${id}`)?.name?.trim() || id,
+				providerName: (id: string) => link?.providerById.get(id)?.name?.trim() || id,
 				endpoint: (id: string) => {
-					const custom = link?.customProviders.find((p) => p.id === id);
+					const custom = link?.customProviderById.get(id);
 					if (custom) return { id: custom.id, name: custom.name, baseUrl: custom.baseUrl, api: custom.api, builtin: false };
-					const info = link?.providers.find((p) => p.id === id);
+					const info = link?.providerById.get(id);
 					if (info) return { id: info.id, name: info.name, builtin: info.builtin };
 					return undefined;
 				},
@@ -92,17 +93,97 @@
 	let measure: HTMLDivElement | undefined = $state();
 	/**
 	 * A card wider than its kind's width (a long model id, a long host with "연결 안 됨" after it, a long chat title): its
-	 * name line and its second line, measured once per text on hidden copies with the real styles. Past `CARD_W_MAX` an id
-	 * loses its middle (`use:middle`) and a display name or title its end; hovering the card flows the whole of it by
-	 * (`flow` below), and the tooltip holds it too.
+	 * name line and its second line, measured via offscreen Canvas 2D using the hidden `.measure` elements' real computed
+	 * fonts (zero DOM mutations / forced layouts per card; falls back to DOM `.measure` when Canvas 2D is unavailable).
+	 * Past `CARD_W_MAX` an id loses its middle (`use:middle`) and a display name or title its end; hovering the card flows
+	 * the whole of it by (`flow` below), and the tooltip holds it too.
 	 */
+	type FontSet = { nm: FontSpec; nmMono: FontSpec; meta: FontSpec; metaBold: FontSpec; metaMono: FontSpec; title: FontSpec; when: FontSpec; dotW: number };
+	let fonts = $state<FontSet | null>(null);
+	let fontGen = $state(0);
 	const widthCache = new Map<string, number>();
+	let whenSamplesKey = "";
+	let whenSamplesCache: string[] = [];
+	const whenWidthCache = new Map<string, number>();
+
+	function readFonts(root: HTMLDivElement): FontSet | null {
+		const nmEl = root.querySelector<HTMLElement>('[data-kind="session"]');
+		const nmMonoEl = root.querySelector<HTMLElement>('[data-kind="model-id"]');
+		const metaEl = root.querySelector<HTMLElement>(".meta");
+		const metaMonoEl = root.querySelector<HTMLElement>("[data-mono-meta]");
+		const titleEl = root.querySelector<HTMLElement>(".title");
+		const whenEl = root.querySelector<HTMLElement>(".when");
+		if (!nmEl || !nmMonoEl || !metaEl || !metaMonoEl || !titleEl || !whenEl) return null;
+		const meta = fontSpecOf(metaEl);
+		const dot = measureTextWidth("·", meta);
+		if (dot === null) return null; // Canvas 2D unavailable (happy-dom / SSR): use DOM fallback
+		return {
+			nm: fontSpecOf(nmEl),
+			nmMono: fontSpecOf(nmMonoEl),
+			meta,
+			metaBold: fontSpecOf(metaEl, "600"),
+			metaMono: fontSpecOf(metaMonoEl),
+			title: fontSpecOf(titleEl),
+			when: fontSpecOf(whenEl),
+			dotW: dot + 16, // `.meta i { margin: 0 8px }`
+		};
+	}
+
+	/** Every form a card's time can take (pastLabel with `time: false`), at its widest, cached per locale. */
+	function whenSamples(): string[] {
+		const tag = localeTag();
+		if (whenSamplesKey === tag && whenSamplesCache.length) return whenSamplesCache;
+		const now = new Date(2026, 11, 31, 23, 59).getTime();
+		const ago = (ms: number) => pastLabel(now - ms, now, { time: false });
+		whenSamplesKey = tag;
+		whenSamplesCache = [ago(59 * 60_000), ago(5 * 3_600_000), ago(11 * 3_600_000 + 59 * 60_000), ago(24 * 3_600_000), ago(3 * 86_400_000), ago(13 * 86_400_000), pastLabel(new Date(2025, 11, 30).getTime(), now, { time: false })];
+		return whenSamplesCache;
+	}
+
+	function maxWhenWidth(srv: string, f: FontSet | null): number {
+		const key = `${localeTag()}|${f?.when.font ?? "dom"}|${srv}`;
+		const hit = whenWidthCache.get(key);
+		if (hit !== undefined) return hit;
+		let wWhen = 0;
+		const samples = whenSamples();
+		if (f) {
+			for (const x of samples) {
+				const w = measureTextWidth(srv ? `${srv} · ${x}` : x, f.when) ?? 0;
+				if (w > wWhen) wWhen = w;
+			}
+		} else if (measure) {
+			const when = measure.querySelector<HTMLElement>(".when");
+			if (when) {
+				for (const x of samples) {
+					when.textContent = srv ? `${srv} · ${x}` : x;
+					const w = when.getBoundingClientRect().width;
+					if (w > wWhen) wWhen = w;
+				}
+			}
+		}
+		whenWidthCache.set(key, wWhen);
+		return wWhen;
+	}
+
 	function widthOf(c: Card): number {
 		if (!measure) return 0;
 		if (c.kind === "session") return chatWidth(c);
 		// a model's id is set in mono; a name the owner gave it in the body face, like the card draws it
 		const kind = c.kind === "model" && c.name === c.label ? "model-id" : c.kind;
 		const facts = metaOf(c);
+		const f = fonts;
+		if (f) {
+			const nmW = measureTextWidth(c.name, kind === "model-id" ? f.nmMono : f.nm) ?? 0;
+			let metaW = 0;
+			for (let i = 0; i < facts.parts.length; i++) {
+				const p = facts.parts[i]!;
+				if (i) metaW += f.dotW;
+				const spec = p.mono ? f.metaMono : p.bold ? f.metaBold : f.meta;
+				metaW += measureTextWidth(p.text, spec) ?? 0;
+			}
+			const line = Math.max(nmW + 12, metaW + facts.extra);
+			return Math.ceil(line) + 24 + 12 + 32 + 2; // mark + gap + padding + border
+		}
 		const key = `${kind}|${c.name}|${facts.parts.map((x) => `${x.mono ? "m" : ""}${x.text}`).join("\u0000")}|${facts.extra}`;
 		const hit = widthCache.get(key);
 		if (hit !== undefined) return hit;
@@ -127,33 +208,30 @@
 		widthCache.set(key, w);
 		return w;
 	}
-	/** Every form a card's time can take (pastLabel with `time: false`), at its widest, from a fixed day in the past. */
-	const WHEN_SAMPLES = () => {
-		const now = new Date(2026, 11, 31, 23, 59).getTime();
-		const ago = (ms: number) => pastLabel(now - ms, now, { time: false });
-		return [ago(59 * 60_000), ago(5 * 3_600_000), ago(11 * 3_600_000 + 59 * 60_000), ago(24 * 3_600_000), ago(3 * 86_400_000), ago(13 * 86_400_000), pastLabel(new Date(2025, 11, 30).getTime(), now, { time: false })];
-	};
 	/** A chat: its name with the time beside it, its title below (what it is doing while it works is live text: it never widens a column). */
 	function chatWidth(c: Card): number {
 		const s = c.session!;
 		const srv = multiServer ? (serverNames.get(c.server) ?? c.server) : "";
 		const name = s.name ? `@${s.name}` : sessionTitle(s.title);
 		const title = sessionTitle(s.title);
+		const f = fonts;
+		if (f) {
+			const nmW = measureTextWidth(name, f.nm) ?? 0;
+			const tlW = measureTextWidth(title, f.title) ?? 0;
+			const wWhen = maxWhenWidth(srv, f);
+			const line = Math.max(nmW + 12 + wWhen, tlW);
+			return Math.ceil(line) + 24 + 12 + 32 + 2; // mark + gap + padding + border
+		}
 		const key = `session|${srv}|${name}|${title}`;
 		const hit = widthCache.get(key);
 		if (hit !== undefined) return hit;
 		const nm = measure!.querySelector<HTMLElement>('[data-kind="session"]');
 		const tl = measure!.querySelector<HTMLElement>(".title");
-		const when = measure!.querySelector<HTMLElement>(".when");
-		if (!nm || !tl || !when) return 0;
+		if (!nm || !tl) return 0;
 		nm.textContent = name;
 		tl.textContent = title;
 		// room for the widest of the forms its time takes as it ages (pastLabel), so the column does not twitch over time
-		let wWhen = 0;
-		for (const x of WHEN_SAMPLES()) {
-			when.textContent = srv ? `${srv} · ${x}` : x;
-			wWhen = Math.max(wWhen, when.getBoundingClientRect().width);
-		}
+		const wWhen = maxWhenWidth(srv, null);
 		const line = Math.max(nm.getBoundingClientRect().width + 12 + wWhen, tl.getBoundingClientRect().width);
 		const w = Math.ceil(line) + 24 + 12 + 32 + 2; // mark + gap + padding + border
 		widthCache.set(key, w);
@@ -191,15 +269,33 @@
 	}
 
 	/** The view's size: the layout wraps many chats into columns when that shows the graph larger in it. */
+	const EMPTY_GRAPH: Graph = { cards: new Map(), edges: [], bands: [], cols: [], width: 0, height: 0 };
+	let viewEl: HTMLDivElement | undefined = $state();
 	let viewW = $state(0);
 	let viewH = $state(0);
-	const graph: Graph = $derived(fitGraph(servers, { widths: widthOf, pins }, viewW, viewH));
+	let ready = $state(false);
+	// Wait until `.view` and `.measure` mount so `fitGraph` runs once with real dimensions and fonts (not twice).
+	$effect.pre(() => {
+		if (!viewEl || !measure) return;
+		const el = viewEl;
+		const m = measure;
+		untrack(() => {
+			viewW = el.clientWidth;
+			viewH = el.clientHeight;
+			fonts = readFonts(m);
+			ready = true;
+		});
+	});
+	const graph: Graph = $derived.by(() => {
+		void fontGen;
+		if (!ready) return EMPTY_GRAPH;
+		return fitGraph(servers, { widths: widthOf, pins }, viewW, viewH);
+	});
 
 	/** Reduced motion: no sparks (SMIL, which CSS cannot stop), cards and the view go straight to their place. */
 	let motion = $state(typeof matchMedia !== "function" || !matchMedia("(prefers-reduced-motion: reduce)").matches);
 
 	// ---- view: pan and zoom ----
-	let viewEl: HTMLDivElement | undefined = $state();
 	let view = $state({ k: 1, x: 24, y: 24 });
 	/** Until the user pans, zooms or moves a card, the view keeps fitting the graph as it grows (the subagents arrive later). */
 	let touched = false;
@@ -235,19 +331,19 @@
 		}
 		fitted = true;
 	}
-	$effect(() => {
+	$effect.pre(() => {
 		void graph;
 		void viewW;
 		void viewH;
-		if (!touched && graph.cards.size && viewEl && measure) untrack(fit);
+		if (ready && !touched && graph.cards.size && viewEl) untrack(fit);
 	});
 	// the window or the sidebar changes the view's size: the layout and the fit follow (until the user takes the view)
 	$effect(() => {
 		if (!viewEl) return;
 		const el = viewEl;
 		const ro = new ResizeObserver(() => {
-			viewW = el.clientWidth;
-			viewH = el.clientHeight;
+			if (el.clientWidth !== viewW) viewW = el.clientWidth;
+			if (el.clientHeight !== viewH) viewH = el.clientHeight;
 		});
 		ro.observe(el);
 		return () => ro.disconnect();
@@ -316,25 +412,33 @@
 	const leaveAt = new Map<string, number>();
 	const leaveEdgeAt = new Map<string, number>();
 	let prev: Graph | null = null;
+	let growUntil = 0;
 	// before the DOM updates: a new card must not show for one frame before its plan hides it
 	$effect.pre(() => {
+		if (!ready) return;
 		const g = graph;
 		untrack(() => {
 			const now = performance.now();
 			const opening = !prev;
 			const timing = GROW;
+			const edgeIds = new Set(g.edges.map((e) => e.id));
 			// back before it finished leaving: it is simply there again
 			if (ghostCards.some((c) => g.cards.has(c.id))) ghostCards = ghostCards.filter((c) => !g.cards.has(c.id));
-			if (ghostEdges.some((e) => g.edges.some((x) => x.id === e.id))) ghostEdges = ghostEdges.filter((e) => !g.edges.some((x) => x.id === e.id));
+			if (ghostEdges.some((e) => edgeIds.has(e.id))) ghostEdges = ghostEdges.filter((e) => !edgeIds.has(e.id));
+			let needsTick = !!goal || ghostCards.length > 0 || ghostEdges.length > 0;
 			if (motion && !opening) {
 				const plan = growthPlan(g, (id) => born.get(id), (id) => edgeBorn.has(id), now, timing);
 				for (const [id, t] of plan.cards) {
 					born.set(id, t);
 					fadeOf.set(id, timing.fade);
+					if (t + timing.fade > growUntil) growUntil = t + timing.fade;
+					needsTick = true;
 				}
 				for (const [id, t] of plan.edges) {
 					edgeBorn.set(id, t);
 					drawOf.set(id, timing.draw);
+					if (t + timing.draw > growUntil) growUntil = t + timing.draw;
+					needsTick = true;
 				}
 			} else {
 				for (const id of g.cards.keys()) if (!born.has(id)) born.set(id, -Infinity);
@@ -343,29 +447,42 @@
 			// what left the layout leaves the screen right to left
 			if (prev && motion) {
 				const goneCards = [...prev.cards.values()].filter((c) => !g.cards.has(c.id));
-				const ids = new Set(g.edges.map((e) => e.id));
-				const goneEdges = prev.edges.filter((e) => !ids.has(e.id) && prev!.cards.has(e.from) && prev!.cards.has(e.to));
+				const goneEdges = prev.edges.filter((e) => !edgeIds.has(e.id) && prev!.cards.has(e.from) && prev!.cards.has(e.to));
 				if (goneCards.length || goneEdges.length) {
 					const plan = leavePlan(new Set(goneCards.map((c) => c.id)), goneEdges, now, LEAVE);
-					for (const [id, t] of plan.cards) leaveAt.set(id, t);
-					for (const [id, t] of plan.edges) leaveEdgeAt.set(id, t);
+					for (const [id, t] of plan.cards) {
+						leaveAt.set(id, t);
+						if (t + LEAVE.fade > growUntil) growUntil = t + LEAVE.fade;
+					}
+					for (const [id, t] of plan.edges) {
+						leaveEdgeAt.set(id, t);
+						if (t + LEAVE.retract > growUntil) growUntil = t + LEAVE.retract;
+					}
 					ghostCards = [...ghostCards, ...goneCards];
 					// a line keeps its ends drawn: a gone card from this snapshot, a staying one from the layout
 					ghostEdges = [...ghostEdges, ...goneEdges];
+					needsTick = true;
 				}
 			}
-			for (const id of born.keys()) if (!g.cards.has(id) && !ghostCards.some((c) => c.id === id)) born.delete(id);
-			for (const id of edgeBorn.keys()) if (!g.edges.some((e) => e.id === id)) {
+			const ghostCardIds = ghostCards.length ? new Set(ghostCards.map((c) => c.id)) : null;
+			for (const id of born.keys()) if (!g.cards.has(id) && !ghostCardIds?.has(id)) born.delete(id);
+			for (const id of edgeBorn.keys()) if (!edgeIds.has(id)) {
 				edgeBorn.delete(id);
 				drawOf.delete(id);
 			}
-			for (const c of g.cards.values()) if (!shown.has(c.id)) shown.set(c.id, { x: c.x, y: c.y, h: c.h, vx: 0, vy: 0, vh: 0 });
-			for (const id of shown.keys()) if (!g.cards.has(id) && !ghostCards.some((c) => c.id === id)) shown.delete(id);
+			for (const c of g.cards.values()) {
+				const s = shown.get(c.id);
+				if (!s) shown.set(c.id, { x: c.x, y: c.y, h: c.h, vx: 0, vy: 0, vh: 0 });
+				else if (s.x !== c.x || s.y !== c.y || s.h !== c.h) needsTick = true;
+			}
+			for (const id of shown.keys()) if (!g.cards.has(id) && !ghostCardIds?.has(id)) shown.delete(id);
 			prev = g;
-			kick();
+			if (needsTick || now < growUntil) kick();
 		});
 	});
 	const ghostById = $derived(new Map(ghostCards.map((c) => [c.id, c])));
+	const ghostEdgeSet = $derived(new Set(ghostEdges));
+	const orderedEdges = $derived([...graph.edges.filter((x) => !x.live), ...graph.edges.filter((x) => x.live), ...ghostEdges]);
 	/** A card where it is drawn this frame (the layout's place once it has settled). */
 	function at(c: Card): Card {
 		void frame;
@@ -379,7 +496,8 @@
 		const lv = leaveAt.get(id);
 		if (lv !== undefined && ghostById.has(id)) return 1 - clamp01((clock - lv) / LEAVE.fade);
 		const b = born.get(id);
-		return b === undefined ? 1 : clamp01((clock - b) / (fadeOf.get(id) ?? GROW.fade));
+		if (b === undefined || b === -Infinity) return 1;
+		return clamp01((clock - b) / (fadeOf.get(id) ?? GROW.fade));
 	}
 	/** How much of a line is drawn: it grows out of its first card, and pulls back into it when it leaves. */
 	function reach(e: Edge, ghost: boolean): number {
@@ -388,13 +506,14 @@
 			return lv === undefined ? 0 : 1 - clamp01((clock - lv) / LEAVE.retract) ** 2;
 		}
 		const b = edgeBorn.get(e.id);
-		return b === undefined ? 1 : inOut(clamp01((clock - b) / (drawOf.get(e.id) ?? GROW.draw)));
+		if (b === undefined || b === -Infinity) return 1;
+		return inOut(clamp01((clock - b) / (drawOf.get(e.id) ?? GROW.draw)));
 	}
 	/** Something still grows or leaves: the frame loop keeps going. */
 	function growing(now: number): boolean {
 		let busy = false;
-		for (const [id, b] of born) if (now < b + (fadeOf.get(id) ?? GROW.fade)) busy = true;
-		for (const [id, b] of edgeBorn) if (now < b + (drawOf.get(id) ?? GROW.draw)) busy = true;
+		for (const [id, b] of born) if (b > -Infinity && now < b + (fadeOf.get(id) ?? GROW.fade)) busy = true;
+		for (const [id, b] of edgeBorn) if (b > -Infinity && now < b + (drawOf.get(id) ?? GROW.draw)) busy = true;
 		if (ghostCards.length || ghostEdges.length) {
 			const cards = ghostCards.filter((c) => now < (leaveAt.get(c.id) ?? 0) + LEAVE.fade);
 			const edges = ghostEdges.filter((e) => now < (leaveEdgeAt.get(e.id) ?? 0) + LEAVE.retract);
@@ -425,9 +544,12 @@
 		const dt = Math.min(0.05, (now - last) / 1000);
 		last = now;
 		let moving = false;
+		let cardMoved = false;
 		for (const [id, s] of shown) {
 			const c = graph.cards.get(id);
 			if (!c) continue; // a ghost: it stays where it was while it leaves
+			if (s.x === c.x && s.y === c.y && s.h === c.h && s.vx === 0 && s.vy === 0 && s.vh === 0) continue;
+			cardMoved = true;
 			// the card under the hand, or no motion wanted: exactly where it belongs
 			if (!motion || dragging === id) {
 				Object.assign(s, { x: c.x, y: c.y, h: c.h, vx: 0, vy: 0, vh: 0 });
@@ -456,12 +578,27 @@
 			if (view.k === g.k && view.x === g.x && view.y === g.y) hold();
 			else moving = true;
 		}
-		clock = now;
-		if (growing(now)) moving = true;
-		frame++;
+		if (growUntil > 0 || ghostCards.length || ghostEdges.length) {
+			clock = now;
+			const still = growing(now);
+			if (still) moving = true;
+			else growUntil = 0;
+		}
+		if (cardMoved) frame++;
 		raf = moving ? requestAnimationFrame(tick) : 0;
 	}
-	onMount(() => () => cancelAnimationFrame(raf));
+	onMount(() => {
+		const stopFonts = onFontsLoaded(() => {
+			whenWidthCache.clear();
+			widthCache.clear();
+			if (measure) fonts = readFonts(measure);
+			fontGen++;
+		});
+		return () => {
+			cancelAnimationFrame(raf);
+			stopFonts();
+		};
+	});
 
 
 	// ---- pointer: pan the background, drag a card, click / double click a chat ----
@@ -605,6 +742,34 @@
 	// ---- focus: the cards a pointer is about stand out, the rest steps back ----
 	const focus = $derived(hover && !dragging && graph.cards.has(hover) ? related(graph, hover) : null);
 
+	/**
+	 * Marquee overflow only applies while a card is hovered (`.card:hover .fl[data-over]`), so measure only the hovered
+	 * card's `.fl` elements instead of attaching hundreds of ResizeObservers when opening a large graph.
+	 */
+	$effect(() => {
+		const id = hover;
+		if (!id || !viewEl) return;
+		void graph;
+		const el = viewEl;
+		const escaped = typeof CSS !== "undefined" && typeof CSS.escape === "function" ? CSS.escape(id) : id.replace(/["\\]/g, "\\$&");
+		const cardEl = el.querySelector<HTMLElement>(`[data-card="${escaped}"]`);
+		if (!cardEl) return;
+		const nodes = cardEl.querySelectorAll<HTMLElement>(".fl");
+		const measured: { node: HTMLElement; over: boolean; dur: string }[] = [];
+		for (const node of nodes) {
+			const mq = node.querySelector<HTMLElement>(".mq");
+			if (!mq) continue;
+			const over = node.scrollWidth > node.clientWidth + 1 || mq.offsetWidth > node.clientWidth + 1;
+			measured.push({ node, over, dur: over ? `${Math.max(6, (mq.offsetWidth + 32) / 40)}s` : "" });
+		}
+		for (const r of measured) {
+			if (r.over) {
+				r.node.dataset.over = "";
+				r.node.style.setProperty("--mq-d", r.dur);
+			} else delete r.node.dataset.over;
+		}
+	});
+
 	// ---- text ----
 	let now = $state(Date.now());
 	$effect(() => {
@@ -615,7 +780,7 @@
 	const quiet = $derived(quietCards(graph, now));
 	const faded = (id: string) => quiet.has(id) && !focus?.has(id) && selected !== id;
 	/** What a model card says it comes from: its maker, else its connection's name. */
-	const modelSource = (c: Card) => (c.brand ? BRAND_LABEL[c.brand] : providerDisplayName(app.links[c.server]?.providers ?? [], c.provider)); // not `graph`: widths are measured while it is built
+	const modelSource = (c: Card) => (c.brand ? BRAND_LABEL[c.brand] : (c.provider ? app.links[c.server]?.providerById.get(c.provider)?.name?.trim() || c.provider : "")); // not `graph`: widths are measured while it is built
 	const linkOf = (c: Card) => {
 		if (app.links[c.server]?.conn) return app.links[c.server];
 		const id = c.servers?.find((s) => app.links[s]?.conn);
@@ -623,10 +788,12 @@
 	};
 	/** The mark the owner picked for a model on any server sharing it, if any. */
 	const iconOf = (server: string, provider: string | undefined, id: string, serversList?: string[]) => {
-		const hit = modelIcon(app.links[server]?.models ?? [], provider, id);
+		if (!id) return undefined;
+		const key = `${provider ?? ""}\u0000${id}`;
+		const hit = app.links[server]?.modelByKey.get(key)?.icon;
 		if (hit || !serversList) return hit;
 		for (const s of serversList) {
-			const x = modelIcon(app.links[s]?.models ?? [], provider, id);
+			const x = app.links[s]?.modelByKey.get(key)?.icon;
 			if (x) return x;
 		}
 		return undefined;
@@ -690,8 +857,8 @@
 			<svg class="edges" aria-hidden="true">
 				<defs>
 				</defs>
-				{#each [...graph.edges.filter((x) => !x.live), ...graph.edges.filter((x) => x.live), ...ghostEdges] as e (e.id)}
-					{@const ghost = !graph.cards.has(e.from) || !graph.cards.has(e.to) || ghostEdges.includes(e)}
+				{#each orderedEdges as e (e.id)}
+					{@const ghost = !graph.cards.has(e.from) || !graph.cards.has(e.to) || ghostEdgeSet.has(e)}
 					{@const ca = graph.cards.get(e.from) ?? ghostById.get(e.from)}
 					{@const cb = graph.cards.get(e.to) ?? ghostById.get(e.to)}
 					{@const r = reach(e, ghost)}
@@ -758,27 +925,27 @@
 				>
 					{#if c.kind === "server"}
 						<span class="lead"><Icon name="server" /></span>
-						<span class="nm fl" title={c.label} use:marquee={c.label}>{@render flow(c.label)}</span>
-						<span class="meta"><span class="give fl mid" title={c.host} use:marquee={c.host ?? ""}>{@render flow(c.host ?? "", true)}</span><i>·</i>{#if c.online}<span>{t("대화 {n}개", { n: c.count })}</span>{:else}<em class="bad">{t("연결 안 됨")}</em>{/if}</span>
+						<span class="nm fl" title={c.label}>{@render flow(c.label)}</span>
+						<span class="meta"><span class="give fl mid" title={c.host}>{@render flow(c.host ?? "", true)}</span><i>·</i>{#if c.online}<span>{t("대화 {n}개", { n: c.count })}</span>{:else}<em class="bad">{t("연결 안 됨")}</em>{/if}</span>
 					{:else if c.kind === "provider"}
 						<span class="lead"><Icon name="plug" /></span>
-						<span class="nm fl" title={c.name !== c.label ? `${c.name} · ${c.label}` : c.name} use:marquee={c.name}>{@render flow(c.name)}</span>
+						<span class="nm fl" title={c.name !== c.label ? `${c.name} · ${c.label}` : c.name}>{@render flow(c.name)}</span>
 						<span class="meta">{#if c.servers && c.servers.length > 1}<span>{t("서버 {n}개", { n: c.servers.length })}</span><i>·</i>{/if}<span>{t("모델 {n}개", { n: c.children.length })}</span><i>·</i><span>{t("대화 {n}개", { n: c.count })}</span></span>
 					{:else if c.kind === "model"}
 						<span class="lead"><ModelLogo conn={linkOf(c)?.conn} icon={iconOf(c.server, c.provider, c.label, c.servers)} provider={c.provider} model={c.label} size={24} colored /></span>
-						{#if c.name === c.label}<span class="nm mono fl mid" title={c.name} use:marquee={c.name}>{@render flow(c.name, true)}</span>
-						{:else}<span class="nm fl" title={`${c.name} · ${c.provider}/${c.label}`} use:marquee={c.name}>{@render flow(c.name)}</span>{/if}
-						<span class="meta"><span class="give fl" use:marquee={modelSource(c)}>{@render flow(modelSource(c))}</span><i>·</i><span>{t("대화 {n}개", { n: c.count })}</span></span>
+						{#if c.name === c.label}<span class="nm mono fl mid" title={c.name}>{@render flow(c.name, true)}</span>
+						{:else}<span class="nm fl" title={`${c.name} · ${c.provider}/${c.label}`}>{@render flow(c.name)}</span>{/if}
+						<span class="meta"><span class="give fl">{@render flow(modelSource(c))}</span><i>·</i><span>{t("대화 {n}개", { n: c.count })}</span></span>
 					{:else if c.kind === "subagent"}
 						{@const m = c.model}
 						{@const ref = m ? splitModelRef(m.model) : null}
 						<span class="lead"><Icon name="bot" /></span>
-						<span class="nm fl mid" title={c.label} use:marquee={c.label}>{@render flow(c.label, true)}</span>
+						<span class="nm fl mid" title={c.label}>{@render flow(c.label, true)}</span>
 						<span class="meta">
 							{#if m}
 								<span class="model" title={m.name !== ref?.id ? m.model : undefined}>
 									<ModelLogo conn={app.links[c.server]?.conn} icon={iconOf(c.server, ref?.provider, ref?.id ?? "")} provider={ref?.provider} model={ref?.id} size={14} colored />
-									<span class="mn fl" class:mono={m.name === ref?.id} class:mid={m.name === ref?.id} use:marquee={m.name}>{@render flow(m.name, m.name === ref?.id)}</span>
+									<span class="mn fl" class:mono={m.name === ref?.id} class:mid={m.name === ref?.id}>{@render flow(m.name, m.name === ref?.id)}</span>
 								</span><i>·</i>
 							{/if}
 							<span>{t("{n}회", { n: c.count })}</span>
@@ -789,7 +956,7 @@
 							<!-- who runs it now (the card says on what model): the newest caller's handle in the working colour -->
 							{@const k = c.calls[0]!}
 							<span class="doing" in:glowFade={{ delay: 120 }} title={c.calls.map((x) => x.who).join("\n")}>
-								<Icon name="bolt" /><b class="by fl" use:marquee={k.who}>{@render flow(k.who)}</b>
+								<Icon name="bolt" /><b class="by fl">{@render flow(k.who)}</b>
 								<span class="what">{t("실행 중")}</span>
 								{#if c.calls.length > 1}<span class="q" title={t("실행 중 {n}", { n: c.calls.length })}>{t("외 {n}", { n: c.calls.length - 1 })}</span>{/if}
 							</span>
@@ -800,19 +967,19 @@
 						{@const busy = c.activity === "working" || c.activity === "asking"}
 						<span class="lead"><AgentBadge id={s.id} server={c.server} state={c.activity} size={24} /></span>
 						{@const name = s.name ? `@${s.name}` : sessionTitle(s.title)}
-						<span class="nm fl" class:who={!!s.name} title={name} use:marquee={name}>{@render flow(name)}</span>
+						<span class="nm fl" class:who={!!s.name} title={name}>{@render flow(name)}</span>
 						{#if !busy || multiServer}
 							<span class="when">
 								{#if multiServer}<span class="srv">{serverNames.get(c.server) ?? c.server}</span>{/if}{#if multiServer && !busy}<i>·</i>{/if}{#if !busy}{livePast(s.updatedAt, { time: false })}{/if}
 							</span>
 						{/if}
-						<span class="title fl" title={sessionTitle(s.title)} use:marquee={sessionTitle(s.title)}>{@render flow(sessionTitle(s.title))}</span>
+						<span class="title fl" title={sessionTitle(s.title)}>{@render flow(sessionTitle(s.title))}</span>
 						{#if busy}
 							<span class="doing" class:ask={c.activity === "asking"} in:glowFade={{ delay: 120 }}>
 								{#if c.activity === "asking"}
 									<Icon name="alert" /><span class="what">{t("답을 기다립니다")}</span>
 								{:else if tool}
-									<Icon name="bolt" /><b>{tool.name}</b><span class="what fl" use:marquee={toolSummary(tool.name, tool.args)}>{@render flow(toolSummary(tool.name, tool.args))}</span>
+									<Icon name="bolt" /><b>{tool.name}</b><span class="what fl">{@render flow(toolSummary(tool.name, tool.args))}</span>
 								{:else}
 									<Icon name="brain" /><span class="what">{t("생각 중")}</span>
 								{/if}
@@ -824,7 +991,7 @@
 			{/each}
 		</div>
 
-		{#if !graph.cards.size}
+		{#if ready && !graph.cards.size}
 			<div class="empty"><EmptyState tone="plain">{t("저장된 서버가 없습니다")}</EmptyState></div>
 		{/if}
 
@@ -844,6 +1011,7 @@
 	<div class="measure" bind:this={measure} aria-hidden="true">
 		{#each ["server", "provider", "model", "model-id", "subagent", "session"] as k (k)}<span class="nm" class:mono={k === "model-id"} data-kind={k}></span>{/each}
 		<span class="meta"></span>
+		<span class="meta mono" data-mono-meta></span>
 		<span class="title"></span>
 		<span class="when"></span>
 	</div>
@@ -1086,6 +1254,7 @@
 		position: absolute;
 		left: 0;
 		top: 0;
+		contain: layout style;
 		display: grid;
 		grid-template-columns: 24px minmax(0, 1fr) auto;
 		grid-template-rows: 20px 20px;

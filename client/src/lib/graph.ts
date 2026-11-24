@@ -440,7 +440,12 @@ function layout(
 			const rows = Math.ceil(grid.length / lanes);
 			const bus = cursor + BUS_GAP / 4; // 18 below the cards above (their 12 gap + 6), 18 above the block
 			cursor += BUS_GAP;
-			const rowH = Array.from({ length: rows }, (_, r) => Math.max(...grid.filter((_, i) => i % rows === r).map((k) => get(k).h)));
+			const rowH = new Array<number>(rows).fill(0);
+			for (let i = 0; i < grid.length; i++) {
+				const r = i % rows;
+				const h = get(grid[i]!).h;
+				if (h > rowH[r]!) rowH[r] = h;
+			}
 			const rowTop: number[] = [];
 			for (const h of rowH) { rowTop.push(cursor); cursor += h + ROW_GAP; }
 			grid.forEach((k, i) => {
@@ -509,10 +514,18 @@ function layout(
 	const roleGroups = new Map<string, Card[]>();
 	for (const r of roles) {
 		const gk = `${r.server}\u0000${r.label}`;
-		roleGroups.set(gk, [...(roleGroups.get(gk) ?? []), r]);
+		let list = roleGroups.get(gk);
+		if (!list) roleGroups.set(gk, (list = []));
+		list.push(r);
+	}
+	const delegatesByTo = new Map<string, Edge[]>();
+	for (const e of delegates) {
+		let list = delegatesByTo.get(e.to);
+		if (!list) delegatesByTo.set(e.to, (list = []));
+		list.push(e);
 	}
 	const runs = [...roleGroups.values()].map((g) => {
-		const edges = g.flatMap((r) => delegates.filter((e) => e.to === r.id));
+		const edges = g.flatMap((r) => delegatesByTo.get(r.id) ?? []);
 		const ys = edges.map((e) => get(e.from).y);
 		const liveYs = edges.filter((e) => e.live).map((e) => get(e.from).y);
 		const live = g.some((r) => r.running! > 0);
@@ -753,7 +766,12 @@ export function growthPlan(
 	const cards = new Map<string, number>();
 	const edges = new Map<string, number>();
 	const into = new Map<string, Edge[]>();
-	for (const e of g.edges) if (g.cards.has(e.from) && e.from !== e.to) into.set(e.to, [...(into.get(e.to) ?? []), e]);
+	for (const e of g.edges) {
+		if (!g.cards.has(e.from) || e.from === e.to) continue;
+		let list = into.get(e.to);
+		if (!list) into.set(e.to, (list = []));
+		list.push(e);
+	}
 	const visiting = new Set<string>();
 	/** A line leaves its card a moment after the card starts to show (at once from a card already there). */
 	const start = (from: string) => Math.max(now, appear(from) + lead);
@@ -791,7 +809,11 @@ export function leavePlan(
 	const cards = new Map<string, number>();
 	const lines = new Map<string, number>();
 	const out = new Map<string, Edge[]>();
-	for (const e of edges) out.set(e.from, [...(out.get(e.from) ?? []), e]);
+	for (const e of edges) {
+		let list = out.get(e.from);
+		if (!list) out.set(e.from, (list = []));
+		list.push(e);
+	}
 	const visiting = new Set<string>();
 	const leave = (id: string): number => {
 		const hit = cards.get(id);
@@ -848,17 +870,31 @@ export function quietCards(g: Graph, now: number): Set<string> {
 	const out = staleRoles(g, now);
 	const down = new Set([...g.cards.values()].filter((c) => c.kind === "server" && !c.online).map((c) => c.server));
 	const cardDown = (c: Card) => (c.servers?.length ? c.servers.every((s) => down.has(s)) : down.has(c.server));
+	const restCache = new Map<string, boolean>();
 	const resting = (c: Card): boolean => {
-		if (c.kind === "session") return c.activity === "idle" && c.children.every((k) => resting(g.cards.get(k)!));
-		return c.children.length > 0 && c.children.every((k) => resting(g.cards.get(k)!));
+		const hit = restCache.get(c.id);
+		if (hit !== undefined) return hit;
+		const res =
+			c.kind === "session"
+				? c.activity === "idle" && c.children.every((k) => resting(g.cards.get(k)!))
+				: c.children.length > 0 && c.children.every((k) => resting(g.cards.get(k)!));
+		restCache.set(c.id, res);
+		return res;
 	};
 	for (const c of g.cards.values()) {
 		if (cardDown(c)) out.add(c.id);
 		else if (c.kind === "session" ? c.activity === "idle" : (c.kind === "provider" || c.kind === "model") && resting(c)) out.add(c.id);
 	}
+	const callersByTo = new Map<string, string[]>();
+	for (const e of g.edges) {
+		if (e.kind !== "delegate") continue;
+		let list = callersByTo.get(e.to);
+		if (!list) callersByTo.set(e.to, (list = []));
+		list.push(e.from);
+	}
 	for (const c of g.cards.values()) {
 		if (c.kind !== "subagent" || c.running) continue;
-		const callers = g.edges.filter((e) => e.kind === "delegate" && e.to === c.id).map((e) => e.from);
+		const callers = callersByTo.get(c.id) ?? [];
 		if (callers.every((id) => out.has(id))) out.add(c.id);
 	}
 	return out;
@@ -878,7 +914,9 @@ export function related(g: Graph, id: string): Set<string> {
 	const parentsOf = new Map<string, string[]>();
 	for (const e of g.edges) {
 		if (e.kind === "delegate") continue;
-		parentsOf.set(e.to, [...(parentsOf.get(e.to) ?? []), e.from]);
+		let list = parentsOf.get(e.to);
+		if (!list) parentsOf.set(e.to, (list = []));
+		list.push(e.from);
 	}
 	const belongsTo = (c: Card, serverId: string) => (c.servers ? c.servers.includes(serverId) : c.server === serverId);
 	const up = (x: string, serverFilter?: string) => {
@@ -888,8 +926,6 @@ export function related(g: Graph, id: string): Set<string> {
 			if (serverFilter && pc.kind === "server" && pc.server !== serverFilter) continue;
 			if (!out.has(p)) {
 				out.add(p);
-				up(p, serverFilter);
-			} else {
 				up(p, serverFilter);
 			}
 		}
@@ -1004,26 +1040,86 @@ export function fitView(g: Graph, w: number, h: number, pad = FIT_PAD, focus: It
  * right must not fall off), and a graph that fits anyway keeps one column (fewer columns win a tie).
  */
 export function fitGraph(servers: GraphServer[], opts: Omit<LayoutOpts, "lanes" | "maxW">, w: number, h: number): Graph {
-	let best = buildGraph(servers, { ...opts, lanes: 1 });
+	// Measure each card's raw width once across all candidate layouts (text width does not depend on lanes or maxW).
+	const rawW = new Map<string, number>();
+	const widths = opts.widths
+		? (c: Card) => {
+				const hit = rawW.get(c.id);
+				if (hit !== undefined) return hit;
+				const v = opts.widths!(c);
+				rawW.set(c.id, v);
+				return v;
+			}
+		: undefined;
+	const baseOpts = { ...opts, widths };
+	let best = buildGraph(servers, { ...baseOpts, lanes: 1 });
 	if (w <= 0 || h <= 0) return best;
 	// Long names widen their columns, but not past the view: the whole graph still fits at the smallest fitted zoom (the
 	// subagents on the right stay in sight). The widest columns give way first; a name that no longer fits ends in "…".
 	// A view too narrow for even the plain widths (a phone) pans anyway: there the names keep their full room.
 	let maxW = CARD_W_MAX;
 	const floor = Math.max(...Object.values(CARD_W));
-	if (fitScales(best, w, h).across < FIT_MIN && fitScales(buildGraph(servers, { ...opts, lanes: 1, maxW: floor }), w, h).across >= FIT_MIN) {
-		let lo = floor, hi = CARD_W_MAX;
-		while (hi - lo > 4) {
-			const mid = Math.round((lo + hi) / 2);
-			if (fitScales(buildGraph(servers, { ...opts, lanes: 1, maxW: mid }), w, h).across >= FIT_MIN) lo = mid;
-			else hi = mid;
+	if (fitScales(best, w, h).across < FIT_MIN) {
+		// Changing maxW on a lanes=1 layout only changes column widths and x positions; compute bounds in O(cols + pins)
+		// instead of rebuilding the graph on every binary-search step.
+		const colMinW: number[] = [];
+		const colRawW: number[] = [];
+		const colHasUnpinned: boolean[] = [];
+		const pinnedCards: { col: number; x: number }[] = [];
+		for (const c of best.cards.values()) {
+			colMinW[c.col] = Math.max(colMinW[c.col] ?? 0, CARD_W[c.kind]);
+			colRawW[c.col] = Math.max(colRawW[c.col] ?? 0, rawW.get(c.id) ?? 0);
+			const pin = opts.pins?.[c.id];
+			if (pin) pinnedCards.push({ col: c.col, x: pin.x });
+			else colHasUnpinned[c.col] = true;
 		}
-		maxW = lo;
-		best = buildGraph(servers, { ...opts, lanes: 1, maxW });
+		const acrossFor = (limit: number): number => {
+			let x = 0, x0 = Infinity, x1 = -Infinity;
+			const cw: number[] = [];
+			for (let i = 0; i < colMinW.length; i++) {
+				if (!colMinW[i]) continue;
+				const width = Math.max(colMinW[i]!, Math.min(limit, colRawW[i] ?? 0));
+				cw[i] = width;
+				if (colHasUnpinned[i]) {
+					x0 = Math.min(x0, x);
+					x1 = Math.max(x1, x + width);
+				}
+				x += width + COL_GAP;
+			}
+			for (const p of pinnedCards) {
+				const half = (cw[p.col] ?? 0) / 2;
+				x0 = Math.min(x0, p.x - half);
+				x1 = Math.max(x1, p.x + half);
+			}
+			return (w - FIT_PAD.x * 2) / (x1 - x0);
+		};
+		if (acrossFor(floor) >= FIT_MIN) {
+			let lo = floor, hi = CARD_W_MAX;
+			while (hi - lo > 4) {
+				const mid = Math.round((lo + hi) / 2);
+				if (acrossFor(mid) >= FIT_MIN) lo = mid;
+				else hi = mid;
+			}
+			maxW = lo;
+			// Apply the narrowed column widths directly to `best` (lanes=1 has no bus routes).
+			let x = 0;
+			for (let i = 0; i < best.cols.length; i++) {
+				const col = best.cols[i];
+				if (!col) continue;
+				col.w = Math.max(colMinW[i]!, Math.min(maxW, colRawW[i] ?? 0));
+				col.x = x;
+				x += col.w + COL_GAP;
+			}
+			for (const c of best.cards.values()) {
+				c.w = best.cols[c.col]!.w;
+				if (!opts.pins?.[c.id]) c.x = best.cols[c.col]!.x + c.w / 2;
+			}
+			best.width = Math.max(0, x - COL_GAP);
+		}
 	}
 	let score = Math.min(1, fitScale(best, w, h));
 	for (let lanes = 2; lanes <= 4 && score < 1; lanes++) {
-		const g = buildGraph(servers, { ...opts, lanes, maxW });
+		const g = buildGraph(servers, { ...baseOpts, lanes, maxW });
 		const f = fitScales(g, w, h);
 		if (f.across < FIT_MIN) break; // wider still would only be worse
 		const s = Math.min(1, f.across, f.down);
