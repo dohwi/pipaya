@@ -89,21 +89,23 @@ export function knownMention(token: string, names: readonly string[]): string | 
 	return best;
 }
 
-/** A run of message text: plain, or a token the chat draws as a chip (`@name` of a known session or group, `#imageN`, `#path`, `/skill:name`). */
-export type TextPart = { text: string; kind?: "mention" | "image" | "file" | "skill"; name?: string };
+/** A run of message text: plain, or a token the chat draws as a chip (`@name` of a known session or group, `#imageN`, `#path`, `/skill:name`, `/prompt:name`). */
+export type TextPart = { text: string; kind?: "mention" | "image" | "file" | "skill" | "prompt"; name?: string };
 
-/** A `#` token that reads as a file path: has a `/` or ends in an extension (`#src/a.ts`, `#README.md`), not `#96` or `#main`. */
-const FILE_TOKEN = /^(?=[^\s#]*[A-Za-z])[^\s#]*(?:\/[^\s#]*|\.[A-Za-z0-9]{1,8})$/;
+/** A `#` token that reads as a file path (optional `:line` / `:line-end`): has a `/` or ends in a letter-led extension (`#src/a.ts:42`, `#README.md`), not `#96`, `#v1.5`, or `#main`. */
+export const FILE_TOKEN = /^(?=[^\s#]*[A-Za-z])[^\s#]*(?:\/[^\s#]*|\.[A-Za-z][A-Za-z0-9]{0,7})(?::\d+(?:-\d+)?)?$/;
 
 /**
  * A sent message cut into plain runs and the tokens the composer marks: `@name` for a known session or group (at the
  * start, after whitespace, or after opening/delimiter punctuation like `(@서아, ...)` — never inside an email or path),
- * `#imageN` for an attached image (1..images), `#path` when it reads as a path, and `/skill:name` for a skill the server
- * confirmed it injected (`<pipaya-hint>`). Trailing particles and punctuation stay text.
+ * `#imageN` for an attached image (1..images), `#path` when it reads as a path (with optional `:line`), `/skill:name`
+ * for a skill the server confirmed it injected (`<pipaya-hint>`), and `/prompt:name` for prompt templates. Trailing
+ * particles and punctuation stay text.
  */
 export function splitTokens(text: string, known: { names: readonly string[]; images?: number; skills?: readonly string[] }): TextPart[] {
 	const hasSkills = !!known.skills?.length && text.includes("/skill:");
-	if (!/[@#]/.test(text) && !hasSkills) return [{ text }];
+	const hasPrompts = text.includes("/prompt:");
+	if (!/[@#]/.test(text) && !hasSkills && !hasPrompts) return [{ text }];
 	const out: TextPart[] = [];
 	let plain = "";
 	let last = 0;
@@ -114,11 +116,13 @@ export function splitTokens(text: string, known: { names: readonly string[]; ima
 		out.push(part);
 		last = at + part.text.length;
 	};
-	const re = /(?<![\p{L}\p{N}_.%+\-@/])@([^\s@#]+)|(?:^|(?<=\s))#([^\s@#]+)|(?<![\p{L}\p{N}_./-])\/skill:([a-z0-9]+(?:-[a-z0-9]+)*)(?![A-Za-z0-9_/-])/gu;
+	const re = /(?<![\p{L}\p{N}_.%+\-@/])@([^\s@#]+)|(?:^|(?<=\s))#([^\s@#]+)|(?<![\p{L}\p{N}_./-])\/(skill|prompt):([a-z0-9]+(?:-[a-z0-9]+)*)(?![A-Za-z0-9_/-])/gu;
 	for (let m = re.exec(text); m; m = re.exec(text)) {
 		const at = m.index;
 		if (m[3]) {
-			if (known.skills?.includes(m[3])) push(at, { text: `/skill:${m[3]}`, kind: "skill", name: m[3] });
+			const slug = m[4]!;
+			if (m[3] === "prompt") push(at, { text: `/prompt:${slug}`, kind: "prompt", name: slug });
+			else if (known.skills?.includes(slug)) push(at, { text: `/skill:${slug}`, kind: "skill", name: slug });
 			continue;
 		}
 		if (m[1]) {

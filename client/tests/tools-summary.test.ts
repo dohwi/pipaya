@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { peerTargetOf, peerTargetsOf, splitCd, toolIcon, toolSummary } from "../src/lib/tools";
+import { peerTargetOf, peerTargetsOf, scheduleIdOf, splitCd, toolIcon, toolSummary } from "../src/lib/tools";
 
 describe("toolSummary for ask_user", () => {
 	test("shows the question text, not its JSON", () => {
@@ -63,6 +63,10 @@ describe("toolSummary for schedule", () => {
 		expect(toolSummary("schedule", { action: "create", prompt: "빌드 상태 확인\n둘째 줄", everyMinutes: 60 })).toBe("create · 빌드 상태 확인");
 		expect(toolSummary("schedule", { action: "delete", id: "abc" })).toBe("delete · abc");
 		expect(toolSummary("schedule", { action: "list" })).toBe("list");
+		expect(scheduleIdOf({ action: "update", id: "sched_123" })).toBe("sched_123");
+		expect(scheduleIdOf({ action: "create" }, { action: "create", id: "a1b2c3d4" })).toBe("a1b2c3d4");
+		expect(scheduleIdOf({ action: "delete", id: "a1b2c3d4" }, { action: "delete", id: "a1b2c3d4" })).toBeNull();
+		expect(scheduleIdOf({ action: "list" }, { action: "list", count: 2 })).toBeNull();
 	});
 });
 

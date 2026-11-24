@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { cleanWorkdirPath, fileRejection, filePathOf, isImagePath, isInlineImage, MAX_FILE_BYTES, MAX_FILES, MAX_FILES_TOTAL, MAX_IMAGES, isLocalFilePath, isWorkdirPath, parseTable, previewKind, sizeLabel, splitFilePath } from "../src/lib/files";
+import { cleanWorkdirPath, fileRefOfHref, fileRejection, filePathOf, formatFileLine, isImagePath, isInlineImage, MAX_FILE_BYTES, MAX_FILES, MAX_FILES_TOTAL, MAX_IMAGES, isLocalFilePath, isWorkdirPath, parseInlineCodeFilePath, parseTable, previewKind, sizeLabel, splitFilePath, splitFileRef } from "../src/lib/files";
 
 import { readFileSync } from "node:fs";
 import { extname } from "node:path";
@@ -105,6 +105,54 @@ describe("previews", () => {
 	test("image links are recognised by extension", () => {
 		for (const ok of ["out/a.PNG", "/x/b.jpeg", "c.webp?raw=1", "d.svg#v"]) expect(isImagePath(ok), ok).toBe(true);
 		for (const no of ["out/a.pdf", "a.png.zip", "README.md"]) expect(isImagePath(no), no).toBe(false);
+	});
+
+	test("splitFileRef and fileRefOfHref parse line numbers and ranges while preserving Windows drives", () => {
+		expect(splitFileRef("src/a.ts")).toEqual({ path: "src/a.ts" });
+		expect(splitFileRef("src/a.ts:42")).toEqual({ path: "src/a.ts", line: 42 });
+		expect(splitFileRef("src/a.ts:42-50")).toEqual({ path: "src/a.ts", line: 42, endLine: 50 });
+		expect(splitFileRef("src/a.ts:42:10")).toEqual({ path: "src/a.ts", line: 42 });
+		expect(splitFileRef("src/a.ts#L42")).toEqual({ path: "src/a.ts", line: 42 });
+		expect(splitFileRef("src/a.ts#L42-L50")).toEqual({ path: "src/a.ts", line: 42, endLine: 50 });
+		expect(splitFileRef("C:\\proj\\a.ts:10")).toEqual({ path: "C:\\proj\\a.ts", line: 10 });
+		expect(splitFileRef("src/a.ts:0")).toEqual({ path: "src/a.ts" });
+		expect(splitFileRef("src/a.ts:50-42")).toEqual({ path: "src/a.ts", line: 50 });
+		expect(fileRefOfHref("./src/a.ts#L42-L50")).toEqual({ path: "src/a.ts", line: 42, endLine: 50 });
+		expect(fileRefOfHref("./src/a.ts:12")).toEqual({ path: "src/a.ts", line: 12 });
+		expect(fileRefOfHref("src/a.ts?v=1#L15")).toEqual({ path: "src/a.ts", line: 15 });
+		expect(formatFileLine(undefined)).toBe("");
+		expect(formatFileLine(42)).toBe(":42");
+		expect(formatFileLine(42, 42)).toBe(":42");
+		expect(formatFileLine(42, 50)).toBe(":42-50");
+	});
+
+	test("parseInlineCodeFilePath matches unambiguous repo-relative file paths and rejects code/versions/paths outside workdir", () => {
+		expect(parseInlineCodeFilePath("client/src/lib/markdown.ts")).toEqual({ path: "client/src/lib/markdown.ts" });
+		expect(parseInlineCodeFilePath("client/src/lib/markdown.ts:42-50")).toEqual({ path: "client/src/lib/markdown.ts", line: 42, endLine: 50 });
+		expect(parseInlineCodeFilePath("./scripts/ui-lint.py#L10")).toEqual({ path: "scripts/ui-lint.py", line: 10 });
+		expect(parseInlineCodeFilePath(".github/workflows/ci.yml")).toEqual({ path: ".github/workflows/ci.yml" });
+		for (const bad of [
+			"",
+			"MessageList",
+			"claude-sonnet-5.5",
+			"cliproxy/claude-sonnet-5.5",
+			"github.com/org/repo.md",
+			"example.com/index.html",
+			"src/*.ts",
+			"src/${file}.ts",
+			"feat/scroll-edge-fade",
+			"origin/main",
+			"console.log",
+			"app.css",
+			".vfade",
+			"/etc/passwd",
+			"/home/u/a.ts",
+			"../secret/a.ts",
+			"https://example.com/a.html",
+			"rm -rf src/a.ts",
+		]) {
+			expect(parseInlineCodeFilePath(bad), bad).toBeNull();
+		}
 	});
 });
 

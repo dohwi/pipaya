@@ -47,26 +47,30 @@
 		return onHighlightReady(() => hlTick++);
 	});
 
-	// Assistant replies highlight known @session / @group mentions and /skill:name tokens into clickable chips, matching
-	// TokenText. `mentionSig` narrows reactivity to targets that actually appear in this message so opening or closing
-	// an unrelated session never re-patches the DOM or resets loaded inline media.
+	// Assistant replies highlight known @session / @group mentions, /skill:name, /prompt:name, #path, and repo-relative
+	// file paths in inline `<code>` into clickable chips, matching TokenText. `mentionSig` narrows reactivity to targets
+	// that actually appear in this message so unrelated session changes never re-patch the DOM or reset loaded media.
 	const mentionSig = $derived(mentions ? mentionSignature(html, app.mentionIndex) : "");
 	const patchInput = $derived.by((): PatchInput => {
 		const raw = html;
 		if (!mentions) return raw;
 		const sig = mentionSig;
 		const hasSkill = raw.includes("/skill:");
-		if (!sig && !hasSkill) return raw;
+		const hasPrompt = raw.includes("/prompt:");
+		const hasFiles = !!sessionId && (raw.includes("<code>") || /(?:^|[\s>])#[^\s#&]/.test(raw));
+		if (!sig && !hasSkill && !hasPrompt && !hasFiles) return raw;
 		void getLang(); // re-apply tooltips when the UI language switches
 		const index = untrack(() => app.mentionIndex);
 		const labels = {
 			openSession: (name: string) => t("{name} 대화 열기", { name }),
 			openGroup: (name: string) => t("{name} 그룹 열기", { name }),
 			openSkill: (name: string) => t("스킬 {name} 보기", { name }),
+			openPrompt: (name: string) => t("프롬프트 {name} 보기", { name }),
+			openFile: (name: string) => t("{name} 미리 보기", { name }),
 		};
 		return {
 			html: raw,
-			decorate: (frag) => decorateMarkdownTokens(frag, { index, skills: hasSkill, labels }),
+			decorate: (frag) => decorateMarkdownTokens(frag, { index, skills: hasSkill, prompts: hasPrompt, files: hasFiles, labels }),
 		};
 	});
 
@@ -212,11 +216,27 @@
 				if (/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(name)) app.openSkills(sessionId, name);
 				return;
 			}
+			const prompt = el.closest<HTMLButtonElement>("button[data-prompt]");
+			if (prompt) {
+				const name = prompt.dataset.prompt ?? "";
+				if (/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(name)) app.openTemplates(sessionId);
+				return;
+			}
 		}
-		const file = el.closest<HTMLAnchorElement>("a[data-file]");
+		const file = el.closest<HTMLElement>(mentions ? "a[data-file], button[data-file]" : "a[data-file]");
 		if (file) {
 			e.preventDefault();
-			if (sessionId) app.openFile(sessionId, { path: file.dataset.file!, name: baseName(file.dataset.file!) });
+			const path = file.dataset.file;
+			if (sessionId && path) {
+				const line = Number(file.dataset.line);
+				const endLine = Number(file.dataset.endLine);
+				app.openFile(sessionId, {
+					path,
+					name: baseName(path),
+					...(Number.isSafeInteger(line) && line >= 1 ? { line } : {}),
+					...(Number.isSafeInteger(endLine) && endLine >= line ? { endLine } : {}),
+				});
+			}
 			return;
 		}
 		const copy = el.closest<HTMLButtonElement>("[data-copy]");
@@ -470,7 +490,7 @@
 		border-radius: var(--radius);
 	}
 	/* Matches TokenText's `.tok.file` chip: monochrome file glyph, atomic inline-flex, directory shrinks before basename. */
-	.md :global(a.wd-file) {
+	.md :global(:is(a, button).wd-file) {
 		display: inline-flex;
 		align-items: center;
 		gap: 4px;
@@ -480,13 +500,15 @@
 		background: color-mix(in srgb, var(--mark-file) 12%, transparent);
 		box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--mark-file) 22%, transparent);
 		color: inherit;
+		font: inherit;
 		text-decoration: none;
 		font-size: 0.88em;
 		line-height: 18px; /* whole-pixel 20px box (18 + 2 padding), matching TokenText */
 		vertical-align: -1px; /* measured: aligns chip ink with surrounding 24px body text (<= 0.5px) */
+		cursor: pointer;
 		transition: none; /* instant hover tint avoids GPU background-color layer promotion snapping inline chips by 1px */
 	}
-	.md :global(a.wd-file::before) {
+	.md :global(:is(a, button).wd-file::before) {
 		content: "";
 		flex: none;
 		width: 12px;
@@ -496,17 +518,17 @@
 		-webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M7 3h7l5 5v13H7zM14 3v5h5'/%3E%3C/svg%3E") center / contain no-repeat;
 		mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M7 3h7l5 5v13H7zM14 3v5h5'/%3E%3C/svg%3E") center / contain no-repeat;
 	}
-	.md :global(a.wd-file .wd-lbl) {
+	.md :global(:is(a, button).wd-file .wd-lbl) {
 		min-width: 0;
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
 	}
-	.md :global(a.wd-file .wd-path) {
+	.md :global(:is(a, button).wd-file .wd-path) {
 		display: inline-flex;
 		min-width: 0;
 	}
-	.md :global(a.wd-file .wd-dir) {
+	.md :global(:is(a, button).wd-file .wd-dir) {
 		flex: 0 999999 auto;
 		min-width: 0;
 		overflow: hidden;
@@ -514,7 +536,7 @@
 		white-space: nowrap;
 		opacity: 0.68;
 	}
-	.md :global(a.wd-file .wd-base) {
+	.md :global(:is(a, button).wd-file .wd-base) {
 		flex: 0 1 auto;
 		min-width: 0;
 		overflow: hidden;
@@ -529,13 +551,14 @@
 		line-height: inherit;
 	}
 	@media (hover: hover) {
-		.md :global(a.wd-file:hover) {
+		.md :global(:is(a, button).wd-file:hover) {
 			background: color-mix(in srgb, var(--mark-file) 22%, transparent);
 		}
 	}
-	/* Matches TokenText's `.tok.mention` and `.tok.skill` chips: amber @session / @group and accent /skill:name pills. */
+	/* Matches TokenText's `.tok.mention` and `.tok.skill` chips: amber @session / @group and accent /skill: & /prompt: pills. */
 	.md :global(button.wd-mention),
-	.md :global(button.wd-skill) {
+	.md :global(button.wd-skill),
+	.md :global(button.wd-prompt) {
 		--hue: var(--mark-mention);
 		display: inline-flex;
 		align-items: center;
@@ -550,28 +573,37 @@
 		font-size: 0.88em;
 		font-weight: 600;
 		line-height: 18px; /* whole-pixel 20px box (18 + 2 padding), matching TokenText */
-		vertical-align: -1px; /* measured: aligns chip ink with surrounding 1.55 body text (<= 0.5px) */
+		vertical-align: -1px; /* measured: aligns chip ink with surrounding 24px body text (<= 0.5px) */
 		cursor: pointer;
-		transition: background var(--motion-fast) var(--ease-std);
+		transition: none; /* instant hover tint avoids GPU background-color layer promotion snapping inline chips by 1px */
 	}
 	.md :global(button.wd-mention) {
 		color: var(--hue);
 	}
-	.md :global(button.wd-skill) {
+	.md :global(button.wd-skill),
+	.md :global(button.wd-prompt) {
 		--hue: var(--accent);
 	}
-	.md :global(button.wd-skill::before) {
+	.md :global(button.wd-skill::before),
+	.md :global(button.wd-prompt::before) {
 		content: "";
 		flex: none;
 		width: 12px;
 		height: 12px;
 		background: currentColor;
 		opacity: 0.7;
+	}
+	.md :global(button.wd-skill::before) {
 		-webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 7c-1.6-1.4-3.7-2-7-2v13c3.3 0 5.4.6 7 2 1.6-1.4 3.7-2 7-2V5c-3.3 0-5.4.6-7 2zM12 7v13'/%3E%3C/svg%3E") center / contain no-repeat;
 		mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 7c-1.6-1.4-3.7-2-7-2v13c3.3 0 5.4.6 7 2 1.6-1.4 3.7-2 7-2V5c-3.3 0-5.4.6-7 2zM12 7v13'/%3E%3C/svg%3E") center / contain no-repeat;
 	}
+	.md :global(button.wd-prompt::before) {
+		-webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 8l5 4-5 4M12 17h7'/%3E%3C/svg%3E") center / contain no-repeat;
+		mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 8l5 4-5 4M12 17h7'/%3E%3C/svg%3E") center / contain no-repeat;
+	}
 	.md :global(button.wd-mention .wd-lbl),
-	.md :global(button.wd-skill .wd-lbl) {
+	.md :global(button.wd-skill .wd-lbl),
+	.md :global(button.wd-prompt .wd-lbl) {
 		min-width: 0;
 		overflow: hidden;
 		text-overflow: ellipsis;
@@ -579,7 +611,8 @@
 	}
 	@media (hover: hover) {
 		.md :global(button.wd-mention:hover),
-		.md :global(button.wd-skill:hover) {
+		.md :global(button.wd-skill:hover),
+		.md :global(button.wd-prompt:hover) {
 			background: color-mix(in srgb, var(--hue) 22%, transparent);
 		}
 	}

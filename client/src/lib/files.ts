@@ -112,6 +112,76 @@ export function cleanWorkdirPath(href: string): string {
 	}
 }
 
+export interface ParsedFileRef {
+	path: string;
+	line?: number;
+	endLine?: number;
+}
+
+const MAX_LINE = 1_000_000;
+const validLine = (s: string | undefined): number | undefined => {
+	if (!s) return undefined;
+	const n = Number(s);
+	return Number.isSafeInteger(n) && n >= 1 && n <= MAX_LINE ? n : undefined;
+};
+
+/**
+ * Split optional line/range suffixes (`src/a.ts:42`, `src/a.ts:42-50`, `src/a.ts:42:10`, `src/a.ts#L42`, `src/a.ts#L42-L50`)
+ * from a file path. Preserves Windows drive letters (`C:\a.ts:10`).
+ */
+export function splitFileRef(raw: string): ParsedFileRef {
+	const hash = /^(.+?)#L(\d+)(?:-L?(\d+))?$/i.exec(raw);
+	if (hash) {
+		const line = validLine(hash[2]);
+		const end = validLine(hash[3]);
+		return line ? { path: hash[1]!, line, ...(end && end >= line ? { endLine: end } : {}) } : { path: hash[1]! };
+	}
+	const colon = /^(.+?):(\d+)(?:-(\d+)|:\d+)?$/.exec(raw);
+	if (colon && !/^[A-Za-z]$/.test(colon[1]!)) {
+		const line = validLine(colon[2]);
+		const end = validLine(colon[3]);
+		return line ? { path: colon[1]!, line, ...(end && end >= line ? { endLine: end } : {}) } : { path: colon[1]! };
+	}
+	return { path: raw };
+}
+
+/** Parse a markdown workdir link (`./src/a.ts#L42-L50`, `src/a.ts:42`, `src/a.ts?v=1`) into a clean path + optional line range. */
+export function fileRefOfHref(href: string): ParsedFileRef {
+	const hash = /#L(\d+)(?:-L?(\d+))?$/i.exec(href);
+	const base = splitFileRef(cleanWorkdirPath(href));
+	if (base.line || !hash) return base;
+	const line = validLine(hash[1]);
+	const end = validLine(hash[2]);
+	return line ? { path: base.path, line, ...(end && end >= line ? { endLine: end } : {}) } : base;
+}
+
+/** Format an optional line range as `:42` or `:42-50` (empty string when no line). */
+export const formatFileLine = (line?: number, endLine?: number): string =>
+	line ? (endLine && endLine > line ? `:${line}-${endLine}` : `:${line}`) : "";
+
+/** Known file extensions for recognizing unambiguous repo-relative file paths inside inline `<code>` spans. */
+const CODE_FILE_EXT =
+	/\.(?:[cm]?[jt]sx?|svelte|vue|astro|py|rb|go|rs|java|kt|kts|swift|c|h|cc|cpp|hpp|cs|php|sh|bash|zsh|fish|sql|html?|css|scss|less|jsonc?|ya?ml|toml|ini|conf|cfg|xml|svg|md|markdown|txt|csv|tsv|log|diff|patch|env|prisma|graphql|gql|proto|tf|hcl|png|jpe?g|gif|webp|pdf|mp3|mp4|wav|webm|mov)$/i;
+
+/**
+ * True when an inline `<code>` span's sole text is unambiguously a relative file path (has `/`, known extension,
+ * no whitespace, no scheme, no `..`, no globs/domains, optional `:line(-end)?` or `#L42(-L50)?`). Rejects versions
+ * (`model-v5.5`), domains (`github.com/a/b.md`), globs (`src/*.ts`), branch names (`feat/foo`), property access
+ * (`console.log`), CSS selectors (`.vfade`), and absolute paths (`/etc/passwd`).
+ */
+export function parseInlineCodeFilePath(raw: string): ParsedFileRef | null {
+	const s = raw.trim();
+	if (!s || /[\s*?{}$<>]/.test(s) || s.startsWith("/") || s.startsWith("~") || s.startsWith("#") || /^[a-z][a-z0-9+.-]*:/i.test(s)) return null;
+	const normalized = s.replace(/^\.\//, "");
+	const ref = splitFileRef(normalized);
+	if (!ref.path.includes("/") || ref.path.startsWith("/") || ref.path.split("/").includes("..")) return null;
+	// Reject bare domain-like prefixes such as `github.com/org/repo.md`, while still allowing dot-dirs like `.github/...`.
+	const firstSeg = ref.path.slice(0, ref.path.indexOf("/"));
+	if (/^[a-z0-9-]+(?:\.[a-z0-9-]+)+$/i.test(firstSeg)) return null;
+	if (!CODE_FILE_EXT.test(ref.path)) return null;
+	return ref;
+}
+
 /** Parse CSV/TSV (quotes, escaped quotes, newlines inside quotes). Small and forgiving; for previews only. */
 export function parseTable(src: string, delimiter: string, maxRows = 1000): { rows: string[][]; more: boolean } {
 	const rows: string[][] = [];

@@ -6,7 +6,8 @@
 	import { app } from "../../lib/store.svelte";
 	import { getPane } from "../../lib/pane";
 	import { clip, duration, fullTime } from "../../lib/format";
-	import { peerTargetsOf, skillOf, splitCd, toolArgStr as str, toolIcon, toolLabel, toolSummary } from "../../lib/tools";
+	import { baseName, formatFileLine, splitFilePath } from "../../lib/files";
+	import { peerTargetsOf, scheduleIdOf, skillOf, splitCd, toolArgStr as str, toolIcon, toolLabel, toolSummary } from "../../lib/tools";
 	import type { ToolRun } from "../../lib/types";
 	import { extensions } from "../../lib/extensions/host.svelte";
 	import ExtensionView from "../extensions/ExtensionView.svelte";
@@ -82,6 +83,15 @@
 		return null;
 	});
 	const skillName = $derived(skillOf(name, args));
+	const fileTarget = $derived.by(() => {
+		if (skillName || !pane.id || (name !== "read" && name !== "write" && name !== "edit")) return null;
+		const path = str(args.path).trim();
+		if (!path) return null;
+		const offset = typeof args.offset === "number" && Number.isSafeInteger(args.offset) && args.offset >= 1 ? args.offset : undefined;
+		return { path, line: name === "read" ? offset : undefined };
+	});
+	const delegateRole = $derived(name === "delegate" && pane.id ? str(args.role).trim() || null : null);
+	const scheduleId = $derived(name === "schedule" ? scheduleIdOf(args, run.details ?? null) : null);
 
 </script>
 
@@ -122,6 +132,51 @@
 						title={t("스킬 {name} 보기", { name: skillName })}
 						onclick={() => app.openSkills(pane.id, skillName)}
 					><Icon name="skill" /><span class="jlabel">/skill:{skillName}</span></button>
+				</div>
+			{:else if fileTarget && pane.id}
+				{@const fp = splitFilePath(fileTarget.path)}
+				{@const suffix = formatFileLine(fileTarget.line)}
+				<div class="jump">
+					<button
+						type="button"
+						class="jump-tok file"
+						title={t("{name} 미리 보기", { name: `${fileTarget.path}${suffix}` })}
+						onclick={() => app.openFile(pane.id!, { path: fileTarget.path, name: baseName(fileTarget.path), ...(fileTarget.line ? { line: fileTarget.line } : {}) })}
+					>
+						<Icon name="file" />
+						{#if fp}
+							<span class="jpath"><span class="jdir">{fp.dir}</span><span class="jbase">{fp.base}{suffix}</span></span>
+						{:else}
+							<span class="jlabel">{fileTarget.path}{suffix}</span>
+						{/if}
+					</button>
+				</div>
+			{:else if delegateRole}
+				<div class="jump">
+					<button
+						type="button"
+						class="jump-tok file"
+						title={t("서브에이전트 역할 보기")}
+						onclick={() => app.openSubagents(pane.id)}
+					><Icon name="bot" /><span class="jlabel">{delegateRole}</span></button>
+				</div>
+			{:else if name === "schedule" && pane.id}
+				<div class="jump">
+					<button
+						type="button"
+						class="jump-tok file"
+						title={t("예약 작업 보기")}
+						onclick={() => (scheduleId ? app.openScheduleEdit(scheduleId) : app.openScheduleFor(pane.id!))}
+					><Icon name="clock" /><span class="jlabel">{t("예약 작업")}</span></button>
+				</div>
+			{:else if name === "goal" && pane.id}
+				<div class="jump">
+					<button
+						type="button"
+						class="jump-tok file"
+						title={t("목표 보기")}
+						onclick={() => app.openGoal(pane.id)}
+					><Icon name="target" /><span class="jlabel">{t("목표")}</span></button>
 				</div>
 			{/if}
 			{#if name === "edit"}
@@ -314,6 +369,10 @@
 	.jump-tok.skill {
 		--hue: var(--accent);
 	}
+	.jump-tok.file {
+		--hue: var(--mark-file);
+		font-weight: 500;
+	}
 	.jump-tok :global(svg) {
 		flex: none;
 		width: 12px;
@@ -321,6 +380,25 @@
 		opacity: 0.7;
 	}
 	.jlabel {
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	.jpath {
+		display: inline-flex;
+		min-width: 0;
+	}
+	.jdir {
+		flex: 0 999999 auto;
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		opacity: 0.68;
+	}
+	.jbase {
+		flex: 0 1 auto;
 		min-width: 0;
 		overflow: hidden;
 		text-overflow: ellipsis;

@@ -108,6 +108,16 @@ export function peerTargetsOf(args: Record<string, unknown>, output = ""): strin
 /** Primary `@`-less handle a `peer` call acted on, or null. */
 export const peerTargetOf = (args: Record<string, unknown>, output = ""): string | null => peerTargetsOf(args, output)[0] ?? null;
 
+/** Schedule ID a `schedule` call acted on (from tool `details.id` or `args.id`), or null for `list` / `delete`. */
+export function scheduleIdOf(args: Record<string, unknown>, details?: Record<string, unknown> | null): string | null {
+	const action = str(args.action);
+	if (action === "list" || action === "delete") return null;
+	const fromDetails = typeof details?.id === "string" ? details.id.trim() : "";
+	if (fromDetails) return fromDetails;
+	const fromArgs = str(args.id).trim();
+	return fromArgs || null;
+}
+
 /** One line that says what a tool call is doing. */
 export function toolSummary(name: string, args: Record<string, unknown>): string {
 	if (toolKind(name, args) === "skill") return "";

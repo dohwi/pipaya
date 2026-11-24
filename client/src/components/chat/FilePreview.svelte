@@ -1,12 +1,12 @@
 <script lang="ts">
 	import IconButton from "../ui/IconButton.svelte";
 	import Spinner from "../ui/Spinner.svelte";
-	import { onDestroy, untrack } from "svelte";
+	import { onDestroy, tick, untrack } from "svelte";
 	import { t } from "../../lib/i18n";
 	import { app } from "../../lib/store.svelte";
 	import { errorText } from "../../lib/api";
 	import { copyText } from "../../lib/clipboard";
-	import { parseTable, previewKind, sizeLabel } from "../../lib/files";
+	import { formatFileLine, parseTable, previewKind, sizeLabel } from "../../lib/files";
 	import Markdown from "./Markdown.svelte";
 	import Modal from "../ui/Modal.svelte";
 	import { saveFile } from "../../lib/save-file";
@@ -34,6 +34,7 @@
 
 	/** where the video player (lib/video-view.ts) is drawn: it has a full-screen button of its own, which a phone WebView lacks natively */
 	let videoHost = $state<HTMLElement>();
+	let linesHost = $state<HTMLElement>();
 	$effect(() => {
 		if (kind !== "video" || !url || mediaFailed || !videoHost) return;
 		const player = videoPlayer(url);
@@ -42,7 +43,28 @@
 		return () => closeVideoView(player);
 	});
 
+	const MAX_NUMBERED_LINES = 2000;
+	const LINE_WINDOW_PAD = 300;
 	const kind = $derived(open ? previewKind(open.file.name, open.file.mimeType) : "other");
+	const targetLine = $derived(open?.file.line && open.file.line >= 1 ? open.file.line : null);
+	const targetEnd = $derived(targetLine ? Math.max(targetLine, open?.file.endLine ?? targetLine) : null);
+	const lineView = $derived.by(() => {
+		if (text === null || targetLine === null || !(kind === "text" || kind === "markdown" || (kind === "html" && source))) return null;
+		const all = text.split(/\r?\n/);
+		const total = all.length;
+		if (total <= MAX_NUMBERED_LINES) return { start: 1, total, rows: all };
+		const start = Math.max(1, targetLine - LINE_WINDOW_PAD);
+		const end = Math.min(total, (targetEnd ?? targetLine) + LINE_WINDOW_PAD);
+		return { start, total, rows: all.slice(start - 1, end) };
+	});
+	$effect(() => {
+		const host = linesHost;
+		const line = targetLine;
+		if (!host || !line || !lineView) return;
+		void tick().then(() => {
+			host.querySelector<HTMLElement>(`[data-ln="${line}"]`)?.scrollIntoView({ block: "center" });
+		});
+	});
 
 	const table = $derived(kind === "table" && text !== null ? parseTable(text, /\.tsv$/i.test(open?.file.name ?? "") ? "\t" : ",") : null);
 
@@ -125,7 +147,7 @@
 </script>
 
 {#if open}
-	<Modal onclose={close} title={open.file.name} sub={`${open.file.path}${size !== undefined ? ` · ${sizeLabel(size)}` : ""}`} subMono divider width="xl" maxHeight="calc(var(--dvh) * 0.85)" layer={2} portal safeArea>
+	<Modal onclose={close} title={open.file.name} sub={`${open.file.path}${formatFileLine(open.file.line, open.file.endLine)}${size !== undefined ? ` · ${sizeLabel(size)}` : ""}`} subMono divider width="xl" maxHeight="calc(var(--dvh) * 0.85)" layer={2} portal safeArea>
 		{#snippet headerActions()}
 			{#if kind === "html"}
 				<IconButton icon="terminal" label={t("소스 보기")} tip class={{ on: source }} onclick={() => (source = !source)} aria-pressed={source} />
@@ -156,6 +178,25 @@
 			{:else if kind === "html" && htmlUrl && !source}
 				<!-- fully sandboxed: no scripts, no same-origin, no forms, no navigation -->
 				<iframe class="html" src={htmlUrl} sandbox="" referrerpolicy="no-referrer" title={open.file.name}></iframe>
+			{:else if lineView}
+				{@const endLineNum = lineView.start + lineView.rows.length - 1}
+				<div class="lines" style:--lno-w={`${Math.max(3, String(endLineNum).length)}ch`} bind:this={linesHost}>
+					{#if lineView.start > 1}
+						<div class="winnote">{t("앞부분 {n}줄 생략", { n: lineView.start - 1 })}</div>
+					{/if}
+					{#each lineView.rows as ln, idx}
+						{@const n = lineView.start + idx}
+						{@const isHl = targetLine !== null && targetEnd !== null && n >= targetLine && n <= targetEnd}
+						<div class="line" data-ln={n} class:hl={isHl} aria-current={isHl ? "location" : undefined}>
+							<span class="lno" aria-hidden="true">{n}</span>
+							<span class="ltxt">{ln || " "}</span>
+						</div>
+					{/each}
+					{#if endLineNum < lineView.total}
+						<div class="winnote">{t("뒷부분 {n}줄 생략", { n: lineView.total - endLineNum })}</div>
+					{/if}
+				</div>
+				{#if truncated}<div class="note">{t("파일이 커서 앞부분만 보여 줍니다")}</div>{/if}
 			{:else if kind === "markdown" && text !== null}
 				<Markdown {text} sessionId={open.sessionId} />
 				{#if truncated}<div class="note">{t("파일이 커서 앞부분만 보여 줍니다")}</div>{/if}
@@ -186,6 +227,38 @@
 		overflow-y: auto;
 		padding: 12px;
 		min-height: 120px;
+	}
+	.lines {
+		font-family: var(--mono);
+		font-size: var(--fs-sm);
+		line-height: 20px;
+		tab-size: 2;
+	}
+	.line {
+		display: grid;
+		grid-template-columns: var(--lno-w, 4ch) minmax(0, 1fr);
+		gap: 12px;
+		padding: 0 8px;
+	}
+	.line.hl {
+		background: color-mix(in srgb, var(--mark-mention) 14%, transparent);
+		box-shadow: inset 2px 0 0 var(--mark-mention); /* crisp left hairline marks the target line range cleanly */
+	}
+	.winnote {
+		padding: 4px 8px;
+		font-family: var(--sans);
+		font-size: var(--fs-xs);
+		color: var(--text-faint);
+	}
+	.lno {
+		text-align: right;
+		color: var(--text-faint);
+		font-variant-numeric: tabular-nums;
+		user-select: none;
+	}
+	.ltxt {
+		white-space: pre-wrap;
+		overflow-wrap: anywhere;
 	}
 	.pic {
 		display: block;

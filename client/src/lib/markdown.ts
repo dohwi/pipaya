@@ -2,7 +2,7 @@ import { Marked, type Tokens } from "marked";
 import createDOMPurify, { type DOMPurify } from "dompurify";
 import { getLang, t } from "./i18n";
 import { remoteImageHost } from "./remote-image";
-import { cleanWorkdirPath, filePathOf, isImagePath, isLocalFilePath, isWorkdirPath, mediaKindOf, splitFilePath } from "./files";
+import { filePathOf, fileRefOfHref, formatFileLine, isImagePath, isLocalFilePath, isWorkdirPath, mediaKindOf, splitFilePath } from "./files";
 import { groupPictures } from "./gallery";
 import { BARE_URL_END, MARKED_OPTIONS, NO_INDENTED_CODE, blocksOf, hideFenceTail, hideMarkerTail, streamSplit } from "./markdown-split";
 import { highlightCode } from "./code-highlight";
@@ -90,13 +90,15 @@ md.use({
 			}
 			// A relative link is a file in the session's working directory (the agent wrote it): preview it in the app.
 			if (isWorkdirPath(href)) {
-				const clean = cleanWorkdirPath(href);
-				const tip = title ? ` title="${escapeHtml(title)}"` : ` title="${escapeHtml(clean)}"`;
+				const ref = fileRefOfHref(href);
+				const display = `${ref.path}${formatFileLine(ref.line, ref.endLine)}`;
+				const tip = title ? ` title="${escapeHtml(title)}"` : ` title="${escapeHtml(display)}"`;
 				const fp = !inner.includes("<") ? splitFilePath(inner) : null;
 				const body = fp
 					? `<span class="wd-path"><span class="wd-dir">${fp.dir}</span><span class="wd-base">${fp.base}</span></span>`
 					: `<span class="wd-lbl">${inner}</span>`;
-				return `<a href="#" class="wd-file"${tip} data-file="${escapeHtml(clean)}">${body}</a>`;
+				const lineAttrs = `${ref.line ? ` data-line="${ref.line}"` : ""}${ref.endLine ? ` data-end-line="${ref.endLine}"` : ""}`;
+				return `<a href="#" class="wd-file"${tip} data-file="${escapeHtml(ref.path)}"${lineAttrs}>${body}</a>`;
 			}
 			if (!isSafeExternalUrl(href)) return inner;
 			return `<a href="${escapeHtml(href)}"${t} data-ext rel="noopener noreferrer">${inner}</a>`;
@@ -136,22 +138,28 @@ function purifier(): DOMPurify {
 		cachedWindow = globalThis.window;
 		cachedPurifier = createDOMPurify(globalThis.window as unknown as Parameters<typeof createDOMPurify>[0]);
 		cachedPurifier.addHook("afterSanitizeAttributes", (node) => {
-			// Mention and skill chips are injected only after sanitization (decorateMarkdownTokens); strip any raw HTML spoof.
+			// Mention, skill, prompt and button file chips are injected only after sanitization (decorateMarkdownTokens).
 			node.removeAttribute("data-mention-id");
 			node.removeAttribute("data-mention-kind");
 			node.removeAttribute("data-skill");
-			if (node.tagName?.toUpperCase() === "A") {
-				if (!node.hasAttribute("data-file")) {
-					const href = node.getAttribute("href") ?? "";
-					if (!isSafeExternalUrl(href)) {
-						node.removeAttribute("href");
-						node.removeAttribute("data-ext");
-						return;
-					}
-					node.setAttribute("data-ext", "");
-				}
-				node.setAttribute("rel", "noopener noreferrer");
+			node.removeAttribute("data-prompt");
+			const tag = node.tagName?.toUpperCase();
+			if (tag !== "A") {
+				node.removeAttribute("data-file");
+				node.removeAttribute("data-line");
+				node.removeAttribute("data-end-line");
+				return;
 			}
+			if (!node.hasAttribute("data-file")) {
+				const href = node.getAttribute("href") ?? "";
+				if (!isSafeExternalUrl(href)) {
+					node.removeAttribute("href");
+					node.removeAttribute("data-ext");
+					return;
+				}
+				node.setAttribute("data-ext", "");
+			}
+			node.setAttribute("rel", "noopener noreferrer");
 		});
 	}
 	return cachedPurifier;
@@ -183,8 +191,8 @@ export function renderMarkdown(src: string, opts: { cache?: boolean } = {}): str
 	}
 	const html = groupPictures(purifier().sanitize(parsed, {
 		ALLOWED_URI_REGEXP: SAFE_URI_REGEXP,
-		ADD_ATTR: ["data-copy", "data-ext", "data-img-src", "data-alt", "data-file", "data-wd-src", "data-kind", "data-hl-wait"],
-		FORBID_ATTR: ["data-mention-id", "data-mention-kind", "data-skill"],
+		ADD_ATTR: ["data-copy", "data-ext", "data-img-src", "data-alt", "data-file", "data-line", "data-end-line", "data-wd-src", "data-kind", "data-hl-wait"],
+		FORBID_ATTR: ["data-mention-id", "data-mention-kind", "data-skill", "data-prompt"],
 		FORBID_TAGS: ["style", "form", "input", "iframe", "object", "embed", "img", "picture", "source", "video", "audio", "link", "meta"],
 	}));
 	// Finished messages are re-rendered on every sidebar toggle; keep a small cache for them. Not while a grammar loads:

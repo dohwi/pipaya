@@ -84,17 +84,31 @@
 				{/if}
 			</div>
 		{:else if scheduled}
-			<div class="header"><Icon name="clock" /> <span>{t("예약")}</span></div>
+			<div class="header">
+				<Icon name="clock" />
+				{#if session}
+					<button type="button" class="header-link" title={t("예약 작업 보기")} onclick={() => app.openScheduleFor(session.id)}>{t("예약")}</button>
+				{:else}
+					<span>{t("예약")}</span>
+				{/if}
+			</div>
 		{/if}
 		{#if shown.quote}
-			<blockquote class="quote">{shown.quote}</blockquote>
+			<blockquote class="quote"><TokenText text={shown.quote} sessionId={session?.id ?? null} /></blockquote>
 		{/if}
 		{#if shown.rest}
 			<div class="txt" class:clamp={item.note?.collapse && !expanded}><TokenText text={shown.rest} images={item.images} skills={item.skills ?? []} sessionId={session?.id ?? null} /></div>
 		{/if}
 		{#if item.note}
-			<div class="tplnote" title={item.note.call} use:tapTitle>
-				<span>{item.note.text}</span>
+			{@const call = item.note.call ?? ""}
+			<div class="tplnote">
+				{#if call.startsWith("/prompt:")}
+					<button type="button" class="notelink" title={t("프롬프트 {name} 보기", { name: call.slice(8).split(/\s/, 1)[0] ?? "" })} onclick={() => app.openTemplates(session?.id ?? null)}>{item.note.text}</button>
+				{:else if /^\/[a-z][a-z0-9-]*:/.test(call)}
+					<button type="button" class="notelink" title={t("확장 명령 보기")} onclick={() => app.openCommands(session?.id ?? null)}>{item.note.text}</button>
+				{:else}
+					<span title={call} use:tapTitle>{item.note.text}</span>
+				{/if}
 				{#if item.note.collapse && (item.text.length > 400 || item.text.split("\n").length > 8)}
 					<button class="more" onclick={() => (expanded = !expanded)}>{expanded ? t("접기") : t("더 보기")}</button>
 				{/if}
@@ -215,14 +229,32 @@
 		color: var(--muted, inherit);
 		opacity: 0.8;
 	}
-	.more {
+	.more,
+	.notelink {
 		background: none;
 		border: 0;
 		padding: 0;
 		font: inherit;
 		color: inherit;
-		text-decoration: underline;
 		cursor: pointer;
+	}
+	.more {
+		text-decoration: underline;
+	}
+	.notelink {
+		text-decoration: underline;
+		text-decoration-style: dotted;
+		text-underline-offset: 3px;
+	}
+	.notelink:focus-visible {
+		outline: 2px solid var(--accent);
+		outline-offset: 2px;
+		border-radius: var(--radius-xs);
+	}
+	@media (hover: hover) {
+		.notelink:hover {
+			text-decoration-style: solid;
+		}
 	}
 	.imgs {
 		display: flex;
