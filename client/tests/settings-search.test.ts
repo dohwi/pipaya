@@ -67,15 +67,17 @@ describe("tabs and tool labels", () => {
 		expect(toolLabel("bash")).toBe("셸 명령 실행 (bash)");
 		expect(toolLabel("my-ext-tool")).toBe("my-ext-tool");
 	});
-	test("the sections follow setup order: device, the server, then what grows over time", () => {
+	test("the sections follow grouped mental-model order: common, server/devices, agent, workflow, extensions", () => {
 		const ids = SETTINGS_TABS.map((x) => x.id);
 		// the app-wide ones first, then the server's, and no server section in front of "정보"
 		expect(ids.slice(0, ids.indexOf("info"))).toEqual(["general", "keys", "backup"]);
-		expect(ids.indexOf("info")).toBeLessThan(ids.indexOf("models"));
-		// voice input is a connection like the models, so it sits right after them
-		expect(ids.indexOf("voice")).toBe(ids.indexOf("models") + 1);
-		// the sections that grow over time come last
-		expect(ids.slice(-2)).toEqual(["srvext", "devices"]);
+		expect(ids.indexOf("devices")).toBe(ids.indexOf("info") + 1);
+		// agent capabilities stay together: models -> tools -> guard -> mcp
+		expect(ids.slice(ids.indexOf("models"), ids.indexOf("mcp") + 1)).toEqual(["models", "tools", "guard", "mcp"]);
+		// workflow sections stay together: sessions -> schedules -> templates -> voice
+		expect(ids.slice(ids.indexOf("sessions"), ids.indexOf("voice") + 1)).toEqual(["sessions", "schedules", "templates", "voice"]);
+		// extensions sit cleanly at the end
+		expect(ids[ids.length - 1]).toBe("srvext");
 	});
 });
 

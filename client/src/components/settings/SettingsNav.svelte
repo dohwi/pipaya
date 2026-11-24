@@ -162,7 +162,10 @@
 	{#if server}
 		<div class="gsep" role="separator" aria-orientation="horizontal"></div>
 		<div class="glabel" aria-hidden="true" title={serverName}><span>{serverName}</span></div>
-		{#each groups.server as x (x.id)}
+		{#each groups.server as x, i (x.id)}
+			{#if i > 0 && x.cluster !== groups.server[i - 1]?.cluster}
+				<div class="subsep" aria-hidden="true"></div>
+			{/if}
 			{@render item(x)}
 		{/each}
 	{/if}
@@ -175,12 +178,14 @@
 			{@const off = !serverOnline && needsOnlineServer(x.id)}
 			{@const kids = off ? [] : extsOf(x.id)}
 			{@const open = kids.length > 0 && !collapsed[x.id]}
+			{@const schedCount = !off && x.id === "schedules" && server ? app.schedules.all(server.id).count : 0}
 			<div class="row" class:has={kids.length > 0}>
 				<button role="tab" class:srvtab={x.server} disabled={off} title={off ? t("서버에 연결되어 있지 않습니다") : x.sub ? t(x.sub) : undefined} aria-selected={!phone && tab === x.id && !extId} tabindex={phone || (tab === x.id && !extId) ? 0 : -1} class:on={!phone && tab === x.id && !extId} onclick={() => go(x.id)}>
 					<span class="nico"><Icon name={x.icon} />{#if x.id === "models" && server && app.problemsOf(server.id).length}<Pin tone="danger" label={t("설정 문제 {n}", { n: app.problemsOf(server.id).length })} />{:else if hasUpdate(x.id) && !open}<Pin tone="ok" label={x.id === "info" ? t("서버 업데이트 있음") : t("업데이트 있음")} />{/if}</span>
 					<span class="nt">
 						<span class="nl">{t(x.label)}</span>
 					</span>
+					{#if schedCount}<span class="cbadge inline-count" aria-hidden="true">{schedCount}</span>{/if}
 					{#if phone && !kids.length}<span class="go" aria-hidden="true"><Icon name="chevron-right" /></span>{/if}
 				</button>
 				{#if kids.length}
@@ -511,6 +516,9 @@
 			width: 1px;
 			height: 24px;
 			margin: 0 4px;
+		}
+		.nav .subsep {
+			display: none;
 		}
 		.nav .tree, .nav button.fold, .nav .cbadge {
 			display: none;

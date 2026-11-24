@@ -156,7 +156,7 @@
 	{#if editing && !section}
 		<div class="tabs">
 			<Segmented tabs variant="underline" label={t("서버 설정 구역")} value={tab} onchange={go}
-				options={[{ id: "info" as const, label: t("정보") }, { id: "agent" as const, label: t("에이전트") }, { id: "sessions" as const, label: t("대화") }, { id: "devices" as const, label: t("기기") }]} />
+				options={[{ id: "info" as const, label: t("정보") }, { id: "devices" as const, label: t("기기") }, { id: "agent" as const, label: t("에이전트") }, { id: "sessions" as const, label: t("대화") }]} />
 		</div>
 	{/if}
 
