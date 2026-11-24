@@ -435,7 +435,7 @@
 		color: var(--lb-ink);
 		background: var(--lb-note-bg);
 		border-radius: min(var(--radius-pill), 18px); /* a one-line note: a pill (18 = half its 36px height) */
-		line-height: 1.35;
+		line-height: 20px;
 		box-shadow: var(--lb-note-shadow);
 		pointer-events: none;
 		animation: note-in var(--motion-fast) var(--ease-std);
