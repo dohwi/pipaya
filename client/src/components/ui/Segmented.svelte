@@ -91,6 +91,7 @@
 		display: flex;
 		gap: 4px;
 		overflow-x: auto;
+		overflow-y: hidden;
 		scrollbar-width: none;
 		box-shadow: inset 0 -1px 0 var(--border); /* the hairline under the tabs, drawn inside so a scrolling row does not clip the bar over it */
 	}

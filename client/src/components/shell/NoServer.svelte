@@ -229,11 +229,15 @@
 		flex: 1;
 		min-width: 0;
 		overflow-x: auto;
+		overflow-y: hidden;
 		white-space: nowrap;
 		font-size: var(--fs-xs);
 		line-height: 20px;
 		color: var(--text);
 		scrollbar-width: none;
+	}
+	.line code::-webkit-scrollbar {
+		display: none;
 	}
 	.steps {
 		list-style: none;

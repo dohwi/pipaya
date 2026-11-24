@@ -303,6 +303,7 @@
 	.srvseg {
 		min-width: 0;
 		overflow-x: auto;
+		overflow-y: hidden;
 		scrollbar-width: none;
 	}
 	/* the strip scrolls (so it clips): draw the ring inside the button, not 4px outside it */

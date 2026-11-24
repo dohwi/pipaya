@@ -187,6 +187,7 @@
 		gap: 4px;
 		padding: 8px 0;
 		overflow-y: auto;
+		overflow-x: hidden;
 		scrollbar-width: none;
 	}
 	.agents::-webkit-scrollbar {

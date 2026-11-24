@@ -379,6 +379,7 @@
 		gap: 4px;
 		padding-left: 8px; /* with the tab's own 8px, the first icon lands on 16, the header title's line */
 		overflow-x: auto;
+		overflow-y: hidden;
 		overscroll-behavior-x: contain;
 		scrollbar-width: none;
 	}

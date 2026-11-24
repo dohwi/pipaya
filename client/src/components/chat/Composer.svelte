@@ -1063,7 +1063,8 @@
 		line-height: 1.5;
 		max-height: 220px;
 		min-height: 28px;
-		scrollbar-gutter: stable;
+		overflow-x: hidden;
+		overflow-y: auto;
 	}
 	textarea {
 		grid-area: 1 / 1;
@@ -1084,11 +1085,13 @@
 		line-height: 1.5;
 		white-space: pre-wrap;
 		overflow-wrap: break-word;
+		overflow-x: hidden;
 		overflow-y: auto;
-		scrollbar-gutter: stable;
+		scrollbar-width: none; /* the textarea in front draws the only scrollbar; syncMirror pads for its width */
 		color: transparent;
 		pointer-events: none;
 	}
+	.mirror::-webkit-scrollbar { display: none; }
 	/* mention tags: #imageN and #files grey, @mentions amber; the hues come from the theme (app.css) */
 	.mirror :global(mark) {
 		color: transparent;

@@ -314,6 +314,7 @@
 		/* max-height comes from the script (1.5, 2.5 or 3.5 rows by the room left, or what the grip pulled it to). */
 		overflow-x: hidden;
 		overflow-y: auto;
+		scrollbar-width: none; /* the custom .thumb is the indicator */
 		overscroll-behavior: contain;
 		cursor: grab;
 		user-select: none;
@@ -321,6 +322,7 @@
 		flex-direction: column;
 		gap: 4px;
 	}
+	.queued::-webkit-scrollbar { display: none; }
 	/* 16px ramps: the cut row is mostly gone by the edge. Only the edge that hides rows fades. */
 	.fade-bottom {
 		mask-image: linear-gradient(to bottom, #000 calc(100% - 16px), transparent);

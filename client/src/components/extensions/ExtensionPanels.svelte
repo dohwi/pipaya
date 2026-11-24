@@ -204,7 +204,7 @@
 	.total { margin-right: 4px; }
 	/* the arrows float over the ends of the rail, so they take no room while there is nothing to scroll */
 	.railwrap { position: relative; flex: 1; min-width: 0; display: flex; }
-	.rail { position: relative; flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; padding: 4px; overflow-x: auto; overscroll-behavior-x: contain; scroll-snap-type: x proximity; scrollbar-width: none; }
+	.rail { position: relative; flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; padding: 4px; overflow-x: auto; overflow-y: hidden; overscroll-behavior-x: contain; scroll-snap-type: x proximity; scrollbar-width: none; }
 	.rail::-webkit-scrollbar { display: none; }
 	.rail.fade-l { mask-image: linear-gradient(to right, transparent, #000 28px); }
 	.rail.fade-r { mask-image: linear-gradient(to left, transparent, #000 28px); }

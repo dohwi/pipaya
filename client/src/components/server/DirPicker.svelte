@@ -280,7 +280,11 @@
 		padding: 4px;
 		min-width: 0;
 		overflow-x: auto;
+		overflow-y: hidden;
 		scrollbar-width: none;
+	}
+	.chips::-webkit-scrollbar {
+		display: none;
 	}
 	.favbtn {
 		flex: none;
