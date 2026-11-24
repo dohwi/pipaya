@@ -7,6 +7,7 @@
 	import { viewport } from "../../lib/viewport.svelte";
 	import ExtensionSurface from "./ExtensionSurface.svelte";
 	import { released } from "../../lib/pointer";
+	import { verticalFade } from "../../lib/edge-fade";
 
 	/**
 	 * `side` panels: a dock at the right of the conversation area, one tab per shown panel. Its width starts at the
@@ -74,11 +75,13 @@
 			</div>
 			<IconButton icon="x" label={t("확장 패널 닫기")} onclick={() => hide(current)} />
 		</header>
-		<div class="body">
+		<div class="bodywrap vfade">
+		<div class="body" use:verticalFade>
 			{#key key(current)}
 				{#if current.description}<p class="desc">{current.description}</p>{/if}
 				<ExtensionSurface panel={current} />
 			{/key}
+		</div>
 		</div>
 	</aside>
 {/if}
@@ -93,6 +96,7 @@
 	header { flex: none; display: flex; align-items: center; gap: 4px; padding: 0 4px 0 0; box-shadow: inset 0 -1px 0 var(--border); }
 	.tabs { flex: 1; min-width: 0; }
 	.tabs :global(.utabs > button) { max-width: 180px; overflow: hidden; text-overflow: ellipsis; }
+	.bodywrap { flex: 1; min-height: 0; --fade-bg: var(--bg-side); }
 	.body { flex: 1; min-height: 0; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; padding: 12px; }
 	.desc { margin: 0 0 12px; font-size: var(--fs-xs); color: var(--text-dim); line-height: 1.6; overflow-wrap: anywhere; }
 

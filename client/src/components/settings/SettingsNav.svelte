@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { slidingIndicator } from "../../lib/sliding-indicator";
+	import { verticalFade } from "../../lib/edge-fade";
 	import { treePath } from "../../lib/tree-path";
 	import { rovingKeys } from "../../lib/roving";
 	import { easeEnter, easeExit, ms } from "../../lib/motion";
@@ -147,6 +148,7 @@
 </script>
 
 <!-- desktop: a column on the left; phone: a row of tabs above the content -->
+<div class="navwrap vfade">
 <div
 	class="nav"
 	class:phone
@@ -154,6 +156,7 @@
 	aria-label={t("설정 구역")}
 	use:slidingIndicator={{ selector: "button.on", variant: "fill", radius: "var(--radius-control)" }}
 	use:rovingKeys={{ item: '[role="tab"]', axis: "both" }}
+	use:verticalFade
 >
 	<div class="glabel" aria-hidden="true">{t("공통")}</div>
 	{#each groups.common as x (x.id)}
@@ -172,6 +175,7 @@
 	{#each groups.last as x (x.id)}
 		{@render item(x)}
 	{/each}
+</div>
 </div>
 
 {#snippet item(x: (typeof SETTINGS_TABS)[number])}
@@ -429,10 +433,16 @@
 	.nav button.sub .nl.idle {
 		color: var(--text-faint);
 	}
+	.navwrap {
+		align-self: stretch;
+		--fade-bg: var(--bg-elev);
+	}
 	.nav {
 		position: relative;
 		display: flex;
 		flex-direction: column;
+		flex: 1 1 auto;
+		min-height: 0;
 		gap: 4px;
 		align-self: stretch;
 		padding: 12px; /* 12 + the rows' 12 + the dialog's 1px border = 25: the icons and group labels start on the title's and search field's line */
@@ -495,6 +505,11 @@
 		white-space: nowrap;
 	}
 	@media (min-width: 601px) and (max-width: 760px) {
+		/* the row scrolls sideways here (masked above): no top/bottom fades */
+		.navwrap::before,
+		.navwrap::after {
+			display: none;
+		}
 		.nav {
 			flex-direction: row;
 			padding: 4px 12px;
@@ -546,9 +561,11 @@
 	}
 	/* phone: the list of sections, one tall row each (its own page opens on a tap), on the dialog's 16px gutter: the 12px of the row's padding + 4 here */
 	@media (max-width: 600px) {
+		.navwrap.phone {
+			border-right: 0;
+		}
 		.nav.phone {
 			padding: 12px 4px;
-			border-right: 0;
 		}
 		/* a touch row: 40 (the sidebar's 32 is for a mouse). Not the fold arrow: it is a 24px box centred with `top: calc(50% - 12px)`,
 		   and at 40px tall it sat 8px below the row's centre */

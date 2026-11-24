@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { msg, t } from "../../lib/i18n";
+	import { verticalFade } from "../../lib/edge-fade";
 	import { surfaceIn, surfaceOut } from "../../lib/motion";
 	import { ACTIVITY_TONE, type Activity } from "../../lib/activity";
 	let {
@@ -30,7 +31,8 @@
 	});
 </script>
 
-<div class="menu" id={listId} in:surfaceIn={{ y: 8 }} out:surfaceOut={{ y: 8 }} role="listbox" aria-label={t(label)} bind:this={listEl}>
+<div class="menu vfade" in:surfaceIn={{ y: 8 }} out:surfaceOut={{ y: 8 }}>
+<div class="scroller" id={listId} role="listbox" aria-label={t(label)} bind:this={listEl} use:verticalFade>
 	{#each items as item, i (item.id)}
 		{#if item.group && item.group !== items[i - 1]?.group}
 			<div class="head" class:first={i === 0} role="presentation">{t(item.group)}</div>
@@ -55,6 +57,7 @@
 		<div class="none">{t(empty)}</div>
 	{/each}
 </div>
+</div>
 
 <style>
 	.menu {
@@ -63,14 +66,21 @@
 		right: 0;
 		bottom: calc(100% + 8px);
 		max-height: min(300px, calc(var(--dvh) * 0.40));
-		overflow-x: hidden;
-		overflow-y: auto;
+		overflow: hidden;
 		background: var(--bg-elev);
 		border: 1px solid var(--border-strong);
 		border-radius: var(--radius);
 		box-shadow: var(--shadow-overlay);
-		padding: 4px 0;
 		z-index: var(--z-popover);
+		--fade-bg: var(--bg-elev);
+		--fade-h: 20px;
+	}
+	.scroller {
+		flex: 1 1 auto;
+		min-height: 0;
+		overflow-x: hidden;
+		overflow-y: auto;
+		padding: 4px 0;
 	}
 	/* a divider and a small heading wherever the kind of rows changes: commands, skills, files ... */
 	.head {

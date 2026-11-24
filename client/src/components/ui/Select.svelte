@@ -1,6 +1,7 @@
 <script lang="ts" generics="T extends string | number">
 	import { tick } from "svelte";
 	import Icon from "./Icon.svelte";
+	import { verticalFade } from "../../lib/edge-fade";
 	import { portal } from "../../lib/dialog";
 	import { surfaceIn, surfaceOut } from "../../lib/motion";
 
@@ -249,14 +250,10 @@
 	<div
 		use:portal
 		bind:this={list}
-		id={listId}
-		class="list"
+		class="list vfade"
 		class:up={pos.up}
 		class:sm={size === "sm"}
 		class:mono
-		role="listbox"
-		tabindex="-1"
-		aria-label={label}
 		in:surfaceIn={{ y: pos.up ? 4 : -4 }}
 		out:surfaceOut={{ y: pos.up ? 4 : -4 }}
 		style:left="{pos.left}px"
@@ -266,6 +263,7 @@
 		style:max-height="{pos.maxHeight}px"
 		onpointerdown={(e) => e.preventDefault()}
 	>
+		<div class="scroller" id={listId} role="listbox" tabindex="-1" aria-label={label} use:verticalFade>
 		{#each options as o, i (o.value)}
 			<div
 				id={optId(i)}
@@ -284,6 +282,7 @@
 				<span class="ck">{#if i === selected}<Icon name="check" />{/if}</span>
 			</div>
 		{/each}
+		</div>
 	</div>
 {/if}
 
@@ -386,6 +385,17 @@
 	.list {
 		position: fixed;
 		z-index: var(--z-dropdown);
+		overflow: hidden;
+		border: 1px solid var(--border-strong);
+		border-radius: var(--radius);
+		background: var(--bg-elev);
+		box-shadow: var(--shadow-overlay);
+		--fade-bg: var(--bg-elev);
+		--fade-h: 20px;
+	}
+	.scroller {
+		flex: 1;
+		min-height: 0;
 		display: flex;
 		flex-direction: column;
 		gap: 1px;
@@ -393,10 +403,6 @@
 		overflow-x: hidden;
 		overflow-y: auto;
 		overscroll-behavior: contain;
-		border: 1px solid var(--border-strong);
-		border-radius: var(--radius);
-		background: var(--bg-elev);
-		box-shadow: var(--shadow-overlay);
 	}
 	.list.mono {
 		font-family: var(--mono);
