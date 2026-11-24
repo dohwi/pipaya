@@ -4,16 +4,16 @@
 	import Icon from "../ui/Icon.svelte";
 	import IconButton from "../ui/IconButton.svelte";
 	import ConfirmButton from "../ui/ConfirmButton.svelte";
+	import Switch from "../ui/Switch.svelte";
 	import ModelLogo from "./ModelLogo.svelte";
 	import { t } from "../../lib/i18n";
 	import { collapseIn, collapseOut } from "../../lib/motion";
 	import type { Form, Row } from "../../lib/connection-form";
-	import type { CatalogModel } from "../../lib/types";
+	import type { CatalogModel, ConnectionResult } from "../../lib/types";
 
 	/**
-	 * The models of the connection being edited, one line each (logo, name, limits, and a badge when something needs the
-	 * user: not fetched, no id, not matched to the catalog), with the button that fetches the upstream's list and the one
-	 * that adds a blank model. Opening a line is the caller's (`onopen`).
+	 * The models of the connection being edited, one line each (logo, name, status badge, inline test, enable switch,
+	 * and a chevron to open full model settings), with upstream discovery and add-blank actions.
 	 */
 	let {
 		form,
@@ -23,6 +23,9 @@
 		note,
 		catalogLoaded,
 		matchedOf,
+		canTest = false,
+		tests = {},
+		ontest,
 		onopen,
 		onadd,
 		ondiscover,
@@ -36,6 +39,9 @@
 		note: string;
 		catalogLoaded: boolean;
 		matchedOf: (r: Row) => CatalogModel | null;
+		canTest?: boolean;
+		tests?: Record<string, ConnectionResult | "running">;
+		ontest?: (modelId: string) => void;
 		onopen: (index: number) => void;
 		onadd: () => void;
 		ondiscover: () => void;
@@ -62,22 +68,33 @@
 	{#if note}<p class="hint note" role="status" in:collapseIn out:collapseOut>{note}</p>{/if}
 	<div class="mpick">
 		{#each form.rows as r, i (i)}
+			{@const id = r.id.trim()}
+			{@const probe = id ? tests[id] : undefined}
 			<div class="mitem" class:off={r.disabled || r.unavailable}>
-			<button type="button" class="mopen" onclick={() => onopen(i)}>
-				<span class="mlogo"><ModelLogo conn={connection} icon={r.icon} provider={form.id} model={r.id} size={18} /></span>
-				<span class="mname" title={r.name.trim() || r.id.trim()}>{r.name.trim() || r.id.trim() || t("새 모델")}{#if r.fromUpstream && !r.unavailable}<span class="lockic" title={t("업스트림 제공")}><Icon name="server" /></span>{/if}{#if matchedOf(r)}<span class="mchk" title={matchedOf(r)?.id}><Icon name="check" /></span>{/if}</span>
-				{#if r.disabled}
-					<Badge tone="neutral" size="sm">{t("꺼짐")}</Badge>
-				{:else if r.unavailable}
-					<Badge tone="neutral" size="sm"><Icon name="alert" />{t("불러오지 못함")}</Badge>
-				{:else if !r.id.trim()}
-					<Badge tone="danger" size="sm" mono><Icon name="alert" />{t("ID 필요")}</Badge>
-				{:else if catalogLoaded && !matchedOf(r)}
-					<Badge tone="neutral" size="sm"><Icon name="unlink" />{t("수동 입력")}</Badge>
+				<div class="mrow">
+					<button type="button" class="mopen" onclick={() => onopen(i)}>
+						<span class="mlogo"><ModelLogo conn={connection} icon={r.icon} provider={form.id} model={r.id} size={18} /></span>
+						<span class="mname" title={r.name.trim() || id}>{r.name.trim() || id || t("새 모델")}{#if r.fromUpstream && !r.unavailable}<span class="lockic" title={t("업스트림 제공")}><Icon name="server" /></span>{/if}{#if matchedOf(r)}<span class="mchk" title={matchedOf(r)?.id}><Icon name="check" /></span>{/if}</span>
+						{#if r.unavailable}
+							<Badge tone="neutral" size="sm"><Icon name="alert" />{t("불러오지 못함")}</Badge>
+						{:else if !id}
+							<Badge tone="danger" size="sm" mono><Icon name="alert" />{t("ID 필요")}</Badge>
+						{:else if catalogLoaded && !matchedOf(r)}
+							<Badge tone="neutral" size="sm"><Icon name="unlink" />{t("수동 입력")}</Badge>
+						{/if}
+						<Icon name="chevron-right" />
+					</button>
+					{#if ontest && !form.isNew}
+						<Button variant="ghost" size="sm" class={r.disabled ? "hidden" : ""} disabled={r.disabled || probe === "running" || !canTest || r.unavailable || !id} tabindex={r.disabled ? -1 : undefined} onclick={() => ontest(id)} title={t("실제 모델 요청을 1회 보냅니다 (요금이 발생할 수 있음)")}>
+							{probe === "running" ? t("확인 중…") : t("테스트")}
+						</Button>
+					{/if}
+					<Switch checked={!r.disabled} disabled={busy} label={t("{id} 사용", { id: r.name.trim() || id || t("새 모델") })} onchange={(on) => { r.disabled = !on; }} />
+					{#if r.unavailable}<IconButton icon="trash" label={t("{name} 삭제", { name: r.name.trim() || id })} tip size="sm" disabled={busy} onclick={() => onremove(i)} />{:else if gone}<span class="tspace" aria-hidden="true"></span>{/if}
+				</div>
+				{#if !r.disabled && probe && probe !== "running"}
+					<span class="res {probe.ok ? 'ok' : 'bad'}" role="status">{probe.ok ? `${t("성공")} ${probe.durationMs}ms${probe.text ? ` · “${probe.text.trim().slice(0, 40)}”` : ""}` : (probe.error ?? t("실패"))}</span>
 				{/if}
-				<Icon name="chevron-right" />
-			</button>
-			{#if r.unavailable}<IconButton icon="trash" label={t("{name} 삭제", { name: r.name.trim() || r.id.trim() })} tip size="sm" disabled={busy} onclick={() => onremove(i)} />{:else if gone}<span class="tspace" aria-hidden="true"></span>{/if}
 			</div>
 		{/each}
 	</div>
@@ -115,7 +132,7 @@
 		align-items: center;
 		gap: 8px;
 	}
-	/* keeps the chevron column straight when only some rows carry a delete button (32px = IconButton sm) */
+	/* keeps the switch column straight when only some rows carry a delete button (32px = IconButton sm) */
 	.tspace {
 		flex: none;
 		width: 32px;
@@ -134,12 +151,30 @@
 	}
 	.mitem {
 		display: flex;
-		align-items: center;
-		gap: 8px;
-		padding: 0 12px 0 12px;
+		flex-direction: column;
+		padding: 0 12px;
 		background: var(--bg-elev);
 		border-bottom: 1px solid var(--border);
 		transition: background var(--motion-fast) var(--ease-std);
+	}
+	.mrow {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+	}
+	.mrow :global(.btn.hidden) {
+		visibility: hidden;
+	}
+	.res {
+		padding: 0 0 8px 24px;
+		font-size: var(--fs-xs);
+		overflow-wrap: anywhere;
+	}
+	.res.ok {
+		color: var(--ok);
+	}
+	.res.bad {
+		color: var(--danger);
 	}
 	.mitem:last-child {
 		border-bottom: 0;

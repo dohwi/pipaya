@@ -123,7 +123,10 @@
 
 	const platformName = (p: NotificationDevice["platform"]) =>
 		p === "android" ? "Android" : p === "ios" ? "iOS" : p === "web" ? t("웹 브라우저") : t("데스크톱 앱");
-	const icon = (p: NotificationDevice["platform"]): "phone" | "monitor" => (p === "android" || p === "ios" ? "phone" : "monitor");
+	const icon = (d: NotificationDevice): "phone" | "monitor" => {
+		if (d.os && /^(macOS|Windows|Linux)\b/i.test(d.os)) return "monitor";
+		return d.platform === "android" || d.platform === "ios" ? "phone" : "monitor";
+	};
 
 	/** This window reports to every saved server under one id, so its row is "this device" on any server tab. */
 	const mine = (d: NotificationDevice) => d.id === notifications.id;
@@ -157,7 +160,7 @@
 		<ul>
 			{#each shown as d (d.id)}
 				<li class:live={d.live} animate:reflow in:rowIn out:rowOut>
-					<span class="kind" class:on={d.live} title={d.live ? t("연결됨") : t("연결 끊김")}><Icon name={icon(d.platform)} /></span>
+					<span class="kind" class:on={d.live} title={d.live ? t("연결됨") : t("연결 끊김")}><Icon name={icon(d)} /></span>
 					<div class="meta">
 						<span class="name">
 							<span class="nm">{d.name ?? platformName(d.platform)}</span>

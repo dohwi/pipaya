@@ -19,7 +19,7 @@
 	import IconPickerModal from "./IconPickerModal.svelte";
 	import CatalogPickerModal from "./CatalogPickerModal.svelte";
 	import ModelPage from "./ModelPage.svelte";
-	import type { CatalogInfo, CatalogModel, CustomProvider } from "../../lib/types";
+	import type { CatalogInfo, CatalogModel, ConnectionResult, CustomProvider } from "../../lib/types";
 	import { directRouter, proxyTierApi } from "../../lib/service-tier";
 	import { applyMatch, collectModels, formFromProvider, headerError, newForm, newRow, slug, snapshot, type Form, type LocalPreset, type Row } from "../../lib/connection-form";
 
@@ -51,6 +51,19 @@
 
 	let busy = $state(false);
 	let formError = $state("");
+	let tests = $state<Record<string, ConnectionResult | "running">>({});
+	const canTest = $derived(start.kind === "edit" && start.provider.configured);
+
+	async function testModel(model: string) {
+		const a = api();
+		if (!a || !form || !model.trim()) return;
+		tests[model] = "running";
+		try {
+			tests[model] = await a.testModel({ provider: form.id, model });
+		} catch (e) {
+			tests[model] = { ok: false, durationMs: 0, error: errorText(e) };
+		}
+	}
 
 	let form = $state<Form | null>(null);
 	/** Index of the model whose details are open inside the dialog; null = the connection page. */
@@ -351,6 +364,9 @@
 					note={discoverNote}
 					{catalogLoaded}
 					{matchedOf}
+					{canTest}
+					{tests}
+					ontest={testModel}
 					onopen={openModel}
 					onadd={addModel}
 					ondiscover={discover}

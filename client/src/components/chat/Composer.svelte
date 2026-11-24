@@ -15,7 +15,7 @@
 	import { errorText } from "../../lib/api";
 	import ExtensionMount from "../extensions/ExtensionMount.svelte";
 	import ExtensionPart from "../extensions/ExtensionPart.svelte";
-	import { untrack } from "svelte";
+	import { tick, untrack } from "svelte";
 	import { peerMentions } from "../../lib/peers";
 	import { abortable } from "../../lib/abortable";
 	import { DebouncedList } from "../../lib/debounced-list.svelte";
@@ -788,10 +788,49 @@
 	let pickedPaths = $state<string[]>([]);
 	const highlighted = $derived(mirrorHtml(text, { commands: [...templateList.map((x) => `${PROMPT_PREFIX}${x.name}`), ...familyList.map((f) => `${f.prefix}:${f.name}`)], skills: skillList, mentions: mentionItems.map((m) => m.insert.slice(1)), images: attached.images.length, paths: pickedPaths }));
 
+	function syncMirror() {
+		if (!mirror || !ta) return;
+		// Keep text wrapping width identical even when a browser reserves different scrollbar widths for <textarea> vs <div>.
+		const padRight = parseFloat(getComputedStyle(ta).paddingRight) || 0;
+		const gutterDelta = mirror.clientWidth - ta.clientWidth;
+		if (gutterDelta > 0) {
+			mirror.style.paddingRight = `${padRight + gutterDelta}px`;
+		} else if (mirror.style.paddingRight) {
+			mirror.style.paddingRight = "";
+		}
+		if (mirror.scrollTop !== ta.scrollTop) mirror.scrollTop = ta.scrollTop;
+		if (mirror.scrollLeft !== ta.scrollLeft) mirror.scrollLeft = ta.scrollLeft;
+	}
+
+	// Re-sync mirror scroll after Svelte flushes `{@html highlighted}` to DOM (prevents scrollTop clamping when text grows at max-height).
+	$effect(() => {
+		void highlighted;
+		syncMirror();
+		const raf = requestAnimationFrame(syncMirror);
+		return () => cancelAnimationFrame(raf);
+	});
+
+	// Re-sync on textarea width/height changes (sidebar toggle, split resize, zoom, attachment strip changes).
+	$effect(() => {
+		const el = ta;
+		if (!el || typeof ResizeObserver === "undefined") return;
+		const ro = new ResizeObserver(syncMirror);
+		ro.observe(el);
+		return () => ro.disconnect();
+	});
+
 	function insertImageToken(n: number) {
-		const next = insertToken(text, ta?.selectionStart ?? text.length, `#image${n}`);
+		const pos = document.activeElement === ta && ta ? ta.selectionStart : caret;
+		const next = insertToken(text, Math.min(pos, text.length), `#image${n}`);
 		text = next.text;
-		queueMicrotask(() => { ta?.setSelectionRange(next.caret, next.caret); syncCaret(); });
+		caret = next.caret;
+		void tick().then(() => {
+			if (ta) {
+				ta.setSelectionRange(next.caret, next.caret);
+				syncCaret();
+				syncMirror();
+			}
+		});
 	}
 
 	function removeAttachment(id: string) {
@@ -913,12 +952,12 @@
 		<div class="mirror" bind:this={mirror} aria-hidden="true">{@html highlighted}</div>
 		<textarea
 			bind:this={ta}
-			onscroll={() => { if (mirror && ta) mirror.scrollTop = ta.scrollTop; }}
+			onscroll={syncMirror}
 			data-composer
 			{...menuAria(slashOpen, menuListId, menuOptionId, slashIndex, menuItems.length)}
 			bind:value={text}
 			onkeydown={onKey}
-			oninput={() => { voiceEnter = false; syncCaret(); }}
+			oninput={() => { voiceEnter = false; syncCaret(); syncMirror(); }}
 			onkeyup={(e) => { if (!["ArrowDown", "ArrowUp", "Enter", "Tab", "Escape"].includes(e.key)) syncCaret(); }}
 			onclick={syncCaret}
 			onfocus={() => { voiceEnter = false; syncCaret(); }}
