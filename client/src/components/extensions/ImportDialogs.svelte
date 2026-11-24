@@ -15,6 +15,7 @@
 	import Icon from "../ui/Icon.svelte";
 	import Modal from "../ui/Modal.svelte";
 	import { recentreOnMount } from "../../lib/dialog";
+	import { sheetPull } from "../../lib/sheet";
 	import Notice from "../ui/Notice.svelte";
 	import PermissionList from "./PermissionList.svelte";
 	import { manifestDescription, manifestName } from "../../lib/extensions/translations";
@@ -68,23 +69,23 @@
 	<!-- one dialog for the whole import: the result takes the preview's place inside it, so deciding does not close one window and open another -->
 	<Modal
 		onclose={result ? onclose : oncancel}
+		dismissible={!!result || !busy.$import}
 		role={result?.tone === "danger" ? "alertdialog" : "dialog"}
 		labelledby={result ? "import-result-title" : "import-preview-title"}
 		describedby={result ? "import-result-detail" : undefined}
 		width={result ? "s" : "l"}
 		maxHeight="var(--dvh)"
 		layer={3}
-		sheet={false}
 		portal
 	>
 		{#if result}
 			{@const r = result}
 			<div class="rmodal result {r.tone}" use:focusOk use:recentreOnMount>
-				<DialogBody gap rule={false}>
-				<div class="rhead">
+				<header class="rhead" use:sheetPull={{ onclose }}>
 					<span class="rmark" aria-hidden="true"><Icon name={r.tone === "ok" ? "check" : "alert"} /></span>
 					<h2 id="import-result-title">{r.title}</h2>
-				</div>
+				</header>
+				<DialogBody gap rule={false}>
 				<div class="rbody">
 					{#if r.pkg}
 						<div class="rpkg">
@@ -99,7 +100,7 @@
 					<p id="import-result-detail" class="rdetail">{r.detail}</p>
 				</div>
 				</DialogBody>
-				<DialogFooter>
+				<DialogFooter safe>
 					{#if r.pkg}
 						<Button variant="primary" size="sm" data-ok onclick={onshow}>{t("설치된 확장 보기")}</Button>
 						<Button size="sm" onclick={onclose}>{t("닫기")}</Button>
@@ -111,11 +112,11 @@
 		{:else if preview}
 			{@const p = preview}
 			<div class="rmodal" use:focusOk>
-				<DialogBody gap rule={false}>
-				<div class="rhead">
+				<header class="rhead" use:sheetPull={{ onclose: () => !busy.$import && oncancel(), disabled: !!busy.$import }}>
 					<span class="rmark info" aria-hidden="true"><Icon name="plus" /></span>
 					<h2 id="import-preview-title">{replacement ? t("확장 교체") : t("확장 가져오기")}</h2>
-				</div>
+				</header>
+				<DialogBody gap rule={false}>
 				<div class="rbody">
 					<div class="rpkg">
 						<strong>{manifestName(p.manifest)}</strong>
@@ -135,7 +136,7 @@
 					{/if}
 				</div>
 				</DialogBody>
-				<DialogFooter rule wrap>
+				<DialogFooter rule safe wrap>
 					<Button size="sm" disabled={busy.$import} onclick={oncancel}>{t("취소")}</Button>
 					<Button variant="primary" size="sm" data-ok disabled={busy.$import || busy[p.manifest.id]} onclick={onimport}>{willResume ? t("교체하고 바로 실행") : replacement ? t("교체하여 가져오기") : t("꺼진 상태로 가져오기")}</Button>
 				</DialogFooter>
@@ -151,8 +152,8 @@
 	.rmark.info { background: var(--accent-soft, var(--bg-hover)); color: var(--accent, var(--text)); }
 	.rdesc { color: var(--text-dim); font-size: var(--fs-sm); overflow-wrap: anywhere; }
 	.rsub { margin: 4px 0 0; font-size: var(--fs-xs); font-weight: 600; color: var(--text-dim); }
-	.rhead { display: flex; align-items: center; gap: 12px; }
-	.rhead h2 { margin: 0; font-size: var(--fs-lg); font-weight: 600; overflow-wrap: anywhere; }
+	.rhead { flex: none; display: flex; align-items: center; gap: 12px; padding: var(--dlg-head-t) var(--dlg-px) 0; }
+	.rhead h2 { margin: 0; font-size: var(--fs-lg); line-height: 24px; font-weight: 600; overflow-wrap: anywhere; }
 	.rmark { flex: none; display: grid; place-items: center; width: 32px; height: 32px; border-radius: 50%; background: var(--ok-soft); color: var(--ok); }
 	.rmodal.warn .rmark { background: var(--warn-soft); color: var(--warn); }
 	.rmodal.danger .rmark { background: var(--danger-soft); color: var(--danger); }
@@ -164,6 +165,9 @@
 	.rmodal :global(.df .btn) { min-width: 76px; }
 	/* the result has no rule above its buttons: the footer's own 12px top is the whole gap (the body's 24px bottom made it 36) */
 	.result :global(.dbody) { padding-bottom: 0; }
+	@media (max-width: 640px) {
+		.rhead { padding: 16px var(--dlg-px) 0; }
+	}
 
 	.hint { overflow-wrap: anywhere; }
 	.tags { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }

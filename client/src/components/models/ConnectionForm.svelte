@@ -428,6 +428,16 @@
 	.ftitle h3 {
 		margin: 0;
 		font-size: var(--fs-xl);
+		line-height: 28px;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	@media (max-width: 640px) {
+		/* align with ModalHeader's mobile padding so the grabber sits cleanly above the title */
+		.fform > header {
+			padding: 12px calc(var(--dlg-px) - 9px) 8px var(--dlg-px);
+		}
 	}
 	.fsub {
 		font-size: var(--fs-xs);

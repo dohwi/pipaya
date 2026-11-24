@@ -89,6 +89,7 @@
 <style>
 	.dock { position: relative; flex: none; width: min(var(--dock-w), 70vw); min-width: 200px; display: flex; flex-direction: column; min-height: 0; background: var(--bg-side); border-left: 1px solid var(--border); }
 	.dock.narrow { position: absolute; inset: 0; z-index: var(--z-dock); width: auto; border-left: none; }
+	.dock.narrow .body { padding-bottom: calc(12px + var(--sab)); }
 	.edge { position: absolute; z-index: 2; top: 0; bottom: 0; left: -4px; width: 8px; cursor: col-resize; touch-action: none; }
 	.edge:focus-visible { background: linear-gradient(90deg, transparent 3px, var(--accent) 3px, var(--accent) 5px, transparent 5px); outline: none; opacity: 0.6; }
 	@media (hover: hover) { .edge:hover { background: linear-gradient(90deg, transparent 3px, var(--accent) 3px, var(--accent) 5px, transparent 5px); opacity: 0.6; } }
