@@ -10,7 +10,7 @@ import { advertisedSkills, aggregateReadFiles, buildSystemPrompt, discoverInstru
 import { systemPromptEntries } from "./system-prompts.ts";
 import { mentionedSkills, readSkillText, skillCallHint, skillsPrompt, type SkillRef, type SkillService } from "./skills.ts";
 import { badRequest, conflict, HttpError, notFound } from "./errors.ts";
-import { filesNote, saveUploads } from "./file-routes.ts";
+import { filesNote, inlineImagesHint, saveInlineImages, saveUploads } from "./file-routes.ts";
 import type { EventBus } from "./events.ts";
 import { checkServiceTier, modelDefaultTier, modelDefaultLevel, reasoningOption, type ModelRegistry } from "./models.ts";
 import { streamAtTier } from "./served-tier.ts";
@@ -727,7 +727,11 @@ export class SessionManager {
 				if (body !== null) content.push({ type: "text", text: skillCallHint(skill, body, "<pipaya-hint>") });
 			}
 		}
-		if (input.images?.length) content.push(...input.images);
+		if (input.images?.length) {
+			content.push(...input.images);
+			const saved = await saveInlineImages(workDirOf(record), input.images);
+			if (saved.length) content.push({ type: "text", text: inlineImagesHint(saved) });
+		}
 		if (input.files?.length) {
 			const saved = await saveUploads(workDirOf(record), input.files);
 			content.push({ type: "text", text: filesNote(saved) });
