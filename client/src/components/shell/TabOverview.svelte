@@ -268,6 +268,7 @@
 	.body {
 		flex: 1;
 		min-height: 0;
+		overflow-x: hidden;
 		overflow-y: auto;
 		overscroll-behavior: contain;
 		scroll-padding-block: 8px; /* a card focused at the edge (Tab, arrows) scrolls in with its 6px ring, not flush */

@@ -371,7 +371,7 @@
 <style>
 	.cm { display: flex; flex-direction: column; min-height: 0; flex: 1; }
 	.body.form { padding: 0; overflow: hidden; flex: 1; }
-	.body { display: flex; flex-direction: column; gap: 12px; padding: var(--dlg-body-t) var(--dlg-px) var(--dlg-body-b); overflow-y: auto; min-height: 0; }
+	.body { display: flex; flex-direction: column; gap: 12px; padding: var(--dlg-body-t) var(--dlg-px) var(--dlg-body-b); overflow-x: hidden; overflow-y: auto; min-height: 0; }
 	.hint { margin: 0; line-height: 1.55; word-break: keep-all; }
 	.hint.lead { margin-top: -4px; } /* the lead line sits 8 under the title, not the body's 12 gap */
 	.search { position: relative; display: flex; align-items: center; }

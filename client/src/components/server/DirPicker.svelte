@@ -315,6 +315,7 @@
 	.list {
 		flex: 1;
 		min-height: 180px;
+		overflow-x: hidden;
 		overflow-y: auto;
 		padding: 4px var(--dlg-px) 4px calc(var(--dlg-px) - 12px); /* rows carry their own 12px, so row text starts on the dialog edge */
 		border-top: 1px solid var(--border);

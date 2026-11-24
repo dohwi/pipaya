@@ -441,6 +441,7 @@
 		flex-direction: column;
 		gap: 24px;
 		padding: var(--dlg-body-t) var(--dlg-px) var(--dlg-body-b);
+		overflow-x: hidden;
 		overflow-y: auto;
 		min-height: 0;
 		scroll-padding-block: 8px;

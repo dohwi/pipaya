@@ -537,7 +537,7 @@
 	.blbl { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 	.divider { width: 100%; margin: 4px 0; border: 0; border-top: 1px solid var(--border); }
 
-	.code { margin: 0; padding: 8px 12px; max-width: 100%; overflow: auto; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-code); font-family: var(--mono); font-size: var(--fs-xs); line-height: 1.55; tab-size: 2; }
+	.code { margin: 0; padding: 8px 12px; max-width: 100%; overflow-x: auto; overflow-y: hidden; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-code); font-family: var(--mono); font-size: var(--fs-xs); line-height: 1.55; tab-size: 2; }
 	.code code { font-family: inherit; white-space: pre; }
 
 	.alert { display: flex; flex-direction: column; gap: 4px; padding: 8px 12px; border-radius: var(--radius-sm); background: var(--tone-soft); color: var(--tone); font-size: var(--fs-sm); line-height: 1.5; }

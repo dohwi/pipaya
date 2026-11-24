@@ -74,7 +74,7 @@
 <style>
   .message { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; line-height: 24px; color: var(--text-dim); font-size: var(--fs-sm); }
   .area { height: auto; padding: 8px 12px; resize: vertical; line-height: 24px; }
-  .options { display: flex; flex-direction: column; gap: 4px; max-height: min(50dvh, 360px); overflow-y: auto; }
+  .options { display: flex; flex-direction: column; gap: 4px; max-height: min(50dvh, 360px); overflow-x: hidden; overflow-y: auto; }
   /* Hairline Inset Fill rows: the native radio stays (arrow keys, group semantics) but is drawn as the row itself; inactive rows keep a transparent 1px border so selecting never shifts the layout */
   .options label { position: relative; display: grid; grid-template-columns: 1fr; gap: 0; padding: 8px 12px; border: 1px solid transparent; border-radius: var(--radius-xs); background: var(--bg-set); cursor: pointer; }
   @media (hover: hover) { .options label:not(.on):hover { background: var(--bg-hover); } }

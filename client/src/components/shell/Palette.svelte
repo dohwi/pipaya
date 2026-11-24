@@ -229,6 +229,7 @@
 		color: var(--text);
 	}
 	.list {
+		overflow-x: hidden;
 		overflow-y: auto;
 		padding: 8px; /* the same 8px above the first row as below the last: the highlighted first row no longer touches the rule */
 		scroll-padding-block: 8px;

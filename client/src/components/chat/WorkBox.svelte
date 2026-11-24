@@ -535,7 +535,8 @@
 		white-space: pre-wrap;
 		overflow-wrap: anywhere;
 		max-height: 300px;
-		overflow: auto;
+		overflow-x: hidden;
+		overflow-y: auto;
 	}
 	/* a call still being written: the same line, three dots in the icon's 16px place */
 	.prep {

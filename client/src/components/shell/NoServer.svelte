@@ -112,6 +112,7 @@
 		grid-template-columns: minmax(0, 1fr);
 		place-items: center;
 		padding: calc(20px + var(--sat)) 20px calc(20px + var(--sab));
+		overflow-x: hidden;
 		overflow-y: auto;
 		background: var(--bg);
 		position: relative;

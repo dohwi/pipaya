@@ -208,7 +208,7 @@
 	.chev :global(svg) { width: 16px; height: 16px; stroke-width: 2; }
 	.source-name { display: block; font-size: var(--fs-xs); line-height: 20px; }
 	.meta { display: block; margin-top: 4px; color: var(--text-faint); font-size: var(--fs-2xs); line-height: 16px; }
-	pre { border-top: 1px solid var(--border); margin: 0; padding: 12px; max-height: 360px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font: 12px/1.7 var(--mono); background: var(--bg); user-select: text; }
+	pre { border-top: 1px solid var(--border); margin: 0; padding: 12px; max-height: 360px; overflow-x: hidden; overflow-y: auto; white-space: pre-wrap; overflow-wrap: anywhere; font: 12px/1.7 var(--mono); background: var(--bg); user-select: text; }
 
 	.gap { margin-bottom: 8px; }
 	.tabs { margin-bottom: 8px; }

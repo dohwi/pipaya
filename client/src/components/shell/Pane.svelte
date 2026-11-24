@@ -438,6 +438,8 @@
 	.empty {
 		flex: 1;
 		display: flex;
+		min-height: 0;
+		overflow-x: hidden;
 		overflow-y: auto;
 		position: relative;
 	}

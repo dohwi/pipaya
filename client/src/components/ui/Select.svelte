@@ -389,6 +389,7 @@
 		flex-direction: column;
 		gap: 1px;
 		padding: 4px;
+		overflow-x: hidden;
 		overflow-y: auto;
 		overscroll-behavior: contain;
 		border: 1px solid var(--border-strong);

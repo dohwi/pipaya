@@ -174,6 +174,7 @@
 		list-style: none;
 		margin: 0;
 		padding: 8px 12px 12px;
+		overflow-x: hidden;
 		overflow-y: auto;
 	}
 	li {
