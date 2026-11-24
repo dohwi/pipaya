@@ -587,6 +587,7 @@ const peerTool: ToolDef = {
 				"create (message, title?, purpose?, cwd?, provider?, model?, thinkingLevel?, notify?): start a new session on `message` and get its @name back. Include all the context it needs; it sees nothing else. You get a report when it ends or asks (notify defaults to true). The directory defaults to yours; for code changes give each session its own git worktree.",
 				"close (hides it from the sidebar, keeps the transcript; only sessions whose work is done and merged, a working one is refused, and never one that stopped on a problem: report it instead) / resume (reopens a closed one) / delete (erases the transcript for good; only sessions you made with create, not working) (name); cancel_queued (name, mode?, text?): lists steer/follow_up messages not yet delivered, with `text` takes one back; rename (name, newName); set (name, purpose?, provider?, model?, thinkingLevel?).",
 				"group_create (members, name?), group_add / group_remove (group, members), group_dissolve (group): put sessions side by side in a named group (tag them all with @group, or send to the group name). A session is in one group at a time; a group of fewer than 2 dissolves.",
+				"Peer messages are text-only: to share an image or file with another session (send or create), save it on disk and include its absolute path in `message` so the receiving session can open it with `read`.",
 			].join("\n") + PEER_NOTE,
 			parameters: Type.Object({
 				action: Type.Unsafe<PeerAction>({ type: "string", enum: [...PEER_ACTIONS] }),

@@ -6,6 +6,7 @@ import { basename, dirname, extname } from "node:path";
 import Type from "typebox";
 import { badRequest, HttpError, notFound } from "./errors.ts";
 import { previewImage } from "./image-resize.ts";
+import { HINT_OPEN } from "./peers.ts";
 import { errors } from "./schemas.ts";
 import { safePath } from "./tools.ts";
 import type { TypeBoxProvider } from "./typebox-provider.ts";
@@ -91,6 +92,62 @@ export const FILES_OPEN = "<pipaya-files>";
 export function filesNote(saved: SavedFile[]): string {
 	const list = saved.map((f) => `- ${f.path} (${f.mimeType}, ${f.size} bytes)`).join("\n");
 	return `${FILES_OPEN}${JSON.stringify(saved)}</pipaya-files>\nThe user attached these files (saved in the working directory):\n${list}`;
+}
+
+const INLINE_IMAGE_EXT = new Map<string, string>([
+	["image/png", "png"],
+	["image/jpeg", "jpg"],
+	["image/gif", "gif"],
+	["image/webp", "webp"],
+	["image/bmp", "bmp"],
+	["image/avif", "avif"],
+]);
+
+const canonicalInlineMime = (raw: unknown): string => {
+	const norm = typeof raw === "string" ? raw.trim().toLowerCase() : "";
+	return INLINE_IMAGE_EXT.has(norm) ? norm : "application/octet-stream";
+};
+
+export interface SavedInlineImage { path: string; absPath: string; size: number; mimeType: string }
+
+/**
+ * Persist user inline images under `.pipaya/uploads/` so the agent has on-disk paths (e.g. for sharing with
+ * another session via `peer(action=send/create)`). Failures on individual items are skipped so inline delivery
+ * to the model is never broken by malformed payloads, oversized images, or an unwritable cwd.
+ */
+export async function saveInlineImages(
+	cwd: string,
+	images: { data: string; mimeType: string }[],
+): Promise<SavedInlineImage[]> {
+	if (!cwd || !images.length) return [];
+	const out: SavedInlineImage[] = [];
+	let total = 0;
+	for (let i = 0; i < images.length; i++) {
+		try {
+			const img = images[i];
+			if (!img || typeof img.data !== "string") continue;
+			const bytes = Buffer.from(img.data, "base64");
+			if (bytes.length === 0 || bytes.length > MAX_FILE_BYTES || total + bytes.length > MAX_FILES_TOTAL) continue;
+			const mimeType = canonicalInlineMime(img.mimeType);
+			const ext = INLINE_IMAGE_EXT.get(mimeType) ?? "img";
+			const relPath = `${UPLOAD_DIR}/${randomUUID().slice(0, 6)}-image-${i + 1}.${ext}`;
+			const absPath = safePath(cwd, relPath);
+			await mkdir(dirname(absPath), { recursive: true });
+			await writeFile(absPath, bytes);
+			total += bytes.length;
+			out.push({ path: relPath, absPath, size: bytes.length, mimeType });
+		} catch {
+			// Skip malformed, oversized, or unwritable items without breaking inline image delivery.
+		}
+	}
+	return out;
+}
+
+/** Hidden `<pipaya-hint>` block exposing saved inline image absolute paths to the model. */
+export function inlineImagesHint(saved: SavedInlineImage[]): string {
+	if (!saved.length) return "";
+	const list = saved.map((img) => `- ${img.absPath} (${canonicalInlineMime(img.mimeType)}, ${img.size} bytes)`).join("\n");
+	return `${HINT_OPEN}The user's inline images were also saved on disk (pass an absolute path to another session via peer(action=send) or peer(action=create) so the receiving session can open it with read):\n${list}</pipaya-hint>`;
 }
 
 export const FileQuery = Type.Object({
