@@ -18,8 +18,10 @@
 		gap: 8px;
 		padding: 12px 16px 4px;
 		overflow-x: auto;
-		scrollbar-width: thin;
+		overflow-y: hidden;
+		scrollbar-width: none;
 	}
+	.strip::-webkit-scrollbar { display: none; }
 	/* the composer's text is 16px in from the box, 12px in a narrow pane (@container 420px): the strip follows the same line */
 	@container (max-width: 420px) {
 		.strip { padding-left: 12px; padding-right: 12px; }

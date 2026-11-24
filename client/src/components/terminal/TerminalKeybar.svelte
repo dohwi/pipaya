@@ -173,6 +173,7 @@
 		align-items: center;
 		gap: 4px;
 		overflow-x: auto;
+		overflow-y: hidden;
 		scrollbar-width: none;
 		overscroll-behavior-x: contain;
 		touch-action: pan-x;

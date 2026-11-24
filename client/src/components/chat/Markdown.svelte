@@ -354,6 +354,7 @@
 		margin: 0;
 		padding: 12px;
 		overflow-x: auto;
+		overflow-y: hidden;
 		-webkit-overflow-scrolling: touch;
 		font-family: var(--mono);
 		font-size: var(--fs-sm);
@@ -394,6 +395,7 @@
 	}
 	.md :global(.tablewrap) {
 		overflow-x: auto;
+		overflow-y: hidden;
 		margin: 0 0 12px;
 		border: 1px solid var(--border);
 		border-radius: var(--radius);

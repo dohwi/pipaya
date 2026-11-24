@@ -89,6 +89,7 @@
 		align-items: center;
 		gap: 4px;
 		overflow-x: auto;
+		overflow-y: hidden;
 		overscroll-behavior-x: contain;
 		scrollbar-width: none;
 	}

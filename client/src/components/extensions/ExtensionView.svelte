@@ -560,7 +560,7 @@
 	.stat dd { margin: 0; }
 	.stat-value { font-size: clamp(var(--fs-sm), calc(100cqi / var(--chars, 8) * 1.7), var(--fs-xl)); font-weight: 650; letter-spacing: -0.02em; line-height: 1.3; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
 
-	.scroll { max-width: 100%; overflow-x: auto; border: 1px solid var(--border); border-radius: var(--radius-sm); }
+	.scroll { max-width: 100%; overflow-x: auto; overflow-y: hidden; border: 1px solid var(--border); border-radius: var(--radius-sm); }
 	table { width: 100%; border-collapse: collapse; font-size: var(--fs-sm); }
 	caption { padding: 8px 12px; text-align: left; font-size: var(--fs-xs); color: var(--text-dim); }
 	th, td { padding: 8px 12px; border-top: 1px solid var(--border); text-align: left; vertical-align: top; }

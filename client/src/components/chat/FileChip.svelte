@@ -27,7 +27,7 @@
 <style>
 	.filechip {
 		position: relative;
-		display: inline-flex;
+		display: flex;
 		flex: none;
 		max-width: min(260px, 100%);
 	}

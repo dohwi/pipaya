@@ -480,21 +480,23 @@ input[type="range"]:focus-visible {
 	outline-offset: 3px;
 }
 
-/* thin scrollbars on desktop */
-* {
-	scrollbar-width: thin;
-	scrollbar-color: var(--border-strong) transparent;
-}
-::-webkit-scrollbar {
-	width: 8px;
-	height: 8px;
-}
-::-webkit-scrollbar-thumb {
-	background: var(--border-strong);
-	border-radius: var(--radius-sm);
-}
-::-webkit-scrollbar-track {
-	background: transparent;
+/* thin scrollbars on a precise pointer only; touch keeps the OS overlay scrollbars (hidden at rest) */
+@media (pointer: fine) {
+	* {
+		scrollbar-width: thin;
+		scrollbar-color: var(--border-strong) transparent;
+	}
+	::-webkit-scrollbar {
+		width: 8px;
+		height: 8px;
+	}
+	::-webkit-scrollbar-thumb {
+		background: var(--border-strong);
+		border-radius: var(--radius-sm);
+	}
+	::-webkit-scrollbar-track {
+		background: transparent;
+	}
 }
 
 /* ---------- shared bits ---------- */

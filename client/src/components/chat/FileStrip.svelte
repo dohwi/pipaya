@@ -14,3 +14,8 @@
 	{/each}
 </ComposerStrip>
 
+<style>
+	/* the slot is the strip's flex item: mirror FileChip's 260px cap so intrinsic max-content cannot stretch the slot past the card */
+	.fchip-slot { display: flex; flex: none; min-width: 0; max-width: min(260px, 100%); }
+</style>
+
