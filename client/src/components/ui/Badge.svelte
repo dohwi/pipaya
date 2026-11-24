@@ -41,6 +41,8 @@
 		align-items: center;
 		justify-content: center;
 		gap: 4px;
+		max-width: 100%;
+		overflow: hidden;
 		border-radius: var(--radius-xs);
 		font-weight: 600;
 		white-space: nowrap;

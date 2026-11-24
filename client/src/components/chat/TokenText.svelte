@@ -35,14 +35,18 @@
 	const openFile = (path: string) => sessionId && app.openFile(sessionId, { path, name: path.split("/").filter(Boolean).pop() ?? path });
 </script>
 
-{#each parts as p, i (i)}{#if p.kind === "mention" && sessionOf(p.name!)}{@const id = sessionOf(p.name!)!}<button type="button" class="tok mention" title={t("{name} 대화 열기", { name: p.text })} onclick={() => void app.openAny(id)}>{p.text}</button>{:else if p.kind === "mention"}<span class="tok mention">{p.text}</span>{:else if p.kind === "image"}<button type="button" class="tok image" title={t("이미지 크게 보기")} onclick={() => openImage(Number(p.name))}><Icon name="image" />{p.text.slice(1)}</button>{:else if p.kind === "file" && sessionId}<button type="button" class="tok file" title={t("{name} 미리 보기", { name: p.name! })} onclick={() => openFile(p.name!)}><Icon name="file" />{p.text.slice(1)}</button>{:else if p.kind === "file"}<span class="tok file"><Icon name="file" />{p.text.slice(1)}</span>{:else if p.kind === "skill"}<button type="button" class="tok skill" title={t("스킬 {name} 보기", { name: p.name! })} onclick={() => app.openSkills(sessionId, p.name!)}><Icon name="skill" />{p.text}</button>{:else}{p.text}{/if}{/each}
+{#each parts as p, i (i)}{#if p.kind === "mention" && sessionOf(p.name!)}{@const id = sessionOf(p.name!)!}<button type="button" class="tok mention" title={t("{name} 대화 열기", { name: p.text })} onclick={() => void app.openAny(id)}><span class="lbl">{p.text}</span></button>{:else if p.kind === "mention"}<span class="tok mention" title={p.text}><span class="lbl">{p.text}</span></span>{:else if p.kind === "image"}<button type="button" class="tok image" title={t("이미지 크게 보기")} onclick={() => openImage(Number(p.name))}><Icon name="image" /><span class="lbl">{p.text.slice(1)}</span></button>{:else if p.kind === "file" && sessionId}<button type="button" class="tok file" title={t("{name} 미리 보기", { name: p.name! })} onclick={() => openFile(p.name!)}><Icon name="file" /><span class="lbl">{p.text.slice(1)}</span></button>{:else if p.kind === "file"}<span class="tok file" title={p.name!}><Icon name="file" /><span class="lbl">{p.text.slice(1)}</span></span>{:else if p.kind === "skill"}<button type="button" class="tok skill" title={t("스킬 {name} 보기", { name: p.name! })} onclick={() => app.openSkills(sessionId, p.name!)}><Icon name="skill" /><span class="lbl">{p.text}</span></button>{:else}{p.text}{/if}{/each}
 
 <style>
 	/* Shaped like inline code in a reply (Markdown.svelte): 8px corners, em padding so the chip grows with its text, a hairline
-	   ring. The hue (app.css --mark-*) tints the fill and the ring; only @names colour their text. */
+	   ring. Atomic inline-flex keeps icon + label together as one chip when lines wrap, truncating cleanly at max-width: 100%.
+	   The hue (app.css --mark-*) tints the fill and the ring; only @names colour their text. */
 	.tok {
 		--hue: var(--mark-file);
-		display: inline;
+		display: inline-flex;
+		align-items: center;
+		gap: 4px;
+		max-width: 100%;
 		padding: 1px 0.4em; /* em sides scale with the text, like inline code */
 		border-radius: var(--radius-sm);
 		background: color-mix(in srgb, var(--hue) 12%, transparent);
@@ -50,10 +54,15 @@
 		color: inherit;
 		font: inherit;
 		font-size: 0.88em; /* inline code's size: the chip (content box + 2px) stays under the 1.55 line, so chips on wrapped lines never touch */
-		overflow-wrap: anywhere;
-		-webkit-box-decoration-break: clone;
-		box-decoration-break: clone;
+		line-height: 18px; /* whole-pixel 20px box (18 + 2 padding) so button and span chips share one height */
+		vertical-align: -1px; /* measured: aligns chip text ink with surrounding 1.55 body text (<= 0.5px) */
 		transition: background var(--motion-fast) var(--ease-std);
+	}
+	.lbl {
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 	}
 	.mention {
 		--hue: var(--mark-mention);
@@ -69,10 +78,9 @@
 	}
 	/* The # sigil gives way to a small icon in the text's own colour, dimmed. */
 	.tok :global(svg) {
+		flex: none;
 		width: 12px;
 		height: 12px;
-		margin-right: 4px;
-		vertical-align: -1px; /* measured: centres the 12px glyph on the chip text's ink */
 		opacity: 0.7;
 	}
 	button.tok {

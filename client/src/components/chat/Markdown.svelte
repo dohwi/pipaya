@@ -310,6 +310,8 @@
 		border-radius: var(--radius-sm);
 		background: var(--bg-elev);
 		border: 1px solid var(--border);
+		-webkit-box-decoration-break: clone;
+		box-decoration-break: clone;
 	}
 	.md :global(.codeblock) {
 		margin: 0 0 12px;
@@ -413,14 +415,19 @@
 		border-radius: var(--radius);
 	}
 	.md :global(a.wd-file) {
-		display: inline-flex;
-		align-items: center;
+		display: inline-block;
+		max-width: 100%;
 		padding: 0 8px;
 		border: 1px solid var(--border);
 		border-radius: var(--radius-sm);
 		background: var(--bg-elev);
 		text-decoration: none;
 		font-size: 0.93em;
+		line-height: 20px; /* whole-pixel 22px chip (20 + 2 border) */
+		vertical-align: -5px; /* optical baseline alignment with surrounding body text */
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 	}
 	.md :global(a.wd-file::before) {
 		content: "📄";
@@ -532,9 +539,10 @@
 		pointer-events: none;
 	}
 	.md :global(.remote-img) {
-		display: inline-flex;
-		align-items: center;
-		min-height: 28px;
+		display: inline-block;
+		max-width: 100%;
+		height: 28px;
+		line-height: 26px; /* 26 + 2 border = 28px single-line pill */
 		padding: 0 8px;
 		border: 1px dashed var(--border-strong);
 		border-radius: var(--radius-pill);
@@ -542,6 +550,10 @@
 		color: var(--text-dim);
 		font: inherit;
 		font-size: var(--fs-xs);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		vertical-align: middle;
 		cursor: pointer;
 	}
 	@media (hover: hover) {

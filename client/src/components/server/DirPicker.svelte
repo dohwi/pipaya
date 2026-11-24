@@ -153,7 +153,7 @@
 			<span class="label">{t("바로가기")}</span>
 			<div class="chips">
 				{#each places as p (p.path)}
-					<FilterChip size="sm" on={browser.listing?.path === p.path} onclick={() => void enter(p.path)} title={p.title}>{t(p.label)}</FilterChip>
+					<FilterChip size="sm" on={browser.listing?.path === p.path} onclick={() => void enter(p.path)} title={p.title}><span class="flbl">{t(p.label)}</span></FilterChip>
 				{/each}
 			</div>
 		</div>
@@ -164,7 +164,7 @@
 			{#if app.favDirs.length}
 				<div class="chips">
 					{#each app.favDirs as p (p)}
-						<FilterChip size="sm" mono on={browser.listing?.path === p} onclick={() => void enter(p)} title={p}>{base(p)}</FilterChip>
+						<FilterChip size="sm" mono on={browser.listing?.path === p} onclick={() => void enter(p)} title={p}><span class="flbl">{base(p)}</span></FilterChip>
 					{/each}
 				</div>
 			{:else}
@@ -373,5 +373,10 @@
 		font-size: var(--fs-xs);
 		line-height: 20px;
 		color: var(--text-dim);
+	}
+	.flbl {
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
 	}
 </style>
