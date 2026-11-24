@@ -212,6 +212,20 @@ describe("modals mounted by their parent animate", () => {
 		expect(cd).toContain("disabled: !sheet || busy");
 		expect(read("lib/sheet.ts")).toContain('[role="alertdialog"]');
 	});
+	test("mobile bottom sheets keep grabber/sheetPull consistent and clear safe areas", () => {
+		// Full-screen sheets (`full`) must not draw a bottom-sheet pull handle
+		expect(read("components/ui/Modal.svelte")).toContain("pull={sheet && !full}");
+		// Workspace & import modals use bottom-sheet mode with safe-area padding on phones
+		expect(read("components/agent/SessionsDialog.svelte")).toContain("safeArea");
+		const market = read("components/extensions/Marketplace.svelte");
+		expect(market).toContain("safeArea");
+		expect(market).not.toContain("sheet={false}");
+		const imp = read("components/extensions/ImportDialogs.svelte");
+		expect(imp).toContain("use:sheetPull=");
+		expect(imp).not.toContain("sheet={false}");
+		expect(imp).toContain("<DialogFooter safe>");
+		expect(imp).toContain("<DialogFooter rule safe wrap>");
+	});
 	test("the address form is a step inside ConnectModal (embedded), not a second dialog opened over it", () => {
 		expect(markup(read("components/server/ConnectModal.svelte"))).toContain("<ConnectionForm embedded");
 		const host = markup(read("components/models/ModelConnections.svelte"));

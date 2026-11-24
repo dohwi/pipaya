@@ -379,6 +379,7 @@
 	}
 	.top {
 		top: 0;
+		padding-top: calc(12px + var(--sat));
 		background: linear-gradient(to bottom, var(--lb-top-fade), transparent);
 	}
 	.grow {

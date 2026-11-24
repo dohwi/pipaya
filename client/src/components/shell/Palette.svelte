@@ -231,6 +231,12 @@
 		font-size: var(--fs-md);
 		color: var(--text);
 	}
+	@media (max-width: 640px) {
+		/* prevent iOS Safari auto-zoom on focus (design-system.md) */
+		.sw input {
+			font-size: var(--fs-lg);
+		}
+	}
 	.listwrap {
 		flex: 0 1 auto;
 		--fade-bg: var(--bg-elev);

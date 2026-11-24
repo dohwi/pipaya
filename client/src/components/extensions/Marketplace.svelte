@@ -176,7 +176,7 @@
 	$effect(() => { void api; void refreshServer(); });
 </script>
 
-<Modal {onclose} title={t("마켓플레이스")} width="3xl" maxHeight="var(--dvh)" layer={3} sheet={false} portal>
+<Modal {onclose} title={t("마켓플레이스")} width="3xl" maxHeight="var(--dvh)" layer={3} portal safeArea>
 	<DialogBody gap>
 		<div class="hints">
 			<p class="hint">{catalog?.description || t("공개 카탈로그에서 확장을 찾아 설치합니다. 설치 전에 권한을 다시 확인합니다.")}</p>

@@ -21,7 +21,7 @@
 	const sub = $derived([server ? app.serverLabel(server) : null, filter?.cwd].filter(Boolean).join(" · ") || null);
 </script>
 
-<Modal onclose={close} label={title} {title} {sub} width="l" maxHeight="720px" {titleExtra} {headerActions}>
+<Modal onclose={close} label={title} {title} {sub} width="l" maxHeight="720px" safeArea {titleExtra} {headerActions}>
 	<DialogBody busy={busy}><SessionsPanel {serverId} cwd={filter?.cwd} bind:count bind:reload bind:busy /></DialogBody>
 </Modal>
 
