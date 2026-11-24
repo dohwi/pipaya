@@ -151,7 +151,7 @@
 		padding-bottom: 0; /* folded: the header is the whole card, no band strip under it */
 	}
 	@media (hover: hover) {
-		.srvhead:hover {
+		.srvhead:global([data-hovered]) {
 			background: color-mix(in srgb, var(--text) 6%, var(--bg-side));
 		}
 	}
@@ -167,7 +167,7 @@
 		background: color-mix(in srgb, var(--text) 15%, var(--bg-side));
 	}
 	@media (hover: hover) {
-		:global(:where(.side) .srvhead .dirnew:hover) {
+		:global(:where(.side) .srvhead .dirnew[data-hovered]) {
 			background: color-mix(in srgb, var(--text) 15%, var(--bg-side));
 		}
 	}
@@ -309,7 +309,8 @@
 	.srvhead.folded .cbadge {
 		transition: opacity var(--motion-fast) var(--ease-std);
 	}
-	.srvhead.folded:hover .cbadge {
+	.srvhead.folded:global([data-hovered]) .cbadge,
+	.srvhead.folded:has(:global(.dirnew.on)) .cbadge {
 		opacity: 0;
 	}
 	}

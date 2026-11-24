@@ -39,21 +39,21 @@
 		color: var(--text);
 	}
 	@media (hover: hover) {
-		:global(:where(.side) .item:hover .title[data-over]),
+		:global(:where(.side) .item[data-hovered] .title[data-over]),
 	:global(:where(.side) .item:has(:focus-visible) .title[data-over]) {
 			text-overflow: clip;
 			-webkit-mask-image: var(--mq-mask);
 			mask-image: var(--mq-mask);
 		}
-		:global(:where(.side) .item:hover .title[data-over] .track),
+		:global(:where(.side) .item[data-hovered] .title[data-over] .track),
 	:global(:where(.side) .item:has(:focus-visible) .title[data-over] .track) {
 			display: flex;
 			width: max-content;
 			animation: mq var(--mq-d, 8s) linear infinite;
 		}
-		:global(:where(.side) .item:hover .title[data-over] .mq),
+		:global(:where(.side) .item[data-hovered] .title[data-over] .mq),
 	:global(:where(.side) .item:has(:focus-visible) .title[data-over] .mq),
-	:global(:where(.side) .item:hover .title[data-over] .dup),
+	:global(:where(.side) .item[data-hovered] .title[data-over] .dup),
 	:global(:where(.side) .item:has(:focus-visible) .title[data-over] .dup) {
 			display: block;
 			flex: none;

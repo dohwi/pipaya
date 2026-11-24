@@ -113,7 +113,7 @@
 		transition: background var(--motion-fast) var(--ease-std);
 	}
 	@media (hover: hover) {
-		.item:hover {
+		.item:global([data-hovered]) {
 			background: var(--bg-hover);
 		}
 	}
@@ -121,14 +121,14 @@
 		background: var(--bg-active);
 	}
 	@media (hover: hover) {
-		.item.active:hover {
+		.item.active:global([data-hovered]) {
 			background: transparent;
 		}
 	}
 	.acts {
 		display: none;
 	}
-	.item:hover .acts,
+	.item:global([data-hovered]) .acts,
 	.item:has(:focus-visible) .acts,
 	.item.menuopen .acts {
 		display: flex;
@@ -159,7 +159,7 @@
 		color: var(--text);
 	}
 	@media (hover: hover) {
-		.more:hover {
+		.more:global([data-hovered]) {
 			background: color-mix(in srgb, var(--text) 14%, transparent); /* over the row's own tint, so it also shows on the open row */
 			color: var(--text);
 		}
