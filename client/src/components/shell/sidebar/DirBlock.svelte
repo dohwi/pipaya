@@ -189,7 +189,7 @@
 		color: var(--text);
 	}
 	@media (hover: hover) {
-		.dir:hover .dirtoggle {
+		.dir:global([data-hovered]) .dirtoggle {
 			color: var(--text);
 		}
 	}
@@ -223,7 +223,7 @@
 		.dparent:not(.twin) {
 			opacity: 0;
 		}
-		.dir:hover .dparent,
+		.dir:global([data-hovered]) .dparent,
 		.dir:has(:focus-visible) .dparent {
 			opacity: 1;
 		}
@@ -286,7 +286,8 @@
 	.dir.folded .cbadge {
 		transition: opacity var(--motion-fast) var(--ease-std);
 	}
-	.dir.folded:hover .cbadge {
+	.dir.folded:global([data-hovered]) .cbadge,
+	.dir.folded:has(:global(.dirnew.on)) .cbadge {
 		opacity: 0;
 	}
 	}

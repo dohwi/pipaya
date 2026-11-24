@@ -126,7 +126,7 @@
 		font-weight: 700;
 	}
 	@media (hover: hover) {
-		.proj:hover .projtoggle {
+		.proj:global([data-hovered]) .projtoggle {
 			color: var(--text);
 		}
 	}
@@ -174,7 +174,8 @@
 		.proj.folded .cbadge {
 			transition: opacity var(--motion-fast) var(--ease-std);
 		}
-		.proj.folded:hover .cbadge {
+		.proj.folded:global([data-hovered]) .cbadge,
+		.proj.folded:has(:global(.dirnew.on)) .cbadge {
 			opacity: 0;
 		}
 	}
