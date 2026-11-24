@@ -219,9 +219,20 @@ function listDirEntries(root: string, relDir: string): { entries: WorkspaceEntry
 	const entries: WorkspaceEntry[] = [];
 	for (const d of dirents) {
 		if (d.name === ".git") continue;
-		const isDir = d.isDirectory();
 		const relPath = prefix ? `${prefix}/${d.name}` : d.name;
-		entries.push({ name: d.name, path: relPath, dir: isDir });
+		if (d.isSymbolicLink()) {
+			// Skip symlinks pointing outside the working directory so the tree never lists unreadable links.
+			const resolved = safeInsideRoot(root, relPath);
+			if (!resolved) continue;
+			try {
+				const targetStat = lstatSync(resolved);
+				entries.push({ name: d.name, path: relPath, dir: targetStat.isDirectory() });
+			} catch {
+				continue;
+			}
+			continue;
+		}
+		entries.push({ name: d.name, path: relPath, dir: d.isDirectory() });
 	}
 	entries.sort((a, b) => Number(b.dir) - Number(a.dir) || a.name.localeCompare(b.name));
 	const truncated = entries.length > MAX_DIR_ENTRIES;
