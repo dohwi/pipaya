@@ -3,26 +3,27 @@ import { msg, t } from "./i18n";
 /**
  * The settings window's sections. `server: false` ones are common to every server (the nav's top group, "내 설정" first); `server: true` ones belong to the chosen server (the group below).
  *
- * Order is the order a person sets the app up in: the device's own basics (general, keys, backup) first, then the server
- * as a whole (info), then what the agent needs to work (models, then voice input right after it: both are one
- * connection with an address, a model and a key), then what it may do (tools, mcp), where it works (sessions), and
- * finally the things that grow over time (extensions, devices).
+ * Server sections are grouped by mental model with subtle dividers (`cluster`):
+ *  1. server: connection identity & paired devices (info, devices)
+ *  2. agent: models, built-in tools, command guard & MCP servers (models, tools, guard, mcp)
+ *  3. workflow: conversations, scheduled tasks, prompt templates & voice input (sessions, schedules, templates, voice)
+ *  4. ext: extensions marketplace & installed packages (srvext)
  */
 export const SETTINGS_TABS = [
-	{ id: "general", label: msg("내 설정"), icon: "settings", sub: msg("언어 · 테마 · 알림 · 터미널"), server: false },
-	{ id: "keys", label: msg("단축키"), icon: "keyboard", sub: msg("키 지정과 초기화"), server: false },
-	{ id: "backup", label: msg("백업"), icon: "download", sub: msg("설정 내보내기 · 가져오기"), server: false },
-	{ id: "info", label: msg("정보"), icon: "server", sub: msg("이름 · 주소 · 버전"), server: true },
-	{ id: "models", label: msg("모델"), icon: "key", sub: msg("모델 연결 · 기본 모델 · 이미지 모델"), server: true },
-	{ id: "voice", label: msg("음성 입력"), icon: "mic", sub: msg("말해서 입력하기"), server: true },
-	{ id: "tools", label: msg("에이전트 도구"), icon: "widgets", sub: msg("도구 허용 · 서브에이전트 위임"), server: true },
-	{ id: "guard", label: msg("명령 보호"), icon: "shield", sub: msg("위험한 셸 명령 실행 차단"), server: true },
-	{ id: "mcp", label: msg("MCP"), icon: "plug", sub: msg("MCP 서버 연결"), server: true },
-	{ id: "sessions", label: msg("대화"), icon: "chat", sub: msg("기본 작업 폴더 · 자동 삭제"), server: true },
-	{ id: "schedules", label: msg("예약 작업"), icon: "clock", sub: msg("정해진 때에 대화로 프롬프트 보내기"), server: true },
-	{ id: "templates", label: msg("프롬프트 템플릿"), icon: "prompt", sub: msg("자주 쓰는 /prompt 명령 관리"), server: true },
-	{ id: "srvext", label: msg("확장"), icon: "bolt", sub: msg("설치 · 권한 · 설정"), server: true },
-	{ id: "devices", label: msg("기기"), icon: "phone", sub: msg("접속한 기기 · 폰 연결"), server: true },
+	{ id: "general", label: msg("내 설정"), icon: "settings", sub: msg("언어 · 테마 · 알림 · 터미널"), server: false, cluster: "common" },
+	{ id: "keys", label: msg("단축키"), icon: "keyboard", sub: msg("키 지정과 초기화"), server: false, cluster: "common" },
+	{ id: "backup", label: msg("백업"), icon: "download", sub: msg("설정 내보내기 · 가져오기"), server: false, cluster: "common" },
+	{ id: "info", label: msg("정보"), icon: "server", sub: msg("이름 · 주소 · 버전"), server: true, cluster: "server" },
+	{ id: "devices", label: msg("기기"), icon: "phone", sub: msg("접속한 기기 · 폰 연결"), server: true, cluster: "server" },
+	{ id: "models", label: msg("모델"), icon: "key", sub: msg("모델 연결 · 기본 모델 · 이미지 모델"), server: true, cluster: "agent" },
+	{ id: "tools", label: msg("에이전트 도구"), icon: "widgets", sub: msg("도구 허용 · 서브에이전트 위임"), server: true, cluster: "agent" },
+	{ id: "guard", label: msg("명령 보호"), icon: "shield", sub: msg("위험한 셸 명령 실행 차단"), server: true, cluster: "agent" },
+	{ id: "mcp", label: msg("MCP"), icon: "plug", sub: msg("MCP 서버 연결"), server: true, cluster: "agent" },
+	{ id: "sessions", label: msg("대화"), icon: "chat", sub: msg("기본 작업 폴더 · 자동 삭제"), server: true, cluster: "workflow" },
+	{ id: "schedules", label: msg("예약 작업"), icon: "clock", sub: msg("정해진 때에 대화로 프롬프트 보내기"), server: true, cluster: "workflow" },
+	{ id: "templates", label: msg("프롬프트 템플릿"), icon: "prompt", sub: msg("자주 쓰는 /prompt 명령 관리"), server: true, cluster: "workflow" },
+	{ id: "voice", label: msg("음성 입력"), icon: "mic", sub: msg("말해서 입력하기"), server: true, cluster: "workflow" },
+	{ id: "srvext", label: msg("확장"), icon: "bolt", sub: msg("마켓플레이스 · 설치 · 권한 · 설정"), server: true, cluster: "ext" },
 ] as const;
 export type SettingsTabId = (typeof SETTINGS_TABS)[number]["id"];
 

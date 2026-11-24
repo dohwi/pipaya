@@ -102,7 +102,7 @@ export const en: Record<string, string> = {
 	"추가": "Add",
 	"이름\u0004rename": "Rename",
 	"확장": "Extensions",
-	"설치 · 권한 · 설정": "Install · permissions · settings",
+	"마켓플레이스 · 설치 · 권한 · 설정": "Marketplace · install · permissions · settings",
 	"설치": "Install",
 	"교체": "Replace",
 	"변경": "Change",

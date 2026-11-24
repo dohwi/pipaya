@@ -67,7 +67,7 @@
 		display: flex;
 		align-items: center;
 		gap: 4px;
-		max-width: 96px; /* a long parent name never takes the title's room */
+		max-width: 72px; /* a long parent name never crowds out the conversation title */
 		font-size: var(--fs-2xs);
 		color: var(--text-faint);
 		line-height: 16px; /* whole-pixel line box, centred on the title's like the handle (ui/Handle) */
