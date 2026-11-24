@@ -9,6 +9,7 @@
 	import Button from "../ui/Button.svelte";
 	import ConfirmButton from "../ui/ConfirmButton.svelte";
 	import SkillEditor from "./SkillEditor.svelte";
+	import SkillViewer from "./SkillViewer.svelte";
 	import { t } from "../../lib/i18n";
 	import { reflow, rowIn, rowOut } from "../../lib/motion";
 	import { untrack } from "svelte";
@@ -23,7 +24,7 @@
 	import Modal from "../ui/Modal.svelte";
 	import Segmented from "../ui/Segmented.svelte";
 
-	let { dialog: target, api, onclose }: { dialog: { cwd: string; sessionId: string | null }; api: Api; onclose: () => void } = $props();
+	let { dialog: target, api, onclose }: { dialog: { cwd: string; sessionId: string | null; skill?: string }; api: Api; onclose: () => void } = $props();
 
 	type Mode = "project" | "global";
 	let data = $state<SkillList | null>(null);
@@ -34,10 +35,20 @@
 	let query = $state("");
 	let tab = $state<Mode>("project");
 	let saving = $state<Record<string, boolean>>({});
+	// Opened directly from a `/skill:name` chip: show only the viewer until the user switches to the full list.
+	let viewing = $state<string | null>(null);
+	let directOnly = $state(false);
+
+	$effect(() => {
+		const initial = target.skill ?? null;
+		viewing = initial;
+		directOnly = initial !== null;
+	});
 
 	// Re-read on manual refresh and whenever any client changes a skill (skills_updated).
 	// Cleanup aborts obsolete requests on refresh, server switch or close.
 	$effect(() => {
+		if (directOnly) return;
 		refresh;
 		app.skillsTick;
 		const { cwd, sessionId } = target;
@@ -162,10 +173,13 @@
 {@const on = effective(s, mode)}
 <li animate:reflow in:rowIn out:rowOut>
 {#snippet fileActions()}
-	<Button size="sm" onclick={() => startEdit(s)} disabled={fileBusy}>{t("수정")}</Button>
-	<ConfirmButton size="sm" danger confirmLabel={t("정말 삭제")} onconfirm={() => remove(s)} disabled={fileBusy}>{t("삭제")}</ConfirmButton>
+	<Button size="sm" onclick={() => (viewing = s.name)} disabled={fileBusy}>{t("보기")}</Button>
+	{#if s.scope !== "builtin"}
+		<Button size="sm" onclick={() => startEdit(s)} disabled={fileBusy}>{t("수정")}</Button>
+		<ConfirmButton size="sm" danger confirmLabel={t("정말 삭제")} onconfirm={() => remove(s)} disabled={fileBusy}>{t("삭제")}</ConfirmButton>
+	{/if}
 {/snippet}
-	<ListItem off={!on} actions={s.scope !== "builtin" ? fileActions : undefined}>
+	<ListItem off={!on} actions={fileActions}>
 		{#snippet lead()}
 			<Switch
 				checked={on}
@@ -203,6 +217,7 @@
 	</ul>
 {/snippet}
 
+{#if !directOnly}
 <Modal closeShortcut="skills" {onclose} title={t("스킬")} sub={data ? `${t("{total}개 중 {on}개 사용", { total: data.skills.length, on: onCount })} · ${home(data.project)}` : null} width="xl" maxHeight="760px" safeArea>
 	{#snippet headerActions()}
 		<IconButton icon="retry" label={t("새로고침")} tip onclick={() => refresh++} disabled={loading} />
@@ -252,6 +267,21 @@
 		{/if}
 	</DialogBody>
 </Modal>
+{/if}
+
+{#if viewing && !editing}
+	<SkillViewer
+		name={viewing}
+		cwd={target.cwd}
+		sessionId={target.sessionId}
+		{api}
+		layer={directOnly ? 1 : 2}
+		closeShortcut={directOnly ? "skills" : undefined}
+		onlist={directOnly ? () => { directOnly = false; viewing = null; } : undefined}
+		onedit={(src) => (editing = src)}
+		onclose={() => { if (directOnly) onclose(); else viewing = null; }}
+	/>
+{/if}
 
 {#if editing}
 	<SkillEditor source={editing} cwd={target.cwd} {api} onsaved={(l) => { data = l; app.skillsTick++; }} onclose={() => (editing = null)} />

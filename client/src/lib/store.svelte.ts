@@ -318,13 +318,13 @@ class AppStore {
   /** Message the next prompt answers (the Reply button); the composer shows it as a badge and quotes it on send. */
   replyTo = $state<{ text: string; who?: string } | null>(null);
   settingsOpen = $state(false);
-  /** Skills dialog (opened from the footer badge). cwd decides which project's skills; sessionId marks the ones that conversation already uses. */
-  skillsDialog = $state<{ cwd: string; sessionId: string | null } | null>(null);
+  /** Skills dialog (opened from the footer badge or a /skill:name chip). cwd decides which project's skills; sessionId marks the ones that conversation already uses; skill opens that skill's viewer directly. */
+  skillsDialog = $state<{ cwd: string; sessionId: string | null; skill?: string } | null>(null);
   /** Bumped when any client changes a skill, so footers and dialogs re-read it. */
   skillsTick = $state(0);
-  openSkills(sessionId: string | null = this.activeId) {
+  openSkills(sessionId: string | null = this.activeId, skill?: string) {
     if (!this.api) return;
-    this.skillsDialog = { cwd: this.session(sessionId)?.cwd ?? this.workdirAbs, sessionId };
+    this.skillsDialog = { cwd: this.session(sessionId)?.cwd ?? this.workdirAbs, sessionId, ...(skill ? { skill } : {}) };
   }
   /** MCP servers dialog (opened from the footer badge). */
   mcpDialog = $state(false);

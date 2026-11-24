@@ -260,14 +260,19 @@ describe("editing and deleting skills", () => {
 			expect(existsSync(join(target, "SKILL.md"))).toBe(true);
 		} finally { await app.close(); f.cleanup(); }
 	});
-	test("built-in skills cannot be edited or deleted", async () => {
+	test("built-in skills can be read but cannot be edited or deleted", async () => {
 		const f = fixture();
 		const cfg: Config = { host: "0.0.0.0", port: 0, dataDir: f.root, dbPath: join(f.root, "app.db"), token: "skills-test", workspaceRoot: f.cwd, logLevel: "silent" };
 		const app: App = await buildApp(cfg, { strictResponses: true, home: f.home });
 		const h = { authorization: `Bearer ${cfg.token}` };
 		try {
 			const name = (discoverSkills(f.cwd, { home: f.home }).skills.find((s) => s.scope === "builtin"))!.name;
-			expect((await app.server.inject({ method: "GET", url: `/skills/${name}/source`, headers: h })).statusCode).toBe(409);
+			const src = await app.server.inject({ method: "GET", url: `/skills/${name}/source`, headers: h });
+			expect(src.statusCode).toBe(200);
+			const parsed = src.json();
+			expect(parsed.name).toBe(name);
+			expect(parsed.scope).toBe("builtin");
+			expect(typeof parsed.body).toBe("string");
 			expect((await app.server.inject({ method: "DELETE", url: `/skills/${name}`, headers: h })).statusCode).toBe(409);
 			expect((await app.server.inject({ method: "PUT", url: `/skills/${name}/source`, headers: h, payload: { description: "d", manualOnly: false, body: "" } })).statusCode).toBe(409);
 		} finally { await app.close(); f.cleanup(); }
