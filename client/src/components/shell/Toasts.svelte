@@ -69,7 +69,7 @@
 	aria-live="polite"
 >
 	<div class="tray" class:bottom={overModal}>
-		<ToastStrip toasts={app.globalToasts} fit={overModal} from={overModal ? "bottom" : "top"} />
+		<ToastStrip toasts={app.globalToasts} notices={app.feedback.notices} fit={overModal} from={overModal ? "bottom" : "top"} />
 	</div>
 </div>
 

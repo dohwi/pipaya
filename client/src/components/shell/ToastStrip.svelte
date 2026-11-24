@@ -1,11 +1,13 @@
 <script lang="ts">
+	import type { Notice, Toast } from "../../lib/feedback.svelte";
+	import { t } from "../../lib/i18n";
 	import type { IconName } from "../../lib/icons";
 	import { surfaceIn, surfaceOut } from "../../lib/motion";
 	import { app } from "../../lib/store.svelte";
 	import { layoutToastStack, STACK_DEFAULT_HEIGHT } from "../../lib/toast-stack";
 	import CountdownClose from "../ui/CountdownClose.svelte";
 	import Icon from "../ui/Icon.svelte";
-	import type { Toast } from "../../lib/feedback.svelte";
+	import AgentBadge from "./AgentBadge.svelte";
 
 	const TONE_ICON: Record<Toast["tone"], IconName> = {
 		info: "info",
@@ -14,17 +16,30 @@
 		error: "alert-circle",
 	};
 
+	type DeckEntry = { kind: "toast"; item: Toast } | { kind: "notice"; item: Notice };
+
 	/**
 	 * Floating rounded toast deck, shared by the global tray (Toasts) and a pane's own (SessionToasts).
+	 * Renders both standard toasts and agent completion/failure notices in one unified stack.
 	 * Each card is at least as wide as the chat composer (`--content-w`, clamped to the pane/device width) and grows
-	 * up to the available width for longer messages. Multiple toasts stack into a compact deck with 8px peeks; hovering
+	 * up to the available width for longer messages. Multiple items stack into a compact deck with 8px peeks; hovering
 	 * (desktop), tapping once (touch), or focusing expands the deck, reveals clamped multi-line text in full, and pauses
 	 * auto-dismiss countdowns while reading.
 	 */
-	let { toasts, compact = false, fit = false, from = "top" }: { toasts: Toast[]; compact?: boolean; fit?: boolean; from?: "top" | "bottom" } = $props();
+	let {
+		toasts,
+		notices = [],
+		compact = false,
+		fit = false,
+		from = "top",
+	}: { toasts: Toast[]; notices?: Notice[]; compact?: boolean; fit?: boolean; from?: "top" | "bottom" } = $props();
 
-	const ordered = $derived([...toasts].reverse());
-	const ids = $derived(ordered.map((t) => t.id));
+	const ordered = $derived<DeckEntry[]>(
+		[...toasts.map((item): DeckEntry => ({ kind: "toast", item })), ...notices.map((item): DeckEntry => ({ kind: "notice", item }))].sort(
+			(a, b) => b.item.id - a.item.id,
+		),
+	);
+	const ids = $derived(ordered.map((e) => e.item.id));
 	const dyIn = $derived(from === "bottom" ? 20 : -20);
 	const dyOut = $derived(from === "bottom" ? 16 : -16);
 	const defaultH = $derived(compact ? 40 : STACK_DEFAULT_HEIGHT);
@@ -42,23 +57,23 @@
 	const layout = $derived(layoutToastStack(ids, heights, expanded, from, defaultH));
 	const slotById = $derived(new Map(layout.items.map((item) => [item.id, item])));
 
-	const frontId = $derived(ordered[0]?.id);
+	const frontId = $derived(ordered[0]?.item.id);
 	const frontW = $derived(frontId !== undefined ? widths[frontId] : undefined);
 	const frontH = $derived(frontId !== undefined ? heights[frontId] : undefined);
 	const stackW = $derived.by(() => {
 		if (!ordered.length) return 0;
 		if (!expanded) return frontW ?? 0;
 		let max = 0;
-		for (const item of ordered) max = Math.max(max, widths[item.id] ?? 0);
+		for (const entry of ordered) max = Math.max(max, widths[entry.item.id] ?? 0);
 		return max;
 	});
 
-	// Clear touch-pinned state once all toasts are dismissed.
+	// Clear touch-pinned state once all items are dismissed.
 	$effect(() => {
 		if (ordered.length === 0 && pinned) pinned = false;
 	});
 
-	// Prune stale measurements for dismissed toasts.
+	// Prune stale measurements for dismissed items.
 	$effect(() => {
 		const live = new Set(ids);
 		for (const key of Object.keys(heights)) {
@@ -73,10 +88,16 @@
 	// Pause auto-dismiss timers while the user is reading the stack, and always resume on leave or unmount.
 	$effect(() => {
 		if (!paused) return;
-		const currentIds = [...ids];
-		for (const id of currentIds) app.feedback.pauseToast(id);
+		const snapshot = ordered.map((e) => ({ kind: e.kind, id: e.item.id }));
+		for (const e of snapshot) {
+			if (e.kind === "toast") app.feedback.pauseToast(e.id);
+			else app.feedback.pauseNotice(e.id);
+		}
 		return () => {
-			for (const id of currentIds) app.feedback.resumeToast(id);
+			for (const e of snapshot) {
+				if (e.kind === "toast") app.feedback.resumeToast(e.id);
+				else app.feedback.resumeNotice(e.id);
+			}
 		};
 	});
 
@@ -129,6 +150,18 @@
 			if (msg && msg.scrollHeight > msg.clientHeight + 1) pinned = true;
 		}
 	}
+	function onNoticeClick(n: Notice) {
+		if (ordered.length > 1 && !expanded) {
+			pinned = true;
+			return;
+		}
+		app.feedback.dismissNotice(n.id);
+		if (n.server && n.server !== app.serverId) app.openIn(n.server, { session: n.sid });
+		else void app.openSession(n.sid);
+	}
+	function noticeTitle(n: Notice): string {
+		return (n.server ? app.links[n.server]?.sessionById.get(n.sid) : app.session(n.sid))?.title ?? t("대화");
+	}
 </script>
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -148,8 +181,9 @@
 	{#if expanded || ordered.length > 1}
 		<div class="hit" style:width={stackW ? `${stackW}px` : null} aria-hidden="true"></div>
 	{/if}
-	{#each ordered as item (item.id)}
-		{@const slot = slotById.get(item.id)}
+	{#each ordered as entry (entry.item.id)}
+		{@const slot = slotById.get(entry.item.id)}
+		{@const tone = entry.kind === "toast" ? entry.item.tone : entry.item.tone === "failed" ? "error" : "ok"}
 		{#if slot}
 			<div
 				class="slot"
@@ -161,12 +195,13 @@
 			>
 				<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_noninteractive_element_interactions -->
 				<div
-					class="card {item.tone}"
+					class="card {tone}"
 					class:compact
 					class:fit
 					class:behind={slot.behind}
+					class:clickable={entry.kind === "notice" && !slot.behind}
 					class:expandable={ordered.length > 1 && !expanded && !slot.behind}
-					role={item.tone === "error" ? "alert" : "status"}
+					role={tone === "error" ? "alert" : "status"}
 					style:width={slot.behind && frontW ? `${frontW}px` : null}
 					style:min-width={slot.behind && frontW ? "0" : null}
 					style:height={slot.behind && frontH ? `${frontH}px` : null}
@@ -174,28 +209,43 @@
 					out:surfaceOut={{ y: dyOut }}
 					onclick={onCardClick}
 				>
-					<div class="inner" use:measureCard={item.id}>
-						<span class="tone-ic" aria-hidden="true">
-							<Icon name={item.icon ?? TONE_ICON[item.tone]} />
-						</span>
-						<div class="body">
-							<span class="msg" class:clamped={!revealFull}>{item.text}</span>
-							{#if item.action}
-								{@const act = item.action}
-								<button
-									type="button"
-									class="act"
-									onclick={() => {
-										act.run();
-										app.feedback.dismissToast(item.id);
-									}}
-								>
-									{act.label}
-								</button>
-							{/if}
+					{#if entry.kind === "toast"}
+						{@const item = entry.item}
+						<div class="inner" use:measureCard={item.id}>
+							<span class="tone-ic" aria-hidden="true">
+								<Icon name={item.icon ?? TONE_ICON[item.tone]} />
+							</span>
+							<div class="body">
+								<span class="msg" class:clamped={!revealFull}>{item.text}</span>
+								{#if item.action}
+									{@const act = item.action}
+									<button
+										type="button"
+										class="act"
+										onclick={() => {
+											act.run();
+											app.feedback.dismissToast(item.id);
+										}}
+									>
+										{act.label}
+									</button>
+								{/if}
+							</div>
+							<CountdownClose ms={item.ms} {paused} onclick={() => app.feedback.dismissToast(item.id)} />
 						</div>
-						<CountdownClose ms={item.ms} {paused} onclick={() => app.feedback.dismissToast(item.id)} />
-					</div>
+					{:else}
+						{@const notice = entry.item}
+						<div class="inner notice-inner" use:measureCard={notice.id}>
+							<button type="button" class="go" onclick={() => onNoticeClick(notice)}>
+								<span class="badge-ic" aria-hidden="true">
+									<AgentBadge id={notice.sid} state={notice.tone} size={18} server={notice.server} />
+								</span>
+								<span class="notice-title">{noticeTitle(notice)}</span>
+								<span class="verdict">{notice.tone === "failed" ? t("실패") : t("완료")}</span>
+							</button>
+							<CountdownClose ms={notice.ms} {paused} onclick={() => app.feedback.dismissNotice(notice.id)} />
+						</div>
+					{/if}
 				</div>
 			</div>
 		{/if}
@@ -299,6 +349,52 @@
 	.card.compact .inner {
 		min-height: 40px;
 	}
+	.notice-inner {
+		padding: 4px 4px 4px 0;
+		gap: 4px;
+	}
+	.go {
+		flex: 1;
+		min-width: 0;
+		min-height: 36px;
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		padding: 0 8px 0 16px;
+		border-radius: var(--radius-control);
+		text-align: left;
+		color: var(--text);
+		font-size: var(--fs-sm);
+		line-height: 20px;
+		cursor: pointer;
+	}
+	.card.compact .go {
+		min-height: 32px;
+	}
+	.badge-ic {
+		flex: none;
+		display: grid;
+		place-items: center;
+		width: 18px; /* matches AgentBadge size={18} */
+		height: 18px; /* matches AgentBadge size={18} */
+	}
+	.notice-title {
+		flex: 1;
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		font-weight: 600;
+		line-height: 20px;
+	}
+	.verdict {
+		flex: none;
+		font-size: var(--fs-xs);
+		line-height: 16px;
+		font-weight: 600;
+		color: var(--tone);
+		white-space: nowrap;
+	}
 	.tone-ic {
 		flex: none;
 		display: grid;
@@ -346,6 +442,9 @@
 	@media (hover: hover) {
 		.act:hover {
 			background: color-mix(in srgb, var(--tone) 16%, transparent);
+		}
+		.card.clickable:hover {
+			border-color: color-mix(in srgb, var(--tone) 48%, var(--border-strong));
 		}
 	}
 	@media (max-width: 640px) {
