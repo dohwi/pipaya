@@ -234,27 +234,34 @@
 		display: flex;
 		align-items: center;
 		gap: 8px;
-		width: 100%;
+		width: calc(100% + 16px);
 		min-width: 0;
-		padding: 4px 0;
+		margin-inline: -8px; /* optical: aligns the 16px icon to the step column while giving the row 8px hover padding */
+		padding: 4px 8px;
+		border-radius: var(--radius-sm);
 		font-size: var(--fs-xs);
 		line-height: 20px;
 		color: var(--text-dim);
 		text-align: left;
-		transition: color var(--motion-fast) var(--ease-std);
+		transition: color var(--motion-fast) var(--ease-std), background-color var(--motion-fast) var(--ease-std);
+	}
+	.head[aria-expanded="true"] {
+		background-color: var(--bg-group);
 	}
 	@media (hover: hover) {
 		.head:hover,
 		.head:hover .sum {
 			color: var(--text);
 		}
+		.head:hover {
+			background-color: var(--bg-hover);
+		}
 		.head:hover .chev {
 			color: var(--text-dim);
 		}
 	}
-	/* the row has no fill of its own, so the press tint of row buttons (app.css) would paint a bare block behind the text */
 	.head:active:not(:disabled) {
-		background-color: transparent;
+		background-color: var(--bg-active);
 	}
 	.kind,
 	.chev {
@@ -275,7 +282,7 @@
 	.kind :global(svg) {
 		stroke-width: 1.8;
 	}
-	/* the tool's name: what kind of work, in the quiet colour */
+	/* the tool's name: clear anchor on the left of each call row */
 	/* one column per work box (--name-w, set by WorkBox from its longest name, 4 to 8ch): every summary starts on one line.
 	   A longer name only pushes its own row; outside a work box it falls back to bash / read / grep / edit's 4ch. */
 	.name {
@@ -285,7 +292,8 @@
 		overflow: hidden;
 		white-space: nowrap;
 		text-overflow: ellipsis;
-		color: var(--text-faint);
+		font-weight: 500;
+		color: var(--text);
 	}
 	/* what it did: the part to read, so it takes the room and is the part that gets cut */
 	.sum {
@@ -309,6 +317,7 @@
 	.dur {
 		min-width: 5ch;
 		text-align: right;
+		font-family: var(--mono);
 		font-size: var(--fs-2xs);
 		line-height: 16px;
 		font-variant-numeric: tabular-nums; /* 940ms over 212ms: every digit as wide, so the times line up row to row */
@@ -355,7 +364,7 @@
 	}
 	/* what the call carried and gave back, under its name (16px icon + 8px gap = 24 in), 8 below its line */
 	.body {
-		padding: 4px 0 8px 24px;
+		padding: 8px 0 8px 24px;
 	}
 	.jump {
 		display: flex;

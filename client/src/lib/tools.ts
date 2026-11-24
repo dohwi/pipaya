@@ -119,6 +119,59 @@ export function scheduleIdOf(args: Record<string, unknown>, details?: Record<str
 	return fromArgs || null;
 }
 
+const LEAD_KEYS = ["action", "command", "method"] as const;
+const VALUE_KEYS = [
+	"scope",
+	"query",
+	"url",
+	"path",
+	"file",
+	"name",
+	"id",
+	"title",
+	"target",
+	"patterns",
+	"paths",
+	"prompt",
+	"message",
+	"content",
+	"text",
+] as const;
+
+function formatArgValue(v: unknown): string {
+	if (v == null) return "";
+	if (typeof v === "string") return firstLine(v).trim();
+	if (typeof v === "number" || typeof v === "boolean") return String(v);
+	if (Array.isArray(v)) {
+		const items = v.map((item) => (typeof item === "string" ? firstLine(item).trim() : typeof item === "number" || typeof item === "boolean" ? String(item) : "")).filter(Boolean);
+		if (!items.length) return v.length ? `${v.length} items` : "";
+		return items.length > 2 ? `${items.slice(0, 2).join(", ")} (+${items.length - 2})` : items.join(", ");
+	}
+	try {
+		const raw = JSON.stringify(v);
+		return raw === "{}" ? "" : raw;
+	} catch {
+		return "";
+	}
+}
+
+/** Human-readable one-line summary for custom / MCP tools instead of raw JSON. */
+export function summarizeGenericArgs(args: Record<string, unknown>): string {
+	const parts: string[] = [];
+	const used = new Set<string>();
+	const pushVal = (key: string, labelKey: boolean) => {
+		if (parts.length >= 3 || used.has(key) || !(key in args)) return;
+		const formatted = formatArgValue(args[key]);
+		used.add(key);
+		if (!formatted) return;
+		parts.push(labelKey ? `${key}=${formatted}` : formatted);
+	};
+	for (const k of LEAD_KEYS) pushVal(k, false);
+	for (const k of VALUE_KEYS) pushVal(k, false);
+	for (const k of Object.keys(args)) pushVal(k, true);
+	return clip(parts.join(" · "), 90);
+}
+
 /** One line that says what a tool call is doing. */
 export function toolSummary(name: string, args: Record<string, unknown>): string {
 	if (toolKind(name, args) === "skill") return "";
@@ -168,6 +221,6 @@ export function toolSummary(name: string, args: Record<string, unknown>): string
 		case "workdir":
 			return clip([str(args.action), str(args.path)].filter(Boolean).join(" · "), 90);
 		default:
-			return clip(JSON.stringify(args), 90);
+			return summarizeGenericArgs(args);
 	}
 }

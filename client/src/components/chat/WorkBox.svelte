@@ -3,6 +3,7 @@
 	import { t } from "../../lib/i18n";
 	import { collapseIn, collapseOut, easeEnter, easeExit, fadeIn, fadeOut, ms } from "../../lib/motion";
 	import Icon from "../ui/Icon.svelte";
+	import Markdown from "./Markdown.svelte";
 	import ToolCard from "./ToolCard.svelte";
 	import QuestionReply from "./QuestionReply.svelte";
 	import { app } from "../../lib/store.svelte";
@@ -170,9 +171,10 @@
 		<div class="steps" id={uid} style:--name-w="{nameCh}ch" in:collapseIn out:collapseOut>
 			{#each steps as s, i (i)}
 				{#if s.kind === "think"}
+					{@const thoughtText = s.text.trim()}
 					<div class="thought">
 						<div class="thead"><Icon name="brain" /><span>{s.done ? t("생각 과정") : t("생각 중")}</span></div>
-						{#if s.text}<div class="tbody">{s.text}</div>{/if}
+						{#if thoughtText}<div class="tbody"><Markdown text={thoughtText} streaming={!s.done} /></div>{/if}
 					</div>
 				{:else if s.id}
 					<ToolCard id={s.id} name={s.name} args={s.args} />
@@ -245,25 +247,27 @@
 		display: flex;
 		align-items: center;
 		gap: 8px;
-		max-width: 100%;
-		padding: 4px 0;
+		max-width: calc(100% + 16px);
+		margin-left: -8px; /* optical: aligns the 16px icon with the text column while giving 8px hover padding */
+		padding: 4px 8px;
+		border-radius: var(--radius-sm);
 		font-size: var(--fs-sm);
 		line-height: 20px;
 		color: var(--text-dim);
 		text-align: left;
-		transition: color var(--motion-fast) var(--ease-std);
+		transition: color var(--motion-fast) var(--ease-std), background-color var(--motion-fast) var(--ease-std);
 	}
 	@media (hover: hover) {
 		button.sumrow:hover {
 			color: var(--text);
+			background-color: var(--bg-hover);
 		}
 		button.sumrow:hover .chev {
 			color: var(--text-dim);
 		}
 	}
-	/* the row has no fill of its own, so the press tint of row buttons (app.css) would paint a bare block behind the text */
 	button.sumrow:active:not(:disabled) {
-		background-color: transparent;
+		background-color: var(--bg-active);
 	}
 	/* the summary keeps its words; only when the column is too narrow for it alone does it shrink to an ellipsis */
 	.what {
@@ -272,6 +276,7 @@
 		overflow: hidden;
 		white-space: nowrap;
 		text-overflow: ellipsis;
+		font-weight: 500;
 	}
 	/* basis 0: what one call touched takes only the room the summary leaves, so it is the part that gets cut */
 	.single {
@@ -287,6 +292,7 @@
 	/* an even 16px box like the dot (8) and the arrow (16): the 11px text's own 17.05px height is odd */
 	.dur {
 		flex: none;
+		font-family: var(--mono);
 		font-size: var(--fs-2xs);
 		line-height: 16px;
 		font-variant-numeric: tabular-nums;
@@ -371,12 +377,12 @@
 		line-height: 20px;
 	}
 
-	/* the live preview and the opened steps hang off one thin guide line under the 16px icon's centre (8 - 2/2 = 7) */
+	/* the live preview and the opened steps hang off one thin hairline under the 16px icon's centre (8 - 1/2 ≈ 7) */
 	.peek,
 	.steps {
-		margin-left: 7px; /* optical: puts the 2px guide line on the centre of the 16px icon above */
-		padding-left: 15px; /* optical: 7 + 2 + 15 = 24, the "now" line's text start (16px icon + 8px gap) */
-		border-left: 2px solid var(--border);
+		margin-left: 7px; /* optical: puts the 1px guide line under the centre of the 16px icon above */
+		padding-left: 16px;
+		border-left: 1px solid var(--border);
 	}
 	.peek {
 		margin-top: 4px;
@@ -414,8 +420,11 @@
 		font-family: inherit;
 		font-style: italic;
 	}
-	/* the rows carry their own 4px padding: 4 + 4 + 4 = 12 between the summary's text and the first row's */
+	/* even 4px rhythm between thoughts and tool rows under the hairline */
 	.steps {
+		display: flex;
+		flex-direction: column;
+		gap: 4px;
 		margin-top: 4px;
 		margin-bottom: 8px;
 	}
@@ -507,7 +516,7 @@
 		}
 	}
 
-	/* a thought is a line like a call (icon, words), its text under it in the quiet colour instead of in a card */
+	/* a thought is a line like a call (icon, words), its text under it in compact markdown */
 	.thought {
 		min-width: 0;
 	}
@@ -517,8 +526,9 @@
 		gap: 8px;
 		padding: 4px 0;
 		font-size: var(--fs-xs);
+		font-weight: 500;
 		line-height: 20px;
-		color: var(--text-dim);
+		color: var(--text-faint);
 	}
 	.thead :global(svg) {
 		flex: none;
@@ -528,15 +538,28 @@
 		color: var(--text-faint);
 	}
 	.tbody {
-		padding: 0 0 8px 24px; /* 24: under the words, past the 16px icon and its 8px gap */
+		padding: 0 0 4px 24px; /* 24: under the words, past the 16px icon and its 8px gap */
 		color: var(--text-dim);
 		font-size: var(--fs-xs);
 		line-height: 20px;
-		white-space: pre-wrap;
-		overflow-wrap: anywhere;
 		max-height: 300px;
 		overflow-x: hidden;
 		overflow-y: auto;
+	}
+	.tbody :global(.md) {
+		line-height: 20px;
+	}
+	.tbody :global(.md p),
+	.tbody :global(.md ul),
+	.tbody :global(.md ol),
+	.tbody :global(.md blockquote) {
+		margin: 0 0 8px;
+	}
+	.tbody :global(.md > :last-child) {
+		margin-bottom: 0;
+	}
+	.tbody :global(.md :not(pre) > code) {
+		font-size: var(--fs-2xs);
 	}
 	/* a call still being written: the same line, three dots in the icon's 16px place */
 	.prep {
