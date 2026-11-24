@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { bezier, clipSlide, cssMs, dialogFrame, easeEnter, easeExit, modalIn, modalQuickIn, ms, surfaceFrame } from "../src/lib/motion";
+import { bezier, clipSlide, cssMs, dialogFrame, easeEnter, easeExit, modalIn, modalOut, modalQuickIn, ms, surfaceFrame } from "../src/lib/motion";
 import { rippleSize } from "../src/lib/ripple";
 
 describe("bezier", () => {
@@ -40,6 +40,32 @@ describe("frames", () => {
 		const node = {} as Element;
 		expect(modalQuickIn(node).duration).toBeLessThan(modalIn(node).duration);
 		expect(modalQuickIn(node).css!(0, 1)).toContain("translateY(8.00px)");
+	});
+	test("on phones, only .sheet dialogs use the bottom-sheet slide while sheet={false} cards stay centred", () => {
+		const prev = globalThis.matchMedia;
+		globalThis.matchMedia = ((q: string) => ({ matches: q.includes("640px") })) as typeof matchMedia;
+		try {
+			const sheetNode = {
+				classList: { contains: (c: string) => c === "sheet" },
+				offsetHeight: 400,
+				style: { getPropertyValue: () => "" },
+			} as unknown as Element;
+			const cardNode = {
+				classList: { contains: () => false },
+			} as unknown as Element;
+
+			expect(modalIn(sheetNode).css!(0, 1)).toContain("100%");
+			expect(modalOut(sheetNode).css!(0, 1)).toContain("100%");
+			expect(modalIn(cardNode).css!(0, 1)).toContain("translateY(16.00px)");
+			expect(modalOut(cardNode).css!(0, 1)).toContain("translateY(6.00px)");
+
+			// Off phones (> 640px), even a .sheet dialog uses the centered dialog transition
+			globalThis.matchMedia = (() => ({ matches: false })) as unknown as typeof matchMedia;
+			expect(modalIn(sheetNode).css!(0, 1)).toContain("translateY(16.00px)");
+			expect(modalOut(sheetNode).css!(0, 1)).toContain("translateY(6.00px)");
+		} finally {
+			globalThis.matchMedia = prev;
+		}
 	});
 	test("surfaces never scale (a large panel scaling wobbles every edge)", () => {
 		for (const dir of ["in", "out"] as const) for (const u of [0, 0.5, 1]) expect(surfaceFrame(u, 10, dir).scale).toBe(1);

@@ -459,7 +459,7 @@
 		position: absolute;
 		left: 0;
 		right: 0;
-		bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+		bottom: calc(16px + var(--sab));
 		display: flex;
 		justify-content: center;
 		gap: 4px;

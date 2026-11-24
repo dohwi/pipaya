@@ -55,7 +55,7 @@
 </script>
 
 <Modal onclose={() => !busy && oncancel()} dismissible={!busy} role="alertdialog" labelledby="{id}-title" describedby={description ? `${id}-desc` : undefined} width="s" {layer} {portal} {sheet}>
-	<div class="cd" use:sheetPull={{ onclose: () => !busy && oncancel(), disabled: !sheet || busy }}>
+	<div class="cd" class:sheet use:sheetPull={{ onclose: () => !busy && oncancel(), disabled: !sheet || busy }}>
 		<span class="mark {tone}"><Icon name={icon} /></span>
 		<h3 id="{id}-title">{title}</h3>
 		{#if description}<p id="{id}-desc">{description}</p>{/if}
@@ -75,7 +75,10 @@
 </Modal>
 
 <style>
-	.cd { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 24px var(--dlg-px) calc(var(--dlg-foot-b) + var(--sab)); text-align: center; }
+	.cd { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 24px var(--dlg-px) var(--dlg-foot-b); text-align: center; }
+	@media (max-width: 640px) {
+		.cd.sheet { padding-bottom: calc(var(--dlg-foot-b) + var(--sab)); }
+	}
 	.mark { display: grid; place-items: center; width: 44px; height: 44px; margin-bottom: 4px; border-radius: 50%; }
 	.mark :global(svg) { width: 22px; height: 22px; stroke-width: 1.8; }
 	.warn { background: var(--warn-soft); color: var(--warn); }

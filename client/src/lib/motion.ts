@@ -184,8 +184,10 @@ function flagClosing(node: Element) {
 	if (typeof HTMLDialogElement !== "undefined" && node instanceof HTMLDialogElement) node.dataset.closing = "";
 }
 
+const asSheet = (node: Element) => isPhone() && Boolean(node.classList?.contains("sheet"));
+
 export function modalIn(node: Element) {
-	if (isPhone()) return sheet(node, "in");
+	if (asSheet(node)) return sheet(node, "in");
 	return { duration: ms("normal"), easing: easeEnter, css: (_: number, u: number) => css(dialogFrame(u, "in")) };
 }
 /**
@@ -193,12 +195,12 @@ export function modalIn(node: Element) {
  * so clicking card after card feels immediate. Phones keep the sheet.
  */
 export function modalQuickIn(node: Element) {
-	if (isPhone()) return sheet(node, "in");
+	if (asSheet(node)) return sheet(node, "in");
 	return { duration: ms("fast"), easing: easeEnter, css: (_: number, u: number) => css(dialogFrame(u * 0.5, "in")) };
 }
 export function modalOut(node: Element) {
 	flagClosing(node);
-	if (isPhone()) return sheet(node, "out");
+	if (asSheet(node)) return sheet(node, "out");
 	return { duration: ms("fast"), easing: easeExit, css: (_: number, u: number) => css(dialogFrame(u, "out")) };
 }
 
