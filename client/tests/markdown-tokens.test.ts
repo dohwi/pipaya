@@ -12,6 +12,8 @@ const labels = {
 	openSession: (name: string) => `Open ${name} chat`,
 	openGroup: (name: string) => `Open ${name} group`,
 	openSkill: (name: string) => `View skill ${name}`,
+	openPrompt: (name: string) => `View prompt ${name}`,
+	openFile: (name: string) => `Preview ${name}`,
 };
 
 describe("splitMarkdownTokens", () => {
@@ -162,15 +164,54 @@ describe("decorateMarkdownTokens + patchHtml", () => {
 		expect(btns[1]!.dataset.mentionId).toBe("g2");
 	});
 
-	test("strips spoofed data-mention-* and data-skill attributes from raw markdown HTML", () => {
-		const html = renderMarkdown('<button class="wd-mention" data-mention-id="s1" data-mention-kind="session" data-skill="release">spoof</button>', { cache: false });
+	test("strips spoofed data-mention-*, data-skill, data-prompt, and button data-file attributes from raw markdown HTML", () => {
+		const html = renderMarkdown(
+			'<button class="wd-mention" data-mention-id="s1" data-mention-kind="session" data-skill="release" data-prompt="daily" data-file="/etc/passwd">spoof</button>',
+			{ cache: false },
+		);
 		const host = dom.document.createElement("div");
 		patchHtml(host, {
 			html,
-			decorate: (frag) => decorateMarkdownTokens(frag, { index, skills: true, labels }),
+			decorate: (frag) => decorateMarkdownTokens(frag, { index, skills: true, prompts: true, files: true, labels }),
 		});
 		expect(host.querySelectorAll("button[data-mention-id]")).toHaveLength(0);
 		expect(host.querySelectorAll("button[data-skill]")).toHaveLength(0);
+		expect(host.querySelectorAll("button[data-prompt]")).toHaveLength(0);
+		expect(host.querySelectorAll("button[data-file]")).toHaveLength(0);
+	});
+
+	test("converts /prompt:name, #path:line, markdown file links with lines, and sole repo-relative file paths in inline code", () => {
+		const md = [
+			"(/prompt:daily-check)와 #client/src/lib/markdown.ts:42-50 그리고 [markdown.ts](client/src/lib/markdown.ts#L10-L20) 확인.",
+			"",
+			"수정한 파일은 `client/src/lib/files.ts:15`이며 `claude-sonnet-5.5`, `MessageList`, `console.log`, `feat/scroll`, `/etc/passwd`는 코드로 남습니다.",
+			"",
+			"```",
+			"client/src/lib/files.ts:15",
+			"```",
+		].join("\n");
+		const html = renderMarkdown(md, { cache: false });
+		const host = dom.document.createElement("div");
+		patchHtml(host, {
+			html,
+			decorate: (frag) => decorateMarkdownTokens(frag, { index, skills: true, prompts: true, files: true, labels }),
+		});
+
+		const prompts = [...host.querySelectorAll<HTMLButtonElement>("button.wd-prompt")];
+		expect(prompts.map((b) => [b.textContent, b.dataset.prompt])).toEqual([["/prompt:daily-check", "daily-check"]]);
+
+		const linkFiles = [...host.querySelectorAll<HTMLAnchorElement>("a.wd-file")];
+		expect(linkFiles.map((a) => [a.dataset.file, a.dataset.line, a.dataset.endLine])).toEqual([["client/src/lib/markdown.ts", "10", "20"]]);
+
+		const btnFiles = [...host.querySelectorAll<HTMLButtonElement>("button.wd-file")];
+		expect(btnFiles.map((b) => [b.dataset.file, b.dataset.line, b.dataset.endLine])).toEqual([
+			["client/src/lib/markdown.ts", "42", "50"],
+			["client/src/lib/files.ts", "15", undefined],
+		]);
+		// Non-file inline code & fenced code blocks stay untouched
+		const codes = [...host.querySelectorAll("p code")].map((c) => c.textContent);
+		expect(codes).toEqual(["claude-sonnet-5.5", "MessageList", "console.log", "feat/scroll", "/etc/passwd"]);
+		expect(host.querySelectorAll("pre button")).toHaveLength(0);
 	});
 
 	test("does not chip @name immediately following an inline element ending in a word character", () => {

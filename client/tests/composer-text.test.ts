@@ -124,19 +124,24 @@ describe("splitTokens", () => {
 	});
 	test("matches mentions and skills wrapped in parentheses or quotes", () => {
 		const withSkills = { ...known, skills: ["review"] };
-		expect(splitTokens("세션(@미나, @철수)과 (/skill:review)", withSkills)).toEqual([
+		expect(splitTokens("세션(@미나, @철수)과 (/skill:review) 및 (/prompt:daily-check)", withSkills)).toEqual([
 			{ text: "세션(" },
 			{ text: "@미나", kind: "mention", name: "미나" },
 			{ text: ", " },
 			{ text: "@철수", kind: "mention", name: "철수" },
 			{ text: ")과 (" },
 			{ text: "/skill:review", kind: "skill", name: "review" },
+			{ text: ") 및 (" },
+			{ text: "/prompt:daily-check", kind: "prompt", name: "daily-check" },
 			{ text: ")" },
 		]);
-		expect(splitTokens("@미나,@철수", known)).toEqual([
+		expect(splitTokens("@미나,@철수 #src/a.ts:42-50 #v1.5", known)).toEqual([
 			{ text: "@미나", kind: "mention", name: "미나" },
 			{ text: "," },
 			{ text: "@철수", kind: "mention", name: "철수" },
+			{ text: " " },
+			{ text: "#src/a.ts:42-50", kind: "file", name: "src/a.ts:42-50" },
+			{ text: " #v1.5" },
 		]);
 	});
 	test("marks confirmed /skill:name tokens and keeps Korean particles or punctuation outside", () => {

@@ -794,6 +794,9 @@ export interface FileRef {
 	name: string;
 	size?: number;
 	mimeType?: string;
+	/** Optional 1-based line (and inclusive end line) to highlight and scroll to in FilePreview. */
+	line?: number;
+	endLine?: number;
 }
 
 export interface AssistantItem {
