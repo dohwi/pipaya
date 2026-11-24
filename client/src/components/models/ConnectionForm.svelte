@@ -427,6 +427,7 @@
 		padding: var(--dlg-body-t) var(--dlg-px) var(--dlg-body-b);
 		overflow-y: auto;
 		min-height: 0;
+		scroll-padding-block: 8px;
 	}
 	:global(.iconbtn.back) {
 		margin-left: -9.5px; /* the 38px button holds a 19px glyph 9.5px in: the glyph's left edge lands on the gutter, like the close glyph on the right (was -8: 1.5px in) */
