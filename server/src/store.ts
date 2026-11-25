@@ -373,7 +373,7 @@ export class SessionStore {
 			.all() as { session_id: string; origin: string; started_at: number; pending_prompt: string | null }[];
 		return rows.map((r) => ({
 			sessionId: r.session_id,
-			origin: r.origin === "peer" || r.origin === "schedule" ? r.origin : "user",
+			origin: r.origin === "peer" || r.origin === "schedule" || r.origin === "goal" ? r.origin : "user",
 			startedAt: r.started_at,
 			pendingPrompt: r.pending_prompt ? parseJson<AgentMessage | null>(r.pending_prompt, null) : null,
 		}));

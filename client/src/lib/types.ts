@@ -214,8 +214,11 @@ export interface McpServer {
 	command?: string;
 	args?: string[];
 	env?: Record<string, string>;
+	inheritEnv?: boolean;
 	url?: string;
 	headers?: Record<string, string>;
+	allowTools?: string[];
+	denyTools?: string[];
 }
 
 export interface McpServerInfo extends McpServer {
@@ -283,6 +286,8 @@ export interface McpInfo {
 	ready: number;
 	/** Tools the connected servers offer */
 	tools: number;
+	/** Tools dropped because total MCP tools exceeded the global cap */
+	truncatedTools?: number;
 }
 
 export interface SkillList {

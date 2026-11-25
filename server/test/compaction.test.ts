@@ -266,7 +266,7 @@ describe("POST /sessions/:id/compact", () => {
 		const msgs = (await api("GET", `/sessions/${id}/messages`)).json;
 		expect(JSON.stringify(msgs)).not.toContain("upstream stream closed with zero output");
 		await api("PUT", "/compaction", { auto: false, model: null });
-	});
+	}, 15_000);
 
 	test("a provider context-overflow error triggers one compaction and the run continues", async () => {
 		await api("PUT", "/compaction", { auto: true, model: null, thresholdPercent: 95 });

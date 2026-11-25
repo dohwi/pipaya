@@ -5,7 +5,9 @@ import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import Type, { type Static } from "typebox";
 import { badRequest } from "./errors.ts";
-import type { ToolDef } from "./tools.ts";
+import { DEFAULT_LIMITS } from "./image-resize-core.ts";
+import { resizeImage } from "./image-resize.ts";
+import { buildChildEnv, type ToolDef } from "./tools.ts";
 
 /** Shown instead of a stored secret (env value, header value); sending it back keeps the stored one. */
 export const MASK = "••••••••";
@@ -13,11 +15,14 @@ const SETTING_KEY = "mcp_servers";
 const NAME = /^[a-zA-Z0-9_-]{1,32}$/;
 const CONNECT_TIMEOUT_MS = 20_000;
 const CALL_TIMEOUT_MS = 120_000;
-const MAX_RESULT_CHARS = 50_000;
+export const MAX_RESULT_CHARS = 50_000;
 const MAX_SERVERS = 50;
 const MAX_TOOLS_PER_SERVER = 200;
+export const MAX_TOTAL_MCP_TOOLS = 128;
+export const MAX_MCP_IMAGE_RAW_BYTES = 10 * 1024 * 1024;
 
 const Strings = Type.Record(Type.String({ minLength: 1, maxLength: 200 }), Type.String({ maxLength: 4000 }), { maxProperties: 50 });
+const ToolFilterList = Type.Array(Type.String({ minLength: 1, maxLength: 200 }), { maxItems: 200 });
 
 export const McpServerBody = Type.Object({
 	name: Type.String({ minLength: 1, maxLength: 32, description: "Letters, digits, - and _. Part of every tool name (mcp_<name>_<tool>)" }),
@@ -26,8 +31,11 @@ export const McpServerBody = Type.Object({
 	command: Type.Optional(Type.String({ maxLength: 1000, description: "stdio: program to run" })),
 	args: Type.Optional(Type.Array(Type.String({ maxLength: 2000 }), { maxItems: 50 })),
 	env: Type.Optional(Strings),
+	inheritEnv: Type.Optional(Type.Boolean({ description: "stdio: inherit full host environment (still excluding PIPAYA_*) instead of filtered defaults" })),
 	url: Type.Optional(Type.String({ maxLength: 2000, description: "http: endpoint URL" })),
 	headers: Type.Optional(Strings),
+	allowTools: Type.Optional(ToolFilterList),
+	denyTools: Type.Optional(ToolFilterList),
 }, { additionalProperties: false });
 export type McpServerConfig = Static<typeof McpServerBody>;
 
@@ -42,7 +50,23 @@ export const McpInfo = Type.Object({
 	})),
 	ready: Type.Integer({ description: "Servers connected right now" }),
 	tools: Type.Integer({ description: "Tools the connected servers offer" }),
+	truncatedTools: Type.Optional(Type.Integer({ description: "Tools dropped because total MCP tools exceeded MAX_TOTAL_MCP_TOOLS" })),
 });
+
+/** Builds the environment for a stdio MCP server: filtered by default, or full host env (excluding PIPAYA_*) when `inheritEnv` is true. */
+export function buildMcpStdioEnv(
+	c: Pick<McpServerConfig, "env" | "inheritEnv">,
+	source: Record<string, string | undefined> = process.env,
+): Record<string, string> {
+	if (c.inheritEnv) {
+		const base: Record<string, string> = {};
+		for (const [k, v] of Object.entries(source)) {
+			if (v !== undefined && !/^PIPAYA_/i.test(k)) base[k] = v;
+		}
+		return { ...base, ...(c.env ?? {}) };
+	}
+	return { ...buildChildEnv(source), ...(c.env ?? {}) };
+}
 
 type Status = "off" | "connecting" | "ready" | "error";
 interface RemoteTool { name: string; tool: string; description: string; schema: Record<string, unknown> }
@@ -87,7 +111,13 @@ export class McpManager {
 				tools: status === "ready" ? (conn?.tools ?? []).map(({ name, tool, description }) => ({ name, tool, description })) : [],
 			};
 		});
-		return { servers, ready: servers.filter((s) => s.status === "ready").length, tools: servers.reduce((n, s) => n + s.tools.length, 0) };
+		const totalTools = servers.reduce((n, s) => n + s.tools.length, 0);
+		return {
+			servers,
+			ready: servers.filter((s) => s.status === "ready").length,
+			tools: Math.min(totalTools, MAX_TOTAL_MCP_TOOLS),
+			truncatedTools: Math.max(0, totalTools - MAX_TOTAL_MCP_TOOLS),
+		};
 	}
 
 	set(input: McpServerConfig[]): Static<typeof McpInfo> {
@@ -112,6 +142,7 @@ export class McpManager {
 				delete c.command;
 				delete c.args;
 				delete c.env;
+				delete c.inheritEnv;
 			}
 			// A masked value means "unchanged": put the stored secret back.
 			const before = old.get(c.name);
@@ -161,7 +192,7 @@ export class McpManager {
 		const client = new Client({ name: "pipaya", version: "1.0.0" });
 		try {
 			const transport = c.transport === "stdio"
-				? new StdioClientTransport({ command: c.command!, args: c.args ?? [], env: { ...(process.env as Record<string, string>), ...(c.env ?? {}) }, stderr: "ignore" })
+				? new StdioClientTransport({ command: c.command!, args: c.args ?? [], env: buildMcpStdioEnv(c), stderr: "ignore" })
 				: new StreamableHTTPClientTransport(new URL(c.url!), { requestInit: { headers: c.headers ?? {} } });
 			conn.client = client;
 			client.onclose = () => {
@@ -178,14 +209,23 @@ export class McpManager {
 				void client.close().catch(() => {});
 				return;
 			}
+			const allow = c.allowTools !== undefined ? new Set(c.allowTools) : null;
+			const deny = c.denyTools?.length ? new Set(c.denyTools) : null;
 			const used = new Set<string>();
-			conn.tools = listed.tools.slice(0, MAX_TOOLS_PER_SERVER).map((t) => {
-				const base = `mcp_${clean(c.name)}_${clean(t.name)}`.slice(0, 64);
-				let name = base;
-				for (let i = 2; used.has(name); i++) name = `${base.slice(0, 60)}_${i}`;
-				used.add(name);
-				return { name, tool: t.name, description: t.description ?? t.title ?? "", schema: { ...(t.inputSchema as Record<string, unknown>), type: "object" } };
-			});
+			conn.tools = listed.tools
+				.slice(0, MAX_TOOLS_PER_SERVER)
+				.map((t) => {
+					const base = `mcp_${clean(c.name)}_${clean(t.name)}`.slice(0, 64);
+					let name = base;
+					for (let i = 2; used.has(name); i++) name = `${base.slice(0, 60)}_${i}`;
+					used.add(name);
+					return { name, tool: t.name, description: t.description ?? t.title ?? "", schema: { ...(t.inputSchema as Record<string, unknown>), type: "object" } };
+				})
+				.filter((t) => {
+					if (allow && !allow.has(t.tool) && !allow.has(t.name)) return false;
+					if (deny && (deny.has(t.tool) || deny.has(t.name))) return false;
+					return true;
+				});
 			conn.status = "ready";
 		} catch (e) {
 			if (!current()) return;
@@ -197,12 +237,27 @@ export class McpManager {
 		this.onChange();
 	}
 
-	/** Tools of the connected servers, ready to be added to the built-in ones. */
+	/** Tools of the connected servers, in deterministic config/sorted order, capped globally at MAX_TOTAL_MCP_TOOLS. */
 	toolDefs(): Record<string, ToolDef> {
 		const defs: Record<string, ToolDef> = {};
-		for (const [server, conn] of this.conns) {
-			if (conn.status !== "ready") continue;
+		const orderedNames: string[] = [];
+		const seen = new Set<string>();
+		for (const c of this.config()) {
+			if (this.conns.has(c.name) && !seen.has(c.name)) {
+				seen.add(c.name);
+				orderedNames.push(c.name);
+			}
+		}
+		for (const name of [...this.conns.keys()].sort()) {
+			if (!seen.has(name)) orderedNames.push(name);
+		}
+		let total = 0;
+		for (const server of orderedNames) {
+			const conn = this.conns.get(server);
+			if (!conn || conn.status !== "ready") continue;
 			for (const t of conn.tools) {
+				if (total >= MAX_TOTAL_MCP_TOOLS) return defs;
+				total++;
 				const description = `[MCP: ${server}] ${t.description || t.tool}`.slice(0, 2000);
 				defs[t.name] = {
 					name: t.name,
@@ -229,27 +284,65 @@ export class McpManager {
 		const conn = this.conns.get(server);
 		if (!conn?.client || conn.status !== "ready") throw new Error(`MCP server "${server}" is not connected`);
 		const res = await conn.client.callTool({ name: tool, arguments: args }, undefined, { signal, timeout: CALL_TIMEOUT_MS });
-		const content: AgentToolResult<any>["content"] = [];
-		let chars = 0;
-		const push = (s: string) => {
-			const room = Math.max(0, MAX_RESULT_CHARS - chars);
-			chars += s.length;
-			content.push({ type: "text", text: s.length > room ? `${s.slice(0, room)}\n[truncated]` : s });
-		};
-		for (const part of (res.content as any[] | undefined) ?? []) {
-			if (part.type === "text") push(String(part.text ?? ""));
-			else if (part.type === "image" && typeof part.data === "string") content.push({ type: "image", data: part.data, mimeType: String(part.mimeType ?? "image/png") });
-			else if (part.type === "resource" && part.resource && typeof part.resource.text === "string") push(part.resource.text);
-			else push(JSON.stringify(part));
-		}
-		if (!content.length) push(res.structuredContent ? JSON.stringify(res.structuredContent) : "(no output)");
-		const out: AgentToolResult<any> = { content, details: { server, tool } };
-		if (res.isError) (out as { isError?: boolean }).isError = true;
-		return out;
+		return formatMcpToolResult(server, tool, res as { content?: unknown; structuredContent?: unknown; isError?: unknown }, signal);
 	}
 
 	async close(): Promise<void> {
 		const all = [...this.conns.keys()];
 		for (const name of all) this.drop(name);
 	}
+}
+
+export async function formatMcpToolResult(
+	server: string,
+	tool: string,
+	res: { content?: unknown; structuredContent?: unknown; isError?: unknown },
+	signal?: AbortSignal,
+	resizer: typeof resizeImage = resizeImage,
+): Promise<AgentToolResult<any>> {
+	const content: AgentToolResult<any>["content"] = [];
+	let chars = 0;
+	let truncated = false;
+	const push = (s: string) => {
+		if (truncated) return;
+		const room = MAX_RESULT_CHARS - chars;
+		if (s.length > room) {
+			truncated = true;
+			chars = MAX_RESULT_CHARS;
+			content.push({ type: "text", text: `${s.slice(0, Math.max(0, room))}\n[truncated]` });
+		} else {
+			chars += s.length;
+			content.push({ type: "text", text: s });
+		}
+	};
+	for (const part of (Array.isArray(res.content) ? res.content : []) as any[]) {
+		if (part.type === "text") {
+			push(String(part.text ?? ""));
+		} else if (part.type === "image" && typeof part.data === "string") {
+			const approxBytes = Math.floor((part.data.length * 3) / 4);
+			if (approxBytes > MAX_MCP_IMAGE_RAW_BYTES) {
+				push("[MCP image omitted: exceeds 10 MB size limit]");
+				continue;
+			}
+			const raw = Buffer.from(part.data, "base64");
+			if (raw.byteLength > MAX_MCP_IMAGE_RAW_BYTES) {
+				push("[MCP image omitted: exceeds 10 MB size limit]");
+				continue;
+			}
+			const resized = await resizer(raw, DEFAULT_LIMITS, signal);
+			if (resized) {
+				content.push({ type: "image", data: resized.data, mimeType: resized.mimeType });
+			} else {
+				push("[MCP image omitted: image could not be decoded or resized to fit model limits]");
+			}
+		} else if (part.type === "resource" && part.resource && typeof part.resource.text === "string") {
+			push(part.resource.text);
+		} else {
+			push(JSON.stringify(part));
+		}
+	}
+	if (!content.length) push(res.structuredContent ? JSON.stringify(res.structuredContent) : "(no output)");
+	const out: AgentToolResult<any> = { content, details: { server, tool } };
+	if (res.isError) (out as { isError?: boolean }).isError = true;
+	return out;
 }

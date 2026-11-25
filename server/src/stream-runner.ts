@@ -1,6 +1,6 @@
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import { retryDelayMs } from "@earendil-works/pi-ai";
-import { classifyUpstreamError, isProxyWarmupError, isZeroOutputError, logUnknownUpstreamError, retryReason, STREAM_RETRY, type UpstreamRetryOptions } from "./upstream-retry.ts";
+import { classifyUpstreamError, isCommittedMidStreamError, isProxyWarmupError, isZeroOutputError, logUnknownUpstreamError, retryReason, STREAM_RETRY, type UpstreamRetryOptions } from "./upstream-retry.ts";
 
 export interface RetrySleepResult {
 	aborted: boolean;
@@ -34,9 +34,10 @@ export interface MidStreamRetryResult {
 }
 
 /**
- * Repeats a turn that terminated with a retryable error *after* partial output had already streamed.
- * Empty replies are handled upstream by `withUpstreamRetry`; partial replies cannot be resumed in place,
- * so each attempt drops the half-written assistant message and calls `continueRun()`.
+ * Repeats a turn that terminated with a retryable error after streaming started (including committed empty/thinking-only
+ * replies where `withUpstreamRetry` committed on `thinking_start` before the stream failed with no content).
+ * Partial or empty failed replies cannot be resumed in place, so each attempt drops the failed assistant message and
+ * calls `continueRun()`.
  */
 export async function retryDroppedMidStream(opts: MidStreamRetryOptions): Promise<MidStreamRetryResult> {
 	const cfg = opts.retryOpts ?? STREAM_RETRY;
@@ -47,7 +48,7 @@ export async function retryDroppedMidStream(opts: MidStreamRetryOptions): Promis
 
 	for (let attempt = 1, unknownUsed = false; !opts.shouldStop() && attempt <= cfg.maxRetries; attempt++) {
 		const last = opts.getLastMessage();
-		if (last?.role !== "assistant" || last.stopReason !== "error" || !last.content.length) break;
+		if (last?.role !== "assistant" || last.stopReason !== "error" || (!last.content.length && !isCommittedMidStreamError(last))) break;
 		const kind = classifyUpstreamError(last);
 		if (kind === "permanent" || (kind === "unknown" && unknownUsed)) break;
 

@@ -1,18 +1,27 @@
 /**
- * Detects an agent run that has gone round in circles: too many model calls in one run, or the same tool call repeated turn after
- * turn. Pure (the limits are arguments), so the rule can be tested and tuned without a live session.
+ * Detects an agent run that has gone round in circles: too many model calls in one run, the same tool call repeated turn after
+ * turn, alternating 2-step/3-step tool-call cycles, or repeated failing tool calls. Pure (the limits are arguments), so the rule
+ * can be tested and tuned without a live session.
  */
+
+export const DEFAULT_MAX_REPEATED_ERRORS = 5;
 
 export interface RunGuardState {
 	/** Model calls so far in this run. */
 	turns: number;
 	/** The tool calls of the latest turns that ended in tool calls, newest last (a plain answer clears it). */
 	recentCalls: string[];
+	/** Bounded window of recent tool calls used to detect 2-step and 3-step repeating cycles. */
+	cycleWindow?: string[];
+	/** Consecutive failing tool-call error signatures, newest last (cleared on a non-error turn). */
+	recentErrors?: string[];
 }
 
 export interface RunGuardLimits {
 	maxTurns: number;
 	maxRepeated: number;
+	/** Consecutive failing turns on the same error signature before stopping (default 5). */
+	maxRepeatedErrors?: number;
 }
 
 /** A turn's tool calls as one comparable string (order does not matter); empty when it made none. */
@@ -25,11 +34,37 @@ export function callSignature(content: unknown): string {
 		.join("|");
 }
 
-/** The state after one more turn whose message content was `content`. */
-export function afterTurn(state: RunGuardState, content: unknown, limits: RunGuardLimits): RunGuardState {
+/** The state after one more turn whose message content was `content` (and optional `errorSignature` when tools failed). */
+export function afterTurn(state: RunGuardState, content: unknown, limits: RunGuardLimits, errorSignature?: string): RunGuardState {
 	const calls = callSignature(content);
+	const cycleCap = Math.max(limits.maxRepeated, 9);
+	const maxErrors = limits.maxRepeatedErrors ?? DEFAULT_MAX_REPEATED_ERRORS;
 	// Only turns that ended in tool calls can be a loop; a plain answer ends the run on its own.
-	return { turns: state.turns + 1, recentCalls: calls ? [...state.recentCalls, calls].slice(-limits.maxRepeated) : [] };
+	return {
+		turns: state.turns + 1,
+		recentCalls: calls ? [...state.recentCalls, calls].slice(-limits.maxRepeated) : [],
+		cycleWindow: calls ? [...(state.cycleWindow ?? state.recentCalls), calls].slice(-cycleCap) : [],
+		recentErrors: errorSignature ? [...(state.recentErrors ?? []), errorSignature].slice(-maxErrors) : [],
+	};
+}
+
+function repeatingCyclePeriod(window: readonly string[]): 2 | 3 | null {
+	for (const period of [2, 3] as const) {
+		const needed = period * 3;
+		if (window.length < needed) continue;
+		const tail = window.slice(-needed);
+		// Must have at least 2 distinct signatures in the cycle (a 1-step repeat is handled by maxRepeated).
+		if (new Set(tail.slice(0, period)).size < 2) continue;
+		let matches = true;
+		for (let i = period; i < needed; i++) {
+			if (tail[i] !== tail[i % period]) {
+				matches = false;
+				break;
+			}
+		}
+		if (matches) return period;
+	}
+	return null;
 }
 
 /** Why the run should stop now, or null to let it go on. */
@@ -38,6 +73,15 @@ export function runawayReason(state: RunGuardState, limits: RunGuardLimits): str
 	const { recentCalls } = state;
 	if (recentCalls.length === limits.maxRepeated && recentCalls.every((c) => c === recentCalls[0])) {
 		return `Stopped: the same tool call was repeated ${limits.maxRepeated} times in a row.`;
+	}
+	const cycle = repeatingCyclePeriod(state.cycleWindow ?? state.recentCalls);
+	if (cycle !== null) {
+		return `Stopped: detected a repeating ${cycle}-step tool call cycle (3 times in a row).`;
+	}
+	const maxErrors = limits.maxRepeatedErrors ?? DEFAULT_MAX_REPEATED_ERRORS;
+	const recentErrors = state.recentErrors ?? [];
+	if (maxErrors > 0 && recentErrors.length >= maxErrors && recentErrors.slice(-maxErrors).every((e) => e === recentErrors[recentErrors.length - 1])) {
+		return `Stopped: the same tool error repeated ${maxErrors} times in a row.`;
 	}
 	return null;
 }

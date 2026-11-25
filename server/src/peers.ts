@@ -116,6 +116,8 @@ export interface PeerHost {
 	onRunFinished(fn: (id: string, result: { status?: string; error?: string | null }) => void): void;
 	/** Calls `fn` whenever a session asks its user (ask_user) and waits. */
 	onQuestion(fn: (id: string, q: QuestionRequest) => void): void;
+	/** Optional: calls `fn` whenever a pending question is resolved, so `reported` can be pruned immediately. */
+	onQuestionResolved?(fn: (id: string, toolCallId: string) => void): void;
 	/** Questions a session is waiting on. */
 	questions(id: string): QuestionRequest[];
 	/** Answer a waiting question; false when nothing matched or the answer is invalid. */
@@ -139,10 +141,30 @@ export class PeerService {
 	/** Questions already reported to a watcher (`sessionId:toolCallId`), so a restart or replay cannot report one twice. */
 	private reported = new Set<string>();
 
+	/** Per-session async locks serializing `create` mutations for the same caller without blocking other sessions. */
+	private createLocks = new Map<string, Promise<void>>();
+
+	private withCreateLock<T>(selfId: string, fn: () => Promise<T> | T): Promise<T> {
+		const prev = this.createLocks.get(selfId) ?? Promise.resolve();
+		let release!: () => void;
+		const next = new Promise<void>((resolve) => { release = resolve; });
+		this.createLocks.set(selfId, next);
+		return prev.then(fn).finally(() => {
+			if (this.createLocks.get(selfId) === next) this.createLocks.delete(selfId);
+			release();
+		});
+	}
+
 	/** Watchers (who asked for `notify`) live in the database, so a restart does not lose them. They get one report per ended run. */
 	constructor(private host: PeerHost) {
 		host.onRunFinished((id, result) => this.finished(id, result));
 		host.onQuestion((id, q) => this.asked(id, q));
+		host.onQuestionResolved?.((id, toolCallId) => this.onQuestionResolved(id, toolCallId));
+	}
+
+	/** Removes a resolved question from `reported` so long-running servers do not accumulate stale keys. */
+	onQuestionResolved(id: string, toolCallId: string): void {
+		this.reported.delete(`${id}:${toolCallId}`);
 	}
 
 	private tell(watcher: string, body: string): void {
@@ -153,6 +175,12 @@ export class PeerService {
 
 	/** A watched session asks its user something and waits: nobody would notice, so the watchers hear it now (and may answer with peer(action=answer)). */
 	private asked(id: string, q: QuestionRequest): void {
+		// Prune any stale reported keys for this session that are no longer waiting.
+		const activeIds = new Set(this.host.questions(id).map((x) => `${id}:${x.toolCallId}`));
+		const prefix = `${id}:`;
+		for (const k of this.reported) {
+			if (k.startsWith(prefix) && !activeIds.has(k) && k !== `${id}:${q.toolCallId}`) this.reported.delete(k);
+		}
 		const watching = this.host.store.watchers(id);
 		if (!watching.length) return;
 		const key = `${id}:${q.toolCallId}`;
@@ -215,6 +243,7 @@ export class PeerService {
 	forget(id: string): void {
 		this.sends.delete(id);
 		this.chains.delete(id);
+		this.createLocks.delete(id);
 		const prefix = `${id}:`;
 		for (const k of this.reported) if (k.startsWith(prefix)) this.reported.delete(k);
 	}
@@ -315,8 +344,8 @@ export class PeerService {
 		return this.host.abort(peer.id) ? `Stopped @${peer.name}.` : `@${peer.name} was not working.`;
 	}
 
-	/** `peer(action=answer)`: answer the question another session is waiting on (what the user would do in the app). */
-	answer(selfId: string, name: string, a: { answer?: string; answers?: string[]; toolCallId?: string }): string {
+	/** `peer(action=answer)`: answer the question another session is waiting on (what the user would do in the app). Supports `null` ("leave to agent"). */
+	answer(selfId: string, name: string, a: { answer?: string | null; answers?: (string | null)[]; toolCallId?: string }): string {
 		const peer = this.find(selfId, name.replace(/^@/, ""));
 		const waiting = this.host.questions(peer.id);
 		if (!waiting.length) return `@${peer.name} is not waiting for an answer.`;
@@ -324,22 +353,26 @@ export class PeerService {
 		if (!q) throw notFound(`question ${a.toolCallId} of @${peer.name}`);
 		const r = this.host.answer(peer.id, q.toolCallId, { answer: a.answer, answers: a.answers });
 		if (r === "invalid") throw conflict(q.items?.length ? `answer every question: pass \`answers\` with ${q.items.length} entries, each one of its options when free text is not allowed` : q.options?.length && !q.allowFreeText ? `the answer must be one of: ${q.options.join(" | ")}` : "the answer must not be empty");
+		this.onQuestionResolved(peer.id, q.toolCallId);
 		if (r === "not_found") return `@${peer.name} is not waiting any more.`;
 		return `Answered @${peer.name}.${waiting.length > 1 ? ` ${waiting.length - 1} more question(s) still wait.` : ""}`;
 	}
 
 	/** `peer(action=create)`: a new session that starts on `message`. The caller hears when it ends or asks something, unless `notify` is false. */
 	async create(selfId: string, input: PeerCreateInput): Promise<string> {
-		const count = (this.sends.get(selfId) ?? 0) + 1;
-		if (count > MAX_SENDS_PER_RUN) throw conflict(`at most ${MAX_SENDS_PER_RUN} peer messages per run; stop and report to the user instead`);
-		this.sends.set(selfId, count);
-		const own = this.host.store.get(selfId);
 		const notify = input.notify ?? true;
-		const r = await this.host.create({ title: input.title, cwd: input.cwd ?? (own ? workDirOf(own) : undefined), provider: input.provider, model: input.model, thinkingLevel: input.thinkingLevel }, selfId);
-		if (input.purpose) this.host.update(r.id, { purpose: input.purpose.slice(0, 200) });
-		if (notify) this.host.store.watch(r.id, selfId);
+		const { r, ownName } = await this.withCreateLock(selfId, async () => {
+			const count = (this.sends.get(selfId) ?? 0) + 1;
+			if (count > MAX_SENDS_PER_RUN) throw conflict(`at most ${MAX_SENDS_PER_RUN} peer messages per run; stop and report to the user instead`);
+			this.sends.set(selfId, count);
+			const own = this.host.store.get(selfId);
+			const created = await this.host.create({ title: input.title, cwd: input.cwd ?? (own ? workDirOf(own) : undefined), provider: input.provider, model: input.model, thinkingLevel: input.thinkingLevel }, selfId);
+			if (input.purpose) this.host.update(created.id, { purpose: input.purpose.slice(0, 200) });
+			if (notify) this.host.store.watch(created.id, selfId);
+			return { r: created, ownName: own?.name };
+		});
 		try {
-			await this.host.deliver(r.id, peerMessage(own?.name, input.message), "prompt");
+			await this.host.deliver(r.id, peerMessage(ownName, input.message), "prompt");
 		} catch (e) {
 			this.host.store.unwatch(r.id);
 			this.host.remove(r.id); // a session that never got its task is of no use

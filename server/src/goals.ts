@@ -120,6 +120,8 @@ const DEFAULT_TIMERS: GoalTimers = {
 
 const DEFAULT_CONTINUE_DELAY_MS = 250;
 const MAX_EMPTY_CONTINUATIONS = 3;
+/** Consecutive per-run turn-cap aborts before marking a goal blocked (tracked separately because `hadActivity` is always true on a max-turn run). */
+const MAX_CONSECUTIVE_LIMIT_ABORTS = 3;
 
 const USAGE_LIMIT_RE = /rate[\s_-]?limit|usage[\s_-]?limit|insufficient[\s_-]?quota|quota[\s_-]?exceeded|too many requests|\b429\b/i;
 
@@ -160,6 +162,7 @@ export class GoalManager {
 	private readonly activeRuns = new Map<string, RunTracker>();
 	private readonly pendingContinue = new Map<string, ReturnType<typeof setTimeout>>();
 	private readonly emptyContinuations = new Map<string, number>();
+	private readonly consecutiveLimitAborts = new Map<string, number>();
 	private readonly budgetReported = new Map<string, string>(); // sessionId -> goalId already warned mid-run
 	private stopped = false;
 
@@ -181,6 +184,7 @@ export class GoalManager {
 		for (const t of this.pendingContinue.values()) this.timers.clear(t);
 		this.pendingContinue.clear();
 		this.activeRuns.clear();
+		this.consecutiveLimitAborts.clear();
 	}
 
 	list(sessionId?: string): GoalRecord[] {
@@ -227,6 +231,7 @@ export class GoalManager {
 				   updated_at = excluded.updated_at`,
 			).run({ sid: sessionId, gid: goalId, obj: objective, budget, now });
 			this.emptyContinuations.delete(sessionId);
+			this.consecutiveLimitAborts.delete(sessionId);
 			this.budgetReported.delete(sessionId);
 			if (this.host.isRunning(sessionId)) this.attachRun(sessionId, goalId);
 			const saved = this.get(sessionId)!;
@@ -251,6 +256,7 @@ export class GoalManager {
 		this.changed(sessionId, "updated");
 		if (saved.status === "active" && !session.closed && !this.host.isRunning(sessionId)) {
 			this.emptyContinuations.delete(sessionId);
+			this.consecutiveLimitAborts.delete(sessionId);
 			this.scheduleContinue(sessionId);
 		} else if (saved.status !== "active") {
 			this.cancelPending(sessionId);
@@ -292,6 +298,7 @@ export class GoalManager {
 
 		if (nextStatus === "active") {
 			this.emptyContinuations.delete(sessionId);
+			this.consecutiveLimitAborts.delete(sessionId);
 			if (nextBudget === null || existing.tokensUsed < nextBudget) this.budgetReported.delete(sessionId);
 			if (this.host.isRunning(sessionId) && !this.activeRuns.has(sessionId)) this.attachRun(sessionId, existing.goalId);
 		} else {
@@ -310,6 +317,7 @@ export class GoalManager {
 		this.cancelPending(sessionId);
 		this.activeRuns.delete(sessionId);
 		this.emptyContinuations.delete(sessionId);
+		this.consecutiveLimitAborts.delete(sessionId);
 		this.budgetReported.delete(sessionId);
 		const had = this.get(sessionId) !== null;
 		if (!had) return false;
@@ -343,6 +351,7 @@ export class GoalManager {
 		this.cancelPending(sessionId);
 		this.activeRuns.delete(sessionId);
 		this.emptyContinuations.delete(sessionId);
+		this.consecutiveLimitAborts.delete(sessionId);
 		const saved = this.get(sessionId)!;
 		this.changed(sessionId, "updated");
 		return saved;
@@ -352,6 +361,7 @@ export class GoalManager {
 		this.cancelPending(sessionId);
 		this.activeRuns.delete(sessionId);
 		this.emptyContinuations.delete(sessionId);
+		this.consecutiveLimitAborts.delete(sessionId);
 		this.budgetReported.delete(sessionId);
 		this.changed(sessionId, "cleared");
 	}
@@ -423,13 +433,26 @@ export class GoalManager {
 			return;
 		}
 
-		// Runaway guard: repeated identical tool calls -> blocked; hitting per-run turn cap can continue on a fresh turn.
+		// Runaway guard: repeated identical/cycle tool calls -> blocked immediately;
+		// hitting per-run turn cap (MAX_RUN_TURNS) can continue once, but 2 consecutive limit aborts -> blocked.
 		if (info.cause === "limit") {
-			if (info.error && /repeated|identical/i.test(info.error)) {
+			if (info.error && /repeated|repeating|identical|cycle/i.test(info.error)) {
+				this.consecutiveLimitAborts.delete(sessionId);
 				this.transitionStatus(sessionId, g.goalId, "blocked");
 				return;
 			}
+			const n = (this.consecutiveLimitAborts.get(sessionId) ?? 0) + 1;
+			this.consecutiveLimitAborts.set(sessionId, n);
+			if (n >= MAX_CONSECUTIVE_LIMIT_ABORTS) {
+				this.consecutiveLimitAborts.delete(sessionId);
+				this.transitionStatus(sessionId, g.goalId, "blocked");
+				return;
+			}
+			const session = this.host.session(sessionId);
+			if (session && !session.closed) this.scheduleContinue(sessionId);
+			return;
 		}
+		this.consecutiveLimitAborts.delete(sessionId);
 
 		// Unrecovered error -> usage_limited or blocked (prevents infinite error loops).
 		if (info.status === "error") {

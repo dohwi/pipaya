@@ -58,9 +58,9 @@ function timeOf(p: { at?: string; inMinutes?: number }, now: number): number | u
 	if (p.at !== undefined && p.inMinutes !== undefined) throw new Error("give either `at` or `inMinutes`, not both");
 	if (p.inMinutes !== undefined) return now + Math.round(p.inMinutes * 60_000);
 	if (p.at === undefined) return undefined;
-	const at = p.at.trim().replace(" ", "T");
+	const at = p.at.trim().replace(" ", "T").replace(/T(\d):/, "T0$1:");
 	// A date alone would be read as midnight UTC, not local: ask for the time.
-	const ms = /T\d{1,2}:\d{2}/.test(at) ? Date.parse(at) : Number.NaN;
+	const ms = /T\d{2}:\d{2}/.test(at) ? Date.parse(at) : Number.NaN;
 	if (Number.isNaN(ms)) throw new Error(`cannot read the time "${p.at}"; use e.g. 2026-11-15T09:00 (server local time) or 2026-11-15T09:00+09:00`);
 	return ms;
 }
@@ -70,12 +70,15 @@ const need = <T>(v: T | undefined, what: string, action: Action): T => {
 	return v;
 };
 
+/** Tracks task IDs created by each session (including cross-session schedules) so the creator may update or delete them. */
+const createdBySession = new Map<string, Set<string>>();
+
 const DESCRIPTION = [
 	"Scheduled tasks: a prompt sent automatically to a session once at a set time, or every so often (the user sees the same list in the settings). Pick `action`; each uses only the parameters named here.",
 	"list (all?): this session's tasks with id, timing, next and last run, and the server's current time; all true lists every task on the server.",
 	"create (prompt, at | inMinutes | everyMinutes, title?, session?): one-time with `at` or `inMinutes`, repeating with `everyMinutes` (first run one interval from now). Sent to this session unless `session` names another one (@name). Write the prompt as an instruction to your future self: that run sees the conversation but not this moment, and nobody is there to clarify.",
-	"update (id, prompt?, title?, at? | inMinutes?, everyMinutes?, enabled?): change a task; a one-time task takes a new time, a repeating one a new interval; enabled false pauses it.",
-	"delete (id): remove it. run (id): send it now; refused while its session is busy, so it cannot run a task of this session during your own run. A one-time task is used up by it.",
+	"update (id, prompt?, title?, at? | inMinutes?, everyMinutes?, enabled?): change a task owned by this session (or created by this session); a one-time task takes a new time, a repeating one a new interval; enabled false pauses it.",
+	"delete (id): remove a task owned by this session (or created by this session). run (id): send a task now; refused while its target session is busy, so it cannot run a task of this session during your own run. A one-time task is used up by it.",
 	"Times are the server's local time unless `at` carries an offset. A due task finding its session busy or closed is skipped, not queued. Set tasks up only when the user asked for something recurring or for later.",
 ].join("\n");
 
@@ -83,6 +86,13 @@ export const scheduleTool: ToolDef = {
 	name: SCHEDULE_TOOL,
 	description: "Set up, list, change, run and remove scheduled prompts (once at a time, or every so often).",
 	create(_cwd, _roots, ctx) {
+		let mutex: Promise<void> = Promise.resolve();
+		const withLock = <T>(fn: () => Promise<T> | T): Promise<T> => {
+			const prev = mutex;
+			let release!: () => void;
+			mutex = new Promise<void>((resolve) => { release = resolve; });
+			return prev.then(fn).finally(() => release());
+		};
 		return defineTool({
 			name: SCHEDULE_TOOL,
 			label: "Scheduled tasks",
@@ -104,6 +114,13 @@ export const scheduleTool: ToolDef = {
 				if (!ops) throw new Error("scheduled tasks are not available in this session");
 				const a: Action = p.action;
 				const show = (t: ScheduleRecord) => describeTask(t, ops.label);
+				const assertOwned = (taskId: string) => {
+					if (!ctx?.sessionId) return;
+					const target = ops.list(true).find((t) => t.id === taskId);
+					if (target && target.sessionId !== ctx.sessionId && !createdBySession.get(ctx.sessionId)?.has(taskId)) {
+						throw new Error(`schedule "${taskId}" belongs to another session (${ops.label(target.sessionId)}) and cannot be modified or deleted from this session`);
+					}
+				};
 				switch (a) {
 					case "list": {
 						const all = ops.list(!!p.all);
@@ -112,33 +129,51 @@ export const scheduleTool: ToolDef = {
 						return text(`${head} ${all.length} task(s):\n${all.map(show).join("\n")}`, { action: a, count: all.length });
 					}
 					case "create": {
-						const prompt = need(p.prompt, "prompt", a);
-						const runAt = timeOf(p, ops.now());
-						if (runAt !== undefined && p.everyMinutes !== undefined) throw new Error("a task is either one-time (`at` / `inMinutes`) or repeating (`everyMinutes`), not both");
-						if (runAt === undefined && p.everyMinutes === undefined) throw new Error("schedule create needs `at`, `inMinutes` or `everyMinutes`");
-						const t = ops.create({ session: p.session, title: p.title, prompt, ...(runAt !== undefined ? { runAt } : { everyMs: p.everyMinutes! * 60_000 }) });
-						return text(`Scheduled:\n${show(t)}`, { action: a, id: t.id });
+						return withLock(() => {
+							const prompt = need(p.prompt, "prompt", a);
+							const runAt = timeOf(p, ops.now());
+							if (runAt !== undefined && p.everyMinutes !== undefined) throw new Error("a task is either one-time (`at` / `inMinutes`) or repeating (`everyMinutes`), not both");
+							if (runAt === undefined && p.everyMinutes === undefined) throw new Error("schedule create needs `at`, `inMinutes` or `everyMinutes`");
+							const t = ops.create({ session: p.session, title: p.title, prompt, ...(runAt !== undefined ? { runAt } : { everyMs: p.everyMinutes! * 60_000 }) });
+							if (ctx?.sessionId) {
+								let owned = createdBySession.get(ctx.sessionId);
+								if (!owned) { owned = new Set(); createdBySession.set(ctx.sessionId, owned); }
+								owned.add(t.id);
+							}
+							return text(`Scheduled:\n${show(t)}`, { action: a, id: t.id });
+						});
 					}
 					case "update": {
-						const id = need(p.id, "id", a);
-						const runAt = timeOf(p, ops.now());
-						const patch: PatchScheduleInput = {
-							...(p.prompt !== undefined ? { prompt: p.prompt } : {}),
-							...(p.title !== undefined ? { title: p.title } : {}),
-							...(runAt !== undefined ? { runAt } : {}),
-							...(p.everyMinutes !== undefined ? { everyMs: p.everyMinutes * 60_000 } : {}),
-							...(p.enabled !== undefined ? { enabled: p.enabled } : {}),
-						};
-						if (!Object.keys(patch).length) throw new Error("schedule update needs something to change (prompt, title, at, inMinutes, everyMinutes or enabled)");
-						return text(`Updated:\n${show(ops.update(id, patch))}`, { action: a, id });
+						return withLock(() => {
+							const id = need(p.id, "id", a);
+							assertOwned(id);
+							const runAt = timeOf(p, ops.now());
+							const patch: PatchScheduleInput = {
+								...(p.prompt !== undefined ? { prompt: p.prompt } : {}),
+								...(p.title !== undefined ? { title: p.title } : {}),
+								...(runAt !== undefined ? { runAt } : {}),
+								...(p.everyMinutes !== undefined ? { everyMs: p.everyMinutes * 60_000 } : {}),
+								...(p.enabled !== undefined ? { enabled: p.enabled } : {}),
+							};
+							if (!Object.keys(patch).length) throw new Error("schedule update needs something to change (prompt, title, at, inMinutes, everyMinutes or enabled)");
+							return text(`Updated:\n${show(ops.update(id, patch))}`, { action: a, id });
+						});
 					}
 					case "delete": {
-						const t = ops.delete(need(p.id, "id", a));
-						return text(`Deleted:\n${show(t)}`, { action: a, id: t.id });
+						return withLock(() => {
+							const id = need(p.id, "id", a);
+							assertOwned(id);
+							const t = ops.delete(id);
+							if (ctx?.sessionId) createdBySession.get(ctx.sessionId)?.delete(id);
+							return text(`Deleted:\n${show(t)}`, { action: a, id: t.id });
+						});
 					}
 					case "run": {
-						const t = await ops.run(need(p.id, "id", a));
-						return text(`Sent now:\n${show(t)}`, { action: a, id: t.id });
+						return withLock(async () => {
+							const id = need(p.id, "id", a);
+							const t = await ops.run(id);
+							return text(`Sent now:\n${show(t)}`, { action: a, id: t.id });
+						});
 					}
 				}
 			},

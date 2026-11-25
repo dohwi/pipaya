@@ -159,6 +159,10 @@ export interface SchedulerOptions {
 	timers?: Timers;
 	/** While true (e.g. a server update is queued waiting for idle), timer-triggered tasks wait until the next tick. */
 	deferRun?: () => boolean;
+	/** Optional: when a one-time task is skipped because its session is busy, re-arm it after this many ms instead of finishing immediately. 0 = off (default). */
+	retryBusyOnceMs?: number;
+	/** Maximum busy retries for a one-time task when `retryBusyOnceMs > 0` (default: 3). */
+	maxBusyRetries?: number;
 	/** Something changed (create / update / delete / a run): the app tells the clients. */
 	onChange?: (change: { id: string | null; action: "created" | "updated" | "deleted" | "ran" }) => void;
 	log?: (msg: string) => void;
@@ -192,11 +196,15 @@ export class Scheduler {
 	private ticking = false;
 	/** Tasks being sent right now: a second run of the same task is refused until it is through. */
 	private inflight = new Set<string>();
+	/** Consecutive `skipped_busy` retries for a one-time task when `retryBusyOnceMs > 0`. */
+	private busyRetries = new Map<string, number>();
 	/** Last timestamp (from `this.now()`) when `prune()` executed; throttles write locks on `list()`. */
 	private lastPruneAt = -Infinity;
 	private now: () => number;
 	private timers: Timers;
 	private deferRun?: () => boolean;
+	private retryBusyOnceMs: number;
+	private maxBusyRetries: number;
 	private onChange: NonNullable<SchedulerOptions["onChange"]>;
 	private log: (msg: string) => void;
 
@@ -204,6 +212,8 @@ export class Scheduler {
 		this.now = opts.now ?? Date.now;
 		this.timers = opts.timers ?? realTimers;
 		this.deferRun = opts.deferRun;
+		this.retryBusyOnceMs = Math.max(0, Math.floor(opts.retryBusyOnceMs ?? 0));
+		this.maxBusyRetries = Math.max(0, Math.floor(opts.maxBusyRetries ?? 3));
 		this.onChange = opts.onChange ?? (() => {});
 		this.log = opts.log ?? (() => {});
 	}
@@ -316,17 +326,21 @@ export class Scheduler {
 				 fail_count = CASE WHEN $on = 1 AND $wasOn = 0 THEN 0 ELSE fail_count END, updated_at = $now WHERE id = $id`,
 			)
 			.run({ id, title, prompt, runAt, everyMs, on: on ? 1 : 0, wasOn: wasOn ? 1 : 0, next, now });
+		this.busyRetries.delete(id);
 		this.changed(id, "updated");
 		return this.get(id);
 	}
 
 	delete(id: string): void {
 		if (!this.db.query("DELETE FROM scheduled_tasks WHERE id = $id").run({ id }).changes) throw notFound("schedule");
+		this.busyRetries.delete(id);
 		this.changed(id, "deleted");
 	}
 
 	/** The session is gone. Its rows went with it (foreign key; deleted here too in case the key is off); this makes the timer and the clients notice. */
 	onSessionDeleted(sessionId: string): void {
+		const ids = (this.db.query("SELECT id FROM scheduled_tasks WHERE session_id = $sessionId").all({ sessionId }) as { id: string }[]).map((r) => r.id);
+		for (const id of ids) this.busyRetries.delete(id);
 		this.db.query("DELETE FROM scheduled_tasks WHERE session_id = $sessionId").run({ sessionId });
 		this.changed(null, "deleted");
 	}
@@ -416,6 +430,7 @@ export class Scheduler {
 		const now = this.now();
 		// Switched off after more than a day of downtime: a "tomorrow morning" prompt is not wanted next week.
 		if (trigger === "timer" && cur.kind === "once" && now - cur.next_run_at! > EXPIRE_AFTER_MS) {
+			this.busyRetries.delete(id);
 			this.db
 				.query("UPDATE scheduled_tasks SET enabled = 0, next_run_at = NULL, last_run_at = $now, last_status = 'skipped_expired', last_error = NULL, updated_at = $now WHERE id = $id")
 				.run({ id, now });
@@ -425,11 +440,24 @@ export class Scheduler {
 		const session = this.host.session(cur.session_id);
 		if (!session) {
 			// Deleted under us (the foreign key normally took the row along already).
+			this.busyRetries.delete(id);
 			this.db.query("DELETE FROM scheduled_tasks WHERE id = $id").run({ id });
 			return;
 		}
 		const skip: ScheduleStatusValue | null = session.closed ? "skipped_closed" : this.inflight.has(id) || this.host.isRunning(cur.session_id) ? "skipped_busy" : null;
 		if (skip && trigger === "manual") throw conflict(skip === "skipped_closed" ? "session is closed; resume it first" : "session is busy; try again when its run has finished");
+
+		// Optional bounded busy-retry for one-time tasks: re-arm instead of finishing immediately while retries remain.
+		if (trigger === "timer" && cur.kind === "once" && skip === "skipped_busy" && this.retryBusyOnceMs > 0) {
+			const count = (this.busyRetries.get(id) ?? 0) + 1;
+			if (count <= this.maxBusyRetries) {
+				this.busyRetries.set(id, count);
+				this.db.query("UPDATE scheduled_tasks SET enabled = 1, next_run_at = $next, updated_at = $now WHERE id = $id").run({ id, now, next: now + this.retryBusyOnceMs });
+				this.record(id, now, "skipped_busy", null, false);
+				return;
+			}
+			this.busyRetries.delete(id);
+		}
 
 		// Move the schedule on before sending: a crash or a slow send must not make the same slot run twice.
 		// A manual run leaves an interval's rhythm alone; any run uses a one-time task up.
@@ -439,9 +467,11 @@ export class Scheduler {
 			this.db.query("UPDATE scheduled_tasks SET next_run_at = $next, updated_at = $now WHERE id = $id").run({ id, now, next: now + cur.every_ms! });
 		}
 		if (skip) {
+			this.busyRetries.delete(id);
 			this.record(id, now, skip, null, false);
 			return;
 		}
+		this.busyRetries.delete(id);
 		this.inflight.add(id);
 		let status: ScheduleStatusValue = "ok";
 		let error: string | null = null;

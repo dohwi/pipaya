@@ -211,7 +211,7 @@ test("post-thinking zero-output errors also count toward the streak across outer
 	expect(seen[2]).toContain("Upstream closed the previous attempt with zero output (retry 2)");
 });
 
-test("completeWithUpstreamRetry retries transient 502 zero-output errors and returns permanent/unknown ones immediately", async () => {
+test("completeWithUpstreamRetry retries transient errors, retries unknown errors once with onRetry, and returns permanent ones immediately", async () => {
 	const waits: number[] = [];
 	let calls = 0;
 	const zeroErr = '502: {"message":"upstream stream closed with zero output","type":"server_error","code":"internal_server_error"}';
@@ -232,16 +232,33 @@ test("completeWithUpstreamRetry retries transient 502 zero-output errors and ret
 	expect(seen[1]).toBe("summarize this");
 	expect(seen[2]).toContain("retry 2");
 
+	// Permanent error returns immediately without retry.
 	const noWaits: number[] = [];
 	let permCalls = 0;
 	const perm = await completeWithUpstreamRetry(
-		async () => (permCalls++, msg({ stopReason: "error", errorMessage: "boom" })),
+		async () => (permCalls++, msg({ stopReason: "error", errorMessage: "401 invalid api key" })),
 		baseCtx,
 		{ maxRetries: 3, baseDelayMs: 5, maxDelayMs: 50, sleep: async (ms) => void noWaits.push(ms) },
 	);
 	expect(perm.stopReason).toBe("error");
 	expect(permCalls).toBe(1);
 	expect(noWaits).toEqual([]);
+
+	// Unknown error is retried once and invokes optional onRetry callback.
+	const unknownWaits: number[] = [];
+	const retryNotices: [number, number, number, string][] = [];
+	let unknownCalls = 0;
+	const unknownReply = await completeWithUpstreamRetry(
+		async () => (unknownCalls++, msg({ stopReason: "error", errorMessage: "boom" })),
+		baseCtx,
+		{ maxRetries: 3, baseDelayMs: 5, maxDelayMs: 50, sleep: async (ms) => void unknownWaits.push(ms), onUnknown: () => {} },
+		undefined,
+		(attempt, maxRetries, delayMs, err) => retryNotices.push([attempt, maxRetries, delayMs, err]),
+	);
+	expect(unknownReply.stopReason).toBe("error");
+	expect(unknownCalls).toBe(2);
+	expect(unknownWaits).toEqual([5]);
+	expect(retryNotices).toEqual([[1, 1, 5, "boom"]]);
 });
 
 test("maxZeroOutputRetries caps consecutive zero-output retries, announces the capped max, and resets on model change", async () => {

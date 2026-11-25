@@ -133,8 +133,10 @@
 			enabled: old?.enabled ?? true,
 			transport: f.transport,
 			...(f.transport === "stdio"
-				? { command: f.command.trim(), args: lines(f.args), env: pairs(f.env, "=") }
+				? { command: f.command.trim(), args: lines(f.args), env: pairs(f.env, "="), ...(old?.inheritEnv !== undefined ? { inheritEnv: old.inheritEnv } : {}) }
 				: { url: f.url.trim(), headers: pairs(f.headers, ":") }),
+			...(old?.allowTools !== undefined ? { allowTools: old.allowTools } : {}),
+			...(old?.denyTools !== undefined ? { denyTools: old.denyTools } : {}),
 		};
 		const rest = all().filter(x => x.name !== f.original);
 		const list = f.original ? all().map(x => (x.name === f.original ? next : x)) : [...rest, next];
