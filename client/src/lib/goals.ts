@@ -30,11 +30,13 @@ export const resumable = (s: GoalStatus) => s === "paused" || s === "blocked" ||
 
 /** "1분 20초", "2시간 5분": the time the agent spent on it (idle time between turns is not counted). */
 export function goalTime(sec: number): string {
-	const m = Math.floor(sec / 60);
-	const h = Math.floor(m / 60);
-	if (h) return t("{h}시간 {m}분", { h, m: m % 60 });
-	if (m) return t("{m}분 {s}초", { m, s: sec % 60 });
-	return t("{s}초", { s: sec });
+	const total = Math.max(0, Math.floor(sec));
+	const h = Math.floor(total / 3600);
+	const m = Math.floor((total % 3600) / 60);
+	const s = total % 60;
+	if (h > 0) return m > 0 ? t("{h}시간 {m}분", { h, m }) : t("{h}시간", { h });
+	if (m > 0) return s > 0 ? t("{m}분 {s}초", { m, s }) : t("{m}분", { m });
+	return t("{s}초", { s });
 }
 
 /** What it has used, short: "142k / 500k" against its budget, else "142k · 2분 18초". */

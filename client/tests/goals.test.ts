@@ -46,7 +46,9 @@ describe("goals helpers", () => {
 
 	test("formats usage, duration, and warning levels", () => {
 		expect(goalTime(45)).toBe("45초");
+		expect(goalTime(120)).toBe("2분");
 		expect(goalTime(138)).toBe("2분 18초");
+		expect(goalTime(3600)).toBe("1시간");
 		expect(goalTime(3720)).toBe("1시간 2분");
 
 		expect(goalUsage(baseGoal({ tokenBudget: null }))).toBe("142k · 2분 18초");

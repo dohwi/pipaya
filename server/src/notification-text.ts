@@ -49,10 +49,13 @@ export function preview(text: string, max = 110): string {
 }
 
 export function duration(ms: number, l: Lang): string {
-  const s = Math.round(ms / 1000);
-  if (s < 60) return l === "ko" ? `${s}초` : `${s}s`;
-  const m = Math.floor(s / 60), r = s % 60;
-  return l === "ko" ? `${m}분${r ? ` ${r}초` : ""}` : `${m}m${r ? ` ${r}s` : ""}`;
+  const totalSec = Math.max(0, Math.round(ms / 1000));
+  if (totalSec < 60) return l === "ko" ? `${totalSec}초` : `${totalSec}s`;
+  const h = Math.floor(totalSec / 3600);
+  const m = Math.floor((totalSec % 3600) / 60);
+  const s = totalSec % 60;
+  if (h > 0) return l === "ko" ? `${h}시간${m ? ` ${m}분` : ""}` : `${h}h${m ? ` ${m}m` : ""}`;
+  return l === "ko" ? `${m}분${s ? ` ${s}초` : ""}` : `${m}m${s ? ` ${s}s` : ""}`;
 }
 
 export interface RunFacts { title: string; status: "ok" | "error"; answer?: string; error?: string | null; durationMs?: number }

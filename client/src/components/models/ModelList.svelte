@@ -7,6 +7,7 @@
 	import Switch from "../ui/Switch.svelte";
 	import ModelLogo from "./ModelLogo.svelte";
 	import { t } from "../../lib/i18n";
+	import { duration } from "../../lib/format";
 	import { collapseIn, collapseOut } from "../../lib/motion";
 	import type { Form, Row } from "../../lib/connection-form";
 	import type { CatalogModel, ConnectionResult } from "../../lib/types";
@@ -93,7 +94,7 @@
 					{#if r.unavailable}<IconButton icon="trash" label={t("{name} 삭제", { name: r.name.trim() || id })} tip size="sm" disabled={busy} onclick={() => onremove(i)} />{:else if gone}<span class="tspace" aria-hidden="true"></span>{/if}
 				</div>
 				{#if !r.disabled && probe && probe !== "running"}
-					<span class="res {probe.ok ? 'ok' : 'bad'}" role="status">{probe.ok ? `${t("성공")} ${probe.durationMs}ms${probe.text ? ` · “${probe.text.trim().slice(0, 40)}”` : ""}` : (probe.error ?? t("실패"))}</span>
+					<span class="res {probe.ok ? 'ok' : 'bad'}" role="status">{probe.ok ? `${t("성공")} ${duration(probe.durationMs)}${probe.text ? ` · “${probe.text.trim().slice(0, 40)}”` : ""}` : (probe.error ?? t("실패"))}</span>
 				{/if}
 			</div>
 		{/each}

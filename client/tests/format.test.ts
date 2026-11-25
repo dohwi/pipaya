@@ -3,7 +3,19 @@ import { clockMinutes, dayLabel, duration, nextChange, pastChange, dayStart, fil
 import { setLang } from "../src/lib/i18n";
 
 describe("duration", () => {
-	test("formats ms, seconds, minutes+seconds without 60s rollover, and hours", () => {
+	test("formats localized durations in Korean and English without 60s rollover", () => {
+		setLang("ko");
+		expect(duration(-50)).toBe("0ms");
+		expect(duration(420)).toBe("420ms");
+		expect(duration(3_450)).toBe("3.5초");
+		expect(duration(59_949)).toBe("59.9초");
+		expect(duration(59_950)).toBe("1분");
+		expect(duration(119_600)).toBe("2분");
+		expect(duration(125_000)).toBe("2분 5초");
+		expect(duration(3_600_000)).toBe("1시간");
+		expect(duration(3_900_000)).toBe("1시간 5분");
+
+		setLang("en");
 		expect(duration(420)).toBe("420ms");
 		expect(duration(3_450)).toBe("3.5s");
 		expect(duration(59_949)).toBe("59.9s");
@@ -12,6 +24,7 @@ describe("duration", () => {
 		expect(duration(125_000)).toBe("2m 5s");
 		expect(duration(3_600_000)).toBe("1h");
 		expect(duration(3_900_000)).toBe("1h 5m");
+		setLang("ko");
 	});
 });
 
