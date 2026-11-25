@@ -356,7 +356,11 @@
 		flex: 0 0 var(--wv-w, 260px);
 		width: var(--wv-w, 260px);
 		max-width: 45vw;
+		height: 100%;
 		min-height: 0;
+		padding-top: var(--sat);
+		padding-right: var(--sar);
+		padding-bottom: var(--sab);
 		display: flex;
 		flex-direction: column;
 		overflow: hidden;
@@ -407,6 +411,12 @@
 		padding: 0 12px;
 		background: var(--bg-side);
 		border-bottom: 1px solid var(--border);
+	}
+	/* Match left Sidebar .brandrow and Header hairline over the tab strip so the top 44px line runs unbroken across all three columns */
+	@media (min-width: 601px) {
+		:global(:root:has(main > [data-part="tabbar"])) .head {
+			border-bottom-color: var(--tabbar-line);
+		}
 	}
 	.htitle {
 		flex: 1;

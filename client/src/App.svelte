@@ -473,11 +473,13 @@
 							{/if}
 						{/if}
 					</div>
-					<WorkspaceFileTree open={app.filesOpen && !app.graphOpen} />
 					<ExtensionDock />
 				</div>
 			</div>
 		</main>
+
+		<!-- Right workspace sidebar: full-height sibling of <main> just like the left sidebar, pushing Header + TabBar + stage cleanly -->
+		<WorkspaceFileTree open={app.filesOpen && !app.graphOpen} />
 
 	</div>
 {/if}
