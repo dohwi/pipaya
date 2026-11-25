@@ -32,4 +32,16 @@ describe("closed chats permanent deletion", () => {
 		expect(srvDbSrc).toMatch(/CREATE TABLE IF NOT EXISTS session_contexts[\s\S]*?REFERENCES sessions\(id\) ON DELETE CASCADE/);
 		expect(srvDbSrc).toMatch(/CREATE TABLE IF NOT EXISTS events[\s\S]*?REFERENCES sessions\(id\) ON DELETE CASCADE/);
 	});
+
+	test("SessionsDialog and SessionsPanel list only closed sessions as deleted chats", () => {
+		const dlgSrc = readFileSync(resolve(__dirname, "../src/components/agent/SessionsDialog.svelte"), "utf-8");
+		const panelSrc = readFileSync(resolve(__dirname, "../src/components/agent/SessionsPanel.svelte"), "utf-8");
+		expect(dlgSrc).toContain('t("삭제된 대화 목록")');
+		expect(panelSrc).toContain("api.allSessions(true)");
+		expect(panelSrc).not.toContain("api.allSessions()");
+		expect(panelSrc).not.toContain("대화 닫기");
+		expect(panelSrc).not.toContain('t("닫음")');
+		expect(panelSrc).toContain('t("복원")');
+		expect(panelSrc).toContain('t("{n}개 영구 삭제"');
+	});
 });

@@ -11,7 +11,6 @@
 	import { livePast } from "../../lib/minute-clock.svelte";
 	import { tailKeepLast } from "../../lib/fit-text";
 	import type { Session } from "../../lib/types";
-	import Badge from "../ui/Badge.svelte";
 	import Handle from "../ui/Handle.svelte";
 	import { peerLabel } from "../../lib/peers";
 	import Icon from "../ui/Icon.svelte";
@@ -47,7 +46,7 @@
 		if (!api) return;
 		error = "";
 		try {
-			const [list, ws] = await Promise.all([api.allSessions(), api.workspace().catch(() => null)]);
+			const [list, ws] = await Promise.all([api.allSessions(true), api.workspace().catch(() => null)]);
 			sessions = list;
 			home = ws?.home ?? null;
 			const alive = new Set(list.map((s) => s.id));
@@ -65,9 +64,14 @@
 	/** A folder shows as `~/work/x` when it is under the server user's home. */
 	const label = (cwd: string): string => tilde(cwd, home);
 
+	const openSessions = $derived(app.links[serverId]?.data.sessions ?? []);
+	/** Ids of chats currently open in the link: if a deleted chat is reopened elsewhere while this dialog is open, drop it immediately so it cannot be deleted here. */
+	const openIds = $derived(new Set(openSessions.map((s) => s.id)));
+
 	const groups = $derived.by(() => {
 		const map = new Map<string, Session[]>();
 		for (const s of sessions ?? []) {
+			if (openIds.has(s.id)) continue;
 			if (cwd !== undefined && s.cwd !== cwd) continue;
 			const list = map.get(s.cwd);
 			if (list) list.push(s);
@@ -77,10 +81,10 @@
 			.map(([cwd, list]) => ({ cwd, list, updatedAt: list[0]?.updatedAt ?? 0 }))
 			.sort((a, b) => b.updatedAt - a.updatedAt);
 	});
-	/** Names the open chats answer to. A closed chat keeps its name now, but one closed before that may share it with an
+	/** Names the open chats in the link answer to. A closed chat keeps its name now, but one closed before that may share it with an
 	   open chat that took it meanwhile: that closed chat shows no handle, so the dialog never lists one `@name` twice. */
-	const openNames = $derived(new Set((sessions ?? []).filter((s) => !s.closed && s.name).map((s) => s.name.toLowerCase())));
-	const handleOf = (s: Session) => (s.closed && openNames.has(s.name.toLowerCase()) ? undefined : peerLabel(s));
+	const openNames = $derived(new Set(openSessions.filter((s) => s.name).map((s) => s.name.toLowerCase())));
+	const handleOf = (s: Session) => (openNames.has(s.name.toLowerCase()) ? undefined : peerLabel(s));
 	const nIn = (list: Session[]) => list.filter((s) => picked[s.id]).length;
 
 	const allIn = (list: Session[]) => list.length > 0 && list.every((s) => picked[s.id]);
@@ -100,13 +104,12 @@
 		else next[id] = true;
 		picked = next;
 	}
-	/** Run `act` over what is ticked in `list` and passes `keep`; then untick those, report with `done` and reload. */
+	/** Run `act` over what is ticked in `list`; then untick those, report with `done` and reload. */
 	async function bulk(
 		list: Session[],
-		keep: (s: Session) => boolean,
 		act: (ids: string[]) => Promise<string | { text: string; tone: "ok" | "warn" } | void>,
 	) {
-		const ids = list.filter((s) => picked[s.id] && keep(s)).map((s) => s.id);
+		const ids = list.filter((s) => picked[s.id] && !openIds.has(s.id)).map((s) => s.id);
 		if (!api || !ids.length) return;
 		busy = true;
 		error = "";
@@ -120,16 +123,13 @@
 			await load();
 		} catch (e) {
 			if (e instanceof ApiError && e.status === 0) void app.links[serverId]?.probe();
-			error = errorText(e);
+			const err = errorText(e);
+			await load();
+			error = err;
 		} finally {
 			busy = false;
 		}
 	}
-	const can = (list: Session[], keep: (s: Session) => boolean) => list.some((s) => picked[s.id] && keep(s));
-	/** Reopen what was closed (the history stays on the server). */
-	const canRestore = (s: Session) => s.closed;
-	const canClose = (s: Session) => !s.closed;
-	const any = () => true;
 
 	const dropFromLink = (ids: string[]) => {
 		const link = app.links[serverId];
@@ -147,29 +147,15 @@
 		}
 	};
 
-	/** Reopen what is ticked in one folder; the open ones are left as they are. */
+	/** Reopen what is ticked in one folder. */
 	const restore = (list: Session[]) =>
-		bulk(list, canRestore, async (ids) => {
+		bulk(list, async (ids) => {
 			for (const id of ids) await api!.patchSession(id, { closed: false });
 			return t("{n}개를 복원했습니다.", { n: ids.length });
 		});
-	/** Move what is ticked to the closed sessions (empty ones are removed instead of kept closed). */
-	const close = (list: Session[]) =>
-		bulk(list, canClose, async (ids) => {
-			const deleted: string[] = [];
-			const closed: string[] = [];
-			for (const id of ids) {
-				const res = await api!.closeSession(id);
-				(res === undefined ? deleted : closed).push(id);
-			}
-			dropFromLink(ids);
-			for (const id of deleted) app.cleanupDeletedSession(serverId, id);
-			for (const id of closed) app.cleanupClosedSession(serverId, id);
-			return t("{n}개를 닫았습니다.", { n: ids.length });
-		});
-	/** Delete what is ticked in one folder. Ticks in other folders stay untouched. */
+	/** Permanently delete what is ticked in one folder. Ticks in other folders stay untouched. */
 	const remove = (list: Session[]) =>
-		bulk(list, any, async (ids) => {
+		bulk(list, async (ids) => {
 			let deleted = 0, skipped = 0;
 			const gone: string[] = [];
 			// the server takes up to 500 at a time
@@ -183,7 +169,7 @@
 			for (const id of gone) app.cleanupDeletedSession(serverId, id);
 			return skipped
 				? { text: t("{n}개를 지웠습니다. {s}개는 실행 중이거나 답을 기다려 남겨 두었습니다.", { n: deleted, s: skipped }), tone: "warn" }
-				: t("{n}개를 지웠습니다.", { n: deleted });
+				: t("{n}개를 영구 삭제했습니다.", { n: deleted });
 		});
 
 </script>
@@ -195,7 +181,7 @@
 		{#if !sessions && !error}
 			<EmptyState loading tone="plain" as="p" />
 		{:else if sessions && !groups.length}
-			<EmptyState tone="dashed" as="p">{t("이 서버에는 대화가 없습니다")}</EmptyState>
+			<EmptyState tone="dashed" as="p">{cwd !== undefined ? t("이 폴더에는 삭제된 대화가 없습니다") : t("이 서버에는 삭제된 대화가 없습니다")}</EmptyState>
 		{:else if sessions}
 			{#each groups as g (g.cwd)}
 				<div class="group">
@@ -205,7 +191,7 @@
 							checked={allIn(g.list)}
 							indeterminate={someIn(g.list)}
 							onchange={() => toggleGroup(g.list)}
-							aria-label={t("{path}의 대화 모두 선택", { path: label(g.cwd) })}
+							aria-label={t("{path}의 삭제된 대화 모두 선택", { path: label(g.cwd) })}
 						/>
 						<button class="fold" onclick={() => (folded[g.cwd] = !folded[g.cwd])} aria-expanded={!folded[g.cwd]}>
 							<Icon name={folded[g.cwd] ? "chevron-right" : "chevron-down"} />
@@ -215,9 +201,8 @@
 						</button>
 						{#if nIn(g.list)}
 							<span class="del" in:collapseIn out:collapseOut>
-								<Button size="sm" onclick={() => void restore(g.list)} disabled={busy || !can(g.list, canRestore)}><Icon name="undo" /> {t("복원")}</Button>
-								<Button size="sm" onclick={() => void close(g.list)} disabled={busy || !can(g.list, canClose)}><Icon name="x" /> {t("대화 닫기")}</Button>
-								<ConfirmButton size="sm" danger timeout={5000} confirmLabel={t("정말 {n}개 삭제", { n: nIn(g.list) })} onconfirm={() => void remove(g.list)} disabled={busy}><Icon name="trash" /> {t("{n}개 삭제", { n: nIn(g.list) })}</ConfirmButton>
+								<Button size="sm" onclick={() => void restore(g.list)} disabled={busy}><Icon name="undo" /> {t("복원")}</Button>
+								<ConfirmButton size="sm" danger timeout={5000} confirmLabel={t("정말 {n}개 영구 삭제", { n: nIn(g.list) })} onconfirm={() => void remove(g.list)} disabled={busy}><Icon name="trash" /> {t("{n}개 영구 삭제", { n: nIn(g.list) })}</ConfirmButton>
 							</span>
 						{/if}
 					</div>
@@ -233,7 +218,6 @@
 											<span class="title">{s.title ? sessionTitle(s.title) : t("제목 없음")}</span>
 										</span>
 									</label>
-									{#if s.closed}<Badge size="sm">{t("닫음")}</Badge>{/if}
 									<span class="age" title={fullTime(s.updatedAt)}>{livePast(s.updatedAt, { time: false })}</span>
 								</li>
 							{/each}

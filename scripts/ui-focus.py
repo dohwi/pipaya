@@ -54,6 +54,7 @@ if a.seed:
     mk = lambda cwd, title: api("POST", "/sessions", {"cwd": cwd, "title": title})["id"]
     for title in ("로그인 버그 수정", "API 리팩터링", "문서 정리"):
         mk("alpha", title)
+    api("PATCH", f"/sessions/{mk('alpha', '닫힌 작업')}", {"closed": True})
     x, y = mk("alpha", "디자인 리뷰"), mk("alpha", "QA")
     pane = lambda i: {"type": "pane", "sessionId": i}
     api("POST", "/groups", {"layout": {"type": "split", "dir": "row", "ratio": 0.5, "a": pane(x), "b": pane(y)}})
