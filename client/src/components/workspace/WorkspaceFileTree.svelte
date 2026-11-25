@@ -809,6 +809,8 @@
 	.search-row {
 		padding: 4px 12px;
 		gap: 8px;
+		content-visibility: auto;
+		contain-intrinsic-size: auto 44px;
 	}
 	.tstack {
 		flex: 1;

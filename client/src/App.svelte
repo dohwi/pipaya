@@ -273,8 +273,11 @@
 		if (!chat) return;
 		void chat.items;
 		void chat.tools;
-		void chat.running;
-		workspaceViewer.syncRecentChanges();
+		const running = chat.running;
+		untrack(() => {
+			if (running) workspaceViewer.scheduleSyncRecentChanges();
+			else workspaceViewer.syncRecentChanges();
+		});
 	});
 
 	onMount(() => {

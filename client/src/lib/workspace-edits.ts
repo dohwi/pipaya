@@ -220,17 +220,16 @@ export function deriveLatestTurnEdits(
 					}
 				} else {
 					const content = typeof block.args.content === "string" ? block.args.content : "";
-					const rows = content ? content.replace(/\r?\n$/, "").split(/\r?\n/) : [];
-					const clipped = rows.slice(0, 400);
-					change.additions += rows.length;
-					diff.additions += rows.length;
-					diff.truncated = rows.length > 400;
-					diff.hunks = clipped.length
+					const { count, head } = countAndHeadLines(content, 400);
+					change.additions += count;
+					diff.additions += count;
+					diff.truncated = count > 400;
+					diff.hunks = head.length
 						? [{
-							header: `@@ -0,0 +1,${rows.length} @@`,
+							header: `@@ -0,0 +1,${count} @@`,
 							oldStart: 0,
 							newStart: 1,
-							lines: clipped.map((text, idx) => ({ type: "add", oldLine: null, newLine: idx + 1, text })),
+							lines: head.map((text, idx) => ({ type: "add", oldLine: null, newLine: idx + 1, text })),
 						}]
 						: [];
 				}
@@ -424,6 +423,67 @@ export function formatCompactCount(n: number): string {
 		return `${Math.round(v / 1_000_000)}M`;
 	}
 	return "999M+";
+}
+
+/**
+ * Count lines in a string without allocating an array of every line, while capturing at most `maxHead` leading lines.
+ * Keeps 1M+ line `write` tool payloads O(N) time and O(maxHead) memory.
+ */
+function countAndHeadLines(content: string, maxHead: number): { count: number; head: string[] } {
+	if (!content) return { count: 0, head: [] };
+	let end = content.length;
+	if (end > 0 && content.charCodeAt(end - 1) === 10) {
+		end--;
+		if (end > 0 && content.charCodeAt(end - 1) === 13) end--;
+	}
+	if (end === 0) return { count: 0, head: [] };
+
+	const head: string[] = [];
+	let count = 0;
+	let pos = 0;
+	while (pos <= end) {
+		const nl = content.indexOf("\n", pos);
+		const lineEnd = nl === -1 || nl > end ? end : nl;
+		if (head.length < maxHead) {
+			const trimEnd = lineEnd > pos && content.charCodeAt(lineEnd - 1) === 13 ? lineEnd - 1 : lineEnd;
+			head.push(content.slice(pos, trimEnd));
+		}
+		count++;
+		if (nl === -1 || nl >= end) break;
+		pos = nl + 1;
+	}
+	return { count, head };
+}
+
+/**
+ * Split sanitized highlight.js HTML (`<span class="...">...</span>`) on newlines while preserving balanced
+ * open/close `<span>` tags across multi-line tokens (block comments, template literals).
+ */
+export function splitHighlightedHtml(html: string): string[] {
+	if (!html) return [];
+	const rawLines = html.split("\n");
+	const out: string[] = new Array(rawLines.length);
+	const stack: string[] = [];
+	const tagRe = /<\/?span\b[^>]*>/gi;
+
+	for (let i = 0; i < rawLines.length; i++) {
+		const line = rawLines[i]!;
+		const prefix = stack.length > 0 ? stack.join("") : "";
+		tagRe.lastIndex = 0;
+		let match: RegExpExecArray | null;
+		while ((match = tagRe.exec(line)) !== null) {
+			const tag = match[0];
+			if (tag.charCodeAt(1) === 47) {
+				// </span>
+				if (stack.length > 0) stack.pop();
+			} else {
+				stack.push(tag);
+			}
+		}
+		const suffix = stack.length > 0 ? "</span>".repeat(stack.length) : "";
+		out[i] = prefix + line + suffix;
+	}
+	return out;
 }
 
 

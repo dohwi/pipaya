@@ -10,7 +10,7 @@
 	import { saveFile } from "../../lib/save-file";
 	import { app } from "../../lib/store.svelte";
 	import { closeVideoView, videoPlayer } from "../../lib/video-view";
-	import { buildFullFileDiff, formatLineSpec, type FullDiffRow } from "../../lib/workspace-edits";
+	import { buildFullFileDiff, formatLineSpec, splitHighlightedHtml, type FullDiffRow } from "../../lib/workspace-edits";
 	import { workspaceViewer } from "../../lib/workspace-viewer.svelte";
 	import Markdown from "../chat/Markdown.svelte";
 	import Button from "../ui/Button.svelte";
@@ -204,26 +204,28 @@
 		return content ? content.split(/\r?\n/) : [];
 	});
 
+	const MAX_HIGHLIGHT_LINES = 4000;
+
+	/** Highlight a multi-line code block in a single hljs + DOMPurify pass and split into balanced per-line HTML. */
+	function highlightBlockLines(text: string, ext: string): string[] | null {
+		if (!text) return [];
+		const res = highlightCode(text, ext);
+		if (!res || res === "wait") return null;
+		const clean = DOMPurify.sanitize(res, { ALLOWED_TAGS: ["span"], ALLOWED_ATTR: ["class"] });
+		return splitHighlightedHtml(clean);
+	}
+
 	const highlightedLines = $derived.by<string[] | null>(() => {
 		void hlTick;
+		if (workspaceViewer.viewMode === "diff" && selectedChange) return null;
 		const content = currentFileData?.content ?? "";
-		if (!content || rawLines.length > 2500) return null;
-		const res = highlightCode(content, fileExt);
-		if (!res || res === "wait") return null;
-		const out: string[] = [];
-		for (const line of rawLines) {
-			if (!line) {
-				out.push("");
-				continue;
-			}
-			const h = highlightCode(line, fileExt);
-			out.push(h && h !== "wait" ? DOMPurify.sanitize(h, { ALLOWED_TAGS: ["span"], ALLOWED_ATTR: ["class"] }) : "");
-		}
-		return out;
+		if (!content || rawLines.length > MAX_HIGHLIGHT_LINES) return null;
+		return highlightBlockLines(content, fileExt);
 	});
 
 	// Full-file inline diff: merges changed hunks into the complete file so changed files always show full context.
 	const fullDiffRows = $derived.by<FullDiffRow[]>(() => {
+		if (workspaceViewer.viewMode !== "diff" || !selectedChange) return [];
 		const diff = workspaceViewer.diffData;
 		if (!diff || diff.binary || diff.path !== selectedPath) return [];
 		const content = currentFileData && !currentFileData.binary ? currentFileData.content : null;
@@ -232,18 +234,36 @@
 
 	const highlightedDiffLines = $derived.by<string[] | null>(() => {
 		void hlTick;
-		if (fullDiffRows.length === 0 || fullDiffRows.length > 2500) return null;
-		const sample = currentFileData?.content ?? fullDiffRows.map((r) => r.text).join("\n");
-		const probe = highlightCode(sample.slice(0, 4000), fileExt);
-		if (!probe || probe === "wait") return null;
-		const out: string[] = [];
-		for (const r of fullDiffRows) {
-			if (!r.text) {
-				out.push("");
-				continue;
+		if (workspaceViewer.viewMode !== "diff" || !selectedChange) return null;
+		if (fullDiffRows.length === 0 || fullDiffRows.length > MAX_HIGHLIGHT_LINES) return null;
+
+		const content = currentFileData && !currentFileData.binary ? currentFileData.content : null;
+		const fileHl = content ? highlightBlockLines(content, fileExt) : null;
+		if (content && !fileHl) return null;
+
+		// Batch-highlight deleted (or fallback non-file) lines in a single hljs + DOMPurify pass.
+		const extraIdx: number[] = [];
+		const extraLines: string[] = [];
+		for (let i = 0; i < fullDiffRows.length; i++) {
+			const r = fullDiffRows[i]!;
+			const fromFile = fileHl && r.type !== "del" && r.newLine !== null && r.newLine >= 1 && r.newLine <= fileHl.length;
+			if (!fromFile) {
+				extraIdx.push(i);
+				extraLines.push(r.text);
 			}
-			const h = highlightCode(r.text, fileExt);
-			out.push(h && h !== "wait" ? DOMPurify.sanitize(h, { ALLOWED_TAGS: ["span"], ALLOWED_ATTR: ["class"] }) : "");
+		}
+		const extraHl = extraLines.length > 0 ? highlightBlockLines(extraLines.join("\n"), fileExt) : [];
+		if (extraLines.length > 0 && !extraHl) return null;
+
+		const out: string[] = new Array(fullDiffRows.length);
+		let ei = 0;
+		for (let i = 0; i < fullDiffRows.length; i++) {
+			const r = fullDiffRows[i]!;
+			if (fileHl && r.type !== "del" && r.newLine !== null && r.newLine >= 1 && r.newLine <= fileHl.length) {
+				out[i] = fileHl[r.newLine - 1] ?? "";
+			} else {
+				out[i] = extraHl?.[ei++] ?? "";
+			}
 		}
 		return out;
 	});
@@ -1180,6 +1200,8 @@
 		align-items: stretch;
 		min-width: max-content;
 		line-height: 20px;
+		content-visibility: auto;
+		contain-intrinsic-size: auto 20px;
 	}
 	@media (hover: hover) {
 		.row:hover {

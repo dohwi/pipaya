@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { buildEditHunk, buildFullFileDiff, deriveLatestTurnEdits, formatCompactCount, formatLineSpec } from "../src/lib/workspace-edits";
+import { buildEditHunk, buildFullFileDiff, deriveLatestTurnEdits, formatCompactCount, formatLineSpec, splitHighlightedHtml } from "../src/lib/workspace-edits";
 import type { ChatState } from "../src/lib/chat.svelte";
 
 function fakeChat(items: ChatState["items"], tools: ChatState["tools"] = {}): ChatState {
@@ -129,5 +129,36 @@ describe("workspace-viewer recent edits", () => {
 		expect(formatCompactCount(1_250_000)).toBe("1.3M");
 		expect(formatCompactCount(12_000_000)).toBe("12M");
 		expect(formatCompactCount(1_000_000_000)).toBe("999M+");
+	});
+
+	it("splits multi-line highlighted HTML while keeping span tags balanced on every line", () => {
+		const html = '<span class="hljs-comment">/* line 1\n * <span class="hljs-doctag">@param</span> x\n */</span>\nconst a = 1;';
+		expect(splitHighlightedHtml(html)).toEqual([
+			'<span class="hljs-comment">/* line 1</span>',
+			'<span class="hljs-comment"> * <span class="hljs-doctag">@param</span> x</span>',
+			'<span class="hljs-comment"> */</span>',
+			"const a = 1;",
+		]);
+		expect(splitHighlightedHtml("")).toEqual([]);
+	});
+
+	it("counts huge write tool payloads without allocating all lines", () => {
+		const big = "line\n".repeat(100_000);
+		const chat = fakeChat([
+			{ key: "u1", kind: "user", text: "gen", images: [], seq: 1 } as never,
+			{
+				key: "a1",
+				kind: "assistant",
+				seq: 2,
+				blocks: [{ type: "tool", id: "t1", name: "write", args: { path: "big.txt", content: big } }],
+			} as never,
+		], { t1: { state: "done" } as never });
+		const t0 = performance.now();
+		const res = deriveLatestTurnEdits(chat, "/repo");
+		const ms = performance.now() - t0;
+		expect(res.changes[0]?.additions).toBe(100_000);
+		expect(res.diffs.get("big.txt")?.truncated).toBe(true);
+		expect(res.diffs.get("big.txt")?.hunks[0]?.lines.length).toBe(400);
+		expect(ms).toBeLessThan(200);
 	});
 });

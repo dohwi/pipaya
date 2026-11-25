@@ -103,9 +103,25 @@ export class WorkspaceViewerStore {
 	private latestTurnKey: string | null = null;
 	private dismissedTurnKey: string | null = null;
 	private dirStates = new Map<string, { openFiles: string[]; expandedDirs: Record<string, boolean> }>();
+	private syncTimer: ReturnType<typeof setTimeout> | null = null;
 	private refreshTimer: ReturnType<typeof setTimeout> | null = null;
 	private clearRecentTimer: ReturnType<typeof setTimeout> | null = null;
 	private seq = { tree: 0, search: 0, file: 0, diff: 0 };
+
+	/** O(1) lookup indexes rebuilt automatically from `changes` so tree rendering stays O(N) even with 500+ changed files. */
+	private changeIndex = $derived.by(() => {
+		const byPath = new Map<string, WorkspaceChange>();
+		const dirtyDirs = new Set<string>();
+		for (const c of this.changes) {
+			byPath.set(c.path, c);
+			let slash = c.path.lastIndexOf("/");
+			while (slash > 0) {
+				dirtyDirs.add(c.path.slice(0, slash));
+				slash = c.path.lastIndexOf("/", slash - 1);
+			}
+		}
+		return { byPath, dirtyDirs };
+	});
 
 	private dirKey(api: Api | null, dir: string): string {
 		if (!dir) return "";
@@ -281,13 +297,12 @@ export class WorkspaceViewerStore {
 	}
 
 	changeFor(path: string): WorkspaceChange | undefined {
-		return this.changes.find((c) => c.path === path);
+		return this.changeIndex.byPath.get(path);
 	}
 
 	/** True when any recently changed file lives under directory `dirPath`. */
 	dirHasChanges(dirPath: string): boolean {
-		const prefix = `${dirPath}/`;
-		return this.changes.some((c) => c.path.startsWith(prefix));
+		return this.changeIndex.dirtyDirs.has(dirPath);
 	}
 
 	isRecent(path: string): boolean {
@@ -574,9 +589,12 @@ export class WorkspaceViewerStore {
 			}
 			this.syncRecentChanges();
 			this.scheduleLiveRefresh();
-		} else if (e.type === "tool_execution_start" || e.type === "message_update") {
+		} else if (e.type === "tool_execution_start") {
 			// Immediately surface in-flight / pending edits in "변경됨" even before tool_result finishes.
 			this.syncRecentChanges();
+		} else if (e.type === "message_update") {
+			// Coalesce high-frequency streamed token events so large multi-file turns never re-diff 60 times/sec.
+			this.scheduleSyncRecentChanges();
 		} else if (e.type === "tool_execution_end") {
 			const data = e.data as { toolName?: string } | null;
 			this.syncRecentChanges();
@@ -587,6 +605,15 @@ export class WorkspaceViewerStore {
 			this.syncRecentChanges();
 			this.scheduleLiveRefresh();
 		}
+	}
+
+	/** Coalesce frequent chat reactivity / streaming ticks into at most ~8 syncs/sec. */
+	scheduleSyncRecentChanges() {
+		if (this.syncTimer) return;
+		this.syncTimer = setTimeout(() => {
+			this.syncTimer = null;
+			this.syncRecentChanges();
+		}, 120);
 	}
 
 	private scheduleLiveRefresh() {
