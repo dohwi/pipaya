@@ -401,3 +401,29 @@ export function buildFullFileDiff(fileContent: string | null | undefined, hunks:
 	return markChangeStarts(out);
 }
 
+/**
+ * Format large file/diff counts compactly for narrow chrome (e.g. 56px rail, sidebar badges)
+ * so values never exceed 4 characters (`999`, `1.2k`, `12k`, `999k`, `1.2M`, `999M+`).
+ */
+export function formatCompactCount(n: number): string {
+	if (!Number.isFinite(n) || n <= 0) return "0";
+	const v = Math.floor(n);
+	if (v < 1_000) return String(v);
+	if (v < 9_950) {
+		const k = Math.round(v / 100) / 10;
+		return `${k % 1 === 0 ? k.toFixed(0) : k.toFixed(1)}k`;
+	}
+	if (v < 999_500) {
+		return `${Math.round(v / 1_000)}k`;
+	}
+	if (v < 9_950_000) {
+		const m = Math.round(v / 100_000) / 10;
+		return `${m % 1 === 0 ? m.toFixed(0) : m.toFixed(1)}M`;
+	}
+	if (v < 999_500_000) {
+		return `${Math.round(v / 1_000_000)}M`;
+	}
+	return "999M+";
+}
+
+

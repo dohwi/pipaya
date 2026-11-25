@@ -1,10 +1,11 @@
 <script lang="ts">
+	import { splitFilePath } from "../../lib/files";
 	import { t } from "../../lib/i18n";
 	import { formatCombo } from "../../lib/keys";
 	import { workDir } from "../../lib/nav";
 	import { app } from "../../lib/store.svelte";
 	import { viewport } from "../../lib/viewport.svelte";
-	import { WORKSPACE_FILE_MIME, type WorkspaceChange } from "../../lib/workspace-edits";
+	import { formatCompactCount, WORKSPACE_FILE_MIME } from "../../lib/workspace-edits";
 	import { workspaceViewer, type WorkspaceEntry } from "../../lib/workspace-viewer.svelte";
 	import EmptyState from "../ui/EmptyState.svelte";
 	import Icon from "../ui/Icon.svelte";
@@ -25,20 +26,14 @@
 	const totalAdd = $derived(workspaceViewer.changes.reduce((n, c) => n + c.additions, 0));
 	const totalDel = $derived(workspaceViewer.changes.reduce((n, c) => n + c.deletions, 0));
 	const anyPending = $derived(workspaceViewer.changes.some((c) => c.pending));
-	const railFiles = $derived.by(() => {
-		const seen = new Set<string>();
-		const out: { path: string; name: string; change?: WorkspaceChange }[] = [];
-		for (const ch of workspaceViewer.changes) {
-			seen.add(ch.path);
-			out.push({ path: ch.path, name: ch.path.split("/").pop() ?? ch.path, change: ch });
-		}
-		for (const fp of workspaceViewer.openFiles) {
-			if (seen.has(fp)) continue;
-			seen.add(fp);
-			out.push({ path: fp, name: fp.split("/").pop() ?? fp });
-		}
-		return out;
-	});
+	/** Only files the user deliberately opened as tabs appear below the summary tile in the collapsed 56px rail, keeping huge 100+ file turns calm and readable. */
+	const railOpenFiles = $derived(
+		workspaceViewer.openFiles.map((path) => ({
+			path,
+			name: path.split("/").pop() ?? path,
+			change: workspaceViewer.changeFor(path),
+		})),
+	);
 
 	function expandToChanges() {
 		workspaceViewer.filter = "changed";
@@ -59,7 +54,10 @@
 		{ id: "all", label: t("전체") },
 		{
 			id: "changed",
-			label: workspaceViewer.changes.length > 0 ? t("변경됨 ({n})", { n: workspaceViewer.changes.length }) : t("변경됨"),
+			label:
+				workspaceViewer.changes.length > 0
+					? t("변경됨 ({n})", { n: formatCompactCount(workspaceViewer.changes.length) })
+					: t("변경됨"),
 		},
 	]);
 
@@ -274,19 +272,24 @@
 					class:pending={anyPending}
 					onclick={expandToChanges}
 					title={totalAdd > 0 || totalDel > 0
-						? t("변경된 파일 {n}개 (+{add} / -{del})", { n: workspaceViewer.changes.length, add: totalAdd, del: totalDel })
-						: t("변경된 파일 {n}개", { n: workspaceViewer.changes.length })}
+						? t("변경된 파일 {n}개 (+{add} / -{del})", {
+								n: workspaceViewer.changes.length.toLocaleString(),
+								add: totalAdd.toLocaleString(),
+								del: totalDel.toLocaleString(),
+							})
+						: t("변경된 파일 {n}개", { n: workspaceViewer.changes.length.toLocaleString() })}
 					aria-label={t("변경된 파일 {n}개", { n: workspaceViewer.changes.length })}
 				>
-					<span class="rcnt mono">{workspaceViewer.changes.length}</span>
-					{#if totalAdd > 0}<span class="radd mono">+{totalAdd}</span>{/if}
-					{#if totalDel > 0}<span class="rdel mono">-{totalDel}</span>{/if}
+					{#if anyPending}<span class="rpdot" aria-hidden="true"></span>{/if}
+					<span class="rcnt mono">{formatCompactCount(workspaceViewer.changes.length)}</span>
+					{#if totalAdd > 0}<span class="radd mono">+{formatCompactCount(totalAdd)}</span>{/if}
+					{#if totalDel > 0}<span class="rdel mono">-{formatCompactCount(totalDel)}</span>{/if}
 				</button>
 			{/if}
-			{#if workspaceViewer.changes.length > 0 && railFiles.length > 0}
+			{#if workspaceViewer.changes.length > 0 && railOpenFiles.length > 0}
 				<span class="rsep" aria-hidden="true"></span>
 			{/if}
-			{#each railFiles as item (item.path)}
+			{#each railOpenFiles as item (item.path)}
 				{@const isCur = workspaceViewer.activeFile === item.path}
 				{@const ch = item.change}
 				<button
@@ -294,7 +297,9 @@
 					class="rfile tap"
 					class:active={isCur}
 					onclick={() => pickFile(item.path, ch ? "diff" : undefined)}
-					title={ch && (ch.additions > 0 || ch.deletions > 0) ? `${item.path} (+${ch.additions} -${ch.deletions})` : item.path}
+					title={ch && (ch.additions > 0 || ch.deletions > 0)
+						? `${item.path} (+${ch.additions.toLocaleString()} -${ch.deletions.toLocaleString()})`
+						: item.path}
 					aria-label={item.path}
 					aria-current={isCur ? "true" : undefined}
 				>
@@ -361,6 +366,9 @@
 					{#each workspaceViewer.searchEntries as entry (entry.path)}
 						{#if !entry.dir}
 							{@const ch = workspaceViewer.changeFor(entry.path)}
+							{@const parts = splitFilePath(entry.path)}
+							{@const baseLabel = parts?.base ?? entry.name}
+							{@const dirLabel = parts?.dir.replace(/\/$/, "") ?? ""}
 							<button
 								type="button"
 								class="trow file search-row"
@@ -372,8 +380,11 @@
 								onclick={() => pickFile(entry.path)}
 								title={entry.path}
 							>
-								<span class="fico"><FileIcon name={entry.name} /></span>
-								<span class="tname mono">{entry.path}</span>
+								<span class="fico"><FileIcon name={baseLabel} /></span>
+								<span class="tstack">
+									<span class="tbase mono">{baseLabel}</span>
+									{#if dirLabel}<span class="tdir mono">{dirLabel}</span>{/if}
+								</span>
 								{#if ch}<span class="st mono {statusClass(ch.status)}">{ch.status}</span>{/if}
 							</button>
 						{/if}
@@ -390,6 +401,9 @@
 						<button type="button" class="chclr" onclick={() => workspaceViewer.clearChanges()}>{t("비우기")}</button>
 					</div>
 					{#each workspaceViewer.changes as ch (ch.path)}
+						{@const parts = splitFilePath(ch.path)}
+						{@const baseLabel = parts?.base ?? ch.path.split("/").pop() ?? ch.path}
+						{@const dirLabel = parts?.dir.replace(/\/$/, "") ?? ""}
 						<button
 							type="button"
 							class="trow file changed-row"
@@ -399,19 +413,24 @@
 							class:opened={workspaceViewer.openFiles.includes(ch.path) && workspaceViewer.activeFile !== ch.path}
 							class:recent={workspaceViewer.isRecent(ch.path) || ch.pending}
 							onclick={() => pickFile(ch.path, "diff")}
-							title={ch.path}
+							title={ch.additions > 0 || ch.deletions > 0
+								? `${ch.path} (+${ch.additions.toLocaleString()} -${ch.deletions.toLocaleString()})`
+								: ch.path}
 						>
-							<span class="fico"><FileIcon name={ch.path.split("/").pop() ?? ch.path} /></span>
-							<span class="st mono {statusClass(ch.status)}">{ch.status}</span>
-							<span class="tname mono">{ch.path}</span>
+							<span class="fico"><FileIcon name={baseLabel} /></span>
+							<span class="tstack">
+								<span class="tbase mono">{baseLabel}</span>
+								{#if dirLabel}<span class="tdir mono">{dirLabel}</span>{/if}
+							</span>
 							{#if ch.pending}
 								<span class="pend">{t("수정 중")}</span>
 							{:else}
 								<span class="cstat mono">
-									{#if ch.additions > 0}<span class="add">+{ch.additions}</span>{/if}
-									{#if ch.deletions > 0}<span class="del">-{ch.deletions}</span>{/if}
+									{#if ch.additions > 0}<span class="add">+{formatCompactCount(ch.additions)}</span>{/if}
+									{#if ch.deletions > 0}<span class="del">-{formatCompactCount(ch.deletions)}</span>{/if}
 								</span>
 							{/if}
+							<span class="st mono {statusClass(ch.status)}">{ch.status}</span>
 						</button>
 					{/each}
 				{/if}
@@ -557,6 +576,7 @@
 		display: none;
 	}
 	.rchg {
+		position: relative;
 		flex: none;
 		width: 44px;
 		padding: 4px;
@@ -567,6 +587,7 @@
 		flex-direction: column;
 		align-items: center;
 		gap: 0;
+		overflow: hidden;
 		cursor: pointer;
 		transition:
 			background var(--motion-fast) var(--ease-std),
@@ -577,26 +598,40 @@
 			background: var(--bg-hover);
 		}
 	}
+	.rpdot {
+		position: absolute;
+		top: 4px;
+		right: 4px;
+		width: 6px; /* optical 6px live-edit indicator matching tab/tree dots */
+		height: 6px; /* optical 6px live-edit indicator matching tab/tree dots */
+		border-radius: var(--radius-pill);
+		background: var(--warn);
+		pointer-events: none;
+	}
+	.rcnt,
+	.radd,
+	.rdel {
+		max-width: 100%;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		font-variant-numeric: tabular-nums;
+		line-height: 16px;
+	}
 	.rcnt {
 		font-size: var(--fs-xs);
 		font-weight: 700;
 		color: var(--text);
-		line-height: 16px;
-		font-variant-numeric: tabular-nums;
 	}
 	.radd {
 		font-size: var(--fs-2xs);
 		font-weight: 600;
 		color: var(--ok);
-		line-height: 16px;
-		font-variant-numeric: tabular-nums;
 	}
 	.rdel {
 		font-size: var(--fs-2xs);
 		font-weight: 600;
 		color: var(--danger);
-		line-height: 16px;
-		font-variant-numeric: tabular-nums;
 	}
 	.rsep {
 		flex: none;
@@ -772,8 +807,30 @@
 	}
 	.changed-row,
 	.search-row {
-		padding-left: 12px;
+		padding: 4px 12px;
 		gap: 8px;
+	}
+	.tstack {
+		flex: 1;
+		min-width: 0;
+		display: flex;
+		flex-direction: column;
+	}
+	.tbase {
+		color: var(--text);
+		font-size: var(--fs-xs);
+		line-height: 20px;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	.tdir {
+		color: var(--text-faint);
+		font-size: var(--fs-2xs);
+		line-height: 16px;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 	}
 	.chev {
 		width: 12px;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { buildEditHunk, buildFullFileDiff, deriveLatestTurnEdits, formatLineSpec } from "../src/lib/workspace-edits";
+import { buildEditHunk, buildFullFileDiff, deriveLatestTurnEdits, formatCompactCount, formatLineSpec } from "../src/lib/workspace-edits";
 import type { ChatState } from "../src/lib/chat.svelte";
 
 function fakeChat(items: ChatState["items"], tools: ChatState["tools"] = {}): ChatState {
@@ -109,5 +109,25 @@ describe("workspace-viewer recent edits", () => {
 		expect(formatLineSpec([6])).toBe("6");
 		expect(formatLineSpec([3, 4, 5, 6])).toBe("3-6");
 		expect(formatLineSpec([14, 3, 5, 4, 9, 15])).toBe("3-5,9,14-15");
+	});
+
+	it("formats large diff and file counts compactly without overflowing narrow chrome", () => {
+		expect(formatCompactCount(0)).toBe("0");
+		expect(formatCompactCount(-5)).toBe("0");
+		expect(formatCompactCount(Number.NaN)).toBe("0");
+		expect(formatCompactCount(Number.POSITIVE_INFINITY)).toBe("0");
+		expect(formatCompactCount(42)).toBe("42");
+		expect(formatCompactCount(999)).toBe("999");
+		expect(formatCompactCount(1_000)).toBe("1k");
+		expect(formatCompactCount(1_049)).toBe("1k");
+		expect(formatCompactCount(1_250)).toBe("1.3k");
+		expect(formatCompactCount(9_949)).toBe("9.9k");
+		expect(formatCompactCount(9_950)).toBe("10k");
+		expect(formatCompactCount(12_450)).toBe("12k");
+		expect(formatCompactCount(999_499)).toBe("999k");
+		expect(formatCompactCount(999_500)).toBe("1M");
+		expect(formatCompactCount(1_250_000)).toBe("1.3M");
+		expect(formatCompactCount(12_000_000)).toBe("12M");
+		expect(formatCompactCount(1_000_000_000)).toBe("999M+");
 	});
 });

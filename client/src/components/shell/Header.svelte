@@ -16,6 +16,7 @@
 	import ExtensionMount from "../extensions/ExtensionMount.svelte";
 	import ExtensionPart from "../extensions/ExtensionPart.svelte";
 	import { app } from "../../lib/store.svelte";
+	import { formatCompactCount } from "../../lib/workspace-edits";
 	import { workspaceViewer } from "../../lib/workspace-viewer.svelte";
 	import { panesOf } from "../../lib/layout";
 	import { workDir } from "../../lib/nav";
@@ -110,9 +111,9 @@
 						<span class="edirty">{t("수정됨")}</span>
 					{/if}
 					{#if !fileCtrl?.editing && fileChange && (fileChange.additions > 0 || fileChange.deletions > 0)}
-						<span class="fstat mono">
-							{#if fileChange.additions > 0}<span class="fadd">+{fileChange.additions}</span>{/if}
-							{#if fileChange.deletions > 0}<span class="fdel">-{fileChange.deletions}</span>{/if}
+						<span class="fstat mono" title="+{fileChange.additions.toLocaleString()} / -{fileChange.deletions.toLocaleString()}">
+							{#if fileChange.additions > 0}<span class="fadd">+{formatCompactCount(fileChange.additions)}</span>{/if}
+							{#if fileChange.deletions > 0}<span class="fdel">-{formatCompactCount(fileChange.deletions)}</span>{/if}
 						</span>
 					{/if}
 				</span>
