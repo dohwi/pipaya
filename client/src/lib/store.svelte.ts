@@ -427,6 +427,10 @@ class AppStore {
   /** The scheduled-tasks window opened from the sidebar (the open server's list and form), or false. */
   get schedulesDialog(): boolean { return this.ui.schedulesDialog; }
   set schedulesDialog(v: boolean) { this.ui.schedulesDialog = v; }
+
+  get filesOpen(): boolean { return this.ui.filesOpen; }
+  set filesOpen(v: boolean) { this.ui.filesOpen = v; }
+  toggleFiles() { this.ui.filesOpen = !this.ui.filesOpen; }
   /** The session the scheduled-tasks page opens a new-task form for (set by a conversation's menu, taken by the page). */
   get scheduleFor(): string | null { return this.ui.scheduleFor; }
   set scheduleFor(v: string | null) { this.ui.scheduleFor = v; }

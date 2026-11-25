@@ -74,6 +74,9 @@ export class UiOverlayState {
   graphFrom = $state<{ server: string; session: string } | null>(null);
   graphPeek = $state<{ server: string; session: string } | null>(null);
 
+  /** Read-only workspace file viewer side panel. */
+  filesOpen = $state(false);
+
   openSessions(serverId: string, filter: { cwd?: string } | null = null) {
     this.sessionsFilter = filter;
     this.sessionsDialog = serverId;

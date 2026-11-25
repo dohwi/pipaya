@@ -54,6 +54,7 @@ export const EVENT_TYPES = [
 	"notification",
 	"device_revoked",
 	"session_unread",
+	"workspace_changed",
 ] as const;
 
 export type EventType = (typeof EVENT_TYPES)[number];

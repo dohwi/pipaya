@@ -790,6 +790,61 @@ export class Api {
 		return `token=${encodeURIComponent(this.conn.token)}`;
 	}
 
+	/* ---------- workspace read-only file viewer ---------- */
+
+	workspaceTree(sessionId: string, opts: { dir?: string; q?: string } = {}, signal?: AbortSignal) {
+		const params = new URLSearchParams();
+		if (opts.dir) params.set("dir", opts.dir);
+		if (opts.q) params.set("q", opts.q);
+		const qs = params.toString();
+		return this.req<{
+			workDir: string;
+			dir: string;
+			isRepo: boolean;
+			branch: string | null;
+			entries: { name: string; path: string; dir: boolean }[];
+			truncated: boolean;
+			changes: { path: string; oldPath?: string; status: "M" | "A" | "D" | "R" | "?" | "U"; additions: number; deletions: number }[];
+		}>("GET", `/sessions/${encodeURIComponent(sessionId)}/workspace/tree${qs ? `?${qs}` : ""}`, undefined, signal);
+	}
+
+	workspaceFile(sessionId: string, path: string, signal?: AbortSignal) {
+		return this.req<{
+			path: string;
+			content: string;
+			binary: boolean;
+			truncated: boolean;
+			size: number;
+			lineCount: number;
+		}>("GET", `/sessions/${encodeURIComponent(sessionId)}/workspace/file?path=${encodeURIComponent(path)}`, undefined, signal);
+	}
+
+	workspaceSaveFile(sessionId: string, path: string, content: string, signal?: AbortSignal) {
+		return this.req<{ path: string; size: number; lineCount: number }>(
+			"PUT",
+			`/sessions/${encodeURIComponent(sessionId)}/workspace/file`,
+			{ path, content },
+			signal,
+		);
+	}
+
+	workspaceDiff(sessionId: string, path: string, signal?: AbortSignal) {
+		return this.req<{
+			path: string;
+			isRepo: boolean;
+			hunks: {
+				header: string;
+				oldStart: number;
+				newStart: number;
+				lines: { type: "context" | "add" | "del" | "meta"; oldLine: number | null; newLine: number | null; text: string }[];
+			}[];
+			additions: number;
+			deletions: number;
+			binary: boolean;
+			truncated: boolean;
+		}>("GET", `/sessions/${encodeURIComponent(sessionId)}/workspace/diff?path=${encodeURIComponent(path)}`, undefined, signal);
+	}
+
 	/**
 	 * Subscribe to the global event stream. EventSource cannot set headers, so a one-time ticket goes in the
 	 * query string (see `streamCredential`). `after` is the replay cursor; the caller owns reconnects (see AppStore)

@@ -642,6 +642,15 @@ export const EVENTS: EventDef[] = [
 		description: "A provider credential was set or removed (sessionId is null)",
 		data: Type.Object({ id: Type.String(), configured: Type.Boolean() }),
 	},
+	{
+		type: "workspace_changed",
+		persisted: false,
+		description: "The agent edited, wrote, or ran a shell command in the session's working directory (live hint for workspace file viewers)",
+		data: Type.Object({
+			tool: Type.String(),
+			path: Nullable(Type.String()),
+		}),
+	},
 ];
 
 export const EventTypeList = Type.Object({
