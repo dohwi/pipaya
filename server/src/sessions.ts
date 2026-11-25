@@ -864,23 +864,52 @@ export class SessionManager {
 		const record = this.get(id);
 		if (record.closed) throw conflict("session is closed; resume it first (PATCH closed=false)");
 		if (this.live.get(id)?.running) throw conflict("session is busy");
-		const history = this.store.lastMessages(id, 2).map((m) => m.message);
+		const history = this.store.lastMessages(id, 4).map((m) => m.message);
 		const lastStored = history.at(-1);
-		const retryTail = lastStored?.role === "assistant" && (lastStored.stopReason === "error" || lastStored.stopReason === "aborted")
-			? history.at(-2) : lastStored;
-		if (!retryTail || retryTail.role === "assistant" || retryTail.role === "system") throw conflict("nothing to retry");
+		const stripLast = lastStored?.role === "assistant" && (lastStored.stopReason === "error" || lastStored.stopReason === "aborted");
+		const stripped = stripLast ? history.slice(0, -1) : history;
+		const retryTail = stripped.at(-1);
+		if (unresolvedToolCalls(stripped).length === 0 && (!retryTail || retryTail.role === "assistant" || retryTail.role === "system")) {
+			throw conflict("nothing to retry");
+		}
 		const live = this.ensureLive(record);
 
 		const messages = live.agent.state.messages;
 		const last = messages[messages.length - 1];
-		if (last?.role === "assistant" && (last.stopReason === "error" || last.stopReason === "aborted")) {
+		const dropLive = last?.role === "assistant" && (last.stopReason === "error" || last.stopReason === "aborted");
+		const liveStripped = dropLive ? messages.slice(0, -1) : messages;
+		const liveTail = liveStripped[liveStripped.length - 1];
+		if (unresolvedToolCalls(liveStripped).length === 0 && (!liveTail || liveTail.role === "assistant" || liveTail.role === "system")) {
+			throw conflict("nothing to retry");
+		}
+
+		let droppedSeq: number | undefined;
+		if (dropLive) {
 			this.store.deleteLastMessage(id);
 			live.nextSeq--;
-			live.agent.state.messages = messages.slice(0, -1);
+			droppedSeq = live.nextSeq;
+			live.agent.state.messages = liveStripped;
 		}
-		const tail = live.agent.state.messages[live.agent.state.messages.length - 1];
-		if (!tail || tail.role === "assistant" || tail.role === "system") throw conflict("nothing to retry");
-		this.run(id, live, "retry", "user", () => live.agent.continue());
+		this.run(
+			id,
+			live,
+			"retry",
+			"user",
+			() => {
+				// Emit synthetic tool results AFTER run_started (with droppedSeq) so clients roll back lastSeq first.
+				for (const call of unresolvedToolCalls(live.agent.state.messages)) {
+					const msg = interruptedToolResult(call, "Run interrupted before tool completed");
+					const seq = live.nextSeq++;
+					this.store.appendMessage(id, seq, msg);
+					live.agent.state.messages = [...live.agent.state.messages, msg];
+					this.bus.publish(id, "message_end", { seq, message: msg });
+					this.ext?.notify("message_end", { sessionId: id, message: msg, seq }, id);
+				}
+				return live.agent.continue();
+			},
+			undefined,
+			droppedSeq,
+		);
 	}
 
 	abort(id: string): boolean {
@@ -1051,7 +1080,7 @@ export class SessionManager {
 	 * watcher) started it, "user" otherwise. It is stamped on run_started and run_finished so notifications can be decided
 	 * from the event alone.
 	 */
-	private run(id: string, live: Live, mode: string, origin: RunOrigin, start: () => Promise<void>, pendingPrompt?: AgentMessage): void {
+	private run(id: string, live: Live, mode: string, origin: RunOrigin, start: () => Promise<void>, pendingPrompt?: AgentMessage, droppedSeq?: number): void {
 		this.peers.resetRun(id);
 		this.delegates.resetRun(id);
 		live.running = true;
@@ -1069,7 +1098,7 @@ export class SessionManager {
 		const cutLoosePromise = new Promise<void>((r) => { releaseCutLoose = r; });
 		live.cutLoose = releaseCutLoose;
 		this.store.markRunActive(id, { origin, startedAt: live.runStartedAt, ...(pendingPrompt ? { pendingPrompt } : {}) });
-		this.bus.publish(id, "run_started", { mode, origin });
+		this.bus.publish(id, "run_started", droppedSeq !== undefined ? { mode, origin, droppedSeq } : { mode, origin });
 		this.goals?.onRunStarted(id);
 
 		const settled = (async () => {

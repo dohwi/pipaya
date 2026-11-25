@@ -2471,12 +2471,15 @@ class AppStore {
   async retry(id = this.activeId) {
     const link = this.link;
     const chat = this.chatOf(id);
-    if (!link || !chat || chat.compacting) return;
+    if (!link || !chat || chat.compacting || chat.running || chat.retrying || this.isSending(chat.id)) return;
+    const tx = this.beginSend(link.id, chat.id, false, 0);
     try {
       await link.api.retry(chat.id);
     } catch (e) {
       this.probeIfNetwork(link, e);
       this.fail(e, t("다시 시도하지 못했습니다"), this.serverId === link.id ? chat.id : null);
+    } finally {
+      tx.dispose();
     }
   }
 

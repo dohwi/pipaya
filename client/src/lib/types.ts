@@ -826,7 +826,9 @@ export interface NoticeItem {
 	text: string;
 	ts: number;
 	/** Absent = an error. */
-	tone?: "ok" | "error";
+	tone?: "ok" | "warn" | "error";
+	/** True when this notice marks an interrupted run that can be continued from where it stopped. */
+	resumable?: boolean;
 }
 
 /** A record a server extension stored on the conversation (`ctx.appendEntry`), drawn by a client extension's renderer. */

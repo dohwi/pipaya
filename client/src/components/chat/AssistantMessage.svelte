@@ -14,7 +14,7 @@
 	import { compact, duration, fullTime } from "../../lib/format";
 	import { liveMessageTime } from "../../lib/minute-clock.svelte";
 	import { formatRunError } from "../../lib/chat.svelte";
-	import { plainTextOf, replyActions, segmentsOf, type Segment } from "../../lib/reply-blocks";
+	import { canContinueRun, plainTextOf, replyActions, segmentsOf, type Segment } from "../../lib/reply-blocks";
 	import { modelDisplayName } from "../../lib/model-name";
 	import { replySpeed, tierLabel } from "../../lib/service-tier";
 	import { SWIPE_BLOCKERS, SWIPE_TRIGGER, SwipeReply } from "../../lib/swipe-reply";
@@ -104,7 +104,17 @@
 	/** When each block was written: the time its message (one model call) started. A text the reply went on from (a
 	 *  progress note between tool calls) shows it underneath; the closing text has it in the foot. */
 	const blockTs = $derived(parts.flatMap((p) => p.blocks.map(() => p.ts)));
-	const actions = $derived(replyActions(tail, last, live));
+	const chat = $derived(app.chatOf(paneId));
+	const canContinue = $derived(
+		canContinueRun({
+			ready: chat?.ready ?? true,
+			running: chat?.running ?? false,
+			retrying: Boolean(chat?.retrying),
+			compacting: chat?.compacting ?? false,
+			closed: Boolean(session?.closed),
+		}),
+	);
+	const actions = $derived(replyActions(tail, last, live, canContinue));
 	/** A model that cannot think shows "off" instead of the session's level, which it ignores. */
 	const tailModel = $derived(tail ? app.models.find((m) => m.provider === tail.provider && m.id === tail.model) : undefined);
 	/** The name the model is registered under on this server ("Echo"), else its id as the reply recorded it ("echo-model"). */
@@ -157,21 +167,32 @@
 			{/if}
 		{/each}
 
-		{#if tail && !live}
-			{#if tail.stopReason === "aborted"}
-				<div class="error"><Icon name="alert" /><span>{t("중지됨")}</span></div>
-			{:else if tail.error}
-				<div class="error">
-					<Icon name="alert" />
-					<span>{formatRunError(tail.error)}</span>
-				</div>
-			{:else if tail.stopReason === "error"}
-				<div class="error"><Icon name="alert" /><span>{t("오류로 작업이 중단되었습니다.")}</span></div>
+		{#snippet continueBtn()}
+			{#if actions.retry}
+				<Button size="sm" disabled={app.isSending(paneId)} onclick={() => void app.retry(paneId)}>{t("이어서 진행하기")}</Button>
 			{/if}
-		{/if}
+		{/snippet}
 
-		{#if actions.cut}
-			<div class="cut">
+		{#if actions.interrupt === "error" && tail}
+			<div class="interrupt">
+				<Notice tone="danger" role="alert" action={continueBtn}>
+					{tail.error ? formatRunError(tail.error) : t("오류로 작업이 중단되었습니다.")}
+				</Notice>
+			</div>
+		{:else if actions.interrupt === "aborted"}
+			<div class="interrupt">
+				<Notice tone="warn" role="status" action={continueBtn}>
+					{t("작업이 중지되었습니다.")}
+				</Notice>
+			</div>
+		{:else if actions.interrupt === "incomplete"}
+			<div class="interrupt">
+				<Notice tone="warn" role="status" action={continueBtn}>
+					{t("작업이 끝나기 전에 중단되었습니다.")}
+				</Notice>
+			</div>
+		{:else if actions.interrupt === "cut"}
+			<div class="interrupt">
 				<Notice tone="warn" role="status">
 					{t("최대 출력 길이에 도달해 답변이 중간에 끊겼습니다.")}
 					{#snippet action()}
@@ -180,6 +201,10 @@
 						{/if}
 					{/snippet}
 				</Notice>
+			</div>
+		{:else if tail && !live && tail.error}
+			<div class="interrupt">
+				<Notice tone="danger" role="alert">{formatRunError(tail.error)}</Notice>
 			</div>
 		{/if}
 
@@ -194,10 +219,6 @@
 					<!-- at rest: model, thinking level, and non-default speed (dot-separated); tokens and duration come with the buttons (hover, focus, or a tap on touch) -->
 					{#if modelName || level || hasSpeed || statsMore}<span class="stext">{modelName}{#if level || hasSpeed}{modelName ? " · " : ""}{level}{#if level && hasSpeed}{" · "}{/if}{#if speed.kind === "fell"}<!-- a fallback stays slightly brighter: the reply was billed at a speed other than the one chosen --><span class="fell">{speed.label}</span>{:else if speed.kind === "tier"}{speed.label}{/if}{/if}{#if statsMore}<span class="more">{modelName || level || hasSpeed ? " · " : ""}{statsMore}</span>{/if}</span>{/if}
 				</span>
-				<!-- retry is what a failed answer needs, so it always shows; the everyday actions wait for the pointer -->
-				{#if actions.retry}
-					<IconButton icon="retry" label={t("다시 시도")} tip size="sm" onclick={() => app.retry(paneId)} />
-				{/if}
 				<span class="acts">
 					<IconButton icon={copied.done ? "check" : "copy"} label={t("답변 복사")} tip size="sm" onclick={() => void copied.copy(plainText)} disabled={!plainText} />
 					<IconButton icon="reply" label={t("답장")} tip size="sm" onclick={reply} disabled={!plainText} />
@@ -275,30 +296,28 @@
 		}
 	}
 
-	.error {
-		display: flex;
-		align-items: flex-start;
-		gap: 8px;
-		margin-top: 8px;
-		padding: 8px 12px;
-		border-radius: var(--radius);
-		background: var(--danger-soft);
-		color: var(--danger);
-		font-size: var(--fs-sm);
-		line-height: 20px;
-		overflow-wrap: anywhere;
-	}
-	/* same gap above as the error box: both close the answer's text */
-	.cut {
+	/* interrupted / cut-off notice closing the answer */
+	.interrupt {
 		margin-top: 8px;
 	}
-	.error :global(svg) {
-		width: 16px;
-		height: 16px;
-		flex: none;
-		/* 16px icon centred on the 20px first line: (20 - 16) / 2 = 2px */
-		margin-top: 2px;
-		stroke-width: 1.8;
+	@media (max-width: 640px) {
+		.interrupt :global(.notice:has(> .action .btn)) {
+			flex-wrap: wrap;
+			align-items: flex-start;
+			padding: 8px 12px;
+		}
+		.interrupt :global(.notice:has(> .action .btn) > svg) {
+			margin-top: 2px; /* 16px icon centred on the 20px first line: (20 - 16) / 2 = 2px */
+		}
+		.interrupt :global(.notice:has(> .action .btn) > .text) {
+			flex: 1 1 0; /* keeps the icon on the text line; only the button wraps */
+		}
+		.interrupt :global(.notice:has(> .action .btn) > .action) {
+			flex-basis: 100%;
+		}
+		.interrupt :global(.notice:has(> .action .btn) > .action .btn) {
+			width: 100%;
+		}
 	}
 
 	/* 32px tall like every action row; starts on the text's left line (the stats text comes first, so no bleed) */
