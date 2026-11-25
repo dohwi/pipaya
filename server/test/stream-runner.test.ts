@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import type { AssistantMessage } from "@earendil-works/pi-ai";
 import { recoverWithFallback, retryDroppedMidStream, type RetryNotice } from "../src/stream-runner.ts";
+import { markCommittedMidStreamError } from "../src/upstream-retry.ts";
 
 const partialError = (errorMessage: string): AssistantMessage => ({
 	role: "assistant",
@@ -129,7 +130,7 @@ describe("retryDroppedMidStream", () => {
 		expect(continues).toBe(1);
 	});
 
-	test("skips empty error replies and permanent errors", async () => {
+	test("skips uncommitted empty error replies and permanent errors", async () => {
 		for (const msg of [emptyError("503 Service Unavailable"), partialError("401 Unauthorized: invalid api key")]) {
 			let called = false;
 			const res = await retryDroppedMidStream({
@@ -143,6 +144,36 @@ describe("retryDroppedMidStream", () => {
 			expect(res).toEqual({ attempts: 0, aborted: false, forceStopped: false, error: null });
 			expect(called).toBe(false);
 		}
+	});
+
+	test("retries committed empty/thinking-only error replies (thinking_start -> error with empty content)", async () => {
+		const committedEmpty = emptyError("503 Service Unavailable");
+		markCommittedMidStreamError(committedEmpty);
+		const messages: AgentMessage[] = [committedEmpty];
+		const notices: RetryNotice[] = [];
+		let drops = 0;
+		let continues = 0;
+
+		const res = await retryDroppedMidStream({
+			getLastMessage: () => messages[messages.length - 1],
+			shouldStop: () => false,
+			sleep: async () => ({ aborted: false }),
+			dropLastReply: () => { drops++; messages.pop(); },
+			continueRun: async () => {
+				continues++;
+				messages.push(okReply());
+			},
+			onRetry: (n) => notices.push(n),
+			retryOpts: { maxRetries: 3, baseDelayMs: 10, maxDelayMs: 100 },
+		});
+
+		expect(res).toEqual({ attempts: 1, aborted: false, forceStopped: false, error: null });
+		expect(drops).toBe(1);
+		expect(continues).toBe(1);
+		expect(notices).toHaveLength(1);
+		expect(notices[0]!.restart).toBeUndefined();
+		expect(messages).toHaveLength(1);
+		expect((messages[0] as AssistantMessage).stopReason).toBe("stop");
 	});
 
 	test("returns aborted or forceStopped without dropping the reply when sleep is interrupted", async () => {

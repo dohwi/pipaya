@@ -21,12 +21,21 @@ export const MAX_SUBAGENT_TURNS = 30;
 export const SUBAGENT_TIMEOUT_MS = 5 * 60_000;
 export const SUBAGENT_ABORT_GRACE_MS = 3_000;
 
+/** Maximum characters returned from a single subagent final report. */
+export const MAX_SUBAGENT_OUTPUT_CHARS = 32_000;
+
+export function capSubagentOutput(text: string, maxChars = MAX_SUBAGENT_OUTPUT_CHARS): string {
+	if (text.length <= maxChars) return text;
+	const omitted = text.length - maxChars;
+	return `${text.slice(0, maxChars)}\n\n[subagent output truncated: ${omitted} characters omitted]`;
+}
+
 /** Time left for reporting when a tool-using turn finishes. Do not interrupt a running tool merely to report. */
 export const subagentReportReserveMs = (timeoutMs: number) => Math.min(30_000, timeoutMs / 5);
 
 /** Stop the work on expiry or parent cancellation; do not block the parent if the work ignores abort. */
 export async function runDelegateWithinDeadline(
-	run: () => Promise<void>, abort: () => void, parentSignal: AbortSignal | undefined, timeoutMs: number, graceMs = SUBAGENT_ABORT_GRACE_MS,
+	run: () => Promise<void>, abort: () => void, parentSignal: AbortSignal | undefined, timeoutMs: number, graceMs = SUBAGENT_ABORT_GRACE_MS, onDetach?: () => void,
 ): Promise<"finished" | "deadline" | "cancelled"> {
 	type Stop = "deadline" | "cancelled";
 	let stopped: Stop | undefined;
@@ -37,7 +46,10 @@ export async function runDelegateWithinDeadline(
 		if (stopped) return;
 		stopped = reason;
 		abort();
-		grace = setTimeout(() => detach(reason), graceMs);
+		grace = setTimeout(() => {
+			try { onDetach?.(); } catch { /* never block detach */ }
+			detach(reason);
+		}, graceMs);
 		grace.unref?.();
 	};
 	const cancel = () => stop("cancelled");
@@ -57,8 +69,10 @@ export async function runDelegateWithinDeadline(
 		parentSignal?.removeEventListener("abort", cancel);
 	}
 }
-/** Tools a subagent never gets, whatever its definition lists: it must not delegate again (depth 1), ask the user, reach other sessions or schedule prompts. */
-const FORBIDDEN = (n: string) => n === "delegate" || n === "ask_user" || n === "peer" || n.startsWith("peer_") || n === "schedule";
+/** Tools a subagent never gets, whatever its definition lists: it must not delegate again (depth 1), ask the user, reach other sessions, schedule prompts, mutate session goals/workdir, or generate images. */
+const FORBIDDEN = (n: string) =>
+	n === "delegate" || n === "ask_user" || n === "peer" || n.startsWith("peer_") || n === "schedule"
+	|| n === "goal" || n === "workdir" || n === "generate_image";
 export const DEFAULT_SUBAGENT_TOOLS = ["read", "grep", "ls"];
 
 export interface SubagentDef {
@@ -101,17 +115,42 @@ function parseDef(file: string, scope: SubagentDef["scope"]): SubagentDef | null
 
 const dirOf = (scope: SubagentDef["scope"], cwd: string, home: string) => join(scope === "global" ? home : cwd, ".agents", "subagents");
 
-/** Every readable definition of one scope, by file name. */
+const scopeCache = new Map<string, { fingerprint: string; defs: SubagentDef[] }>();
+
+/** Clears the cached subagent definitions (called automatically by saveSubagent/removeSubagent). */
+export function clearSubagentCache(): void {
+	scopeCache.clear();
+}
+
+/** Every readable definition of one scope, by file name, cached by directory & file mtime/size/inode fingerprint. */
 function readScope(dir: string, scope: SubagentDef["scope"]): SubagentDef[] {
+	const cacheKey = `${scope}\0${dir}`;
 	let names: string[];
-	try { names = readdirSync(dir).filter((f) => f.endsWith(".md")).sort(); } catch { return []; }
-	const out: SubagentDef[] = [];
+	try { names = readdirSync(dir).filter((f) => f.endsWith(".md")).sort(); } catch {
+		scopeCache.delete(cacheKey);
+		return [];
+	}
+	const files: string[] = [];
+	const parts: string[] = [];
 	for (const f of names) {
 		const file = join(dir, f);
-		try { if (!statSync(file).isFile()) continue; } catch { continue; }
+		try {
+			const st = statSync(file);
+			if (!st.isFile()) continue;
+			files.push(file);
+			parts.push(`${f}:${st.mtimeMs}:${st.size}:${st.ino}`);
+		} catch { /* skip unreadable file */ }
+	}
+	const fingerprint = parts.join("\n");
+	const cached = scopeCache.get(cacheKey);
+	if (cached && cached.fingerprint === fingerprint) return cached.defs;
+
+	const out: SubagentDef[] = [];
+	for (const file of files) {
 		const def = parseDef(file, scope);
 		if (def) out.push(def);
 	}
+	scopeCache.set(cacheKey, { fingerprint, defs: out });
 	return out;
 }
 
@@ -163,6 +202,7 @@ export function saveSubagent(scope: SubagentDef["scope"], cwd: string, home: str
 	set("maxTurns", Math.min(Math.max(Math.floor(input.maxTurns), 1), MAX_SUBAGENT_TURNS));
 	mkdirSync(dir, { recursive: true });
 	writeFileSync(file, `---\n${Bun.YAML.stringify(meta, null, 2)}\n---\n${input.prompt.trim()}\n`);
+	scopeCache.delete(`${scope}\0${dir}`);
 	const def = parseDef(file, scope);
 	if (!def) throw badRequest("the role could not be read back");
 	return def;
@@ -170,9 +210,11 @@ export function saveSubagent(scope: SubagentDef["scope"], cwd: string, home: str
 
 export function removeSubagent(scope: SubagentDef["scope"], cwd: string, home: string, name: string): void {
 	if (!SUBAGENT_NAME.test(name)) throw badRequest("invalid role name");
-	const file = join(dirOf(scope, cwd, home), `${name}.md`);
+	const dir = dirOf(scope, cwd, home);
+	const file = join(dir, `${name}.md`);
 	if (!existsSync(file)) throw notFound(`subagent role "${name}"`);
 	rmSync(file);
+	scopeCache.delete(`${scope}\0${dir}`);
 }
 
 /** What a subagent is told besides its role text. */
@@ -183,15 +225,27 @@ export const SUBAGENT_WRAP_UP = "This is your final model call. No tools are ava
 
 export type SubagentLimit = "maxTurns" | "repeatedTools" | "deadline";
 
-/** Only detect a repeated successful built-in read with unchanged text output. Stateful tools and batches keep the normal budget. */
+/**
+ * Detects repeated identical successful read-only or `bash` tool turns (single call or multi-tool batch) with unchanged
+ * text output. Failed calls and stateful write/edit tools keep the normal budget.
+ */
 export function repeatedReadSignature({ message, toolResults }: AgentTurnContext, readOnly: ReadonlySet<string>): string | undefined {
-	if (message.stopReason !== "toolUse" || toolResults.length !== 1) return;
+	if (message.stopReason !== "toolUse" || !toolResults.length) return;
 	const calls = message.content.filter((block) => block.type === "toolCall");
-	const [call] = calls;
-	const [result] = toolResults;
-	if (calls.length !== 1 || !call || !result || result.isError || !readOnly.has(call.name) || result.content.some((block) => block.type !== "text")) return;
-	return JSON.stringify([call.name, call.arguments, result.content]);
+	if (!calls.length || calls.length !== toolResults.length) return;
+	const entries: string[] = [];
+	for (let i = 0; i < calls.length; i++) {
+		const call = calls[i];
+		const result = toolResults[i];
+		if (!call || !result || result.isError) return;
+		if (!readOnly.has(call.name) && call.name !== "bash") return;
+		if (result.content.some((block) => block.type !== "text")) return;
+		entries.push(JSON.stringify([call.name, call.arguments, result.content]));
+	}
+	return entries.length === 1 ? entries[0] : JSON.stringify(entries.sort());
 }
+
+export const repeatedToolSignature = repeatedReadSignature;
 
 /** The text of the last assistant message of a subagent run. */
 export function finalText(messages: readonly AgentMessage[]): { text: string; error?: string } {

@@ -112,21 +112,40 @@ export function contextTokens(messages: AgentMessage[], systemChars: number, sin
 }
 
 /**
- * Where to cut `messages`: everything before the returned index is summarized, the rest is kept as is. The cut
- * always lands on a user message, so a tool call is never separated from its result. Returns null when there is
- * no earlier user message to cut at (nothing worth summarizing).
+ * Like `contextTokens()`, but falls back to a chars/4 estimate when `contextTokens()` returns `null`
+ * (for example immediately after a compaction before any new provider usage has arrived).
  */
-export function pickCut(messages: AgentMessage[], keepRecent = KEEP_RECENT_TOKENS, midRun = false): number | null {
+export function effectiveContextTokens(messages: AgentMessage[], systemChars: number, since?: number): number {
+	const measured = contextTokens(messages, systemChars, since);
+	if (measured !== null) return measured;
+	return Math.ceil(systemChars / 4 + messages.reduce((n, m) => n + estimateTokens(m), 0));
+}
+
+/**
+ * Where to cut `messages`: everything before the returned index is summarized, the rest is kept as is. The cut
+ * normally lands on a user message, so a tool call is never separated from its result. Returns null when there is
+ * no earlier user message to cut at (nothing worth summarizing).
+ * When `midRun` is true, any non-error/non-aborted assistant message is also a candidate.
+ * When `fallbackToAssistant` is true (e.g. manual `/compact` on a single-prompt long run) and no user cut point exists,
+ * falls back to a non-error/non-aborted assistant boundary if the total tokens exceed `keepRecent`.
+ */
+export function pickCut(messages: AgentMessage[], keepRecent = KEEP_RECENT_TOKENS, midRun = false, fallbackToAssistant = false): number | null {
+	const suffix = new Array<number>(messages.length + 1).fill(0);
+	for (let i = messages.length - 1; i >= 0; i--) suffix[i] = suffix[i + 1]! + estimateTokens(messages[i]!);
+
 	const candidates: number[] = [];
+	const okAssistantAt = (m: AgentMessage) => m.role === "assistant" && m.stopReason !== "error" && m.stopReason !== "aborted";
 	// Mid-run (one long prompt with many tool turns) there may be no later user message; a turn's assistant message is
 	// also a safe cut, because its tool results follow it and stay with it. Never cut at a failed/aborted tail reply.
 	messages.forEach((m, i) => {
-		const okAssistant = midRun && m.role === "assistant" && m.stopReason !== "error" && m.stopReason !== "aborted";
-		if (i > 0 && (m.role === "user" || okAssistant)) candidates.push(i);
+		if (i > 0 && (m.role === "user" || (midRun && okAssistantAt(m)))) candidates.push(i);
 	});
+	if (!candidates.length && !midRun && fallbackToAssistant && suffix[0]! > keepRecent) {
+		messages.forEach((m, i) => {
+			if (i > 0 && okAssistantAt(m)) candidates.push(i);
+		});
+	}
 	if (!candidates.length) return null;
-	const suffix = new Array<number>(messages.length + 1).fill(0);
-	for (let i = messages.length - 1; i >= 0; i--) suffix[i] = suffix[i + 1]! + estimateTokens(messages[i]!);
 	return candidates.find((i) => suffix[i]! <= keepRecent) ?? candidates[candidates.length - 1]!;
 }
 
@@ -161,9 +180,20 @@ export const SUMMARY_REQUEST_TEMPLATE = [
 	"Write the summary now.",
 ].join("\n");
 
-export function summaryRequest(previous: string | null, messages: AgentMessage[], instructions?: string, maxChars = 400_000): string {
+export function summaryBudgetChars(contextWindow?: number): number {
+	return contextWindow ? Math.min(400_000, Math.max(24_000, Math.floor(contextWindow * 0.65 * 4))) : 400_000;
+}
+
+export function summaryRequest(
+	previous: string | null,
+	messages: AgentMessage[],
+	instructions?: string,
+	maxChars?: number,
+	contextWindow?: number,
+): string {
+	const limit = maxChars ?? summaryBudgetChars(contextWindow);
 	let body = transcript(messages);
-	if (body.length > maxChars) body = `[earlier part omitted]\n${body.slice(body.length - maxChars)}`;
+	if (body.length > limit) body = `[earlier part omitted]\n${body.slice(body.length - limit)}`;
 	return [
 		previous ? `Summary so far (earlier compaction):\n${previous}\n\nNew conversation since then:` : "Conversation to summarize:",
 		body,
@@ -172,10 +202,67 @@ export function summaryRequest(previous: string | null, messages: AgentMessage[]
 	].join("\n");
 }
 
+export interface TouchedFiles {
+	read: string[];
+	modified: string[];
+}
+
+/** Deterministically extracts deduplicated `read` paths and `write`/`edit` modified paths from messages. */
+export function aggregateTouchedFiles(messages: readonly AgentMessage[]): TouchedFiles {
+	const failedIds = new Set<string>();
+	const readSet = new Set<string>();
+	const modifiedSet = new Set<string>();
+
+	for (const m of messages) {
+		if (m.role !== "toolResult") continue;
+		const tr = m as { toolName?: string; toolCallId?: string; isError?: boolean; details?: unknown };
+		if (tr.isError) {
+			if (typeof tr.toolCallId === "string") failedIds.add(tr.toolCallId);
+			continue;
+		}
+		const path = tr.details && typeof tr.details === "object" && !Array.isArray(tr.details)
+			? (tr.details as { path?: unknown }).path
+			: undefined;
+		if (typeof path !== "string" || !path.trim()) continue;
+		if (tr.toolName === "read") readSet.add(path.trim());
+		else if (tr.toolName === "write" || tr.toolName === "edit") modifiedSet.add(path.trim());
+	}
+
+	for (const m of messages) {
+		if (m.role !== "assistant" || !Array.isArray(m.content)) continue;
+		for (const part of m.content as { type?: string; id?: string; name?: string; arguments?: unknown }[]) {
+			if (part.type !== "toolCall") continue;
+			if (typeof part.id === "string" && failedIds.has(part.id)) continue;
+			const path = part.arguments && typeof part.arguments === "object" && !Array.isArray(part.arguments)
+				? (part.arguments as { path?: unknown }).path
+				: undefined;
+			if (typeof path !== "string" || !path.trim()) continue;
+			if (part.name === "read") readSet.add(path.trim());
+			else if (part.name === "write" || part.name === "edit") modifiedSet.add(path.trim());
+		}
+	}
+
+	return {
+		read: [...readSet].sort(),
+		modified: [...modifiedSet].sort(),
+	};
+}
+
+/** Formats touched files into a deterministic block suitable for appending to a compaction summary. */
+export function formatTouchedFiles(messages: readonly AgentMessage[]): string {
+	const { read, modified } = aggregateTouchedFiles(messages);
+	if (!read.length && !modified.length) return "";
+	const lines = ["Files touched before compaction:"];
+	if (modified.length) lines.push(`- Modified: ${modified.join(", ")}`);
+	if (read.length) lines.push(`- Read: ${read.join(", ")}`);
+	return lines.join("\n");
+}
+
 export const SUMMARY_PREFIX = "The earlier part of this conversation was compacted. Summary of what happened so far:\n\n";
 
-export function summaryMessage(summary: string): AgentMessage {
-	return { role: "user", content: [{ type: "text", text: SUMMARY_PREFIX + summary }], timestamp: Date.now() } as AgentMessage;
+export function summaryMessage(summary: string, touchedFiles?: string): AgentMessage {
+	const suffix = touchedFiles?.trim() ? `\n\n${touchedFiles.trim()}` : "";
+	return { role: "user", content: [{ type: "text", text: SUMMARY_PREFIX + summary + suffix }], timestamp: Date.now() } as AgentMessage;
 }
 
 /** Token level at which an automatic compaction fires: `percent` of the context window. */

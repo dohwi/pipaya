@@ -1,6 +1,7 @@
 import { closeSync, constants, fstatSync, openSync, readSync, realpathSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
+import { pickCommandShell, type CommandShell } from "./command-shell.ts";
 import { skillsPrompt, type SkillRef } from "./skills.ts";
 import type { SessionRecord, StoredMessage } from "./store.ts";
 
@@ -135,9 +136,18 @@ export function discoverInstructions(cwd: string, opts: { home?: string; maxFile
 /** Skills are loaded through `read`, so they are pointless (and not advertised) without that tool. */
 export const advertisedSkills = (tools: string[], skills: SkillRef[]): SkillRef[] => (tools.includes("read") ? skills : []);
 
-/** The model's system prompt: base + current AGENTS.md + the skills that are currently enabled. */
-export function buildSystemPrompt(base: string, instructions: Instruction[], skills: SkillRef[]): string {
+/** Compact static environment block (no timestamps or mutable git state so prompt caching stays intact). */
+export function buildEnvContext(cwd: string, opts?: { platform?: NodeJS.Platform; arch?: string; shell?: CommandShell }): string {
+	const platform = opts?.platform ?? process.platform;
+	const arch = opts?.arch ?? process.arch;
+	const shell = opts?.shell ?? pickCommandShell(platform);
+	return `Environment: cwd=${cwd} | os=${platform}/${arch} | shell=${shell.name} (${shell.path})`;
+}
+
+/** The model's system prompt: base + optional static env context + current AGENTS.md + the skills that are currently enabled. */
+export function buildSystemPrompt(base: string, instructions: Instruction[], skills: SkillRef[], envContext?: string): string {
 	const parts = [base];
+	if (envContext?.trim()) parts.push(envContext.trim());
 	if (instructions.length) parts.push(`# Project instructions\n\n${instructions.map((i) => `## ${i.path}\n\n${i.content}`).join("\n\n")}`);
 	if (skills.length) parts.push(skillsPrompt(skills));
 	return parts.join("\n\n");

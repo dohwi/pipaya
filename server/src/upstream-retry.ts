@@ -190,6 +190,17 @@ export function nudgeZeroOutputContext<C>(ctx: C, attempt: number): C {
 	return { ...(ctx as object), messages: [...messages.slice(0, -1), nextLast] } as C;
 }
 
+/** Tracks error messages that arrived *after* `withUpstreamRetry` committed the stream (e.g. after `thinking_start`), even when `content` is empty. */
+const committedStreamErrors = new WeakSet<object>();
+
+export function markCommittedMidStreamError(message: object): void {
+	committedStreamErrors.add(message);
+}
+
+export function isCommittedMidStreamError(message: unknown): boolean {
+	return !!message && typeof message === "object" && committedStreamErrors.has(message);
+}
+
 /**
  * Wraps a model stream so a transient upstream failure (502 Bad Gateway, 503, 504, connection reset, timeout, zero output …)
  * that happens before the model produced any content is retried with exponential backoff instead of ending the run.
@@ -240,7 +251,11 @@ export function withUpstreamRetry<A extends [unknown, unknown, { signal?: AbortS
 					for await (const ev of stream) {
 						if (ev.type === "done") zeroOutputStreak = 0;
 						else if (ev.type === "error") zeroOutputStreak = ev.reason === "error" && isZeroOutputError(ev.error.errorMessage) ? zeroOutputStreak + 1 : 0;
-						if (committed) { out.push(ev); continue; }
+						if (committed) {
+							if (ev.type === "error" && ev.reason === "error" && ev.error && typeof ev.error === "object") markCommittedMidStreamError(ev.error);
+							out.push(ev);
+							continue;
+						}
 						if (ev.type === "start") { pending.push(ev); continue; }
 						if (ev.type === "error" && ev.reason === "error" && (kind = retryable(ev.error))) {
 							failure = ev.error;
@@ -297,21 +312,25 @@ export function withUpstreamRetry<A extends [unknown, unknown, { signal?: AbortS
 }
 
 /**
- * Retries a one-shot `completeSimple` call on known transient upstream errors (502/503/504, socket reset, zero output, proxy warm-up).
- * Permanent and unknown errors return immediately so deterministic failures and mocks do not block one-shot endpoints.
+ * Retries a one-shot `completeSimple` call on known transient upstream errors (502/503/504, socket reset, zero output, proxy warm-up)
+ * and gives an unclassified ("unknown") error a single retry (matching `withUpstreamRetry`).
+ * Permanent errors return immediately.
  */
 export async function completeWithUpstreamRetry(
 	inner: (ctx: Context) => Promise<AssistantMessage>,
 	ctx: Context,
 	opts: UpstreamRetryOptions = COMPLETION_RETRY,
 	signal?: AbortSignal,
+	onRetry?: UpstreamRetryOptions["onRetry"],
 ): Promise<AssistantMessage> {
 	const wait = opts.sleep ?? sleepAbortable;
+	const notifyRetry = onRetry ?? opts.onRetry;
 	const zeroCap = opts.maxZeroOutputRetries !== undefined ? Math.min(opts.maxRetries, opts.maxZeroOutputRetries) : opts.maxRetries;
 	const warmupCap = opts.maxWarmupRetries !== undefined ? Math.min(opts.maxRetries, opts.maxWarmupRetries) : opts.maxRetries;
 	let attempt = 0;
 	let warmupAttempts = 0;
 	let zeroOutputStreak = 0;
+	let unknownUsed = false;
 	for (;;) {
 		const callCtx = zeroOutputStreak >= 2 ? nudgeZeroOutputContext(ctx, zeroOutputStreak) : ctx;
 		let reply: AssistantMessage;
@@ -321,42 +340,59 @@ export async function completeWithUpstreamRetry(
 			if (signal?.aborted || attempt >= opts.maxRetries) throw e;
 			const message = e instanceof Error ? e.message : String(e);
 			const probe = { role: "assistant", stopReason: "error", errorMessage: message } as AssistantMessage;
-			if (classifyUpstreamError(probe) !== "transient") throw e;
-			const zero = isZeroOutputError(message);
+			const kind = classifyUpstreamError(probe);
+			if (kind === "permanent" || (kind === "unknown" && unknownUsed)) throw e;
+			const zero = kind === "transient" && isZeroOutputError(message);
 			if (zero && attempt >= zeroCap) throw e;
-			const warmup = isProxyWarmupError(message);
+			const warmup = kind === "transient" && isProxyWarmupError(message);
 			if (warmup && warmupAttempts >= warmupCap) throw e;
 			zeroOutputStreak = zero ? zeroOutputStreak + 1 : 0;
 			attempt++;
 			if (warmup) warmupAttempts++;
-			const maxAnnounced = zero && opts.maxZeroOutputRetries !== undefined
-				? zeroCap
-				: warmup && opts.maxWarmupRetries !== undefined
-					? Math.min(opts.maxRetries, attempt + (warmupCap - warmupAttempts))
-					: opts.maxRetries;
-			const delay = retryDelayMs({ baseDelayMs: opts.baseDelayMs, maxAgentDelayMs: opts.maxDelayMs }, attempt);
-			opts.onRetry?.(attempt, maxAnnounced, delay, message);
+			if (kind === "unknown") {
+				unknownUsed = true;
+				(opts.onUnknown ?? logUnknownUpstreamError)(message);
+			}
+			const maxAnnounced = kind === "unknown"
+				? attempt
+				: zero && opts.maxZeroOutputRetries !== undefined
+					? zeroCap
+					: warmup && opts.maxWarmupRetries !== undefined
+						? Math.min(opts.maxRetries, attempt + (warmupCap - warmupAttempts))
+						: opts.maxRetries;
+			const delay = kind === "unknown" ? opts.baseDelayMs : retryDelayMs({ baseDelayMs: opts.baseDelayMs, maxAgentDelayMs: opts.maxDelayMs }, attempt);
+			notifyRetry?.(attempt, maxAnnounced, delay, message);
 			await wait(delay, signal);
 			if (signal?.aborted) throw e;
 			continue;
 		}
-		if (reply.stopReason !== "error" || signal?.aborted || attempt >= opts.maxRetries || classifyUpstreamError(reply) !== "transient") {
+		if (reply.stopReason !== "error" || signal?.aborted || attempt >= opts.maxRetries) {
 			return reply;
 		}
-		const zero = isZeroOutputError(reply.errorMessage);
+		const kind = classifyUpstreamError(reply);
+		if (kind === "permanent" || (kind === "unknown" && unknownUsed)) {
+			return reply;
+		}
+		const zero = kind === "transient" && isZeroOutputError(reply.errorMessage);
 		if (zero && attempt >= zeroCap) return reply;
-		const warmup = isProxyWarmupError(reply.errorMessage);
+		const warmup = kind === "transient" && isProxyWarmupError(reply.errorMessage);
 		if (warmup && warmupAttempts >= warmupCap) return reply;
 		zeroOutputStreak = zero ? zeroOutputStreak + 1 : 0;
 		attempt++;
 		if (warmup) warmupAttempts++;
-		const maxAnnounced = zero && opts.maxZeroOutputRetries !== undefined
-			? zeroCap
-			: warmup && opts.maxWarmupRetries !== undefined
-				? Math.min(opts.maxRetries, attempt + (warmupCap - warmupAttempts))
-				: opts.maxRetries;
-		const delay = retryDelayMs({ baseDelayMs: opts.baseDelayMs, maxAgentDelayMs: opts.maxDelayMs }, attempt);
-		opts.onRetry?.(attempt, maxAnnounced, delay, reply.errorMessage ?? "");
+		if (kind === "unknown") {
+			unknownUsed = true;
+			(opts.onUnknown ?? logUnknownUpstreamError)(reply.errorMessage ?? "");
+		}
+		const maxAnnounced = kind === "unknown"
+			? attempt
+			: zero && opts.maxZeroOutputRetries !== undefined
+				? zeroCap
+				: warmup && opts.maxWarmupRetries !== undefined
+					? Math.min(opts.maxRetries, attempt + (warmupCap - warmupAttempts))
+					: opts.maxRetries;
+		const delay = kind === "unknown" ? opts.baseDelayMs : retryDelayMs({ baseDelayMs: opts.baseDelayMs, maxAgentDelayMs: opts.maxDelayMs }, attempt);
+		notifyRetry?.(attempt, maxAnnounced, delay, reply.errorMessage ?? "");
 		await wait(delay, signal);
 		if (signal?.aborted) {
 			const { errorMessage: _drop, ...rest } = reply;

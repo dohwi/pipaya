@@ -17,6 +17,7 @@ import { OptionalTier, Thinking, Tier } from "./schemas.ts";
 import { createOpenRouterCatalog, type OpenRouterCatalog } from "./openrouter-catalog.ts";
 import { ModelIcons } from "./model-icons.ts";
 import { DEFAULT_TOOLS, isInside } from "./tools.ts";
+import { MAX_SUBAGENT_TURNS } from "./subagents.ts";
 import { THINKING_LEVELS, type SqliteCredentialStore, type ThinkingLevel } from "./store.ts";
 import Type, { type Static } from "typebox";
 import Value from "typebox/value";
@@ -127,10 +128,10 @@ export const DelegatePolicy = Type.Object({
 	models: Type.Array(Type.String({ minLength: 3, maxLength: 200 }), { maxItems: 50, description: "provider/model entries the allowlist permits" }),
 	maxConcurrent: Type.Integer({ minimum: 1, maximum: 8, description: "Subagents running at once per session" }),
 	maxCalls: Type.Integer({ minimum: 1, maximum: 50, description: "delegate calls per run of the calling session" }),
-	maxTurns: Type.Integer({ minimum: 1, maximum: 50, description: "Upper bound on a subagent's model calls, whatever its role file asks for" }),
+	maxTurns: Type.Integer({ minimum: 1, maximum: MAX_SUBAGENT_TURNS, description: "Upper bound on a subagent's model calls, whatever its role file asks for" }),
 }, { additionalProperties: false });
 export type DelegatePolicyValue = Static<typeof DelegatePolicy> & { roles: "defined" | "any" };
-export const DEFAULT_DELEGATE_POLICY: DelegatePolicyValue = { roles: "defined", policy: "defined", models: [], maxConcurrent: 4, maxCalls: 12, maxTurns: 30 };
+export const DEFAULT_DELEGATE_POLICY: DelegatePolicyValue = { roles: "defined", policy: "defined", models: [], maxConcurrent: 4, maxCalls: 12, maxTurns: MAX_SUBAGENT_TURNS };
 export const ToolsInfo = Type.Object({
 	delegate: Type.Optional(DelegatePolicy),
 	toggleable: Type.Array(Type.String(), { description: "Tools that can be switched off" }),

@@ -426,6 +426,11 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 				return billable > 0 ? billable : u.totalTokens;
 			},
 			send: (id, input) => sessions.send(id, input),
+			steer: (id, text) => {
+				if (!sessions.isRunning(id)) return false;
+				void sessions.send(id, { text, mode: "steer", origin: "goal" }).catch(() => {});
+				return true;
+			},
 		},
 		{
 			deferContinue: () => updater.isPending,
