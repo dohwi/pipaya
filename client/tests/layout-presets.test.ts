@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { setLang } from "../src/lib/i18n";
 import { MAX_PANES, MAX_RATIO, MIN_RATIO, measure, pair, pane, panesOf, setRatio, splitAt, type Layout } from "../src/lib/layout";
-import { findPreset, layoutsMatch, matchPreset, nextArrangedPreset, presetsFor, recommendedPreset } from "../src/lib/layout-presets";
+import { findPreset, layoutPaletteSpec, layoutsMatch, matchPreset, presetsFor, recommendedPreset, type LayoutPresetId } from "../src/lib/layout-presets";
 
 const SERVER_MAX_DEPTH = 8;
 
@@ -85,33 +85,10 @@ describe("layout presets", () => {
 		expect(layoutsMatch(pair("a", "b", "right"), swapped)).toBe(false);
 	});
 
-	test("nextArrangedPreset picks the recommended layout for irregular trees and cycles once arranged", () => {
-		// Irregular 3-pane layout: a (left 25%) | (b / c)
-		const irregular = setRatio(splitAt(pair("a", "b", "right"), "b", "c", "bottom"), [], 0.25);
-		expect(matchPreset(irregular)).toBeNull();
-
-		const first = nextArrangedPreset(irregular)!;
-		expect(first.id).toBe("columns");
-		expect(first.recommended).toBe(true);
-
-		const second = nextArrangedPreset(first.layout)!;
-		expect(second.id).toBe("main-left");
-
-		const third = nextArrangedPreset(second.layout)!;
-		expect(third.id).toBe("main-top");
-
-		const fourth = nextArrangedPreset(third.layout)!;
-		expect(fourth.id).toBe("rows");
-
-		const wrapped = nextArrangedPreset(fourth.layout)!;
-		expect(wrapped.id).toBe("columns");
-	});
-
 	test("edge cases: invalid counts, empty or duplicate ids, unknown preset id, and English labels", () => {
 		expect(presetsFor([])).toEqual([]);
 		expect(presetsFor(["only"])).toEqual([]);
 		expect(presetsFor(["a", "b", "c", "d", "e", "f", "g", "h", "i"])).toEqual([]);
-		expect(nextArrangedPreset(pane("only"))).toBeNull();
 		expect(recommendedPreset(pane("only"))).toBeNull();
 
 		// Empty strings and duplicates are rejected so a malformed layout never silently drops panes
@@ -128,5 +105,33 @@ describe("layout presets", () => {
 		expect(enThree[0]!.label).toBe("Horizontal 3-split");
 		expect(enThree.every((p) => !p.label.includes("{") && !p.desc.includes("{"))).toBe(true);
 		expect(measure(enThree[1]!.layout).panes.find((p) => p.id === "a")?.w).toBeCloseTo(0.5, 6);
+	});
+
+	test("layoutPaletteSpec binds arrangePanes as closeShortcut, marks the current/recommended preset, and forwards selection", () => {
+		const picked: LayoutPresetId[] = [];
+		const matchedLayout = findPreset(splitAt(pair("a", "b", "right"), "b", "c", "bottom"), "main-left")!.layout;
+		const spec = layoutPaletteSpec({ name: "작업 그룹", layout: matchedLayout }, (id) => {
+			picked.push(id);
+		});
+		expect(spec.closeShortcut).toBe("arrangePanes");
+		expect(spec.title).toBe("'작업 그룹' 레이아웃 선택");
+		expect(spec.items.map((it) => it.id)).toEqual(["columns", "main-left", "main-top", "rows"]);
+		expect(spec.items[0]!.tag).toBe("추천");
+		expect(spec.items.slice(1).every((it) => it.tag === undefined)).toBe(true);
+		expect(spec.items.map((it) => !!it.current)).toEqual([false, true, false, false]);
+		expect(spec.items.every((it) => (it.preview?.length ?? 0) === 3)).toBe(true);
+
+		spec.onpick(spec.items[2]!);
+		expect(picked).toEqual(["main-top"]);
+
+		// Irregular layout: no item is marked current, so the palette starts at index 0 (recommended)
+		const irregular = setRatio(splitAt(pair("a", "b", "right"), "b", "c", "bottom"), [], 0.25);
+		const irregularSpec = layoutPaletteSpec({ name: "Irregular", layout: irregular }, () => {});
+		expect(irregularSpec.items.every((it) => !it.current)).toBe(true);
+
+		// Single pane: empty items list with fallback message
+		const singleSpec = layoutPaletteSpec({ name: "Solo", layout: pane("only") }, () => {});
+		expect(singleSpec.items).toEqual([]);
+		expect(singleSpec.empty).toBeTruthy();
 	});
 });

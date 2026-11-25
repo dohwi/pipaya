@@ -1,5 +1,6 @@
-import { t } from "./i18n";
+import { msg, t } from "./i18n";
 import { MAX_PANES, measure, pane, panesOf, type Layout, type Rect } from "./layout";
+import type { PaletteSpec } from "./store-model";
 
 export type LayoutPresetId = "columns" | "rows" | "grid" | "grid-tall" | "main-left" | "main-top";
 
@@ -150,19 +151,33 @@ export function recommendedPreset(layout: Layout): LayoutPreset | null {
 	return presetsFor(panesOf(layout))[0] ?? null;
 }
 
-/**
- * Pick the next preset for auto-arrange:
- * - if `layout` is irregular / does not match any preset, return the recommended preset;
- * - if it already matches a preset, advance to the next preset in the cycle.
- */
-export function nextArrangedPreset(layout: Layout): LayoutPreset | null {
-	const presets = presetsFor(panesOf(layout));
-	if (!presets.length) return null;
-	const cur = presets.findIndex((p) => layoutsMatch(layout, p.layout));
-	return cur < 0 ? presets[0]! : presets[(cur + 1) % presets.length]!;
-}
-
 /** Look up a specific preset for `layout` by id. */
 export function findPreset(layout: Layout, id: LayoutPresetId): LayoutPreset | null {
 	return presetsFor(panesOf(layout)).find((p) => p.id === id) ?? null;
+}
+
+/** Build the layout selection palette spec for a split group. */
+export function layoutPaletteSpec(
+	group: { name: string; layout: Layout },
+	onSelect: (presetId: LayoutPresetId) => void | Promise<void>,
+): PaletteSpec {
+	const presets = presetsFor(panesOf(group.layout));
+	const active = matchPreset(group.layout);
+	return {
+		closeShortcut: "arrangePanes",
+		title: t("'{name}' 레이아웃 선택", { name: group.name }),
+		empty: msg("적용할 레이아웃이 없습니다"),
+		items: presets.map((p) => ({
+			id: p.id,
+			title: p.label,
+			sub: p.desc,
+			tag: p.recommended ? t("추천") : undefined,
+			current: active?.id === p.id,
+			preview: p.boxes,
+		})),
+		onpick: (it) => {
+			const chosen = presets.find((p) => p.id === it.id);
+			if (chosen) return onSelect(chosen.id);
+		},
+	};
 }

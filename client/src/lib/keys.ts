@@ -44,7 +44,6 @@ export type ActionId =
   | "zoomPane"
   | "toggleFull"
   | "arrangePanes"
-  | "chooseLayout"
   | "newTerminal"
   | "splitTerminal"
   | "splitTerminalRight"
@@ -378,14 +377,8 @@ const BASE: Omit<ActionDef, "group">[] = [
   {
     id: "arrangePanes",
     label: msg("분할 창 자동 정렬"),
-    hint: msg("창 개수에 맞는 추천 레이아웃으로 정렬합니다. 다시 누르면 다른 배치로 순환합니다"),
+    hint: msg("현재 그룹의 창 개수에 맞는 레이아웃을 선택해 정렬합니다"),
     default: "Mod+B+Space",
-  },
-  {
-    id: "chooseLayout",
-    label: msg("분할 레이아웃 선택"),
-    hint: msg("현재 그룹의 창 개수에 맞는 레이아웃 목록을 열어 고릅니다"),
-    default: "",
   },
   {
     id: "workdir",
@@ -437,7 +430,6 @@ const GROUP: Partial<Record<ActionId, ActionDef["group"]>> = {
   zoomPane: "pane",
   toggleFull: "pane",
   arrangePanes: "pane",
-  chooseLayout: "pane",
   newTerminal: "layout",
   splitTerminal: "layout",
   splitTerminalRight: "layout",
