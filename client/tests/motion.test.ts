@@ -251,6 +251,14 @@ describe("modals mounted by their parent animate", () => {
 		expect(imp).not.toContain("sheet={false}");
 		expect(imp).toContain("<DialogFooter safe>");
 		expect(imp).toContain("<DialogFooter rule safe wrap>");
+		// Non-Modal phone sheets (Palette, RowMenu, non-editable Select, ExtensionFloating) share sheetPull and --sab
+		for (const f of ["shell/Palette", "ui/RowMenu", "ui/Select", "extensions/ExtensionFloating"]) {
+			const src = read(`components/${f}.svelte`);
+			expect(src, f).toContain("use:sheetPull=");
+			expect(src, f).toContain("var(--sab)");
+		}
+		expect(read("lib/sheet.ts")).toContain('[role="menu"]');
+		expect(read("lib/sheet.ts")).toContain("[data-sheet-root]");
 	});
 	test("the address form is a step inside ConnectModal (embedded), not a second dialog opened over it", () => {
 		expect(markup(read("components/server/ConnectModal.svelte"))).toContain("<ConnectionForm embedded");
