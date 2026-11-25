@@ -43,13 +43,14 @@
 	const ids = $derived(tabs.map((x) => x.id));
 	/** The folder a tab (or a pane of one of its groups) is listed in */
 	const dirOf = (id: string) => dirs.find((d) => d.tabs.some((x) => x.id === id || tabPanes(x).includes(id)))?.path ?? null;
-	/** Where a folder's run starts, with the name it goes by: its branch inside a git project, else its folder label */
+	/** Where a folder's run starts, with the name it goes by: its branch inside a git project, else its compact folder label */
 	const leads = $derived.by(() => {
 		const out: Record<string, TabLead> = {};
 		const sid = app.serverId;
 		if (!multi || !sid) return out;
 		const manual = !!app.tabProject && app.tabProject.serverId === sid && isManualRoot(app.tabProject.root);
 		const repos = app.links[sid]?.repos ?? {};
+		const siblings = dirs.map((d) => d.path);
 		for (const d of dirs) {
 			const first = d.tabs[0];
 			if (!first) continue;
@@ -58,6 +59,7 @@
 				customName: app.sidebar.dirName(sid, d.path),
 				repo: repos[d.path],
 				home: app.workspace?.home,
+				siblings,
 			});
 		}
 		return out;

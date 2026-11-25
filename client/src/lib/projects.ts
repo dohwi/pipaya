@@ -4,7 +4,7 @@
  * and a repository with a single folder open, stay plain folder rows. The server says which repository a folder is in
  * (`POST /fs/repos`, read from `.git` without starting git); a server from before that lists every folder on its own.
  */
-import { tilde } from "./format";
+import { nameSegs, tilde } from "./format";
 import type { DirBlock } from "./nav";
 import { SEP, shortName } from "./sidebar-model";
 
@@ -154,9 +154,32 @@ export interface TabLead {
 }
 
 /**
+ * Shortest segment that tells `path` apart from `siblings` in a compact space like the tab strip:
+ * - its own folder name when no sibling ends with the same name (`server`, `client`),
+ * - otherwise the nearest ancestor segment that distinguishes it from siblings sharing that name
+ *   (`frontend/billing` vs `backend/billing` -> `frontend`, `backend`),
+ * - falling back to `shortName` when nothing above sets it apart.
+ */
+export function compactFolderLabel(path: string, siblings: readonly string[], home?: string): string {
+	const segs = nameSegs(path, home);
+	if (!segs.length) return tilde(path, home);
+	const last = segs[segs.length - 1]!;
+	const twins = siblings
+		.filter((s) => s !== path)
+		.map((s) => nameSegs(s, home))
+		.filter((s) => s.length > 0 && s[s.length - 1] === last);
+	if (!twins.length) return last;
+	for (let offset = 2; offset <= segs.length; offset++) {
+		const candidate = segs[segs.length - offset]!;
+		if (twins.every((t) => t[t.length - offset] !== candidate)) return candidate;
+	}
+	return shortName(path, home);
+}
+
+/**
  * The marker before a folder's run of tabs in a project's tab strip.
  * A git project names each folder by its checked-out branch with a fork icon; a hand-made project names each folder by
- * its own label with a folder icon, matching the sidebar's DirBlock.
+ * its compact distinguishing folder name with a folder icon (full path in `title`).
  */
 export function tabLead(
 	path: string,
@@ -165,12 +188,13 @@ export function tabLead(
 		customName?: string | null;
 		repo?: RepoInfo | null;
 		home?: string;
+		siblings?: readonly string[];
 	},
 ): TabLead {
 	const fallback = shortName(path, opts.home);
 	const custom = opts.customName || null;
 	if (opts.manual) {
-		const label = custom ?? fallback;
+		const label = custom ?? compactFolderLabel(path, opts.siblings ?? [], opts.home);
 		const full = tilde(path, opts.home);
 		return {
 			icon: "folder",
