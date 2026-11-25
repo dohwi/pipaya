@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { branchLabel, dissolveProject, flattenBlocks, joinProject, leaveProject, projectBlocks, subPath, type RepoMap } from "../src/lib/projects";
+import { branchLabel, dissolveProject, flattenBlocks, joinProject, leaveProject, projectBlocks, subPath, tabLead, type RepoMap } from "../src/lib/projects";
 import { withoutDirKeys } from "../src/lib/sidebar.svelte";
 import type { DirBlock } from "../src/lib/nav";
 
@@ -85,5 +85,68 @@ describe("hand-made projects", () => {
 		expect(leaveProject(o, "/w/app-x", true).ungrouped).toEqual(["/w/app-x"]);
 		expect(leaveProject({ projects: [{ id: "p", name: "x", dirs: ["/w/app-x"] }] }, "/w/app-x", true)).toEqual({ projects: [], ungrouped: [] });
 		expect(dissolveProject(o, "p").projects).toEqual([]);
+	});
+});
+
+describe("tabLead", () => {
+	test("manual project uses folder icon and short folder name even when the folder is a git repo on main", () => {
+		const r = repo("/home/u/w/backend/billing", "/home/u/w/backend/billing", "main");
+		expect(tabLead("/home/u/w/backend/billing", { manual: true, repo: r, home: "/home/u" })).toEqual({
+			icon: "folder",
+			label: "backend/billing",
+			title: "~/w/backend/billing",
+		});
+		const sub = repo("/home/u/w/frontend", "/home/u/w/frontend", "main");
+		expect(tabLead("/home/u/w/frontend/billing", { manual: true, repo: sub, home: "/home/u" })).toEqual({
+			icon: "folder",
+			label: "frontend/billing",
+			title: "~/w/frontend/billing",
+		});
+	});
+	test("manual project respects custom folder names and ignores empty/null custom names", () => {
+		expect(tabLead("/home/u/w/api", { manual: true, customName: "프록시", home: "/home/u" })).toEqual({
+			icon: "folder",
+			label: "프록시",
+			title: "프록시 · ~/w/api",
+		});
+		expect(tabLead("/home/u/w/api", { manual: true, customName: "", repo: null, home: "/home/u" })).toEqual({
+			icon: "folder",
+			label: "w/api",
+			title: "~/w/api",
+		});
+		expect(tabLead("/w/api", { manual: true })).toEqual({
+			icon: "folder",
+			label: "w/api",
+			title: "/w/api",
+		});
+	});
+	test("git project uses fork icon and branch name, with subfolder and detached HEAD handling", () => {
+		expect(tabLead("/w/app-x", { manual: false, repo: repo("/w/app", "/w/app-x", "feat/x") })).toEqual({
+			icon: "fork",
+			label: "feat/x",
+			title: "feat/x",
+		});
+		expect(tabLead("/w/app/client/src", { manual: false, repo: repo("/w/app", "/w/app", "main") })).toEqual({
+			icon: "fork",
+			label: "client/src",
+			title: "client/src (main)",
+		});
+		expect(tabLead("/w/app-x", { manual: false, repo: repo("/w/app", "/w/app-x", null) })).toEqual({
+			icon: "fork",
+			label: "app-x",
+			title: "app-x",
+		});
+		expect(tabLead("/w/app-x", { manual: false, customName: "백엔드", repo: repo("/w/app", "/w/app-x", "feat/x") })).toEqual({
+			icon: "fork",
+			label: "백엔드",
+			title: "백엔드",
+		});
+	});
+	test("git project falls back to folder icon and short name when repo info is absent", () => {
+		expect(tabLead("/w/notes", { manual: false, repo: null })).toEqual({
+			icon: "folder",
+			label: "w/notes",
+			title: "w/notes",
+		});
 	});
 });

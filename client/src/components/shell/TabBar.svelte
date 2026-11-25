@@ -27,8 +27,7 @@
 	import { formatCombo } from "../../lib/keys";
 	import { slidingIndicator } from "../../lib/sliding-indicator";
 	import { tabPanes, type Tab } from "../../lib/nav";
-	import { branchLabel } from "../../lib/projects";
-	import { shortName } from "../../lib/sidebar-model";
+	import { isManualRoot, tabLead, type TabLead } from "../../lib/projects";
 	import { app } from "../../lib/store.svelte";
 
 	/**
@@ -44,17 +43,22 @@
 	const ids = $derived(tabs.map((x) => x.id));
 	/** The folder a tab (or a pane of one of its groups) is listed in */
 	const dirOf = (id: string) => dirs.find((d) => d.tabs.some((x) => x.id === id || tabPanes(x).includes(id)))?.path ?? null;
-	/** Where a folder's run starts, with the name it goes by: its branch inside a git project, else its short name */
+	/** Where a folder's run starts, with the name it goes by: its branch inside a git project, else its folder label */
 	const leads = $derived.by(() => {
-		const out: Record<string, string> = {};
+		const out: Record<string, TabLead> = {};
 		const sid = app.serverId;
 		if (!multi || !sid) return out;
+		const manual = !!app.tabProject && app.tabProject.serverId === sid && isManualRoot(app.tabProject.root);
 		const repos = app.links[sid]?.repos ?? {};
 		for (const d of dirs) {
 			const first = d.tabs[0];
 			if (!first) continue;
-			const repo = repos[d.path];
-			out[first.id] = app.sidebar.dirName(sid, d.path) ?? (repo ? branchLabel(d.path, repo).name : shortName(d.path, app.workspace?.home));
+			out[first.id] = tabLead(d.path, {
+				manual,
+				customName: app.sidebar.dirName(sid, d.path),
+				repo: repos[d.path],
+				home: app.workspace?.home,
+			});
 		}
 		return out;
 	});
@@ -315,7 +319,8 @@
 			{#each tabs as x (x.id)}
 				{@const on = x.id === activeTab}
 				{@const st = stateOf(x)}
-				{#if leads[x.id]}<span class="lead mono" title={leads[x.id]}><Icon name="fork" /><span class="ln">{leads[x.id]}</span></span>{/if}
+				{@const lead = leads[x.id]}
+				{#if lead}<span class="lead mono" title={lead.title}><Icon name={lead.icon} /><span class="ln">{lead.label}</span></span>{/if}
 				<!-- a group is a tray of its sessions' chips, laid out inline with the other tabs (its name is in the page
 				     header's "group › session" and the sidebar) -->
 				{#if x.kind === "group"}
