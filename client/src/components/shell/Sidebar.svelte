@@ -1,7 +1,7 @@
 <script lang="ts">
 	import ExtensionMount from "../extensions/ExtensionMount.svelte";
 	import ExtensionPanels from "../extensions/ExtensionPanels.svelte";
-	import { untrack } from "svelte";
+	import { tick, untrack } from "svelte";
 	import { schedule, unschedule } from "../../lib/frame";
 	import { ms } from "../../lib/motion";
 	import Pin from "../ui/Pin.svelte";
@@ -47,6 +47,11 @@
 	function closeDrawer() {
 		app.sidebar.open = false;
 		document.querySelector<HTMLElement>("[data-part=header] .menu")?.focus({ preventScroll: true });
+	}
+	/** Desktop fold button: hand keyboard focus to the collapsed rail's expand button so it doesn't fall to body. */
+	function foldSidebar(e: MouseEvent) {
+		app.sidebar.toggleCollapsed();
+		if (e.detail === 0) void tick().then(() => document.querySelector<HTMLElement>("[data-part=rail] .tools .iconbtn")?.focus({ preventScroll: true }));
 	}
 	/**
 	 * The drawer just opened (phone): focus moves into it, to the open row if there is one, else its close button, so a
@@ -526,9 +531,11 @@
 	<div class="brandrow" data-logo-frame>
 		<PipayaMark tone="color" size={26} />
 		<Wordmark size={16} />
-		<!-- on a phone, closes the drawer (it has no edge resize handle; desktop folds by dragging or clicking the edge) -->
+		<!-- folds the sidebar into the rail; on a phone it closes the drawer instead (it had no visible way out but the scrim) -->
 		{#if viewport.narrow}
 			<IconButton icon="x" label={t("사이드바 닫기")} title={t("사이드바 닫기") + hint} class="foldbtn" onclick={closeDrawer} />
+		{:else}
+			<IconButton icon="sidebar" label={t("사이드바 접기")} title={t("사이드바 접기") + hint} class="foldbtn" onclick={foldSidebar} />
 		{/if}
 	</div>
 	<ExtensionMount slot="sidebar.top" />

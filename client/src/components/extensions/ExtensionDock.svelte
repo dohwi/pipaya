@@ -1,8 +1,10 @@
 <script lang="ts">
+	import { tick } from "svelte";
 	import { manifestName } from "../../lib/extensions/translations";
 	import IconButton from "../ui/IconButton.svelte";
 	import Segmented from "../ui/Segmented.svelte";
 	import { t } from "../../lib/i18n";
+	import { formatCombo } from "../../lib/keys";
 	import { extensions, type ExtensionPanel } from "../../lib/extensions/host.svelte";
 	import { app } from "../../lib/store.svelte";
 	import { viewport } from "../../lib/viewport.svelte";
@@ -12,10 +14,12 @@
 
 	/**
 	 * `side` panels: a dock at the right of the conversation area, one tab per shown panel. On desktop it shares the
-	 * left sidebar's edge-drag collapse/expand model (no close button; dragging past the edge snaps it into a slim edge
-	 * handle and pulling it back snaps it open). On a narrow screen it takes the whole stage with a close button.
+	 * left sidebar's edge-drag collapse/expand model alongside a header collapse button (dragging past the edge or
+	 * clicking the collapse button snaps it into a slim edge handle and pulling it back snaps it open). On a narrow
+	 * screen it takes the whole stage with a close button.
 	 */
 	const DOCK_MIN_W = 200;
+	const dockHint = $derived(app.prefs.bindings.toggleDock ? ` (${formatCombo(app.prefs.bindings.toggleDock)})` : "");
 	const key = (p: ExtensionPanel) => `${p.owner}:${p.id}`;
 	const ownerName = (owner: string) => ((m) => (m ? manifestName(m) : owner))(extensions.installed.find((e) => e.package.manifest.id === owner)?.package.manifest);
 	const shown = $derived(extensions.panels.filter((p) => p.placement === "side" && p.open && extensions.installed.some((e) => e.package.manifest.id === p.owner && e.state === "active")));
@@ -66,6 +70,11 @@
 		},
 	);
 
+	let edgeEl = $state<HTMLElement>();
+	function foldDock(e: MouseEvent) {
+		app.sidebar.setDockCollapsed(true);
+		if (e.detail === 0) void tick().then(() => edgeEl?.focus({ preventScroll: true }));
+	}
 	function hide(p: ExtensionPanel) {
 		try { extensions.setPanelOpen(p.owner, p.id, false); } catch { /* gone */ }
 	}
@@ -86,6 +95,7 @@
 			<!-- A window splitter (WAI-ARIA): stays mounted when collapsed so pulling or clicking the right edge unfolds the dock. -->
 			<!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
 			<div
+				bind:this={edgeEl}
 				class="edge"
 				role="separator"
 				aria-orientation="vertical"
@@ -102,13 +112,15 @@
 			></div>
 		{/if}
 		<div class="dock-content" inert={collapsed}>
-			<header class:with-close={viewport.narrow}>
+			<header>
 				<div class="tabs">
 					<Segmented tabs variant="underline" full={false} label={t("확장 패널")} value={key(current)} onchange={(id) => (picked = id)}
 						options={shown.map((p) => ({ id: key(p), label: p.title, title: ownerName(p.owner) }))} />
 				</div>
 				{#if viewport.narrow}
 					<IconButton icon="x" label={t("확장 패널 닫기")} onclick={() => hide(current)} />
+				{:else}
+					<IconButton icon="sidebar" class="flip-x" label={t("확장 패널 접기")} title={t("확장 패널 접기") + dockHint} onclick={foldDock} />
 				{/if}
 			</header>
 			<div class="bodywrap vfade">
@@ -147,12 +159,13 @@
 		.edge:hover::after { opacity: 0.6; }
 		.edge:hover::before { background: var(--accent); opacity: 0.9; }
 	}
-	/* the header's hairline runs under the close button too */
-	header { flex: none; display: flex; align-items: center; gap: 4px; padding: 0; box-sizing: content-box; min-height: 44px; border-bottom: 1px solid var(--border); /* the app header's box (44px + 1px hairline), so the lines meet across the dock edge */ }
-	header.with-close { padding-right: 12px; }
+	/* the header's hairline runs under the action button too */
+	header { flex: none; display: flex; align-items: center; gap: 4px; padding: 0 12px 0 0; box-sizing: content-box; min-height: 44px; border-bottom: 1px solid var(--border); /* the app header's box (44px + 1px hairline), so the lines meet across the dock edge */ }
 	/* the 19px glyph of the 38px button lands on the body's 12px right edge: 12 - 9.5 bleed */
 	header :global(.iconbtn:last-child) { margin-right: -9.5px; }
 	header :global(.iconbtn:last-child:focus-visible) { outline-offset: -2px; }
+	/* Mirror the sidebar glyph so its panel divider faces right */
+	header :global(.iconbtn.flip-x svg) { transform: scaleX(-1); }
 	.tabs { flex: 1; min-width: 0; }
 	/* the tabs fill the 44px header, and the header's own border is the hairline: the tabs' inset one would draw a second, 1px above it */
 	.tabs :global(.utabs) { box-shadow: none; }

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { tick } from "svelte";
 	import { splitFilePath } from "../../lib/files";
 	import { t } from "../../lib/i18n";
 	import { formatCombo } from "../../lib/keys";
@@ -39,6 +40,14 @@
 	function expandToChanges() {
 		workspaceViewer.filter = "changed";
 		app.filesOpen = true;
+	}
+
+	/** Desktop toggle buttons: hand keyboard focus to the counterpart rail/header toggle so it doesn't fall to body. */
+	function setFilesOpen(next: boolean, e: MouseEvent) {
+		app.filesOpen = next;
+		if (e.detail === 0) {
+			void tick().then(() => drawerEl?.querySelector<HTMLElement>(next ? ".hact .flip-x" : ".rtools .iconbtn")?.focus({ preventScroll: true }));
+		}
 	}
 
 	// Resizable desktop sidebar width (200..420px).
@@ -265,10 +274,13 @@
 		></div>
 	{/if}
 
-	<!-- Collapsed desktop rail (56px, mirrors left Rail.svelte): compact changed-files/+/- summary + quick-jump file icons -->
+	<!-- Collapsed desktop rail (56px, mirrors left Rail.svelte): expand button + compact changed-files/+/- summary + quick-jump file icons -->
 	<div class="frail" data-part="workspace-rail" inert={open || viewport.narrow}>
 		<div class="rtop">
-			<IconButton icon="folder" label={t("파일 뷰어 펼치기")} title={t("파일 뷰어 펼치기") + shortcutHint} onclick={() => (app.filesOpen = true)} />
+			<IconButton icon="folder" tabindex={-1} label={t("파일 뷰어 펼치기")} title={t("파일 뷰어 펼치기") + shortcutHint} onclick={(e) => setFilesOpen(true, e)} />
+		</div>
+		<div class="rtools">
+			<IconButton icon="sidebar" size="sm" class="flip-x" label={t("파일 뷰어 펼치기")} title={t("파일 뷰어 펼치기") + shortcutHint} onclick={(e) => setFilesOpen(true, e)} />
 		</div>
 		<div class="rbody">
 			{#if workspaceViewer.changes.length > 0}
@@ -331,6 +343,8 @@
 			<IconButton icon="retry" label={t("새로고침")} onclick={() => workspaceViewer.refreshTree({ preserveOpenDirs: true })} />
 			{#if viewport.narrow}
 				<IconButton icon="x" label={t("파일 뷰어 닫기")} title={t("파일 뷰어 닫기") + shortcutHint} onclick={() => (app.filesOpen = false)} />
+			{:else}
+				<IconButton icon="sidebar" class="flip-x" label={t("파일 뷰어 접기")} title={t("파일 뷰어 접기") + shortcutHint} onclick={(e) => setFilesOpen(false, e)} />
 			{/if}
 		</div>
 	</header>
@@ -574,7 +588,11 @@
 	.grip:focus-visible {
 		outline: none;
 	}
-	/* Collapsed desktop right rail (56px, exact vertical rhythm with left Rail.svelte & Header) */
+	/* Mirror the sidebar glyph so its panel divider faces right */
+	.ftree :global(.iconbtn.flip-x svg) {
+		transform: scaleX(-1);
+	}
+	/* Collapsed desktop right rail (56px, exact vertical rhythm with left Rail.svelte, Header & TabBar) */
 	.rtop {
 		display: grid;
 		place-items: center;
@@ -584,11 +602,22 @@
 		height: 44px;
 		border-bottom: 1px solid var(--border);
 	}
-	.rtop :global(.iconbtn:focus-visible) {
+	.rtop :global(.iconbtn:focus-visible),
+	.rtools :global(.iconbtn:focus-visible) {
 		outline-offset: -2px;
 	}
+	.rtools {
+		display: grid;
+		place-items: center;
+		flex: none;
+		width: 100%;
+		box-sizing: content-box;
+		height: 37px; /* + 1px hairline = TabBar 38px, matching left Rail .tools */
+		border-bottom: 1px solid var(--border);
+	}
 	@media (min-width: 601px) {
-		:global(:root:has(main > [data-part="tabbar"])) .rtop {
+		:global(:root:has(main > [data-part="tabbar"])) .rtop,
+		:global(:root:has(main > [data-part="tabbar"])) .rtools {
 			border-bottom-color: var(--tabbar-line);
 		}
 	}
