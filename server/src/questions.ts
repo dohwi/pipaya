@@ -171,14 +171,20 @@ export class QuestionManager {
 		const { request } = entry;
 
 		if (request.items?.length) {
-			const answers = a.answers?.map((x) => (x === null ? null : x.trim()));
-			if (!answers || answers.length !== request.items.length) return "invalid";
+			if (!Array.isArray(a.answers) || a.answers.length !== request.items.length) return "invalid";
+			const answers: (string | null)[] = [];
+			for (const x of a.answers) {
+				if (x === null) answers.push(null);
+				else if (typeof x === "string") answers.push(x.trim());
+				else return "invalid";
+			}
 			if (!request.items.every((item, i) => valid(item, answers[i]!))) return "invalid";
 			const text = request.items.map((item, i) => `${i + 1}. ${item.question}\n→ ${shown(item, answers[i]!, true)}`).join("\n\n");
 			entry.resolve({ status: "answered", answer: text }, "user");
 			return "ok";
 		}
 
+		if (a.answer !== null && a.answer !== undefined && typeof a.answer !== "string") return "invalid";
 		const answer = a.answer === null ? null : (a.answer ?? "").trim();
 		if (!valid(request, answer)) return "invalid";
 		entry.resolve({ status: "answered", answer: shown(request, answer, false) }, "user");

@@ -57,6 +57,13 @@ describe("cdTarget", () => {
 		expect(cdTarget("cd $WT", "/w/app", "/h")).toBeNull();
 		expect(cdTarget("cd - && ls", "/w/app", "/h")).toBeNull();
 		expect(cdTarget("echo cd ../x", "/w/app", "/h")).toBeNull();
+		expect(cdTarget('echo "foo; cd ../app-x"', "/w/app", "/h")).toBeNull();
+		expect(cdTarget("echo 'foo | cd ../app-x'", "/w/app", "/h")).toBeNull();
+	});
+	test("handles quoted directory names containing semicolons, pipes, or spaces", () => {
+		expect(cdTarget('cd "my;dir" && ls', "/w/app", "/h")).toBe("/w/app/my;dir");
+		expect(cdTarget("cd 'my dir' && pwd", "/w/app", "/h")).toBe("/w/app/my dir");
+		expect(cdTarget('cd "a|b" && echo ok', "/w/app", "/h")).toBe("/w/app/a|b");
 	});
 });
 

@@ -17,6 +17,7 @@ describe("workKind", () => {
 		expect(workKind("write")).toBe("edit");
 		expect(workKind("edit")).toBe("edit");
 		expect(workKind("grep")).toBe("search");
+		expect(workKind("glob")).toBe("search");
 		expect(workKind("ls")).toBe("search");
 		expect(workKind("delegate")).toBe("delegate");
 		expect(workKind("generate_image")).toBe("image");

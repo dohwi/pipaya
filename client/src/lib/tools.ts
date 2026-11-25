@@ -6,7 +6,7 @@ export const toolArgStr = (v: unknown): string => (typeof v === "string" ? v : v
 const str = toolArgStr;
 
 /** What a tool call really is. A `read` of a SKILL.md is a skill being loaded gets its own look. */
-export type ToolKind = "read" | "write" | "edit" | "ls" | "grep" | "bash" | "skill" | "think" | "image" | "peer" | "other";
+export type ToolKind = "read" | "write" | "edit" | "ls" | "grep" | "glob" | "bash" | "skill" | "think" | "image" | "peer" | "other";
 
 /** `read` of …/<name>/SKILL.md → the skill's name, else null. */
 export function skillOf(name: string, args: Record<string, unknown>): string | null {
@@ -26,6 +26,7 @@ const LOOK: Record<ToolKind, { icon: ToolIcon }> = {
 	read: { icon: "file" },
 	ls: { icon: "folder" },
 	grep: { icon: "search" },
+	glob: { icon: "search" },
 	write: { icon: "pencil" },
 	edit: { icon: "pencil" },
 	bash: { icon: "terminal" },
@@ -127,13 +128,17 @@ export function toolSummary(name: string, args: Record<string, unknown>): string
 		case IMAGE_TOOL:
 			return clip(str(args.prompt), 90);
 		case "grep":
+		case "glob":
 			return `${str(args.pattern)}${args.path ? `  in ${str(args.path)}` : ""}`;
 		case "ls":
 			return str(args.path) || ".";
 		case "read":
 		case "write":
-		case "edit":
 			return str(args.path);
+		case "edit": {
+			const n = Array.isArray(args.edits) ? args.edits.length : 0;
+			return n > 1 ? `${str(args.path)} (${n})` : str(args.path);
+		}
 		case "delegate":
 			return clip(`${str(args.role)}: ${firstLine(str(args.task))}`, 90);
 		case "peer": {

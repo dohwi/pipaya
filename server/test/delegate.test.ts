@@ -298,7 +298,7 @@ describe("delegate tool", () => {
 			expect(reqs[0].tools.map((t: any) => t.function.name)).toEqual(["read"]);
 			expect(reqs[1].tools ?? []).toEqual([]);
 			expect(reqs[1].messages.some((m: any) => m.role === "system" && textOf(m.content).includes("final model call"))).toBe(true);
-			expect(result.content[0].text).toContain("Report based on evidence: verified fixture evidence");
+			expect(result.content[0].text).toMatch(/Report based on evidence:\s+1│verified fixture evidence/);
 			expect(result.content[0].text).toContain("may be incomplete");
 			expect(result.details).toMatchObject({ turns: 2, limited: true, limit: "maxTurns", usage: { input: 8 } });
 		} finally { await put(30); }
@@ -378,7 +378,7 @@ describe("delegate tool", () => {
 		const requests = budgetRequests(variant);
 		expect(requests).toHaveLength(2);
 		expect(requests[1].tools ?? []).toEqual([]);
-		expect(result.content[0].text).toContain("Report based on evidence: verified fixture evidence");
+		expect(result.content[0].text).toMatch(/Report based on evidence:\s+1│verified fixture evidence/);
 		expect(result.content[0].text).toContain("time limit was nearly reached");
 		expect(result.details).toMatchObject({ turns: 2, limited: true, limit: "deadline" });
 	}, 8_000);

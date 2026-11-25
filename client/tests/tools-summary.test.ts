@@ -29,8 +29,16 @@ describe("tool icons", () => {
 		expect(toolIcon("bash")).toBe("terminal");
 		expect(toolIcon("read", { path: "a.ts" })).toBe("file");
 		expect(toolIcon("read", { path: "skills/x/SKILL.md" })).toBe("skill");
+		expect(toolIcon("glob")).toBe("search");
 		expect(toolIcon("peer")).toBe("chat");
 		expect(toolIcon("some_mcp_tool")).toBe("bolt");
+	});
+
+	test("formats glob and multi-edit summaries cleanly", () => {
+		expect(toolSummary("glob", { pattern: "**/*.ts" })).toBe("**/*.ts");
+		expect(toolSummary("glob", { pattern: "*.svelte", path: "src" })).toBe("*.svelte  in src");
+		expect(toolSummary("edit", { path: "a.ts", oldText: "1", newText: "2" })).toBe("a.ts");
+		expect(toolSummary("edit", { path: "a.ts", edits: [{ oldText: "1", newText: "2" }, { oldText: "3", newText: "4" }] })).toBe("a.ts (2)");
 	});
 });
 

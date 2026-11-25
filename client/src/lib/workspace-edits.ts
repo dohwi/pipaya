@@ -208,10 +208,23 @@ export function deriveLatestTurnEdits(
 				}
 
 				if (block.name === "edit") {
-					const oldText = typeof block.args.oldText === "string" ? block.args.oldText : "";
-					const newText = typeof block.args.newText === "string" ? block.args.newText : "";
-					if (oldText || newText) {
-						const built = buildEditHunk(oldText, newText, contentFor?.(path));
+					const pairs: { oldText: string; newText: string }[] = Array.isArray(block.args.edits)
+						? block.args.edits
+								.filter((e): e is Record<string, unknown> => !!e && typeof e === "object")
+								.map((e) => ({
+									oldText: typeof e.oldText === "string" ? e.oldText : "",
+									newText: typeof e.newText === "string" ? e.newText : "",
+								}))
+						: [
+								{
+									oldText: typeof block.args.oldText === "string" ? block.args.oldText : "",
+									newText: typeof block.args.newText === "string" ? block.args.newText : "",
+								},
+							];
+					const fileContent = contentFor?.(path);
+					for (const pair of pairs) {
+						if (!pair.oldText && !pair.newText) continue;
+						const built = buildEditHunk(pair.oldText, pair.newText, fileContent);
 						change.additions += built.additions;
 						change.deletions += built.deletions;
 						diff.additions += built.additions;
