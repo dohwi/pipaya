@@ -124,6 +124,7 @@ export function toolLabel(name: string): string {
 		case "edit": return t("파일 일부 수정 (edit)");
 		case "ls": return t("폴더 목록 (ls)");
 		case "grep": return t("내용 검색 (grep)");
+		case "glob": return t("파일 경로 검색 (glob)");
 		case "bash": return t("셸 명령 실행 (bash)");
 		case "ask_user": return t("사용자에게 질문하고 답을 기다림 (ask_user)");
 		case "peer": return t("다른 대화와 소통·관리: 메시지·읽기·목록·생성·중지·답변·그룹 (peer)");

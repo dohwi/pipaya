@@ -11,12 +11,89 @@ import { homedir } from "node:os";
 import { dirname, isAbsolute, resolve } from "node:path";
 import { repoOf, worktreesOf } from "./git-info.ts";
 
-const unquote = (s: string) => s.replace(/^(['"])(.*)\1$/, "$2");
-
 const absolute = (p: string, base: string, home: string) => {
 	const path = p === "~" ? home : p.startsWith("~/") ? resolve(home, p.slice(2)) : p;
 	return isAbsolute(path) ? resolve(path) : resolve(base, path);
 };
+
+/** Quote- and subshell-aware splitter for top-level command separators (`&&`, `||`, `;`, `\n`, `|`). */
+function splitShellCommands(command: string): string[] {
+	const out: string[] = [];
+	let start = 0;
+	let quote: "'" | '"' | null = null;
+	let parenDepth = 0;
+	for (let i = 0; i < command.length; i++) {
+		const ch = command[i]!;
+		if (quote === "'") {
+			if (ch === "'") quote = null;
+			continue;
+		}
+		if (quote === '"') {
+			if (ch === "\\" && i + 1 < command.length) { i++; continue; }
+			if (ch === '"') quote = null;
+			continue;
+		}
+		if (ch === "\\" && i + 1 < command.length) { i++; continue; }
+		if (ch === "'" || ch === '"') { quote = ch; continue; }
+		if (ch === "(") { parenDepth++; continue; }
+		if (ch === ")") { if (parenDepth > 0) parenDepth--; continue; }
+		if (parenDepth > 0) continue;
+
+		if (ch === ";" || ch === "\n") {
+			out.push(command.slice(start, i));
+			start = i + 1;
+		} else if ((ch === "&" && command[i + 1] === "&") || (ch === "|" && command[i + 1] === "|")) {
+			out.push(command.slice(start, i));
+			i++;
+			start = i + 1;
+		} else if (ch === "|") {
+			out.push(command.slice(start, i));
+			start = i + 1;
+		}
+	}
+	out.push(command.slice(start));
+	return out;
+}
+
+/** Quote-aware shell word tokenizer returning `{ value, singleQuoted }`. */
+function tokenizeWords(raw: string): { value: string; singleQuoted: boolean }[] {
+	const words: { value: string; singleQuoted: boolean }[] = [];
+	let cur = "";
+	let hasWord = false;
+	let singleQuoted = true;
+	let quote: "'" | '"' | null = null;
+	for (let i = 0; i < raw.length; i++) {
+		const ch = raw[i]!;
+		if (quote === "'") {
+			if (ch === "'") quote = null;
+			else cur += ch;
+			continue;
+		}
+		if (quote === '"') {
+			if (ch === "\\" && i + 1 < raw.length) { cur += raw[++i]!; continue; }
+			if (ch === '"') quote = null;
+			else cur += ch;
+			continue;
+		}
+		if (/\s/.test(ch)) {
+			if (hasWord) {
+				words.push({ value: cur, singleQuoted });
+				cur = "";
+				hasWord = false;
+				singleQuoted = true;
+			}
+			continue;
+		}
+		hasWord = true;
+		if (ch === "'") { quote = "'"; continue; }
+		if (ch === '"') { quote = '"'; singleQuoted = false; continue; }
+		singleQuoted = false;
+		if (ch === "\\" && i + 1 < raw.length) { cur += raw[++i]!; continue; }
+		cur += ch;
+	}
+	if (hasWord) words.push({ value: cur, singleQuoted });
+	return words;
+}
 
 /**
  * The folder a shell command ends up in after its `cd`s, each resolved against the one before (a bash call starts in
@@ -26,11 +103,12 @@ const absolute = (p: string, base: string, home: string) => {
 export function cdTarget(command: string, cwd: string, home = homedir()): string | null {
 	let dir = cwd;
 	let moved = false;
-	for (const raw of command.split(/&&|\|\||[;\n|]/)) {
-		const words = raw.trim().split(/\s+/).filter(Boolean);
-		if ((words[0] !== "cd" && words[0] !== "pushd") || words.length > 2) continue;
-		const arg = unquote(words[1] ?? "~");
-		if (arg === "-" || arg.includes("$") || arg.includes("`")) return null;
+	for (const raw of splitShellCommands(command)) {
+		const words = tokenizeWords(raw);
+		if (!words.length || (words[0]!.value !== "cd" && words[0]!.value !== "pushd") || words.length > 2) continue;
+		const argWord = words[1];
+		const arg = argWord ? argWord.value : "~";
+		if (arg === "-" || (!argWord?.singleQuoted && (arg.includes("$") || arg.includes("`")))) return null;
 		dir = absolute(arg, dir, home);
 		moved = true;
 	}

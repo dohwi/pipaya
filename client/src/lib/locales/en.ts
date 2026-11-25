@@ -891,6 +891,7 @@ export const en: Record<string, string> = {
 	"파일 일부 수정 (edit)": "Edit parts of files (edit)",
 	"폴더 목록 (ls)": "List folders (ls)",
 	"내용 검색 (grep)": "Search contents (grep)",
+	"파일 경로 검색 (glob)": "Find files by pattern (glob)",
 	"셸 명령 실행 (bash)": "Run shell commands (bash)",
 	"단축키": "Shortcuts",
 	"단축키 검색": "Search shortcuts",

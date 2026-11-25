@@ -73,6 +73,16 @@
 		return str(args.command ?? "");
 	});
 
+	const editItems = $derived.by(() => {
+		if (name !== "edit") return [];
+		if (Array.isArray(args.edits)) {
+			return args.edits
+				.filter((e): e is Record<string, unknown> => !!e && typeof e === "object")
+				.map((e) => ({ oldText: str(e.oldText), newText: str(e.newText) }));
+		}
+		return [{ oldText: str(args.oldText), newText: str(args.newText) }];
+	});
+
 	/** For `peer` calls, link straight to the session or group it acted on when still open (falls back to old name on rename). */
 	const peerResolved = $derived.by(() => {
 		if (name !== "peer") return null;
@@ -180,9 +190,13 @@
 				</div>
 			{/if}
 			{#if name === "edit"}
-				<div class="diff mono">
-					<div class="del">{str(args.oldText)}</div>
-					<div class="add">{str(args.newText)}</div>
+				<div class="diffs">
+					{#each editItems as item}
+						<div class="diff mono">
+							<div class="del">{item.oldText}</div>
+							<div class="add">{item.newText}</div>
+						</div>
+					{/each}
 				</div>
 			{:else if name === "bash"}
 				<pre class="mono cmd"><span class="prompt">$</span> {str(args.command)}</pre>
@@ -440,6 +454,11 @@
 	.cmd .prompt {
 		color: var(--text-faint);
 		user-select: none;
+	}
+	.diffs {
+		display: flex;
+		flex-direction: column;
+		gap: 8px;
 	}
 	.diff {
 		border-radius: var(--radius-sm);

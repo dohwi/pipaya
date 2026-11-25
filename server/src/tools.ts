@@ -1,7 +1,8 @@
 import type { AgentTool, AgentToolResult } from "@earendil-works/pi-agent-core";
+import { randomUUID } from "node:crypto";
 import { realpathSync } from "node:fs";
-import { mkdir, open, readdir, readFile, stat, writeFile } from "node:fs/promises";
-import { dirname, isAbsolute, relative, resolve, sep } from "node:path";
+import { chmod, mkdir, open, readdir, readFile, rename, stat, unlink, writeFile } from "node:fs/promises";
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import Type, { type TSchema } from "typebox";
 import { formatBytes, isUnsupportedPicture, MAX_IMAGE_BYTES, sniffImage } from "./image-file.ts";
 import { DEFAULT_LIMITS, exifOrientation, type ResizeLimits } from "./image-resize-core.ts";
@@ -12,11 +13,28 @@ import { goalTool, type GoalOps } from "./goal-tool.ts";
 import { scheduleTool, type ScheduleOps } from "./schedule-tool.ts";
 import { LEFT_TO_AGENT } from "./questions.ts";
 import { THINKING_LEVELS, type ThinkingLevel } from "./shared/thinking.ts";
+import { formatSpilledOutput, spillText, truncateHeadBytes, truncateTailBytes } from "./spill.ts";
+
+export { truncateHeadBytes, truncateTailBytes };
 
 const MAX_OUTPUT_BYTES = 50 * 1024;
 const MAX_READ_LINES = 2000;
+const MAX_READ_FILE_BYTES = 20 * 1024 * 1024;
+const BINARY_SNIFF_BYTES = 8 * 1024;
+const MAX_LS_ENTRIES = 500;
+const MAX_GREP_LINES = 200;
+const MAX_GREP_LINE_CHARS = 300;
+const MAX_GLOB_DEFAULT = 200;
+const MAX_GLOB_LIMIT = 500;
+const MAX_CAPTURE_BYTES = 10 * 1024 * 1024;
 const DEFAULT_BASH_TIMEOUT_S = 120;
+const KILL_TERM_GRACE_MS = 500;
 const KILL_GRACE_MS = 2000;
+
+export interface ReadTrackEntry {
+	mtimeMs: number;
+	size: number;
+}
 
 export interface ToolDef {
 	name: string;
@@ -29,6 +47,12 @@ export interface ToolDef {
 export interface ToolContext {
 	/** The session the tool runs in (extension tools use it to reach their per-session storage). */
 	sessionId?: string;
+	/** Dynamic working directory resolver so `workdir move` takes effect immediately for every tool call. */
+	getCwd?: () => string;
+	/** Tracks `{ mtimeMs, size }` per canonical file path read/written in this session for `edit` staleness checks. */
+	readTracker?: Map<string, ReadTrackEntry>;
+	/** Directory where oversized tool output (`bash`, `grep`) may be spilled to disk. */
+	spillDir?: string;
 	/** Whether the model that will see tool results can take pictures; asked at call time because the model can change mid-session. Missing = assume yes (the provider layer drops pictures a model cannot take). */
 	canSeeImages?(): boolean;
 	/** The model's own picture size limits, when its catalog entry has any; they replace the defaults. */
@@ -88,11 +112,11 @@ const text = (t: string, details: Record<string, unknown> = {}): AgentToolResult
 	details,
 });
 
-/** Keep the tail of long output (the end of a log is usually what matters). */
+/** Keep the tail of long output (UTF-8 safe). */
 function truncateTail(s: string, max = MAX_OUTPUT_BYTES): { text: string; truncated: boolean } {
-	const buf = Buffer.from(s);
-	if (buf.length <= max) return { text: s, truncated: false };
-	return { text: `[output truncated, showing last ${max} bytes]\n${buf.subarray(buf.length - max).toString()}`, truncated: true };
+	const res = truncateTailBytes(s, max);
+	if (!res.truncated) return res;
+	return { text: `[output truncated, showing last ${max} bytes]\n${res.text}`, truncated: true };
 }
 
 const escapes = (root: string, target: string) => {
@@ -113,6 +137,15 @@ function realWithTail(abs: string): string {
 	}
 }
 
+/** Canonical path key for readTracker and per-path locking. */
+function canonicalPath(file: string): string {
+	try {
+		return realpathSync(file);
+	} catch {
+		return resolve(file);
+	}
+}
+
 /** Whether `target` is `root` or lies inside it, judged by real location so a symlink cannot lead out. */
 export function isInside(root: string, target: string): boolean {
 	return !escapes(root, target) && !escapes(realWithTail(root), realWithTail(target));
@@ -128,18 +161,93 @@ export function safePath(cwd: string, p: string): string {
 	return isAbsolute(p) ? resolve(p) : resolve(cwd, p);
 }
 
-/** Like safePath, but additionally allows reading inside the given directories. */
-export function safeReadPath(cwd: string, p: string, roots: string[] = []): string {
+/** Like safePath; kept as a distinct helper for read-root callers. */
+export function safeReadPath(cwd: string, p: string, _roots: string[] = []): string {
+	return safePath(cwd, p);
+}
+
+/** Per-path async mutex: serializes concurrent writes/edits to the same file while keeping different files parallel. */
+const pathLocks = new Map<string, Promise<void>>();
+
+export async function withPathLock<T>(key: string, fn: () => Promise<T>): Promise<T> {
+	const prev = pathLocks.get(key) ?? Promise.resolve();
+	let release!: () => void;
+	const next = new Promise<void>((r) => { release = r; });
+	const tail = prev.then(() => next);
+	pathLocks.set(key, tail);
+	await prev;
 	try {
-		return safePath(cwd, p);
-	} catch (e) {
-		const abs = isAbsolute(p) ? resolve(p) : resolve(cwd, p);
-		// Check both the literal path and its real (symlink-resolved) location, so a link placed inside a
-		// skill folder cannot lead the read tool out of it.
-		const realAbs = realWithTail(abs);
-		for (const root of roots) {
-			if (!escapes(root, abs) && !escapes(realWithTail(root), realAbs)) return abs;
+		return await fn();
+	} finally {
+		release();
+		if (pathLocks.get(key) === tail) pathLocks.delete(key);
+	}
+}
+
+/** Per-session async UI mutex for `ask_user`, abort-aware while waiting for the previous prompt. */
+const askLocks = new Map<string, Promise<void>>();
+
+async function withAskLock<T>(sessionKey: string, signal: AbortSignal | undefined, fn: () => Promise<T>): Promise<T> {
+	if (signal?.aborted) throw new Error("Run aborted while waiting for the user");
+	const prev = askLocks.get(sessionKey) ?? Promise.resolve();
+	let release!: () => void;
+	const next = new Promise<void>((r) => { release = r; });
+	const tail = prev.then(() => next);
+	askLocks.set(sessionKey, tail);
+
+	try {
+		if (signal) {
+			await new Promise<void>((res, rej) => {
+				if (signal.aborted) {
+					rej(new Error("Run aborted while waiting for the user"));
+					return;
+				}
+				const onAbort = () => rej(new Error("Run aborted while waiting for the user"));
+				signal.addEventListener("abort", onAbort, { once: true });
+				prev.then(() => {
+					signal.removeEventListener("abort", onAbort);
+					res();
+				});
+			});
+		} else {
+			await prev;
 		}
+		if (signal?.aborted) throw new Error("Run aborted while waiting for the user");
+		return await fn();
+	} finally {
+		release();
+		if (askLocks.get(sessionKey) === tail) askLocks.delete(sessionKey);
+	}
+}
+
+/** Atomic write via sibling temp file + rename, preserving existing file mode; falls back on EXDEV/EPERM. */
+async function atomicWriteFile(file: string, content: string): Promise<void> {
+	let mode: number | undefined;
+	try {
+		mode = (await stat(file)).mode & 0o777;
+	} catch {}
+
+	const tmp = join(dirname(file), `.${basename(file)}.pipaya-tmp-${randomUUID().slice(0, 8)}`);
+	try {
+		await writeFile(tmp, content, mode !== undefined ? { encoding: "utf8", mode } : "utf8");
+		if (mode !== undefined) {
+			try {
+				await chmod(tmp, mode);
+			} catch {}
+		}
+		try {
+			await rename(tmp, file);
+		} catch (e) {
+			const code = (e as NodeJS.ErrnoException).code;
+			if (code === "EXDEV" || code === "EPERM" || code === "EACCES") {
+				await unlink(tmp).catch(() => {});
+				await writeFile(file, content, "utf8");
+			} else {
+				throw e;
+			}
+		}
+	} catch (e) {
+		await unlink(tmp).catch(() => {});
 		throw e;
 	}
 }
@@ -180,9 +288,69 @@ interface ProcResult {
 	aborted: boolean;
 }
 
+interface SplitProcResult {
+	stdout: string;
+	stderr: string;
+	exitCode: number | null;
+	timedOut: boolean;
+	aborted: boolean;
+}
+
+/** Send SIGTERM to process group on POSIX, poll up to 500ms, then escalate to SIGKILL. */
+function terminateProcess(proc: ReturnType<typeof Bun.spawn>, grouped: boolean, exited: () => boolean): void {
+	if (!grouped) {
+		// No process groups on Windows: taskkill /T takes the whole tree down.
+		try {
+			Bun.spawn(["taskkill", "/T", "/F", "/PID", String(proc.pid)], { stdout: "ignore", stderr: "ignore", stdin: "ignore" });
+		} catch (e) {
+			process.stderr.write(`taskkill failed for ${proc.pid}: ${(e as Error).message}\n`);
+		}
+		try { proc.kill("SIGKILL"); } catch {}
+		return;
+	}
+
+	const groupAlive = () => {
+		try {
+			process.kill(-proc.pid, 0);
+			return true;
+		} catch (e) {
+			return (e as NodeJS.ErrnoException).code !== "ESRCH";
+		}
+	};
+
+	try {
+		process.kill(-proc.pid, "SIGTERM");
+	} catch (e) {
+		if ((e as NodeJS.ErrnoException).code !== "ESRCH") {
+			process.stderr.write(`could not SIGTERM process group ${proc.pid}: ${(e as Error).message}\n`);
+		}
+		return;
+	}
+
+	const deadline = Date.now() + KILL_TERM_GRACE_MS;
+	const poll = setInterval(() => {
+		if (!groupAlive() || (exited() && !groupAlive())) {
+			clearInterval(poll);
+			return;
+		}
+		if (Date.now() >= deadline) {
+			clearInterval(poll);
+			try {
+				process.kill(-proc.pid, "SIGKILL");
+			} catch (e) {
+				if ((e as NodeJS.ErrnoException).code !== "ESRCH") {
+					process.stderr.write(`could not kill process group ${proc.pid}: ${(e as Error).message}\n`);
+				}
+			}
+			try { proc.kill("SIGKILL"); } catch {}
+		}
+	}, 50);
+	poll.unref?.();
+}
+
 async function runProcess(
 	cmd: string[],
-	opts: { cwd: string; timeoutMs: number; signal?: AbortSignal; onChunk?: (tail: string) => void },
+	opts: { cwd: string; timeoutMs: number; signal?: AbortSignal; maxCaptureBytes?: number; onChunk?: (tail: string) => void },
 ): Promise<ProcResult> {
 	// POSIX: run in its own session (Bun calls setsid(); the pid stays the group id) so a kill reaches grandchildren too, not just
 	// the shell. This needs no `setsid` binary, which macOS does not ship.
@@ -191,17 +359,12 @@ async function runProcess(
 	let timedOut = false;
 	let aborted = false;
 	let killedAt = 0;
+	let hasExited = false;
+	const maxCap = opts.maxCaptureBytes ?? MAX_OUTPUT_BYTES * 2;
 	const kill = () => {
-		killedAt ||= Date.now();
-		if (grouped) {
-			try { process.kill(-proc.pid, "SIGKILL"); } catch (e) { if ((e as NodeJS.ErrnoException).code !== "ESRCH") process.stderr.write(`could not kill process group ${proc.pid}: ${(e as Error).message}` + "\n"); }
-		} else {
-			// No process groups on Windows: taskkill /T takes the whole tree down.
-			try { Bun.spawn(["taskkill", "/T", "/F", "/PID", String(proc.pid)], { stdout: "ignore", stderr: "ignore", stdin: "ignore" }); } catch (e) { process.stderr.write(`taskkill failed for ${proc.pid}: ${(e as Error).message}` + "\n"); }
-		}
-		try {
-			proc.kill("SIGKILL");
-		} catch {} // already gone
+		if (killedAt) return;
+		killedAt = Date.now();
+		terminateProcess(proc, grouped, () => hasExited);
 	};
 	const timer = setTimeout(() => {
 		timedOut = true;
@@ -220,17 +383,22 @@ async function runProcess(
 		const decoder = new TextDecoder();
 		for await (const chunk of stream) {
 			output += decoder.decode(chunk, { stream: true });
-			// Bound memory: keep ~2x the cap while running.
-			if (output.length > MAX_OUTPUT_BYTES * 2) output = output.slice(-MAX_OUTPUT_BYTES * 2);
+			// Bound memory: keep ~maxCap while running.
+			if (output.length > maxCap) output = output.slice(-maxCap);
 			const now = Date.now();
 			if (opts.onChunk && now - lastEmit > 150) {
 				lastEmit = now;
 				opts.onChunk(truncateTail(output).text);
 			}
 		}
+		output += decoder.decode();
 	};
 	try {
-		const drained = Promise.all([pump(proc.stdout), pump(proc.stderr)]).then(() => proc.exited);
+		const drained = Promise.all([pump(proc.stdout), pump(proc.stderr)]).then(async () => {
+			const code = await proc.exited;
+			hasExited = true;
+			return code;
+		});
 		// After a kill, never wait on the pipes for long: a leaked descendant could hold them open forever.
 		const gaveUp = new Promise<null>((res) => {
 			const poll = setInterval(() => {
@@ -240,6 +408,68 @@ async function runProcess(
 		});
 		const exitCode = await Promise.race([drained, gaveUp]);
 		return { output, exitCode: exitCode ?? -1, timedOut, aborted };
+	} finally {
+		clearTimeout(timer);
+		opts.signal?.removeEventListener("abort", onAbort);
+	}
+}
+
+/** Run a subprocess keeping stdout and stderr strictly separated, capturing from the head up to `maxCaptureBytes`. */
+async function runProcessSplit(
+	cmd: string[],
+	opts: { cwd: string; timeoutMs: number; signal?: AbortSignal; maxCaptureBytes?: number },
+): Promise<SplitProcResult> {
+	const grouped = process.platform !== "win32";
+	const proc = Bun.spawn(cmd, { cwd: opts.cwd, stdout: "pipe", stderr: "pipe", stdin: "ignore", env: childEnv(), detached: grouped });
+	let timedOut = false;
+	let aborted = false;
+	let killedAt = 0;
+	let hasExited = false;
+	const maxCap = opts.maxCaptureBytes ?? MAX_CAPTURE_BYTES;
+	const kill = () => {
+		if (killedAt) return;
+		killedAt = Date.now();
+		terminateProcess(proc, grouped, () => hasExited);
+	};
+	const timer = setTimeout(() => {
+		timedOut = true;
+		kill();
+	}, opts.timeoutMs);
+	const onAbort = () => {
+		aborted = true;
+		kill();
+	};
+	if (opts.signal?.aborted) onAbort();
+	opts.signal?.addEventListener("abort", onAbort, { once: true });
+
+	const pumpHead = async (stream: ReadableStream<Uint8Array>, cap: number): Promise<string> => {
+		const decoder = new TextDecoder();
+		let acc = "";
+		for await (const chunk of stream) {
+			if (acc.length < cap) {
+				const decoded = decoder.decode(chunk, { stream: true });
+				const remaining = cap - acc.length;
+				acc += decoded.length > remaining ? decoded.slice(0, remaining) : decoded;
+			}
+		}
+		if (acc.length < cap) acc += decoder.decode();
+		return acc;
+	};
+	try {
+		const drained = Promise.all([pumpHead(proc.stdout, maxCap), pumpHead(proc.stderr, MAX_OUTPUT_BYTES)]).then(async ([stdout, stderr]) => {
+			const code = await proc.exited;
+			hasExited = true;
+			return { stdout, stderr, code };
+		});
+		const gaveUp = new Promise<null>((res) => {
+			const poll = setInterval(() => {
+				if (killedAt && Date.now() - killedAt > KILL_GRACE_MS) { clearInterval(poll); res(null); }
+			}, 100);
+			void drained.finally(() => clearInterval(poll));
+		});
+		const result = await Promise.race([drained, gaveUp]);
+		if (!result) return { stdout: "", stderr: "", exitCode: -1, timedOut, aborted };
+		return { stdout: result.stdout, stderr: result.stderr, exitCode: result.code, timedOut, aborted };
 	} finally {
 		clearTimeout(timer);
 		opts.signal?.removeEventListener("abort", onAbort);
@@ -303,7 +533,7 @@ function picture(shown: string, label: string, data: string, mimeType: string, d
 	return { content: [{ type: "text", text: `Read image ${shown} (${label}).` }, { type: "image", data, mimeType }], details };
 }
 
-const READ_DESCRIPTION = "Read a text file, or look at an image (PNG, JPEG, GIF, WebP; large ones are shrunk to fit the model). Text output is capped at 2000 lines / 50KB; use offset and limit to page through.";
+const READ_DESCRIPTION = "Read a text file, or look at an image (PNG, JPEG, GIF, WebP; large ones are shrunk to fit the model). Text output includes line numbers and is capped at 2000 lines / 50KB; use offset and limit to page through.";
 
 /** Providers reject a picture bigger than this on one side. */
 const MAX_IMAGE_EDGE = 8000;
@@ -311,10 +541,16 @@ const MAX_IMAGE_EDGE = 8000;
 const MAX_IMAGE_FILE_BYTES = 100 * 1024 * 1024;
 const MAX_IMAGE_PIXELS = 100_000_000;
 
+function formatNumberedLine(lineNum: number, line: string, width: number): string {
+	return `${String(lineNum).padStart(width, " ")}│${line.replace(/\r$/, "")}`;
+}
+
 const readTool: ToolDef = {
 	name: "read",
 	description: READ_DESCRIPTION,
 	create(cwd, readRoots = [], ctx = {}) {
+		const tracker = ctx.readTracker ?? new Map<string, ReadTrackEntry>();
+		const curCwd = () => ctx.getCwd?.() ?? cwd;
 		return defineTool({
 			name: "read",
 			label: "Read file",
@@ -325,16 +561,80 @@ const readTool: ToolDef = {
 				limit: Type.Optional(Type.Integer({ minimum: 1, description: "Maximum number of lines" })),
 			}),
 			async execute(_id, params, signal) {
-				const file = safeReadPath(cwd, params.path, readRoots);
+				const file = safeReadPath(curCwd(), params.path, readRoots);
 				const image = await readPicture(file, params.path, ctx, signal);
 				if (image) return image;
-				const lines = (await readFile(file, "utf8")).split("\n");
+
+				const info = await stat(file);
+				if (!info.isFile()) throw new Error(`${params.path} is not a regular file`);
+				if (info.size > MAX_READ_FILE_BYTES) {
+					throw new Error(`${params.path} is ${formatBytes(info.size)}, exceeding the 20 MB read limit. Use bash or grep to inspect specific parts.`);
+				}
+
+				if (info.size > 0) {
+					const fh = await open(file, "r");
+					try {
+						const probe = Buffer.alloc(Math.min(info.size, BINARY_SNIFF_BYTES));
+						const { bytesRead } = await fh.read(probe, 0, probe.length, 0);
+						if (probe.subarray(0, bytesRead).includes(0)) {
+							return text(`${params.path} appears to be a binary file (${formatBytes(info.size)}); cannot display as text.`, {
+								path: params.path,
+								binary: true,
+								bytes: info.size,
+							});
+						}
+					} finally {
+						await fh.close();
+					}
+				}
+
+				const raw = await readFile(file, "utf8");
+				tracker.set(canonicalPath(file), { mtimeMs: info.mtimeMs, size: info.size });
+
+				const lines = raw.split("\n");
 				const start = (params.offset ?? 1) - 1;
-				const end = Math.min(lines.length, start + Math.min(params.limit ?? MAX_READ_LINES, MAX_READ_LINES));
-				const slice = lines.slice(start, end).join("\n");
-				const { text: body } = truncateTail(slice);
-				const more = end < lines.length ? `\n[${lines.length - end} more lines; continue with offset=${end + 1}]` : "";
-				return text(body + more, { path: params.path, totalLines: lines.length, from: start + 1, to: end });
+				if (start >= lines.length) {
+					return text(`(file has ${lines.length} lines; offset ${start + 1} is past EOF)`, {
+						path: params.path,
+						totalLines: lines.length,
+						from: start + 1,
+						to: lines.length,
+					});
+				}
+				const maxEnd = Math.min(lines.length, start + Math.min(params.limit ?? MAX_READ_LINES, MAX_READ_LINES));
+				const width = Math.max(4, String(maxEnd).length);
+
+				const outLines: string[] = [];
+				let usedBytes = 0;
+				let shownEnd = start;
+				let byteTruncated = false;
+
+				for (let i = start; i < maxEnd; i++) {
+					const formatted = formatNumberedLine(i + 1, lines[i]!, width);
+					const lineBytes = Buffer.byteLength(formatted, "utf8") + (outLines.length > 0 ? 1 : 0);
+					if (usedBytes + lineBytes > MAX_OUTPUT_BYTES) {
+						if (outLines.length === 0) {
+							const clipped = truncateHeadBytes(formatted, MAX_OUTPUT_BYTES).text;
+							outLines.push(`${clipped}… [line truncated]`);
+							shownEnd = i + 1;
+						}
+						byteTruncated = true;
+						break;
+					}
+					outLines.push(formatted);
+					usedBytes += lineBytes;
+					shownEnd = i + 1;
+				}
+
+				const body = outLines.join("\n");
+				const more = shownEnd < lines.length ? `\n[${lines.length - shownEnd} more lines; continue with offset=${shownEnd + 1}]` : "";
+				return text(body + more, {
+					path: params.path,
+					totalLines: lines.length,
+					from: start + 1,
+					to: shownEnd,
+					...(byteTruncated ? { truncated: true } : {}),
+				});
 			},
 		});
 	},
@@ -343,7 +643,9 @@ const readTool: ToolDef = {
 const writeTool: ToolDef = {
 	name: "write",
 	description: "Create or overwrite a file. Parent directories are created automatically.",
-	create(cwd) {
+	create(cwd, _roots, ctx = {}) {
+		const tracker = ctx.readTracker ?? new Map<string, ReadTrackEntry>();
+		const curCwd = () => ctx.getCwd?.() ?? cwd;
 		return defineTool({
 			name: "write",
 			label: "Write file",
@@ -353,41 +655,362 @@ const writeTool: ToolDef = {
 				content: Type.String(),
 			}),
 			async execute(_id, params) {
-				const file = safePath(cwd, params.path);
-				await mkdir(dirname(file), { recursive: true });
-				await writeFile(file, params.content);
-				return text(`Wrote ${Buffer.byteLength(params.content)} bytes to ${params.path}`, {
-					path: params.path,
-					bytes: Buffer.byteLength(params.content),
+				const file = safePath(curCwd(), params.path);
+				return withPathLock(realWithTail(file), async () => {
+					await mkdir(dirname(file), { recursive: true });
+					await atomicWriteFile(file, params.content);
+					const info = await stat(file);
+					tracker.set(canonicalPath(file), { mtimeMs: info.mtimeMs, size: info.size });
+					const bytes = Buffer.byteLength(params.content, "utf8");
+					return text(`Wrote ${bytes} bytes to ${params.path}`, {
+						path: params.path,
+						bytes,
+					});
 				});
 			},
 		});
 	},
 };
 
+const READ_LINE_PREFIX_RE = /^\s*\d+[│→\t]/;
+
+function stripReadPrefixes(s: string): string {
+	return s.split("\n").map((l) => l.replace(READ_LINE_PREFIX_RE, "")).join("\n");
+}
+
+function hasReadPrefixes(s: string): boolean {
+	return s.split("\n").some((l) => READ_LINE_PREFIX_RE.test(l));
+}
+
+function allNonEmptyHaveReadPrefixes(s: string): boolean {
+	const nonEmpty = s.split("\n").filter((l) => l.trim().length > 0);
+	return nonEmpty.length > 0 && nonEmpty.every((l) => READ_LINE_PREFIX_RE.test(l));
+}
+
+function lineNumberAt(s: string, index: number): number {
+	let line = 1;
+	for (let i = 0; i < index && i < s.length; i++) {
+		if (s.charCodeAt(i) === 10) line++;
+	}
+	return line;
+}
+
+function findAllOccurrences(haystack: string, needle: string): number[] {
+	const out: number[] = [];
+	if (!needle) return out;
+	let pos = 0;
+	while (true) {
+		const idx = haystack.indexOf(needle, pos);
+		if (idx === -1) break;
+		out.push(idx);
+		pos = idx + needle.length;
+	}
+	return out;
+}
+
+function buildLfMap(raw: string): { lf: string; rawIndex: number[] } {
+	let lf = "";
+	const rawIndex: number[] = [];
+	for (let i = 0; i < raw.length; i++) {
+		if (raw.charCodeAt(i) === 13 && raw.charCodeAt(i + 1) === 10) continue;
+		lf += raw[i]!;
+		rawIndex.push(i);
+	}
+	rawIndex.push(raw.length);
+	return { lf, rawIndex };
+}
+
+function leadingWs(line: string): string {
+	const m = /^[ \t]*/.exec(line);
+	return m ? m[0] : "";
+}
+
+function closestCandidateHint(content: string, needle: string): string {
+	const fileLines = content.replace(/\r\n/g, "\n").split("\n");
+	const needleLines = needle.replace(/\r\n/g, "\n").split("\n").map((l) => l.trim()).filter(Boolean);
+	if (fileLines.length === 0 || needleLines.length === 0) return "";
+
+	const needleSet = new Set(needleLines);
+	const needleTokens = new Set(needleLines.join(" ").split(/\W+/).filter((w) => w.length >= 2));
+	const winSize = Math.min(Math.max(1, needleLines.length), fileLines.length);
+
+	// Pick candidate start positions: scan all lines for small files, or anchor on best-matching lines for large files.
+	const starts: number[] = [];
+	if (fileLines.length <= 2000) {
+		for (let i = 0; i <= fileLines.length - winSize; i++) starts.push(i);
+	} else {
+		const anchorScores: { idx: number; score: number }[] = [];
+		for (let i = 0; i < fileLines.length; i++) {
+			const trimmed = fileLines[i]!.trim();
+			if (!trimmed) continue;
+			let s = needleSet.has(trimmed) ? 3 : 0;
+			if (!s && needleTokens.size > 0) {
+				for (const tok of trimmed.split(/\W+/)) {
+					if (tok.length >= 2 && needleTokens.has(tok)) s += 0.5;
+				}
+			}
+			if (s > 0) anchorScores.push({ idx: i, score: s });
+		}
+		anchorScores.sort((a, b) => b.score - a.score);
+		const seen = new Set<number>();
+		for (const a of anchorScores.slice(0, 60)) {
+			const st = Math.max(0, Math.min(fileLines.length - winSize, a.idx - Math.floor(winSize / 2)));
+			if (!seen.has(st)) { seen.add(st); starts.push(st); }
+		}
+	}
+
+	let bestStart = -1;
+	let bestScore = 0;
+	for (const st of starts) {
+		let score = 0;
+		for (let k = 0; k < winSize; k++) {
+			const trimmed = fileLines[st + k]!.trim();
+			if (!trimmed) continue;
+			if (needleSet.has(trimmed)) {
+				score += 2;
+			} else if (needleTokens.size > 0) {
+				let tokHits = 0;
+				const words = trimmed.split(/\W+/).filter((w) => w.length >= 2);
+				for (const w of words) if (needleTokens.has(w)) tokHits++;
+				if (words.length > 0) score += tokHits / words.length;
+			}
+		}
+		const normalized = score / (needleLines.length * 2);
+		if (normalized > bestScore) {
+			bestScore = normalized;
+			bestStart = st;
+		}
+	}
+
+	if (bestStart === -1 || bestScore < 0.2) return "";
+	const snippetStart = Math.max(0, bestStart - 1);
+	const snippetEnd = Math.min(fileLines.length, bestStart + Math.min(winSize, 8) + 1);
+	const width = Math.max(4, String(snippetEnd).length);
+	const snippet = fileLines.slice(snippetStart, snippetEnd).map((l, idx) => formatNumberedLine(snippetStart + idx + 1, l, width)).join("\n");
+	return `\nClosest candidate (lines ${snippetStart + 1}-${snippetEnd}):\n${snippet}`;
+}
+
+interface SingleEditResult {
+	next: string;
+	matchLines: number[];
+	count: number;
+}
+
+function applyOneEdit(content: string, oldText: string, newText: string, replaceAll: boolean, label?: string): SingleEditResult {
+	const prefix = label ? `${label}: ` : "";
+	const eol = content.includes("\r\n") ? "\r\n" : "\n";
+
+	const ambiguousError = (lines: number[]) => {
+		const listed = lines.slice(0, 20).join(", ") + (lines.length > 20 ? `, ... (${lines.length} total)` : "");
+		return new Error(`${prefix}oldText matches ${lines.length} times (lines ${listed}); include more surrounding context or pass replaceAll: true`);
+	};
+
+	// Stage 1: exact match
+	const exact = findAllOccurrences(content, oldText);
+	if (exact.length > 0) {
+		const lines = exact.map((i) => lineNumberAt(content, i));
+		if (exact.length > 1 && !replaceAll) throw ambiguousError(lines);
+		const parts: string[] = [];
+		let cursor = 0;
+		for (const idx of exact) {
+			parts.push(content.slice(cursor, idx), newText);
+			cursor = idx + oldText.length;
+		}
+		parts.push(content.slice(cursor));
+		return { next: parts.join(""), matchLines: lines, count: exact.length };
+	}
+
+	// Stage 2: strip accidental `read` line-number prefixes
+	const strippedOld = hasReadPrefixes(oldText) ? stripReadPrefixes(oldText) : oldText;
+	const strippedNew = strippedOld !== oldText && allNonEmptyHaveReadPrefixes(newText) ? stripReadPrefixes(newText) : newText;
+	if (strippedOld !== oldText && strippedOld.length > 0) {
+		const sMatches = findAllOccurrences(content, strippedOld);
+		if (sMatches.length > 0) {
+			const lines = sMatches.map((i) => lineNumberAt(content, i));
+			if (sMatches.length > 1 && !replaceAll) throw ambiguousError(lines);
+			const parts: string[] = [];
+			let cursor = 0;
+			for (const idx of sMatches) {
+				parts.push(content.slice(cursor, idx), strippedNew);
+				cursor = idx + strippedOld.length;
+			}
+			parts.push(content.slice(cursor));
+			return { next: parts.join(""), matchLines: lines, count: sMatches.length };
+		}
+	}
+
+	// Stage 3: CRLF/LF normalized match (preserving original line endings)
+	const { lf: normContent, rawIndex } = buildLfMap(content);
+	const normCandidates: { o: string; n: string }[] = [{ o: oldText.replace(/\r\n/g, "\n"), n: newText.replace(/\r\n/g, "\n") }];
+	if (strippedOld !== oldText && strippedOld.length > 0) {
+		normCandidates.push({ o: strippedOld.replace(/\r\n/g, "\n"), n: strippedNew.replace(/\r\n/g, "\n") });
+	}
+	for (const cand of normCandidates) {
+		const lfMatches = findAllOccurrences(normContent, cand.o);
+		if (lfMatches.length > 0) {
+			const lines = lfMatches.map((i) => lineNumberAt(normContent, i));
+			if (lfMatches.length > 1 && !replaceAll) throw ambiguousError(lines);
+			const adaptedNew = eol === "\r\n" ? cand.n.replace(/\n/g, "\r\n") : cand.n;
+			const parts: string[] = [];
+			let cursor = 0;
+			for (const lfIdx of lfMatches) {
+				const rawStart = rawIndex[lfIdx]!;
+				const rawEnd = rawIndex[lfIdx + cand.o.length - 1]! + 1;
+				parts.push(content.slice(cursor, rawStart), adaptedNew);
+				cursor = rawEnd;
+			}
+			parts.push(content.slice(cursor));
+			return { next: parts.join(""), matchLines: lines, count: lfMatches.length };
+		}
+	}
+
+	// Stage 4: whitespace/indent-insensitive line-block match (ONLY if unique, preserving original base indent delta)
+	const effectiveOld = (strippedOld !== oldText && strippedOld.length > 0 ? strippedOld : oldText).replace(/\r\n/g, "\n");
+	const effectiveNew = (strippedOld !== oldText && strippedOld.length > 0 ? strippedNew : newText).replace(/\r\n/g, "\n");
+	const oldLines = effectiveOld.split("\n");
+	if (oldLines.some((l) => l.trim().length > 0)) {
+		const rawLines = normContent.split("\n");
+		const winLen = oldLines.length;
+		const blockMatches: number[] = [];
+		for (let i = 0; i <= rawLines.length - winLen; i++) {
+			let ok = true;
+			for (let k = 0; k < winLen; k++) {
+				if (rawLines[i + k]!.trim() !== oldLines[k]!.trim()) {
+					ok = false;
+					break;
+				}
+			}
+			if (ok) blockMatches.push(i);
+		}
+		if (blockMatches.length > 1) {
+			throw ambiguousError(blockMatches.map((i) => i + 1));
+		}
+		if (blockMatches.length === 1) {
+			const startLine = blockMatches[0]!;
+			const firstNonEmpty = oldLines.findIndex((l) => l.trim().length > 0);
+			const fileIndent = leadingWs(rawLines[startLine + firstNonEmpty]!);
+			const oldIndent = leadingWs(oldLines[firstNonEmpty]!);
+			const newLines = effectiveNew.split("\n").map((line) => {
+				if (line.trim().length === 0) return "";
+				if (oldIndent && line.startsWith(oldIndent)) {
+					return fileIndent + line.slice(oldIndent.length);
+				}
+				const ws = leadingWs(line);
+				const strip = Math.min(oldIndent.length, ws.length);
+				return fileIndent + line.slice(strip);
+			});
+			const replaced = [...rawLines.slice(0, startLine), ...newLines, ...rawLines.slice(startLine + winLen)].join(eol);
+			return { next: replaced, matchLines: [startLine + 1], count: 1 };
+		}
+	}
+
+	const hint = closestCandidateHint(content, effectiveOld);
+	throw new Error(`${prefix}oldText was not found in the file${hint}`);
+}
+
+function buildEditSnippet(content: string, matchLines: number[]): string {
+	const lines = content.replace(/\r\n/g, "\n").split("\n");
+	if (lines.length === 0 || matchLines.length === 0) return "";
+	// Merge ±3-line ranges around edited locations (up to 3 regions).
+	const ranges: [number, number][] = [];
+	for (const ln of matchLines.slice(0, 3)) {
+		const start = Math.max(1, ln - 3);
+		const end = Math.min(lines.length, ln + 3);
+		const prev = ranges.at(-1);
+		if (prev && start <= prev[1] + 1) {
+			prev[1] = Math.max(prev[1], end);
+		} else {
+			ranges.push([start, end]);
+		}
+	}
+	const maxLine = Math.max(...ranges.map(([, e]) => e));
+	const width = Math.max(4, String(maxLine).length);
+	return ranges
+		.map(([s, e]) => lines.slice(s - 1, e).map((l, idx) => formatNumberedLine(s + idx, l, width)).join("\n"))
+		.join("\n...\n");
+}
+
+const EDIT_DESCRIPTION = "Replace text in a file. Pass oldText + newText for a single edit (with optional replaceAll), or edits[] for multiple atomic all-or-nothing edits.";
+
 const editTool: ToolDef = {
 	name: "edit",
-	description: "Replace one exact, unique occurrence of oldText with newText in a file.",
-	create(cwd) {
+	description: EDIT_DESCRIPTION,
+	create(cwd, _roots, ctx = {}) {
+		const tracker = ctx.readTracker ?? new Map<string, ReadTrackEntry>();
+		const curCwd = () => ctx.getCwd?.() ?? cwd;
 		return defineTool({
 			name: "edit",
 			label: "Edit file",
-			description: "Replace one exact, unique occurrence of oldText with newText in a file.",
+			description: EDIT_DESCRIPTION,
 			parameters: Type.Object({
-				path: Type.String(),
-				oldText: Type.String({ minLength: 1, description: "Exact text to find; must occur exactly once" }),
-				newText: Type.String(),
+				path: Type.String({ description: "File path, relative to the working directory" }),
+				oldText: Type.Optional(Type.String({ minLength: 1, description: "Text to find; must occur once unless replaceAll is true" })),
+				newText: Type.Optional(Type.String({ description: "Replacement text" })),
+				replaceAll: Type.Optional(Type.Boolean({ description: "Replace all occurrences of oldText" })),
+				edits: Type.Optional(
+					Type.Array(
+						Type.Object({
+							oldText: Type.String({ minLength: 1 }),
+							newText: Type.String(),
+							replaceAll: Type.Optional(Type.Boolean()),
+						}),
+						{ minItems: 1, description: "Multiple edits applied atomically (all-or-nothing) in order" },
+					),
+				),
 			}),
 			async execute(_id, params) {
-				const file = safePath(cwd, params.path);
-				const original = await readFile(file, "utf8");
-				const first = original.indexOf(params.oldText);
-				if (first === -1) throw new Error("oldText was not found in the file");
-				if (original.indexOf(params.oldText, first + 1) !== -1) {
-					throw new Error("oldText matches more than once; include more surrounding context");
+				const hasSingle = params.oldText !== undefined || params.newText !== undefined;
+				const hasBatch = params.edits !== undefined;
+				if (hasSingle && hasBatch) {
+					throw new Error("provide either oldText/newText or edits, not both");
 				}
-				await writeFile(file, original.slice(0, first) + params.newText + original.slice(first + params.oldText.length));
-				return text(`Edited ${params.path}`, { path: params.path, oldText: params.oldText, newText: params.newText });
+				if (hasBatch) {
+					if (!params.edits?.length) throw new Error("edits must be a non-empty array");
+				} else if (params.oldText === undefined || params.newText === undefined) {
+					throw new Error("edit requires oldText and newText, or edits");
+				}
+
+				const file = safePath(curCwd(), params.path);
+				return withPathLock(realWithTail(file), async () => {
+					const key = canonicalPath(file);
+					const info = await stat(file);
+					const tracked = tracker.get(key);
+					if (tracked && (tracked.mtimeMs !== info.mtimeMs || tracked.size !== info.size)) {
+						throw new Error(`${params.path} has been modified on disk since it was last read; re-read it with read before editing`);
+					}
+
+					const original = await readFile(file, "utf8");
+					let cur = original;
+					const allMatchLines: number[] = [];
+					let totalReplacements = 0;
+
+					if (params.edits) {
+						for (let i = 0; i < params.edits.length; i++) {
+							const e = params.edits[i]!;
+							const res = applyOneEdit(cur, e.oldText, e.newText, !!e.replaceAll, `edits[${i}]`);
+							cur = res.next;
+							allMatchLines.push(...res.matchLines);
+							totalReplacements += res.count;
+						}
+					} else {
+						const res = applyOneEdit(cur, params.oldText!, params.newText!, !!params.replaceAll);
+						cur = res.next;
+						allMatchLines.push(...res.matchLines);
+						totalReplacements += res.count;
+					}
+
+					await atomicWriteFile(file, cur);
+					const nextInfo = await stat(file);
+					tracker.set(canonicalPath(file), { mtimeMs: nextInfo.mtimeMs, size: nextInfo.size });
+
+					const snippet = buildEditSnippet(cur, allMatchLines);
+					const header = totalReplacements > 1 ? `Edited ${params.path} (${totalReplacements} replacements)` : `Edited ${params.path}`;
+					return text(snippet ? `${header}\n${snippet}` : header, {
+						path: params.path,
+						...(params.edits ? { edits: params.edits.length } : { oldText: params.oldText, newText: params.newText }),
+						replacements: totalReplacements,
+					});
+				});
 			},
 		});
 	},
@@ -396,18 +1019,47 @@ const editTool: ToolDef = {
 const lsTool: ToolDef = {
 	name: "ls",
 	description: "List a directory. Directories end with '/'.",
-	create(cwd) {
+	create(cwd, _roots, ctx = {}) {
+		const curCwd = () => ctx.getCwd?.() ?? cwd;
 		return defineTool({
 			name: "ls",
 			label: "List directory",
 			description: "List a directory. Directories end with '/'.",
 			parameters: Type.Object({ path: Type.Optional(Type.String({ description: "Defaults to the working directory" })) }),
 			async execute(_id, params) {
-				const dir = safePath(cwd, params.path ?? ".");
+				const dir = safePath(curCwd(), params.path ?? ".");
 				const entries = await readdir(dir, { withFileTypes: true });
-				const names = entries.map((e) => (e.isDirectory() ? `${e.name}/` : e.name)).sort();
+				const names = (
+					await Promise.all(
+						entries.map(async (e) => {
+							if (e.isDirectory()) return `${e.name}/`;
+							if (e.isSymbolicLink()) {
+								try {
+									const target = await stat(join(dir, e.name));
+									return target.isDirectory() ? `${e.name}/` : e.name;
+								} catch {
+									return e.name;
+								}
+							}
+							return e.name;
+						}),
+					)
+				).sort();
 				const info = await stat(dir);
-				return text(names.join("\n") || "(empty)", { path: params.path ?? ".", count: names.length, mtime: info.mtimeMs });
+
+				const shown: string[] = [];
+				let usedBytes = 0;
+				const cap = Math.min(names.length, MAX_LS_ENTRIES);
+				for (let i = 0; i < cap; i++) {
+					const name = names[i]!;
+					const bytes = Buffer.byteLength(name, "utf8") + (shown.length > 0 ? 1 : 0);
+					if (usedBytes + bytes > MAX_OUTPUT_BYTES && shown.length > 0) break;
+					shown.push(name);
+					usedBytes += bytes;
+				}
+				const omitted = names.length - shown.length;
+				const body = shown.length ? shown.join("\n") + (omitted > 0 ? `\n[${omitted} more entries omitted]` : "") : "(empty)";
+				return text(body, { path: params.path ?? ".", count: names.length, shown: shown.length, mtime: info.mtimeMs });
 			},
 		});
 	},
@@ -416,7 +1068,8 @@ const lsTool: ToolDef = {
 const grepTool: ToolDef = {
 	name: "grep",
 	description: "Search file contents with a regular expression (ripgrep if available, otherwise grep).",
-	create(cwd) {
+	create(cwd, _roots, ctx = {}) {
+		const curCwd = () => ctx.getCwd?.() ?? cwd;
 		return defineTool({
 			name: "grep",
 			label: "Search files",
@@ -425,20 +1078,201 @@ const grepTool: ToolDef = {
 				pattern: Type.String(),
 				path: Type.Optional(Type.String()),
 				glob: Type.Optional(Type.String({ description: "Only search files matching this glob, e.g. *.ts" })),
+				ignoreCase: Type.Optional(Type.Boolean({ description: "Case-insensitive search (-i)" })),
+				context: Type.Optional(Type.Integer({ minimum: 0, maximum: 10, description: "Lines of context around each match (-C)" })),
+				filesOnly: Type.Optional(Type.Boolean({ description: "Return only matching file paths (-l)" })),
+				fixedStrings: Type.Optional(Type.Boolean({ description: "Treat pattern as a literal string (-F)" })),
 			}),
 			async execute(_id, params, signal) {
-				const target = safePath(cwd, params.path ?? ".");
+				const base = curCwd();
+				const target = safePath(base, params.path ?? ".");
 				const rg = Bun.which("rg");
 				const cmd = rg
-					? [rg, "-n", "--no-heading", "--max-columns", "300", ...(params.glob ? ["-g", params.glob] : []), "-e", params.pattern, target]
-					: ["grep", "-rnIE", ...(params.glob ? [`--include=${params.glob}`] : []), "-e", params.pattern, target];
-				const res = await runProcess(cmd, { cwd, timeoutMs: 30_000, signal });
-				if (res.exitCode === 1 && !res.output) return text("No matches", { matches: 0 });
-				if (res.exitCode !== 0 && res.exitCode !== 1) throw new Error(res.output.trim() || `search failed (${res.exitCode})`);
-				const lines = res.output.split("\n").filter(Boolean);
-				const shown = lines.slice(0, 200).map((l) => l.replace(`${cwd}${sep}`, ""));
-				const extra = lines.length > shown.length ? `\n[${lines.length - shown.length} more matches]` : "";
-				return text(shown.join("\n") + extra, { matches: lines.length });
+					? [
+							rg,
+							...(params.filesOnly ? ["-l"] : ["-n", "--no-heading", "--max-columns", String(MAX_GREP_LINE_CHARS)]),
+							...(params.ignoreCase ? ["-i"] : []),
+							...(params.fixedStrings ? ["-F"] : []),
+							...(params.context && !params.filesOnly ? ["-C", String(params.context)] : []),
+							...(params.glob ? ["-g", params.glob] : []),
+							"-e",
+							params.pattern,
+							target,
+						]
+					: [
+							"grep",
+							...(params.filesOnly ? ["-rlI"] : ["-rnI"]),
+							...(params.fixedStrings ? ["-F"] : ["-E"]),
+							...(params.ignoreCase ? ["-i"] : []),
+							...(params.context && !params.filesOnly ? ["-C", String(params.context)] : []),
+							...(params.glob ? [`--include=${params.glob}`] : []),
+							"-e",
+							params.pattern,
+							target,
+						];
+				const res = await runProcessSplit(cmd, { cwd: base, timeoutMs: 30_000, signal });
+				if (res.aborted) throw new Error("Search aborted");
+				if (res.timedOut) throw new Error("Search timed out after 30s");
+				if (res.exitCode === 1 && !res.stdout.trim()) return text("(no matches)", { matches: 0 });
+				if (res.exitCode !== 0 && res.exitCode !== 1) {
+					throw new Error(res.stderr.trim() || res.stdout.trim() || `search failed (${res.exitCode})`);
+				}
+
+				const prefix = `${base}${sep}`;
+				const rawLines = res.stdout.split("\n").filter(Boolean).map((l) => {
+					const stripped = l.startsWith(prefix) ? l.slice(prefix.length) : l;
+					if (!rg && stripped.length > MAX_GREP_LINE_CHARS) {
+						return `${stripped.slice(0, MAX_GREP_LINE_CHARS)}…`;
+					}
+					return stripped;
+				});
+				if (rawLines.length === 0) return text("(no matches)", { matches: 0 });
+
+				const shown: string[] = [];
+				let usedBytes = 0;
+				const lineCap = Math.min(rawLines.length, MAX_GREP_LINES);
+				for (let i = 0; i < lineCap; i++) {
+					const line = rawLines[i]!;
+					const bytes = Buffer.byteLength(line, "utf8") + (shown.length > 0 ? 1 : 0);
+					if (usedBytes + bytes > MAX_OUTPUT_BYTES) {
+						if (shown.length === 0) {
+							shown.push(truncateHeadBytes(line, MAX_OUTPUT_BYTES).text);
+						}
+						break;
+					}
+					shown.push(line);
+					usedBytes += bytes;
+				}
+
+				const truncated = shown.length < rawLines.length;
+				let extra = "";
+				let spillPath: string | undefined;
+				if (truncated) {
+					if (ctx.spillDir) {
+						const spilled = await spillText(ctx.spillDir, "grep", rawLines.join("\n"));
+						spillPath = spilled.path;
+						extra = `\n[showing first ${shown.length} of ${rawLines.length} matches; full output (${formatBytes(spilled.bytes)}) saved to ${spilled.path} — use read/grep to inspect]`;
+					} else {
+						extra = `\n[${rawLines.length - shown.length} more matches omitted]`;
+					}
+				}
+				return text(shown.join("\n") + extra, {
+					matches: rawLines.length,
+					shown: shown.length,
+					...(truncated ? { truncated: true } : {}),
+					...(spillPath ? { spillPath } : {}),
+				});
+			},
+		});
+	},
+};
+
+const GLOB_SKIP_DIRS = new Set([".git", "node_modules"]);
+
+/** Recursive fallback file walker when `rg` is unavailable. Exported for testing. */
+export async function globFallback(target: string, pattern: string, signal?: AbortSignal): Promise<string[]> {
+	const cleaned = pattern.replace(/^\.\//, "");
+	const matcher = new Bun.Glob(cleaned);
+	const matchBasename = !cleaned.includes("/");
+	const results: string[] = [];
+	const visited = new Set<string>();
+
+	const walk = async (dir: string): Promise<void> => {
+		if (signal?.aborted) throw new Error("Glob aborted");
+		let realDir: string;
+		try {
+			realDir = realpathSync(dir);
+		} catch {
+			return;
+		}
+		if (visited.has(realDir)) return;
+		visited.add(realDir);
+
+		let entries;
+		try {
+			entries = await readdir(dir, { withFileTypes: true });
+		} catch {
+			return;
+		}
+		for (const entry of entries) {
+			if (signal?.aborted) throw new Error("Glob aborted");
+			const full = join(dir, entry.name);
+			let isDir = entry.isDirectory();
+			if (!isDir && entry.isSymbolicLink()) {
+				try { isDir = (await stat(full)).isDirectory(); } catch { continue; }
+			}
+			if (isDir) {
+				if (GLOB_SKIP_DIRS.has(entry.name)) continue;
+				await walk(full);
+			} else {
+				const rel = relative(target, full).replace(/\\/g, "/");
+				if (matcher.match(rel) || (matchBasename && matcher.match(entry.name))) {
+					results.push(full);
+				}
+			}
+		}
+	};
+
+	await walk(target);
+	return results;
+}
+
+const GLOB_DESCRIPTION = "Find files matching a glob pattern (e.g. **/*.ts, src/*.svelte). Respects .gitignore when ripgrep is available.";
+
+const globTool: ToolDef = {
+	name: "glob",
+	description: GLOB_DESCRIPTION,
+	create(cwd, _roots, ctx = {}) {
+		const curCwd = () => ctx.getCwd?.() ?? cwd;
+		return defineTool({
+			name: "glob",
+			label: "Find files",
+			description: GLOB_DESCRIPTION,
+			parameters: Type.Object({
+				pattern: Type.String({ minLength: 1, description: "Glob pattern to match file paths, e.g. **/*.ts" }),
+				path: Type.Optional(Type.String({ description: "Directory to search in (defaults to working directory)" })),
+				limit: Type.Optional(Type.Integer({ minimum: 1, maximum: MAX_GLOB_LIMIT, description: `Maximum number of files to return (default ${MAX_GLOB_DEFAULT}, max ${MAX_GLOB_LIMIT})` })),
+			}),
+			async execute(_id, params, signal) {
+				const base = curCwd();
+				const target = safePath(base, params.path ?? ".");
+				const limit = Math.min(Math.max(1, params.limit ?? MAX_GLOB_DEFAULT), MAX_GLOB_LIMIT);
+				const rg = Bun.which("rg");
+				let absFiles: string[];
+
+				if (rg) {
+					const res = await runProcessSplit([rg, "--files", "-g", params.pattern, target], { cwd: base, timeoutMs: 30_000, signal });
+					if (res.aborted) throw new Error("Glob aborted");
+					if (res.timedOut) throw new Error("Glob timed out after 30s");
+					if (res.exitCode === 1 && !res.stdout.trim()) {
+						return text("(no matches)", { path: params.path ?? ".", count: 0, shown: 0 });
+					}
+					if (res.exitCode !== 0 && res.exitCode !== 1) {
+						throw new Error(res.stderr.trim() || res.stdout.trim() || `glob failed (${res.exitCode})`);
+					}
+					absFiles = res.stdout.split("\n").filter(Boolean).map((l) => (isAbsolute(l) ? l : resolve(base, l)));
+				} else {
+					absFiles = await globFallback(target, params.pattern, signal);
+				}
+
+				const relFiles = absFiles.map((f) => relative(base, f)).sort();
+				if (relFiles.length === 0) {
+					return text("(no matches)", { path: params.path ?? ".", count: 0, shown: 0 });
+				}
+
+				const shown: string[] = [];
+				let usedBytes = 0;
+				const cap = Math.min(relFiles.length, limit);
+				for (let i = 0; i < cap; i++) {
+					const f = relFiles[i]!;
+					const bytes = Buffer.byteLength(f, "utf8") + (shown.length > 0 ? 1 : 0);
+					if (usedBytes + bytes > MAX_OUTPUT_BYTES && shown.length > 0) break;
+					shown.push(f);
+					usedBytes += bytes;
+				}
+				const omitted = relFiles.length - shown.length;
+				const body = shown.join("\n") + (omitted > 0 ? `\n[${omitted} more files omitted]` : "");
+				return text(body, { path: params.path ?? ".", count: relFiles.length, shown: shown.length });
 			},
 		});
 	},
@@ -450,7 +1284,8 @@ const BASH_DESCRIPTION = `Run a shell command in the working directory. Output i
 const bashTool: ToolDef = {
 	name: "bash",
 	description: BASH_DESCRIPTION,
-	create(cwd) {
+	create(cwd, _roots, ctx = {}) {
+		const curCwd = () => ctx.getCwd?.() ?? cwd;
 		return defineTool({
 			name: "bash",
 			label: "Run command",
@@ -462,13 +1297,34 @@ const bashTool: ToolDef = {
 			executionMode: "sequential",
 			async execute(_id, params, signal, onUpdate) {
 				const res = await runProcess(commandArgv(commandShell, params.command), {
-					cwd,
+					cwd: curCwd(),
 					timeoutMs: (params.timeout ?? DEFAULT_BASH_TIMEOUT_S) * 1000,
 					signal,
+					maxCaptureBytes: ctx.spillDir ? MAX_CAPTURE_BYTES : MAX_OUTPUT_BYTES * 2,
 					onChunk: (tail) => onUpdate?.(text(tail, { running: true })),
 				});
-				const { text: out, truncated } = truncateTail(res.output);
-				const details = { command: params.command, exitCode: res.exitCode, timedOut: res.timedOut, truncated };
+
+				let out: string;
+				let truncated = false;
+				let spillPath: string | undefined;
+				if (Buffer.byteLength(res.output, "utf8") > MAX_OUTPUT_BYTES && ctx.spillDir) {
+					const spilled = await spillText(ctx.spillDir, "bash", res.output);
+					out = formatSpilledOutput(res.output, { path: spilled.path, totalBytes: spilled.bytes, totalLines: spilled.lines });
+					truncated = true;
+					spillPath = spilled.path;
+				} else {
+					const t = truncateTail(res.output);
+					out = t.text;
+					truncated = t.truncated;
+				}
+
+				const details = {
+					command: params.command,
+					exitCode: res.exitCode,
+					timedOut: res.timedOut,
+					truncated,
+					...(spillPath ? { spillPath } : {}),
+				};
 				if (res.aborted) throw new Error(`Command aborted\n${out}`);
 				if (res.timedOut) throw new Error(`Command timed out after ${params.timeout ?? DEFAULT_BASH_TIMEOUT_S}s\n${out}`);
 				if (res.exitCode !== 0) {
@@ -528,6 +1384,9 @@ const askUserTool: ToolDef = {
 			}),
 			async execute(id, p, signal) {
 				if (!ctx?.ask) throw new Error("ask_user is not available in this session");
+				if (p.question && p.questions?.length) {
+					throw new Error("ask_user takes either `question` or `questions`, not both");
+				}
 				const rec = (o?: string[], r?: string) => (r && o?.includes(r) ? { recommended: r } : {});
 				const scale = (o?: string[], s?: boolean) => (s && (o?.length ?? 0) >= 2 ? { scale: true } : {});
 				const multiple = (o?: string[], m?: boolean) => (m && (o?.length ?? 0) >= 2 ? { multiple: true } : {});
@@ -537,7 +1396,8 @@ const askUserTool: ToolDef = {
 				const items = p.questions?.map((q) => ({ question: q.question, options: q.options, ...extra(q), allowFreeText: q.allowFreeText ?? true }));
 				if (!items?.length && !p.question) throw new Error("ask_user needs `question` or `questions`");
 				const first = items?.[0] ?? { question: p.question!, options: p.options, ...extra(p), allowFreeText: p.allowFreeText ?? true };
-				const answer = await ctx.ask(id, { ...first, ...(items?.length ? { items } : {}) }, signal);
+				const sessionKey = ctx.sessionId ?? "__default__";
+				const answer = await withAskLock(sessionKey, signal, () => ctx.ask!(id, { ...first, ...(items?.length ? { items } : {}) }, signal));
 				return text(answer, { question: first.question, answer, ...(answer === LEFT_TO_AGENT ? { left: true } : {}) });
 			},
 		});
@@ -717,19 +1577,20 @@ const workdirTool: ToolDef = {
 
 const PEER_DEFS = [peerTool];
 /** Built-in tools the user may switch off in the settings; every other built-in tool is locked on. */
-export const TOGGLEABLE_TOOLS = [askUserTool.name, ...PEER_DEFS.map((t) => t.name), DELEGATE_TOOL, scheduleTool.name, goalTool.name];
+export const TOGGLEABLE_TOOLS = [globTool.name, askUserTool.name, ...PEER_DEFS.map((t) => t.name), DELEGATE_TOOL, scheduleTool.name, goalTool.name];
 /** Tools every session gets whatever list it was created with (the other sessions must always be reachable). */
 export const PEER_TOOLS = PEER_DEFS.map((t) => t.name);
 /** Tools every session gets, locked on: moving between working trees is part of how the session works, not an option. */
 export const ALWAYS_TOOLS = [WORKDIR_TOOL];
 
 export const TOOL_DEFS: Record<string, ToolDef> = Object.fromEntries(
-	[readTool, writeTool, editTool, lsTool, grepTool, bashTool, askUserTool, ...PEER_DEFS, delegateTool, scheduleTool, goalTool, workdirTool].map((t) => [t.name, t]),
+	[readTool, writeTool, editTool, lsTool, grepTool, globTool, bashTool, askUserTool, ...PEER_DEFS, delegateTool, scheduleTool, goalTool, workdirTool].map((t) => [t.name, t]),
 );
 export const DEFAULT_TOOLS = Object.keys(TOOL_DEFS);
 
 
 /** `defs` lets server extensions add or replace tools; the built-in set is the default. */
 export function buildTools(names: string[], cwd: string, readRoots: string[] = [], ctx: ToolContext = {}, defs: Record<string, ToolDef> = TOOL_DEFS): AgentTool<any>[] {
-	return names.flatMap((n) => (defs[n] ? [defs[n].create(cwd, readRoots, ctx)] : []));
+	const effectiveCtx: ToolContext = ctx.readTracker ? ctx : { ...ctx, readTracker: new Map<string, ReadTrackEntry>() };
+	return names.flatMap((n) => (defs[n] ? [defs[n].create(cwd, readRoots, effectiveCtx)] : []));
 }

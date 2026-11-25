@@ -58,6 +58,39 @@ describe("workspace-viewer recent edits", () => {
 		expect(res.diffs.get("src/new.ts")?.additions).toBe(1);
 	});
 
+	it("extracts multiple hunks from edit.edits[] calls", () => {
+		const chat = fakeChat(
+			[
+				{ kind: "user", key: "u1", seq: 1, text: "batch edit", images: [], files: [], ts: 1 },
+				{
+					kind: "assistant",
+					key: "a1",
+					seq: 2,
+					streaming: false,
+					ts: 2,
+					blocks: [
+						{
+							type: "tool",
+							id: "t1",
+							name: "edit",
+							args: {
+								path: "src/app.ts",
+								edits: [
+									{ oldText: "const a = 1;", newText: "const a = 10;" },
+									{ oldText: "const b = 2;", newText: "const b = 20;\nconst c = 30;" },
+								],
+							},
+						},
+					],
+				},
+			],
+			{ t1: { state: "done", output: "" } },
+		);
+		const res = deriveLatestTurnEdits(chat, "/repo");
+		expect(res.changes).toEqual([{ path: "src/app.ts", status: "M", additions: 3, deletions: 2, pending: false }]);
+		expect(res.diffs.get("src/app.ts")?.hunks.length).toBe(2);
+	});
+
 	it("anchors diff hunk line numbers to actual file lines when file content is available", () => {
 		const content = "line1\nline2\nline3\nconst x = 2;\nline5\n";
 		const { hunk, additions, deletions } = buildEditHunk("const x = 1;", "const x = 2;", content);

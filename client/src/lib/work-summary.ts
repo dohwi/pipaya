@@ -16,6 +16,7 @@ export function workKind(name: string, args: Record<string, unknown> = {}): Work
 		case "edit":
 			return "edit";
 		case "grep":
+		case "glob":
 		case "ls":
 			return "search";
 		case "skill":

@@ -2,15 +2,16 @@ import type { Database } from "bun:sqlite";
 import type { AgentTool } from "@earendil-works/pi-agent-core";
 import type { Api, ImageContent, ImageModel, ImagesInputContent, Model } from "@earendil-works/pi-ai";
 import { randomUUID } from "node:crypto";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import Type, { type Static } from "typebox";
 import Value from "typebox/value";
 import { badRequest } from "./errors.ts";
-import { mimeOf } from "./routes/file-routes.ts";
-import { sniffImage } from "./image-file.ts";
+import { formatBytes, isUnsupportedPicture, MAX_IMAGE_BYTES, sniffImage } from "./image-file.ts";
+import { DEFAULT_LIMITS, exifOrientation } from "./image-resize-core.ts";
+import { resizeImage } from "./image-resize.ts";
 import type { ModelRegistry } from "./models.ts";
-import { safePath, type ToolDef } from "./tools.ts";
+import { safePath, type ToolContext, type ToolDef } from "./tools.ts";
 
 /**
  * Image generation. An image model (a connection's model marked `imageGeneration`) never runs a chat. The server's
@@ -35,6 +36,7 @@ export function resolveImageApi(baseUrl: string, provider: string, id: string, o
 }
 export const IMAGE_TOOL = "generate_image";
 const MAX_INPUT_IMAGES = 4;
+const MAX_REF_IMAGE_BYTES = 20 * 1024 * 1024;
 export const IMAGE_TIMEOUT_MS = 180_000;
 const EXT: Record<string, string> = { "image/png": "png", "image/jpeg": "jpg", "image/webp": "webp", "image/gif": "gif" };
 
@@ -149,7 +151,8 @@ export function imageTool(registry: ModelRegistry, settings: ImageModelSettings)
 	return {
 		name: IMAGE_TOOL,
 		description: DESCRIPTION,
-		create(cwd): AgentTool<any> {
+		create(cwd, _roots, ctx?: ToolContext): AgentTool<any> {
+			const curCwd = () => ctx?.getCwd?.() ?? cwd;
 			return {
 				name: IMAGE_TOOL,
 				label: "Generate image",
@@ -163,13 +166,43 @@ export function imageTool(registry: ModelRegistry, settings: ImageModelSettings)
 					const params = raw as { prompt: string; images?: string[] };
 					const model = settings.resolve();
 					if (!model) throw new Error("no image model is set (Settings → agent → image model)");
+					const base = curCwd();
 					const inputs: ImageContent[] = [];
 					for (const p of params.images ?? []) {
-						const mimeType = mimeOf(p);
-						if (!mimeType.startsWith("image/")) throw new Error(`${p} is not a picture`);
-						inputs.push({ type: "image", data: (await readFile(safePath(cwd, p))).toString("base64"), mimeType });
+						const abs = safePath(base, p);
+						const info = await stat(abs);
+						if (!info.isFile()) throw new Error(`${p} is not a file`);
+						if (info.size > MAX_REF_IMAGE_BYTES) {
+							throw new Error(`${p} is too large (${formatBytes(info.size)}); reference images must be at most 20 MB`);
+						}
+						const bytes = await readFile(abs);
+						const sniffed = sniffImage(bytes);
+						if (!sniffed) {
+							const unsupported = isUnsupportedPicture(bytes);
+							throw new Error(
+								unsupported
+									? `${p} is a ${unsupported} image; only PNG, JPEG, GIF and WebP are supported`
+									: `${p} is not a valid PNG, JPEG, GIF or WebP image`,
+							);
+						}
+						const fits =
+							(sniffed.width ?? 0) <= DEFAULT_LIMITS.maxWidth &&
+							(sniffed.height ?? 0) <= DEFAULT_LIMITS.maxHeight &&
+							Math.ceil(bytes.length / 3) * 4 < DEFAULT_LIMITS.maxBytes;
+						if (fits && sniffed.width && sniffed.height && exifOrientation(bytes) === 1) {
+							inputs.push({ type: "image", data: bytes.toString("base64"), mimeType: sniffed.mimeType });
+						} else {
+							const resized = await resizeImage(bytes, DEFAULT_LIMITS, signal);
+							if (resized) {
+								inputs.push({ type: "image", data: resized.data, mimeType: resized.mimeType });
+							} else if (bytes.length <= MAX_IMAGE_BYTES) {
+								inputs.push({ type: "image", data: bytes.toString("base64"), mimeType: sniffed.mimeType });
+							} else {
+								throw new Error(`${p} could not be resized to fit the image size limit (${formatBytes(MAX_IMAGE_BYTES)})`);
+							}
+						}
 					}
-					const out = await generateImages(registry, model, cwd, params.prompt, inputs, signal);
+					const out = await generateImages(registry, model, base, params.prompt, inputs, signal);
 					const lines = [...out.images.map((i) => `Saved ${i.path}`), ...(out.text ? [`Model note: ${out.text}`] : [])];
 					return {
 						content: [{ type: "text", text: lines.join("\n") }, ...out.images.map((i) => ({ type: "image" as const, data: i.data, mimeType: i.mimeType }))],
