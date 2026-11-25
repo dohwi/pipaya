@@ -604,12 +604,12 @@
 		height: 16px;
 		stroke-width: 2;
 	}
-	:global(.iconbtn.foldbtn) {
+	.brandrow :global(.iconbtn.foldbtn) {
 		margin-left: auto;
 		margin-right: -9.5px; /* the 38px box bleeds 9.5px into the 16px gutter: its 19px icon's right edge sits on the gutter line (x = 16 from the edge), like the server chevron below */
 	}
 	/* 38px in a 44px row: an outer ring would run into the window's top edge, so it is drawn inside */
-	:global(.iconbtn.foldbtn:focus-visible) {
+	.brandrow :global(.iconbtn.foldbtn:focus-visible) {
 		outline-offset: -2px; /* like the other header buttons: the box now ends inside the sidebar's edge (16 - 9.5 = 6.5px in), so nothing is clipped */
 	}
 	@media (min-width: 861px) {

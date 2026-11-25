@@ -112,15 +112,16 @@
 			></div>
 		{/if}
 		<div class="dock-content" inert={collapsed}>
-			<header>
+			<header class:with-fold={!viewport.narrow}>
+				{#if !viewport.narrow}
+					<IconButton icon="sidebar" class="foldbtn flip-x" label={t("확장 패널 접기")} title={t("확장 패널 접기") + dockHint} onclick={foldDock} />
+				{/if}
 				<div class="tabs">
 					<Segmented tabs variant="underline" full={false} label={t("확장 패널")} value={key(current)} onchange={(id) => (picked = id)}
 						options={shown.map((p) => ({ id: key(p), label: p.title, title: ownerName(p.owner) }))} />
 				</div>
 				{#if viewport.narrow}
 					<IconButton icon="x" label={t("확장 패널 닫기")} onclick={() => hide(current)} />
-				{:else}
-					<IconButton icon="sidebar" class="flip-x" label={t("확장 패널 접기")} title={t("확장 패널 접기") + dockHint} onclick={foldDock} />
 				{/if}
 			</header>
 			<div class="bodywrap vfade">
@@ -161,9 +162,13 @@
 	}
 	/* the header's hairline runs under the action button too */
 	header { flex: none; display: flex; align-items: center; gap: 4px; padding: 0 12px 0 0; box-sizing: content-box; min-height: 44px; border-bottom: 1px solid var(--border); /* the app header's box (44px + 1px hairline), so the lines meet across the dock edge */ }
-	/* the 19px glyph of the 38px button lands on the body's 12px right edge: 12 - 9.5 bleed */
-	header :global(.iconbtn:last-child) { margin-right: -9.5px; }
-	header :global(.iconbtn:last-child:focus-visible) { outline-offset: -2px; }
+	header.with-fold { padding: 0 12px; }
+	/* desktop fold button on the inner (left) edge: 32px box bleeds -6.5px into the 12px gutter so the 19px glyph aligns with .body and clears the 5px .edge grip */
+	header > :global(.iconbtn.foldbtn) { flex: none; width: 32px; height: 38px; margin-left: -6.5px; }
+	header > :global(.iconbtn.foldbtn:focus-visible) { outline-offset: -2px; }
+	/* narrow close button: the 19px glyph of the 38px button lands on the body's 12px right edge: 12 - 9.5 bleed */
+	header :global(.iconbtn:last-child:not(.foldbtn)) { margin-right: -9.5px; }
+	header :global(.iconbtn:last-child:not(.foldbtn):focus-visible) { outline-offset: -2px; }
 	/* Mirror the sidebar glyph so its panel divider faces right */
 	header :global(.iconbtn.flip-x svg) { transform: scaleX(-1); }
 	.tabs { flex: 1; min-width: 0; }

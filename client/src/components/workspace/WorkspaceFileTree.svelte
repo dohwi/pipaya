@@ -46,7 +46,7 @@
 	function setFilesOpen(next: boolean, e: MouseEvent) {
 		app.filesOpen = next;
 		if (e.detail === 0) {
-			void tick().then(() => drawerEl?.querySelector<HTMLElement>(next ? ".hact .flip-x" : ".rtools .iconbtn")?.focus({ preventScroll: true }));
+			void tick().then(() => drawerEl?.querySelector<HTMLElement>(next ? ".head .foldbtn" : ".rtools .iconbtn")?.focus({ preventScroll: true }));
 		}
 	}
 
@@ -332,6 +332,9 @@
 
 	<div class="ftree-in" inert={!open}>
 	<header class="head">
+		{#if !viewport.narrow}
+			<IconButton icon="sidebar" class="foldbtn flip-x" label={t("파일 뷰어 접기")} title={t("파일 뷰어 접기") + shortcutHint} onclick={(e) => setFilesOpen(false, e)} />
+		{/if}
 		<div class="htitle" title={workspaceViewer.workDir}>
 			{#if workspaceViewer.branch}
 				<span class="hbranch mono" title="{folderName} · {workspaceViewer.branch}">{workspaceViewer.branch}</span>
@@ -343,8 +346,6 @@
 			<IconButton icon="retry" label={t("새로고침")} onclick={() => workspaceViewer.refreshTree({ preserveOpenDirs: true })} />
 			{#if viewport.narrow}
 				<IconButton icon="x" label={t("파일 뷰어 닫기")} title={t("파일 뷰어 닫기") + shortcutHint} onclick={() => (app.filesOpen = false)} />
-			{:else}
-				<IconButton icon="sidebar" class="flip-x" label={t("파일 뷰어 접기")} title={t("파일 뷰어 접기") + shortcutHint} onclick={(e) => setFilesOpen(false, e)} />
 			{/if}
 		</div>
 	</header>
@@ -755,11 +756,21 @@
 		flex: none;
 		display: flex;
 		align-items: center;
-		gap: 8px;
+		gap: 4px;
 		height: 44px;
 		padding: 0 12px;
 		background: var(--bg-side);
 		border-bottom: 1px solid var(--border);
+	}
+	.head > :global(.iconbtn.foldbtn) {
+		flex: none;
+		width: 32px;
+		height: 38px;
+		/* pulls the 32px button's 6.5px left padding into the 12px gutter so the 19px glyph aligns with Segmented/search below and clears the 5px edge grip */
+		margin-left: -6.5px;
+	}
+	.head > :global(.iconbtn.foldbtn:focus-visible) {
+		outline-offset: -2px;
 	}
 	/* Match left Sidebar .brandrow and Header hairline over the tab strip so the top 44px line runs unbroken across all three columns */
 	@media (min-width: 601px) {
