@@ -4,6 +4,7 @@
 
 <script lang="ts">
 	import Button from "../ui/Button.svelte";
+	import Notice from "../ui/Notice.svelte";
 	import { localeTag, t } from "../../lib/i18n";
 	import { fullTime } from "../../lib/format";
 	import { dayLabel, dayStart } from "../../lib/format";
@@ -21,10 +22,24 @@
 	import ChatSkeleton from "./ChatSkeleton.svelte";
 	import { uniqueBy } from "../../lib/unique";
 	import { promptDurations } from "../../lib/prompt-duration";
+	import { app } from "../../lib/store.svelte";
+	import { getPane } from "../../lib/pane";
+	import { canContinueRun, hasUnansweredPrompt } from "../../lib/reply-blocks";
 
 	/** `held`: the conversation kept on screen (dimmed) while the pane's newly opened one loads; it must not record scroll */
 	/** `late`: the pane already waited on this conversation (it held the previous one), so its skeleton shows at once */
 	let { chat, held = false, late = false }: { chat: ChatState; held?: boolean; late?: boolean } = $props();
+	const pane = getPane();
+	const session = $derived(app.session(pane.id));
+	const canContinue = $derived(
+		canContinueRun({
+			ready: chat.ready,
+			running: chat.running,
+			retrying: Boolean(chat.retrying),
+			compacting: chat.compacting,
+			closed: Boolean(session?.closed),
+		}),
+	);
 	/** The outline stays a moment once it was seen, so a load that ends just after it appeared does not flash it */
 	const lateStart = untrack(() => late);
 	const sk = skeletonGate(() => !chat.ready && !chat.loadError, lateStart);
@@ -408,9 +423,22 @@
 			{/if}
 			{#each units as u, n (unitKey(u))}
 				{#if dayOf[n]}<div class="day" role="separator" aria-label={dayOf[n]}><span>{dayOf[n]}</span></div>{/if}
-				<div class="unit" class:live={chat.running && n === units.length - 1}>
+				{@const end = n === units.length - 1}
+				<div class="unit" class:live={chat.running && end}>
 					{#if u.kind === "notice"}
-						<div class="notice"><Icon name="alert" /> {u.item.text}</div>
+						<div class="notice-row">
+							<Notice
+								tone={u.item.tone === "warn" ? "warn" : u.item.tone === "ok" ? "ok" : "danger"}
+								role={u.item.tone === "warn" || u.item.tone === "ok" ? "status" : "alert"}
+							>
+								{u.item.text}
+								{#snippet action()}
+									{#if end && u.item.resumable && canContinue}
+										<Button size="sm" disabled={app.isSending(pane.id)} onclick={() => void app.retry(pane.id)}>{t("이어서 진행하기")}</Button>
+									{/if}
+								{/snippet}
+							</Notice>
+						</div>
 					{:else if u.kind === "entry"}
 						<EntryCard item={u.item} />
 					{:else if u.kind === "user" && u.item.goal}
@@ -419,8 +447,17 @@
 					{:else if u.kind === "user"}
 						<Message item={u.item} working={u.item.key === lastUserKey} elapsed={elapsedOf[n]} />
 					{:else}
-						{@const end = n === units.length - 1}
 						<Message item={u.items[u.items.length - 1]!} turn={u.items} last={end} live={end && chat.running} />
+					{/if}
+					{#if end && u.kind === "user" && hasUnansweredPrompt(u.item, canContinue, app.isSending(pane.id), chat.settled)}
+						<div class="notice-row">
+							<Notice tone="warn" role="status">
+								{t("답변이 생성되기 전에 중단되었습니다.")}
+								{#snippet action()}
+									<Button size="sm" disabled={app.isSending(pane.id)} onclick={() => void app.retry(pane.id)}>{t("이어서 진행하기")}</Button>
+								{/snippet}
+							</Notice>
+						</div>
 					{/if}
 				</div>
 			{/each}
@@ -545,23 +582,27 @@
 		height: 12px;
 		stroke-width: 2;
 	}
-	.notice {
-		display: flex;
-		align-items: center;
-		gap: 8px;
+	.notice-row {
 		margin: 8px 0;
-		padding: 8px 12px;
-		border-radius: var(--radius);
-		background: var(--danger-soft);
-		color: var(--danger);
-		font-size: var(--fs-sm);
-		line-height: 20px;
 	}
-	.notice :global(svg) {
-		width: 16px;
-		height: 16px;
-		flex: none;
-		stroke-width: 1.8;
+	@media (max-width: 640px) {
+		.notice-row :global(.notice:has(> .action .btn)) {
+			flex-wrap: wrap;
+			align-items: flex-start;
+			padding: 8px 12px;
+		}
+		.notice-row :global(.notice:has(> .action .btn) > svg) {
+			margin-top: 2px; /* 16px icon centred on the 20px first line: (20 - 16) / 2 = 2px */
+		}
+		.notice-row :global(.notice:has(> .action .btn) > .text) {
+			flex: 1 1 0; /* keeps the icon on the text line; only the button wraps */
+		}
+		.notice-row :global(.notice:has(> .action .btn) > .action) {
+			flex-basis: 100%;
+		}
+		.notice-row :global(.notice:has(> .action .btn) > .action .btn) {
+			width: 100%;
+		}
 	}
 	.jump {
 		position: absolute;

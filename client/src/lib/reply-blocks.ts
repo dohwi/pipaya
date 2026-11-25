@@ -39,14 +39,57 @@ export const plainTextOf = (blocks: readonly AssistantBlock[]): string =>
 		.map((b) => b.text)
 		.join("\n\n");
 
+export type ReplyInterrupt = "error" | "aborted" | "incomplete" | "cut" | null;
+
+/** Whether the conversation is in a state that can accept a "continue/retry" action right now. */
+export function canContinueRun(state: {
+	ready: boolean;
+	running: boolean;
+	retrying: boolean;
+	compacting: boolean;
+	closed: boolean;
+}): boolean {
+	return state.ready && !state.running && !state.retrying && !state.compacting && !state.closed;
+}
+
+/** True when the conversation is confirmed idle right after a persisted user prompt without any reply. */
+export function hasUnansweredPrompt(
+	lastItem: { kind: string; seq?: number | null } | undefined,
+	canContinue: boolean,
+	sending: boolean,
+	settled = true,
+): boolean {
+	return canContinue && settled && !sending && lastItem?.kind === "user" && typeof lastItem.seq === "number";
+}
+
 /** What a finished reply offers below it. Only the newest reply, and only once it has stopped, can be acted on. */
-export function replyActions(tail: { stopReason: StopReason } | undefined, last: boolean, live: boolean): { retry: boolean; cut: boolean; resume: boolean } {
+export function replyActions(
+	tail: { stopReason: StopReason } | undefined,
+	last: boolean,
+	live: boolean,
+	canContinue = true,
+): { retry: boolean; cut: boolean; resume: boolean; interrupt: ReplyInterrupt } {
 	const settled = !!tail && !live;
 	// The token limit ended the text mid-way. (A cut tool call never ends a run: the agent fails it and goes on.)
 	const cut = settled && tail.stopReason === "length";
+	// A tool-use turn at the very end with no following reply means the loop stopped before the model could continue
+	// (for example after hitting a run limit and reloading, when the ephemeral notice is gone).
+	const incomplete = settled && last && tail.stopReason === "toolUse";
+	const interrupt: ReplyInterrupt = !settled
+		? null
+		: tail.stopReason === "error"
+			? "error"
+			: tail.stopReason === "aborted"
+				? "aborted"
+				: cut
+					? "cut"
+					: incomplete
+						? "incomplete"
+						: null;
 	return {
-		retry: settled && last && (tail.stopReason === "error" || tail.stopReason === "aborted"),
+		retry: settled && last && canContinue && (tail.stopReason === "error" || tail.stopReason === "aborted" || tail.stopReason === "toolUse"),
 		cut,
-		resume: cut && last,
+		resume: cut && last && canContinue,
+		interrupt,
 	};
 }

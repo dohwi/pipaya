@@ -428,7 +428,96 @@ describe("manual abort vs pre-prompt runtime failure", () => {
 
 		expect((await api("POST", `/sessions/${id}/retry`)).status).toBe(202);
 		await untilIdle(app, id);
+		const events = (await api("GET", `/events/history?sessionId=${id}`)).json.events as any[];
+		const retryStart = events.filter((e) => e.type === "run_started" && e.data?.mode === "retry").at(-1);
+		expect(retryStart?.data?.droppedSeq).toBe(1);
 		const afterRetry = (await api("GET", `/sessions/${id}/messages`)).json.messages as any[];
 		expect(afterRetry.at(-1).message.stopReason).toBe("stop");
+	});
+
+	test("retry closes dangling unresolved tool calls when transcript ended on toolUse", async () => {
+		const { ws, cfg } = makeEnv();
+		const upstream = startEchoUpstream();
+		cleanups.push(() => upstream.stop());
+
+		const app = await buildApp(cfg, { strictResponses: true });
+		cleanups.push(() => app.close());
+		await configureEcho(app, upstream);
+		const api = clientFor(app);
+
+		const id = (await api("POST", "/sessions", { cwd: ws })).json.id as string;
+		const now = Date.now();
+		const rawStore = (app.sessions as any).store as SessionStore;
+		rawStore.appendMessage(id, 0, { role: "user", content: [{ type: "text", text: "run tool" }], timestamp: now } as any);
+		rawStore.appendMessage(id, 1, {
+			role: "assistant",
+			api: "openai-completions",
+			provider: "echo",
+			model: ECHO_MODEL.id,
+			stopReason: "toolUse",
+			usage: { input: 1, output: 1, cacheRead: 0, cacheWrite: 0, totalTokens: 2, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } },
+			content: [{ type: "toolCall", id: "call-orphan", name: "bash", arguments: { command: "echo hi" } }],
+			timestamp: now,
+		} as any);
+
+		expect((await api("POST", `/sessions/${id}/retry`)).status).toBe(202);
+		await untilIdle(app, id);
+
+		const msgs = (await api("GET", `/sessions/${id}/messages`)).json.messages as any[];
+		expect(msgs.map((m) => m.role)).toEqual(["user", "assistant", "toolResult", "assistant"]);
+		expect(msgs[2].message).toMatchObject({ role: "toolResult", toolCallId: "call-orphan", isError: true });
+		expect(msgs[3].message.stopReason).toBe("stop");
+	});
+
+	test("retry strips trailing error reply over unresolved toolUse and emits run_started before synthetic toolResult", async () => {
+		const { ws, cfg } = makeEnv();
+		const upstream = startEchoUpstream();
+		cleanups.push(() => upstream.stop());
+
+		const app = await buildApp(cfg, { strictResponses: true });
+		cleanups.push(() => app.close());
+		await configureEcho(app, upstream);
+		const api = clientFor(app);
+
+		const id = (await api("POST", "/sessions", { cwd: ws })).json.id as string;
+		const now = Date.now();
+		const rawStore = (app.sessions as any).store as SessionStore;
+		rawStore.appendMessage(id, 0, { role: "user", content: [{ type: "text", text: "run tool" }], timestamp: now } as any);
+		rawStore.appendMessage(id, 1, {
+			role: "assistant",
+			api: "openai-completions",
+			provider: "echo",
+			model: ECHO_MODEL.id,
+			stopReason: "toolUse",
+			usage: { input: 1, output: 1, cacheRead: 0, cacheWrite: 0, totalTokens: 2, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } },
+			content: [{ type: "toolCall", id: "call-dangling", name: "bash", arguments: { command: "echo hi" } }],
+			timestamp: now,
+		} as any);
+		rawStore.appendMessage(id, 2, {
+			role: "assistant",
+			api: "openai-completions",
+			provider: "echo",
+			model: ECHO_MODEL.id,
+			stopReason: "error",
+			errorMessage: "broken",
+			usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } },
+			content: [],
+			timestamp: now,
+		} as any);
+
+		expect((await api("POST", `/sessions/${id}/retry`)).status).toBe(202);
+		await untilIdle(app, id);
+
+		const events = (await api("GET", `/events/history?sessionId=${id}`)).json.events as any[];
+		const retryStartIdx = events.findIndex((e) => e.type === "run_started" && e.data?.mode === "retry");
+		const synthToolIdx = events.findIndex((e) => e.type === "message_end" && e.data?.message?.toolCallId === "call-dangling");
+		expect(retryStartIdx).toBeGreaterThanOrEqual(0);
+		expect(events[retryStartIdx].data.droppedSeq).toBe(2);
+		expect(synthToolIdx).toBeGreaterThan(retryStartIdx);
+
+		const msgs = (await api("GET", `/sessions/${id}/messages`)).json.messages as any[];
+		expect(msgs.map((m) => m.role)).toEqual(["user", "assistant", "toolResult", "assistant"]);
+		expect(msgs[2].message).toMatchObject({ role: "toolResult", toolCallId: "call-dangling", isError: true });
+		expect(msgs[3].message.stopReason).toBe("stop");
 	});
 });

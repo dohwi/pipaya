@@ -28,12 +28,16 @@ describe("notice and completion feedback consistency", () => {
 		}
 	});
 
-	test("AssistantMessage cut notice keeps md size regardless of resume button", async () => {
+	test("AssistantMessage interrupt notices keep md size regardless of action buttons", async () => {
 		const src = await read("chat/AssistantMessage.svelte");
-		const cut = src.match(/<div class="cut">[\s\S]*?<\/div>/)?.[0] ?? "";
-		const notices = cut.match(/<Notice\b[^>]*>/g) ?? [];
-		expect(notices).toEqual(['<Notice tone="warn" role="status">']);
-		expect(cut).toContain("{#if actions.resume}");
+		const blocks = [...src.matchAll(/<div class="interrupt">[\s\S]*?<\/div>/g)].map((m) => m[0]);
+		expect(blocks.length).toBeGreaterThanOrEqual(4);
+		const notices = blocks.flatMap((b) => b.match(/<Notice\b[^>]*>/g) ?? []);
+		expect(notices.length).toBe(blocks.length);
+		for (const tag of notices) expect(tag).not.toContain('size="sm"');
+		expect(blocks.some((b) => b.includes("{#if actions.resume}"))).toBe(true);
+		expect(blocks.some((b) => b.includes("action={continueBtn}"))).toBe(true);
+		expect(src).toContain("{#if actions.retry}");
 	});
 
 	test("Backup, RetentionSection, VoicePane, and ModelConnections report routine completions/errors via toast", async () => {

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { plainTextOf, replyActions, segmentsOf } from "../src/lib/reply-blocks";
+import { canContinueRun, hasUnansweredPrompt, plainTextOf, replyActions, segmentsOf } from "../src/lib/reply-blocks";
 import { SWIPE_MAX, SWIPE_TRIGGER, SwipeReply } from "../src/lib/swipe-reply";
 import type { AssistantBlock, StopReason } from "../src/lib/types";
 
@@ -117,21 +117,53 @@ describe("swipe to reply", () => {
 
 describe("replyActions", () => {
 	const r = (stopReason: StopReason) => ({ stopReason });
-	const none = { retry: false, cut: false, resume: false };
+	const none = { retry: false, cut: false, resume: false, interrupt: null };
 
 	test("a reply the output limit cut off says so, and only the newest one offers to go on", () => {
-		expect(replyActions(r("length"), true, false)).toEqual({ retry: false, cut: true, resume: true });
-		expect(replyActions(r("length"), false, false)).toEqual({ retry: false, cut: true, resume: false });
+		expect(replyActions(r("length"), true, false)).toEqual({ retry: false, cut: true, resume: true, interrupt: "cut" });
+		expect(replyActions(r("length"), false, false)).toEqual({ retry: false, cut: true, resume: false, interrupt: "cut" });
+		expect(replyActions(r("length"), true, false, false)).toEqual({ retry: false, cut: true, resume: false, interrupt: "cut" });
 	});
-	test("a failed or stopped reply offers retry, and only the newest one", () => {
-		expect(replyActions(r("error"), true, false)).toEqual({ retry: true, cut: false, resume: false });
-		expect(replyActions(r("aborted"), true, false)).toEqual({ retry: true, cut: false, resume: false });
-		expect(replyActions(r("aborted"), false, false)).toEqual(none);
+	test("a failed or stopped reply reports its interrupt state, and only the newest one offers retry", () => {
+		expect(replyActions(r("error"), true, false)).toEqual({ retry: true, cut: false, resume: false, interrupt: "error" });
+		expect(replyActions(r("error"), false, false)).toEqual({ retry: false, cut: false, resume: false, interrupt: "error" });
+		expect(replyActions(r("error"), true, false, false)).toEqual({ retry: false, cut: false, resume: false, interrupt: "error" });
+		expect(replyActions(r("aborted"), true, false)).toEqual({ retry: true, cut: false, resume: false, interrupt: "aborted" });
+		expect(replyActions(r("aborted"), false, false)).toEqual({ retry: false, cut: false, resume: false, interrupt: "aborted" });
+	});
+	test("a trailing toolUse turn with no follow-up is marked incomplete and retryable only on the last turn", () => {
+		expect(replyActions(r("toolUse"), true, false)).toEqual({ retry: true, cut: false, resume: false, interrupt: "incomplete" });
+		expect(replyActions(r("toolUse"), false, false)).toEqual(none);
+		expect(replyActions(r("toolUse"), true, true)).toEqual(none);
+		expect(replyActions(r("toolUse"), true, false, false)).toEqual({ retry: false, cut: false, resume: false, interrupt: "incomplete" });
 	});
 	test("a reply still being written, a finished one and no reply at all offer nothing", () => {
 		expect(replyActions(r("length"), true, true)).toEqual(none);
 		expect(replyActions(r("error"), true, true)).toEqual(none);
-		for (const s of ["stop", "toolUse", "pending", "deferred"] as const) expect(replyActions(r(s), true, false), s).toEqual(none);
+		for (const s of ["stop", "pending", "deferred"] as const) expect(replyActions(r(s), true, false), s).toEqual(none);
 		expect(replyActions(undefined, true, false)).toEqual(none);
+	});
+});
+
+describe("canContinueRun & hasUnansweredPrompt", () => {
+	const idle = { ready: true, running: false, retrying: false, compacting: false, closed: false };
+	test("only an idle, open, ready session can continue", () => {
+		expect(canContinueRun(idle)).toBe(true);
+		expect(canContinueRun({ ...idle, ready: false })).toBe(false);
+		expect(canContinueRun({ ...idle, running: true })).toBe(false);
+		expect(canContinueRun({ ...idle, retrying: true })).toBe(false);
+		expect(canContinueRun({ ...idle, compacting: true })).toBe(false);
+		expect(canContinueRun({ ...idle, closed: true })).toBe(false);
+	});
+	test("detects persisted user prompt with no reply, including seq 0, and ignores optimistic/sending/unsettled states", () => {
+		expect(hasUnansweredPrompt({ kind: "user", seq: 0 }, true, false, true)).toBe(true);
+		expect(hasUnansweredPrompt({ kind: "user", seq: 5 }, true, false, true)).toBe(true);
+		expect(hasUnansweredPrompt({ kind: "user", seq: 0 }, true, false, false)).toBe(false);
+		expect(hasUnansweredPrompt({ kind: "user", seq: null }, true, false, true)).toBe(false);
+		expect(hasUnansweredPrompt({ kind: "user", seq: 0 }, true, true, true)).toBe(false);
+		expect(hasUnansweredPrompt({ kind: "user", seq: 0 }, false, false, true)).toBe(false);
+		expect(hasUnansweredPrompt({ kind: "assistant", seq: 1 }, true, false, true)).toBe(false);
+		expect(hasUnansweredPrompt({ kind: "notice" }, true, false, true)).toBe(false);
+		expect(hasUnansweredPrompt(undefined, true, false, true)).toBe(false);
 	});
 });

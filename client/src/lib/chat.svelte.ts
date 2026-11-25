@@ -200,6 +200,8 @@ export class ChatState {
 		return [...this.held.map((h) => ({ mode: "follow_up" as const, text: h.text })), ...this.queued];
 	}
 	running = $state(false);
+	/** True once the server confirmed this session is idle (via load/catchUp snapshot or run_finished), cleared while a run or standalone prompt is starting. */
+	settled = $state(false);
 	/** The last run was stopped (by anyone): a steer / queue that then finds the session idle must not start a new run. */
 	stopped = false;
 	/** When the current run started (ms), for the elapsed time in the status line; null while idle. */
@@ -416,6 +418,7 @@ export class ChatState {
 			this.hasEarlier = msgs.length > 0 && this.firstSeq > 0;
 			this.earlierFailed = false;
 			this.running = st.running;
+			this.settled = !st.running;
 			// Joined mid-run: the best guess for its start is the last prompt.
 			this.runStartedAt = st.running ? (this.runStartedAt ?? [...items].reverse().find((i) => i.kind === "user")?.ts ?? Date.now()) : null;
 			this.usage = detail.usage;
@@ -479,15 +482,18 @@ export class ChatState {
 		const st = detail.status;
 		const wasRunning = this.running;
 		// If a live run_started/run_finished arrived while getSession() was in flight, trust the newer live stream.
-		if (this.runRev === startRunRev && st.running !== this.running) {
-			this.running = st.running;
-			if (st.running) this.runStartedAt = this.runStartedAt ?? Date.now();
-			else {
-				this.runStartedAt = null;
-				const s = this.streamItem();
-				if (s) s.streaming = false;
-				for (const run of Object.values(this.tools)) {
-					if (run.state === "running" || run.state === "awaiting_input" || run.state === "pending") run.state = "skipped";
+		if (this.runRev === startRunRev) {
+			this.settled = !st.running;
+			if (st.running !== this.running) {
+				this.running = st.running;
+				if (st.running) this.runStartedAt = this.runStartedAt ?? Date.now();
+				else {
+					this.runStartedAt = null;
+					const s = this.streamItem();
+					if (s) s.streaming = false;
+					for (const run of Object.values(this.tools)) {
+						if (run.state === "running" || run.state === "awaiting_input" || run.state === "pending") run.state = "skipped";
+					}
 				}
 			}
 		}
@@ -570,11 +576,37 @@ export class ChatState {
 
 	/**
 	 * The server dropped a reply that was cut off mid-stream and asks the model again: forget what the failed attempt
-	 * had shown, so the retried answer replaces it instead of being appended to a half-written message.
+	 * had shown, so the retried answer replaces it instead of being appended to a half-written message. Also rolls
+	 * `lastSeq` back when that reply had already been persisted, because the server reuses its seq for the replacement.
 	 */
 	private dropPartialReply(): void {
 		const last = this.items[this.items.length - 1];
-		if (last?.kind === "assistant") this.items.pop();
+		if (last?.kind === "assistant") {
+			this.items.pop();
+			if (last.seq !== null && last.seq === this.lastSeq) this.lastSeq = last.seq - 1;
+		}
+	}
+
+	/**
+	 * A manual retry (`POST /retry`) started: clear trailing ephemeral failure notices, and if the server dropped the
+	 * trailing error/aborted assistant reply (`droppedSeq` present), remove it here and roll `lastSeq` back so the
+	 * replacement `message_end` (reusing that seq) is not ignored as a duplicate. Guarded by exact `droppedSeq` + failed
+	 * `stopReason` so a replayed `run_started` can never drop a newer finished reply or an unrelated failed reply.
+	 */
+	private prepareRetry(droppedSeq?: number): void {
+		while (this.items.length > 0 && this.items[this.items.length - 1]!.kind === "notice") {
+			this.items.pop();
+		}
+		if (droppedSeq === undefined) return;
+		const last = this.items[this.items.length - 1];
+		if (
+			last?.kind === "assistant" &&
+			(last.stopReason === "error" || last.stopReason === "aborted") &&
+			last.seq === droppedSeq
+		) {
+			this.items.pop();
+			if (last.seq !== null && last.seq === this.lastSeq) this.lastSeq = last.seq - 1;
+		}
 	}
 
 	private ensureStream(): AssistantItem {
@@ -673,13 +705,15 @@ export class ChatState {
 				this.retrying = null;
 				this.contextRevision++;
 				this.running = true;
+				this.settled = false;
 				this.stopped = false;
 				this.runStartedAt = Date.now();
+				if (d.mode === "retry") this.prepareRetry(typeof d.droppedSeq === "number" ? d.droppedSeq : undefined);
 				break;
 
 			case "run_limit":
 				// The server stopped a runaway run; say why, since the abort alone would look like a plain stop.
-				if (typeof d.reason === "string") this.items.push({ kind: "notice", key: `n${uid()}`, text: d.reason, ts: e.ts });
+				if (typeof d.reason === "string") this.items.push({ kind: "notice", key: `n${uid()}`, text: d.reason, ts: e.ts, tone: "warn", resumable: true });
 				break;
 
 			case "run_finished": {
@@ -687,6 +721,7 @@ export class ChatState {
 				this.streamRev++;
 				this.retrying = null;
 				this.running = false;
+				this.settled = true;
 				this.stopped = d.status === "aborted";
 				this.runStartedAt = null;
 				const s = this.streamItem();
@@ -701,12 +736,18 @@ export class ChatState {
 				// The run-limit abort cut a model call short and left an empty error reply; the server drops it, so hide it here too.
 				if (d.cause === "limit") {
 					const tail = this.items[this.items.length - 1];
-					if (tail?.kind === "assistant" && (tail.stopReason === "error" || tail.stopReason === "aborted") && tail.blocks.length === 0) this.items.pop();
+					if (tail?.kind === "assistant" && (tail.stopReason === "error" || tail.stopReason === "aborted") && tail.blocks.length === 0) {
+						this.items.pop();
+						if (tail.seq !== null && tail.seq === this.lastSeq) this.lastSeq = tail.seq - 1;
+					}
 				}
 				if (d.status === "error" && d.error) {
-					const last = this.lastAssistant;
-					if (!last || last.stopReason !== "error") {
-						this.items.push({ kind: "notice", key: `n${uid()}`, text: formatRunError(String(d.error)), ts: e.ts });
+					const last = this.items[this.items.length - 1];
+					if (last?.kind !== "notice" && (last?.kind !== "assistant" || last.stopReason !== "error")) {
+						const resumable =
+							last?.kind === "user" ||
+							(last?.kind === "assistant" && (last.stopReason === "aborted" || last.stopReason === "toolUse"));
+						this.items.push({ kind: "notice", key: `n${uid()}`, text: formatRunError(String(d.error)), ts: e.ts, tone: "error", resumable });
 					}
 				}
 				break;
@@ -764,6 +805,7 @@ export class ChatState {
 					this.context = { ...this.context, tokens: m.usage.totalTokens };
 				}
 				if (m.role === "user") {
+					if (!this.running) this.settled = false;
 					this.queued = applyQueueEvent(this.queued, "delivered", { text: textOf(m.content) });
 					const mi = deliveredIndex(this.mine.map((x) => ({ mode: "", text: x.text })), textOf(m.content));
 					if (mi >= 0) this.mine.splice(mi, 1);
