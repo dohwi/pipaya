@@ -1,7 +1,7 @@
 import type { AgentTool, AgentToolResult } from "@earendil-works/pi-agent-core";
 import { randomUUID } from "node:crypto";
 import { realpathSync } from "node:fs";
-import { chmod, mkdir, open, readdir, readFile, rename, stat, unlink, writeFile } from "node:fs/promises";
+import { chmod, lstat, mkdir, open, readdir, readFile, realpath, rename, stat, unlink, writeFile } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import Type, { type TSchema } from "typebox";
 import { formatBytes, isUnsupportedPicture, MAX_IMAGE_BYTES, sniffImage } from "./image-file.ts";
@@ -220,28 +220,66 @@ async function withAskLock<T>(sessionKey: string, signal: AbortSignal | undefine
 	}
 }
 
-/** Atomic write via sibling temp file + rename, preserving existing file mode; falls back on EXDEV/EPERM. */
+/**
+ * Atomic write via sibling temp file + rename:
+ * - Resolves symlinks so writing through a symlink updates its target without destroying the link.
+ * - Falls back to in-place `writeFile` for hardlinks (`nlink > 1`) or files owned by another uid.
+ * - Creates temp file with `0o600` first, then `chmod`s to `existingMode` before `rename` (no 0644 window).
+ * - Falls back to direct `writeFile` only on `EXDEV` (preserving mode), surfacing `EPERM`/`EACCES`.
+ */
 async function atomicWriteFile(file: string, content: string): Promise<void> {
-	let mode: number | undefined;
-	try {
-		mode = (await stat(file)).mode & 0o777;
-	} catch {}
+	let target = file;
+	let existingMode: number | undefined;
+	let writeInPlace = false;
+	const myUid = typeof process.getuid === "function" ? process.getuid() : undefined;
 
-	const tmp = join(dirname(file), `.${basename(file)}.pipaya-tmp-${randomUUID().slice(0, 8)}`);
 	try {
-		await writeFile(tmp, content, mode !== undefined ? { encoding: "utf8", mode } : "utf8");
-		if (mode !== undefined) {
+		const lst = await lstat(file);
+		if (lst.isSymbolicLink()) {
 			try {
-				await chmod(tmp, mode);
-			} catch {}
+				target = await realpath(file);
+				const st = await stat(target);
+				existingMode = st.mode & 0o777;
+				if (st.nlink > 1 || (myUid !== undefined && st.uid !== myUid)) {
+					writeInPlace = true;
+				}
+			} catch {
+				// Dangling symlink: write through it in-place so the symlink is not replaced.
+				writeInPlace = true;
+			}
+		} else {
+			existingMode = lst.mode & 0o777;
+			if (lst.nlink > 1 || (myUid !== undefined && lst.uid !== myUid)) {
+				writeInPlace = true;
+			}
+		}
+	} catch {
+		// File does not exist yet — create atomically.
+	}
+
+	if (writeInPlace) {
+		await writeFile(target, content, "utf8");
+		return;
+	}
+
+	const tmp = join(dirname(target), `.${basename(target)}.pipaya-tmp-${randomUUID().slice(0, 8)}`);
+	try {
+		if (existingMode !== undefined) {
+			await writeFile(tmp, content, { encoding: "utf8", mode: 0o600 });
+			await chmod(tmp, existingMode);
+		} else {
+			await writeFile(tmp, content, "utf8");
 		}
 		try {
-			await rename(tmp, file);
+			await rename(tmp, target);
 		} catch (e) {
 			const code = (e as NodeJS.ErrnoException).code;
-			if (code === "EXDEV" || code === "EPERM" || code === "EACCES") {
+			if (code === "EXDEV") {
 				await unlink(tmp).catch(() => {});
-				await writeFile(file, content, "utf8");
+				await writeFile(target, content, "utf8");
+				if (existingMode !== undefined) {
+					try { await chmod(target, existingMode); } catch {}
+				}
 			} else {
 				throw e;
 			}
@@ -545,6 +583,36 @@ function formatNumberedLine(lineNum: number, line: string, width: number): strin
 	return `${String(lineNum).padStart(width, " ")}│${line.replace(/\r$/, "")}`;
 }
 
+/** Detect binary content in the leading sample: NUL byte, UTF-16 BOM, or >10% invalid UTF-8 replacement chars. */
+function isBinarySample(sample: Buffer, totalSize: number): boolean {
+	if (sample.length === 0) return false;
+	if (sample.includes(0)) return true;
+	// UTF-16 LE / BE BOM
+	if (sample.length >= 2 && ((sample[0] === 0xff && sample[1] === 0xfe) || (sample[0] === 0xfe && sample[1] === 0xff))) {
+		return true;
+	}
+	// If we only read a prefix of a larger file, trim any partial multi-byte UTF-8 sequence at the cut boundary.
+	let checkEnd = sample.length;
+	if (totalSize > sample.length) {
+		let back = 0;
+		while (back < 3 && checkEnd > 0 && (sample[checkEnd - 1]! & 0xc0) === 0x80) {
+			checkEnd--;
+			back++;
+		}
+		if (checkEnd > 0 && (sample[checkEnd - 1]! & 0x80) !== 0) {
+			checkEnd--;
+		}
+	}
+	if (checkEnd <= 0) return false;
+	const decoded = new TextDecoder("utf-8", { fatal: false }).decode(sample.subarray(0, checkEnd));
+	if (decoded.length === 0) return false;
+	let invalid = 0;
+	for (let i = 0; i < decoded.length; i++) {
+		if (decoded.charCodeAt(i) === 0xfffd) invalid++;
+	}
+	return invalid / decoded.length > 0.1;
+}
+
 const readTool: ToolDef = {
 	name: "read",
 	description: READ_DESCRIPTION,
@@ -576,7 +644,7 @@ const readTool: ToolDef = {
 					try {
 						const probe = Buffer.alloc(Math.min(info.size, BINARY_SNIFF_BYTES));
 						const { bytesRead } = await fh.read(probe, 0, probe.length, 0);
-						if (probe.subarray(0, bytesRead).includes(0)) {
+						if (isBinarySample(probe.subarray(0, bytesRead), info.size)) {
 							return text(`${params.path} appears to be a binary file (${formatBytes(info.size)}); cannot display as text.`, {
 								path: params.path,
 								binary: true,
@@ -591,7 +659,12 @@ const readTool: ToolDef = {
 				const raw = await readFile(file, "utf8");
 				tracker.set(canonicalPath(file), { mtimeMs: info.mtimeMs, size: info.size });
 
+				if (raw.length === 0) {
+					return text("(empty file)", { path: params.path, totalLines: 0, from: 0, to: 0 });
+				}
+
 				const lines = raw.split("\n");
+				if (raw.endsWith("\n")) lines.pop();
 				const start = (params.offset ?? 1) - 1;
 				if (start >= lines.length) {
 					return text(`(file has ${lines.length} lines; offset ${start + 1} is past EOF)`, {
@@ -672,19 +745,31 @@ const writeTool: ToolDef = {
 	},
 };
 
-const READ_LINE_PREFIX_RE = /^\s*\d+[│→\t]/;
+const READ_LINE_PREFIX_RE = /^\s*(\d+)│/;
+
+/**
+ * Only strip `read` line-number prefixes when EVERY non-empty line matches `^\s*(\d+)│`
+ * AND the parsed line numbers are strictly consecutive (e.g. 10, 11, 12).
+ * This avoids corrupting TSV or pipe-delimited content.
+ */
+function hasStrictReadPrefixes(s: string): boolean {
+	const lines = s.split("\n");
+	let prevNum: number | null = null;
+	let matched = 0;
+	for (const line of lines) {
+		if (line.trim().length === 0) continue;
+		const m = READ_LINE_PREFIX_RE.exec(line);
+		if (!m) return false;
+		const num = Number(m[1]);
+		if (prevNum !== null && num !== prevNum + 1) return false;
+		prevNum = num;
+		matched++;
+	}
+	return matched > 0;
+}
 
 function stripReadPrefixes(s: string): string {
 	return s.split("\n").map((l) => l.replace(READ_LINE_PREFIX_RE, "")).join("\n");
-}
-
-function hasReadPrefixes(s: string): boolean {
-	return s.split("\n").some((l) => READ_LINE_PREFIX_RE.test(l));
-}
-
-function allNonEmptyHaveReadPrefixes(s: string): boolean {
-	const nonEmpty = s.split("\n").filter((l) => l.trim().length > 0);
-	return nonEmpty.length > 0 && nonEmpty.every((l) => READ_LINE_PREFIX_RE.test(l));
 }
 
 function lineNumberAt(s: string, index: number): number {
@@ -790,10 +875,52 @@ function closestCandidateHint(content: string, needle: string): string {
 	return `\nClosest candidate (lines ${snippetStart + 1}-${snippetEnd}):\n${snippet}`;
 }
 
+type EditMatchKind = "exact" | "prefix" | "crlf" | "indent";
+
 interface SingleEditResult {
 	next: string;
 	matchLines: number[];
 	count: number;
+	matchKind: EditMatchKind;
+}
+
+interface RawLineRange {
+	start: number;
+	end: number;
+	text: string;
+	eol: string;
+}
+
+function rawLineRanges(content: string): RawLineRange[] {
+	const out: RawLineRange[] = [];
+	let pos = 0;
+	while (pos <= content.length) {
+		const nl = content.indexOf("\n", pos);
+		if (nl === -1) {
+			out.push({ start: pos, end: content.length, text: content.slice(pos), eol: "" });
+			break;
+		}
+		const hasCr = nl > pos && content.charCodeAt(nl - 1) === 13;
+		const end = hasCr ? nl - 1 : nl;
+		out.push({ start: pos, end, text: content.slice(pos, end), eol: hasCr ? "\r\n" : "\n" });
+		pos = nl + 1;
+	}
+	return out;
+}
+
+function indentStyleOfLines(lines: readonly string[]): "tab" | "space" | "mixed" | "none" {
+	let hasTab = false;
+	let hasSpace = false;
+	for (const line of lines) {
+		if (line.trim().length === 0) continue;
+		const ws = leadingWs(line);
+		if (ws.includes("\t")) hasTab = true;
+		if (ws.includes(" ")) hasSpace = true;
+	}
+	if (hasTab && hasSpace) return "mixed";
+	if (hasTab) return "tab";
+	if (hasSpace) return "space";
+	return "none";
 }
 
 function applyOneEdit(content: string, oldText: string, newText: string, replaceAll: boolean, label?: string): SingleEditResult {
@@ -817,12 +944,12 @@ function applyOneEdit(content: string, oldText: string, newText: string, replace
 			cursor = idx + oldText.length;
 		}
 		parts.push(content.slice(cursor));
-		return { next: parts.join(""), matchLines: lines, count: exact.length };
+		return { next: parts.join(""), matchLines: lines, count: exact.length, matchKind: "exact" };
 	}
 
-	// Stage 2: strip accidental `read` line-number prefixes
-	const strippedOld = hasReadPrefixes(oldText) ? stripReadPrefixes(oldText) : oldText;
-	const strippedNew = strippedOld !== oldText && allNonEmptyHaveReadPrefixes(newText) ? stripReadPrefixes(newText) : newText;
+	// Stage 2: strip accidental `read` line-number prefixes (strict consecutive `^\s*(\d+)│` on every non-empty line)
+	const strippedOld = hasStrictReadPrefixes(oldText) ? stripReadPrefixes(oldText) : oldText;
+	const strippedNew = strippedOld !== oldText && hasStrictReadPrefixes(newText) ? stripReadPrefixes(newText) : newText;
 	if (strippedOld !== oldText && strippedOld.length > 0) {
 		const sMatches = findAllOccurrences(content, strippedOld);
 		if (sMatches.length > 0) {
@@ -835,11 +962,11 @@ function applyOneEdit(content: string, oldText: string, newText: string, replace
 				cursor = idx + strippedOld.length;
 			}
 			parts.push(content.slice(cursor));
-			return { next: parts.join(""), matchLines: lines, count: sMatches.length };
+			return { next: parts.join(""), matchLines: lines, count: sMatches.length, matchKind: "prefix" };
 		}
 	}
 
-	// Stage 3: CRLF/LF normalized match (preserving original line endings)
+	// Stage 3: CRLF/LF normalized match (preserving original line endings and aligning CRLF boundaries)
 	const { lf: normContent, rawIndex } = buildLfMap(content);
 	const normCandidates: { o: string; n: string }[] = [{ o: oldText.replace(/\r\n/g, "\n"), n: newText.replace(/\r\n/g, "\n") }];
 	if (strippedOld !== oldText && strippedOld.length > 0) {
@@ -854,28 +981,31 @@ function applyOneEdit(content: string, oldText: string, newText: string, replace
 			const parts: string[] = [];
 			let cursor = 0;
 			for (const lfIdx of lfMatches) {
-				const rawStart = rawIndex[lfIdx]!;
+				let rawStart = rawIndex[lfIdx]!;
+				if (rawStart > 0 && content[rawStart - 1] === "\r" && content[rawStart] === "\n") {
+					rawStart--;
+				}
 				const rawEnd = rawIndex[lfIdx + cand.o.length - 1]! + 1;
 				parts.push(content.slice(cursor, rawStart), adaptedNew);
 				cursor = rawEnd;
 			}
 			parts.push(content.slice(cursor));
-			return { next: parts.join(""), matchLines: lines, count: lfMatches.length };
+			return { next: parts.join(""), matchLines: lines, count: lfMatches.length, matchKind: "crlf" };
 		}
 	}
 
-	// Stage 4: whitespace/indent-insensitive line-block match (ONLY if unique, preserving original base indent delta)
+	// Stage 4: whitespace/indent-insensitive line-block match (ONLY if unique, preserving original slice EOLs and refusing tab/space conflicts)
 	const effectiveOld = (strippedOld !== oldText && strippedOld.length > 0 ? strippedOld : oldText).replace(/\r\n/g, "\n");
 	const effectiveNew = (strippedOld !== oldText && strippedOld.length > 0 ? strippedNew : newText).replace(/\r\n/g, "\n");
 	const oldLines = effectiveOld.split("\n");
 	if (oldLines.some((l) => l.trim().length > 0)) {
-		const rawLines = normContent.split("\n");
+		const ranges = rawLineRanges(content);
 		const winLen = oldLines.length;
 		const blockMatches: number[] = [];
-		for (let i = 0; i <= rawLines.length - winLen; i++) {
+		for (let i = 0; i <= ranges.length - winLen; i++) {
 			let ok = true;
 			for (let k = 0; k < winLen; k++) {
-				if (rawLines[i + k]!.trim() !== oldLines[k]!.trim()) {
+				if (ranges[i + k]!.text.trim() !== oldLines[k]!.trim()) {
 					ok = false;
 					break;
 				}
@@ -887,20 +1017,33 @@ function applyOneEdit(content: string, oldText: string, newText: string, replace
 		}
 		if (blockMatches.length === 1) {
 			const startLine = blockMatches[0]!;
-			const firstNonEmpty = oldLines.findIndex((l) => l.trim().length > 0);
-			const fileIndent = leadingWs(rawLines[startLine + firstNonEmpty]!);
-			const oldIndent = leadingWs(oldLines[firstNonEmpty]!);
-			const newLines = effectiveNew.split("\n").map((line) => {
-				if (line.trim().length === 0) return "";
-				if (oldIndent && line.startsWith(oldIndent)) {
-					return fileIndent + line.slice(oldIndent.length);
-				}
-				const ws = leadingWs(line);
-				const strip = Math.min(oldIndent.length, ws.length);
-				return fileIndent + line.slice(strip);
-			});
-			const replaced = [...rawLines.slice(0, startLine), ...newLines, ...rawLines.slice(startLine + winLen)].join(eol);
-			return { next: replaced, matchLines: [startLine + 1], count: 1 };
+			const matchedFileTexts = ranges.slice(startLine, startLine + winLen).map((r) => r.text);
+			const newLinesRaw = effectiveNew.split("\n");
+			const fileStyle = indentStyleOfLines(matchedFileTexts);
+			const editStyle = indentStyleOfLines([...oldLines, ...newLinesRaw]);
+			const indentConflict =
+				(fileStyle === "tab" && (editStyle === "space" || editStyle === "mixed")) ||
+				(fileStyle === "space" && (editStyle === "tab" || editStyle === "mixed"));
+
+			if (!indentConflict) {
+				const firstNonEmpty = oldLines.findIndex((l) => l.trim().length > 0);
+				const fileIndent = leadingWs(matchedFileTexts[firstNonEmpty]!);
+				const oldIndent = leadingWs(oldLines[firstNonEmpty]!);
+				const newLines = newLinesRaw.map((line) => {
+					if (line.trim().length === 0) return "";
+					if (oldIndent && line.startsWith(oldIndent)) {
+						return fileIndent + line.slice(oldIndent.length);
+					}
+					const ws = leadingWs(line);
+					const strip = Math.min(oldIndent.length, ws.length);
+					return fileIndent + line.slice(strip);
+				});
+				const sliceStart = ranges[startLine]!.start;
+				const sliceEnd = ranges[startLine + winLen - 1]!.end;
+				const blockEol = ranges[startLine]!.eol || eol;
+				const replaced = content.slice(0, sliceStart) + newLines.join(blockEol) + content.slice(sliceEnd);
+				return { next: replaced, matchLines: [startLine + 1], count: 1, matchKind: "indent" };
+			}
 		}
 	}
 
@@ -983,6 +1126,8 @@ const editTool: ToolDef = {
 					let cur = original;
 					const allMatchLines: number[] = [];
 					let totalReplacements = 0;
+					const MATCH_RANK: Record<EditMatchKind, number> = { exact: 0, prefix: 1, crlf: 2, indent: 3 };
+					let matchKind: EditMatchKind = "exact";
 
 					if (params.edits) {
 						for (let i = 0; i < params.edits.length; i++) {
@@ -991,12 +1136,14 @@ const editTool: ToolDef = {
 							cur = res.next;
 							allMatchLines.push(...res.matchLines);
 							totalReplacements += res.count;
+							if (MATCH_RANK[res.matchKind] > MATCH_RANK[matchKind]) matchKind = res.matchKind;
 						}
 					} else {
 						const res = applyOneEdit(cur, params.oldText!, params.newText!, !!params.replaceAll);
 						cur = res.next;
 						allMatchLines.push(...res.matchLines);
 						totalReplacements += res.count;
+						matchKind = res.matchKind;
 					}
 
 					await atomicWriteFile(file, cur);
@@ -1004,11 +1151,13 @@ const editTool: ToolDef = {
 					tracker.set(canonicalPath(file), { mtimeMs: nextInfo.mtimeMs, size: nextInfo.size });
 
 					const snippet = buildEditSnippet(cur, allMatchLines);
-					const header = totalReplacements > 1 ? `Edited ${params.path} (${totalReplacements} replacements)` : `Edited ${params.path}`;
+					const fallbackNote = matchKind !== "exact" ? ` [matched via ${matchKind} fallback]` : "";
+					const header = (totalReplacements > 1 ? `Edited ${params.path} (${totalReplacements} replacements)` : `Edited ${params.path}`) + fallbackNote;
 					return text(snippet ? `${header}\n${snippet}` : header, {
 						path: params.path,
 						...(params.edits ? { edits: params.edits.length } : { oldText: params.oldText, newText: params.newText }),
 						replacements: totalReplacements,
+						match: matchKind,
 					});
 				});
 			},
@@ -1114,7 +1263,8 @@ const grepTool: ToolDef = {
 				if (res.aborted) throw new Error("Search aborted");
 				if (res.timedOut) throw new Error("Search timed out after 30s");
 				if (res.exitCode === 1 && !res.stdout.trim()) return text("(no matches)", { matches: 0 });
-				if (res.exitCode !== 0 && res.exitCode !== 1) {
+				const partial = res.exitCode === 2 && Boolean(res.stdout.trim());
+				if (res.exitCode !== 0 && res.exitCode !== 1 && !partial) {
 					throw new Error(res.stderr.trim() || res.stdout.trim() || `search failed (${res.exitCode})`);
 				}
 
@@ -1156,11 +1306,16 @@ const grepTool: ToolDef = {
 						extra = `\n[${rawLines.length - shown.length} more matches omitted]`;
 					}
 				}
+				if (partial && res.stderr.trim()) {
+					const warnLine = res.stderr.trim().split("\n")[0]!;
+					extra += `\n[warning: partial results (${warnLine})]`;
+				}
 				return text(shown.join("\n") + extra, {
 					matches: rawLines.length,
 					shown: shown.length,
 					...(truncated ? { truncated: true } : {}),
 					...(spillPath ? { spillPath } : {}),
+					...(partial ? { partial: true } : {}),
 				});
 			},
 		});
@@ -1169,11 +1324,15 @@ const grepTool: ToolDef = {
 
 const GLOB_SKIP_DIRS = new Set([".git", "node_modules"]);
 
-/** Recursive fallback file walker when `rg` is unavailable. Exported for testing. */
-export async function globFallback(target: string, pattern: string, signal?: AbortSignal): Promise<string[]> {
+function makeGlobMatcher(pattern: string): (relToTarget: string) => boolean {
 	const cleaned = pattern.replace(/^\.\//, "");
 	const matcher = new Bun.Glob(cleaned);
-	const matchBasename = !cleaned.includes("/");
+	return (relToTarget: string) => matcher.match(relToTarget);
+}
+
+/** Recursive fallback file walker when `rg` is unavailable. Exported for testing. */
+export async function globFallback(target: string, pattern: string, signal?: AbortSignal): Promise<string[]> {
+	const matches = makeGlobMatcher(pattern);
 	const results: string[] = [];
 	const visited = new Set<string>();
 
@@ -1206,7 +1365,7 @@ export async function globFallback(target: string, pattern: string, signal?: Abo
 				await walk(full);
 			} else {
 				const rel = relative(target, full).replace(/\\/g, "/");
-				if (matcher.match(rel) || (matchBasename && matcher.match(entry.name))) {
+				if (matches(rel)) {
 					results.push(full);
 				}
 			}
@@ -1217,7 +1376,7 @@ export async function globFallback(target: string, pattern: string, signal?: Abo
 	return results;
 }
 
-const GLOB_DESCRIPTION = "Find files matching a glob pattern (e.g. **/*.ts, src/*.svelte). Respects .gitignore when ripgrep is available.";
+const GLOB_DESCRIPTION = "Find files matching a glob pattern relative to `path` (use `**/*.ts` for recursive matching, `*.ts` for top-level only, or `src/*.svelte`). Respects .gitignore when ripgrep is available.";
 
 const globTool: ToolDef = {
 	name: "glob",
@@ -1229,7 +1388,7 @@ const globTool: ToolDef = {
 			label: "Find files",
 			description: GLOB_DESCRIPTION,
 			parameters: Type.Object({
-				pattern: Type.String({ minLength: 1, description: "Glob pattern to match file paths, e.g. **/*.ts" }),
+				pattern: Type.String({ minLength: 1, description: "Glob pattern relative to `path` (e.g. **/*.ts for recursive, *.ts for top-level)" }),
 				path: Type.Optional(Type.String({ description: "Directory to search in (defaults to working directory)" })),
 				limit: Type.Optional(Type.Integer({ minimum: 1, maximum: MAX_GLOB_LIMIT, description: `Maximum number of files to return (default ${MAX_GLOB_DEFAULT}, max ${MAX_GLOB_LIMIT})` })),
 			}),
@@ -1241,16 +1400,22 @@ const globTool: ToolDef = {
 				let absFiles: string[];
 
 				if (rg) {
-					const res = await runProcessSplit([rg, "--files", "-g", params.pattern, target], { cwd: base, timeoutMs: 30_000, signal });
+					const res = await runProcessSplit([rg, "--files", target], { cwd: base, timeoutMs: 30_000, signal });
 					if (res.aborted) throw new Error("Glob aborted");
 					if (res.timedOut) throw new Error("Glob timed out after 30s");
 					if (res.exitCode === 1 && !res.stdout.trim()) {
 						return text("(no matches)", { path: params.path ?? ".", count: 0, shown: 0 });
 					}
-					if (res.exitCode !== 0 && res.exitCode !== 1) {
+					const partial = res.exitCode === 2 && Boolean(res.stdout.trim());
+					if (res.exitCode !== 0 && res.exitCode !== 1 && !partial) {
 						throw new Error(res.stderr.trim() || res.stdout.trim() || `glob failed (${res.exitCode})`);
 					}
-					absFiles = res.stdout.split("\n").filter(Boolean).map((l) => (isAbsolute(l) ? l : resolve(base, l)));
+					const matches = makeGlobMatcher(params.pattern);
+					absFiles = res.stdout
+						.split("\n")
+						.filter(Boolean)
+						.map((l) => (isAbsolute(l) ? l : resolve(base, l)))
+						.filter((abs) => matches(relative(target, abs).replace(/\\/g, "/")));
 				} else {
 					absFiles = await globFallback(target, params.pattern, signal);
 				}

@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, linkSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, readlinkSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import * as photon from "@silvia-odwyer/photon-node";
@@ -80,13 +80,21 @@ describe("dynamic getCwd across tools", () => {
 });
 
 describe("read tool hardening", () => {
-	test("outputs line numbers, strips CRLF \\r, and truncates from the head with accurate offset", async () => {
+	test("outputs line numbers, strips CRLF \\r, handles empty file and trailing newline without phantom line, and truncates from head", async () => {
 		const d = mkDir("read-test");
 		writeFileSync(join(d, "crlf.txt"), "alpha\r\nbeta\r\ngamma\r\n");
+		writeFileSync(join(d, "empty.txt"), "");
 		const [read] = buildTools(["read"], d);
+
 		const r = await exec(read, { path: "crlf.txt" });
-		expect(r.content[0].text).toBe("   1│alpha\n   2│beta\n   3│gamma\n   4│");
+		expect(r.content[0].text).toBe("   1│alpha\n   2│beta\n   3│gamma");
+		expect(r.details.totalLines).toBe(3);
+		expect(r.details.to).toBe(3);
 		expect(r.content[0].text).not.toContain("\r");
+
+		const emptyRes = await exec(read, { path: "empty.txt" });
+		expect(emptyRes.content[0].text).toBe("(empty file)");
+		expect(emptyRes.details.totalLines).toBe(0);
 
 		// >50 KB file: head truncation must keep line 1 and give exact next offset.
 		const longLines = Array.from({ length: 1000 }, (_, i) => `L${i + 1} ${"x".repeat(120)}`).join("\n");
@@ -99,14 +107,17 @@ describe("read tool hardening", () => {
 		expect(bigRes.content[0].text).toContain(`continue with offset=${bigRes.details.to + 1}]`);
 	});
 
-	test("detects binary files via NUL byte in first 8 KB", async () => {
+	test("detects binary files via NUL byte, UTF-16 BOM, or high invalid UTF-8 ratio", async () => {
 		const d = mkDir("read-bin");
-		const buf = Buffer.from([0x7f, 0x45, 0x4c, 0x46, 0x00, 0x01, 0x02, 0x03]);
-		writeFileSync(join(d, "prog.bin"), buf);
+		writeFileSync(join(d, "prog.bin"), Buffer.from([0x7f, 0x45, 0x4c, 0x46, 0x00, 0x01, 0x02, 0x03]));
+		writeFileSync(join(d, "utf16.bin"), Buffer.from([0xff, 0xfe, 0x41, 0x00, 0x42, 0x00]));
+		writeFileSync(join(d, "badutf8.bin"), Buffer.from(Array.from({ length: 100 }, () => 0xfe)));
 		const [read] = buildTools(["read"], d);
-		const r = await exec(read, { path: "prog.bin" });
-		expect(r.content[0].text).toContain("binary file");
-		expect(r.details.binary).toBe(true);
+		for (const f of ["prog.bin", "utf16.bin", "badutf8.bin"]) {
+			const r = await exec(read, { path: f });
+			expect(r.content[0].text, f).toContain("binary file");
+			expect(r.details.binary, f).toBe(true);
+		}
 	});
 
 	test("rejects >20 MB text files cleanly", async () => {
@@ -144,15 +155,45 @@ describe("edit and write hardening", () => {
 		expect(events.indexOf("c:end")).toBeLessThan(events.indexOf("a:end"));
 	});
 
-	test("atomic write preserves file mode and cleans up temp files", async () => {
+	test("atomic write preserves file mode, symlinks, hardlinks, and cleans up temp files", async () => {
 		const d = mkDir("atomic-mode");
 		const f = join(d, "script.sh");
 		writeFileSync(f, "#!/bin/sh\necho hi\n");
 		chmodSync(f, 0o755);
-		const [edit] = buildTools(["edit"], d);
+		const [write, edit] = buildTools(["write", "edit"], d);
 		await exec(edit, { path: "script.sh", oldText: "echo hi", newText: "echo bye" });
 		expect(statSync(f).mode & 0o777).toBe(0o755);
 		expect(readdirSync(d)).toEqual(["script.sh"]);
+
+		// 0o600 mode preserved
+		const secret = join(d, "secret.conf");
+		writeFileSync(secret, "k=1\n", { mode: 0o600 });
+		chmodSync(secret, 0o600);
+		await exec(edit, { path: "secret.conf", oldText: "k=1", newText: "k=2" });
+		expect(statSync(secret).mode & 0o777).toBe(0o600);
+
+		// Symlink preserved: writing/editing through symlink updates real target and keeps symlink intact
+		const targetDir = mkDir("atomic-sym-target");
+		const realFile = join(targetDir, "real.md");
+		writeFileSync(realFile, "hello symlink\n");
+		const linkPath = join(d, "AGENTS.md");
+		symlinkSync(realFile, linkPath);
+		await exec(edit, { path: "AGENTS.md", oldText: "hello symlink", newText: "edited symlink" });
+		expect(lstatSync(linkPath).isSymbolicLink()).toBe(true);
+		expect(readlinkSync(linkPath)).toBe(realFile);
+		expect(readFileSync(realFile, "utf8")).toBe("edited symlink\n");
+		await exec(write, { path: "AGENTS.md", content: "rewritten via symlink\n" });
+		expect(lstatSync(linkPath).isSymbolicLink()).toBe(true);
+		expect(readFileSync(realFile, "utf8")).toBe("rewritten via symlink\n");
+
+		// Hardlink preserved (nlink > 1 writes in-place)
+		const h1 = join(d, "hard1.txt");
+		const h2 = join(d, "hard2.txt");
+		writeFileSync(h1, "hard-orig\n");
+		linkSync(h1, h2);
+		await exec(edit, { path: "hard1.txt", oldText: "hard-orig", newText: "hard-new" });
+		expect(statSync(h1).ino).toBe(statSync(h2).ino);
+		expect(readFileSync(h2, "utf8")).toBe("hard-new\n");
 	});
 
 	test("staleness check rejects edit when file changed on disk since read", async () => {
@@ -177,31 +218,50 @@ describe("edit and write hardening", () => {
 		expect(readFileSync(f, "utf8")).toBe("hey world! modified externally\n");
 	});
 
-	test("staged matching: line-number prefix strip, CRLF preservation, and unique indent-insensitive block", async () => {
+	test("staged matching: strict prefix strip (no TSV corruption), CRLF boundary alignment, and safe Stage 4 indent matching", async () => {
 		const d = mkDir("staged");
 		const [edit] = buildTools(["edit"], d);
 
-		// Stage 2: accidental read line-number prefix
+		// Stage 2: strict consecutive `│` read prefix stripped, recorded in details.match + fallback notice
 		const f1 = join(d, "prefixed.ts");
 		writeFileSync(f1, "const a = 1;\nconst b = 2;\n");
-		await exec(edit, { path: "prefixed.ts", oldText: "   1│const a = 1;\n   2│const b = 2;", newText: "const a = 10;\nconst b = 20;" });
+		const rPrefix = await exec(edit, { path: "prefixed.ts", oldText: "   1│const a = 1;\n   2│const b = 2;", newText: "const a = 10;\nconst b = 20;" });
 		expect(readFileSync(f1, "utf8")).toBe("const a = 10;\nconst b = 20;\n");
+		expect(rPrefix.details.match).toBe("prefix");
+		expect(rPrefix.content[0].text).toContain("matched via prefix fallback");
 
-		// Stage 3: CRLF preserved when model sends LF
+		// TSV with `10\tone` must NOT be misidentified as read line-number prefix!
+		const fTsv = join(d, "data.tsv");
+		writeFileSync(fTsv, "one\ntwo\n");
+		await expect(exec(edit, { path: "data.tsv", oldText: "10\tone\n11\ttwo", newText: "10\tONE\n11\tTWO" })).rejects.toThrow(/not found/);
+		expect(readFileSync(fTsv, "utf8")).toBe("one\ntwo\n");
+
+		// Stage 3: CRLF preserved when model sends LF, including leading `\n` on CRLF pair (no `\r\r\n` corruption)
 		const f2 = join(d, "win.txt");
-		writeFileSync(f2, "one\r\ntwo\r\nthree\r\n");
-		await exec(edit, { path: "win.txt", oldText: "one\ntwo", newText: "ONE\nTWO" });
-		expect(readFileSync(f2, "utf8")).toBe("ONE\r\nTWO\r\nthree\r\n");
+		writeFileSync(f2, "a\r\nb\r\nc\r\n");
+		const rCrlf = await exec(edit, { path: "win.txt", oldText: "\nb\nc", newText: "\nB\nC" });
+		expect(readFileSync(f2, "utf8")).toBe("a\r\nB\r\nC\r\n");
+		expect(rCrlf.details.match).toBe("crlf");
+		expect(rCrlf.content[0].text).toContain("matched via crlf fallback");
 
-		// Stage 4: unique whitespace/indent-insensitive match preserves base indent delta
+		// Stage 4: unique space-indent match preserves base indent delta AND leaves outside mixed EOLs untouched
 		const f3 = join(d, "indent.ts");
-		writeFileSync(f3, "function f() {\n\t\tif (ok) {\n\t\t\treturn 1;\n\t\t}\n}\n");
-		await exec(edit, {
+		writeFileSync(f3, "header\r\nfunction f() {\n    if (ok) {\n      return 1;\n    }\n}\r\n");
+		const rIndent = await exec(edit, {
 			path: "indent.ts",
 			oldText: "if (ok) {\n  return 1;\n}",
 			newText: "if (ok) {\n  return 2;\n}",
 		});
-		expect(readFileSync(f3, "utf8")).toBe("function f() {\n\t\tif (ok) {\n\t\t  return 2;\n\t\t}\n}\n");
+		expect(readFileSync(f3, "utf8")).toBe("header\r\nfunction f() {\n    if (ok) {\n      return 2;\n    }\n}\r\n");
+		expect(rIndent.details.match).toBe("indent");
+		expect(rIndent.content[0].text).toContain("matched via indent fallback");
+
+		// Stage 4: refuses when tab vs space indentation conflicts
+		const fTab = join(d, "tabs.ts");
+		writeFileSync(fTab, "function f() {\n\t\tif (ok) {\n\t\t\treturn 1;\n\t\t}\n}\n");
+		await expect(
+			exec(edit, { path: "tabs.ts", oldText: "if (ok) {\n  return 1;\n}", newText: "if (ok) {\n  return 2;\n}" }),
+		).rejects.toThrow(/not found/);
 	});
 
 	test("replaceAll, atomic edits[], mismatch closest candidate, and ambiguous line numbers", async () => {
@@ -269,6 +329,24 @@ describe("grep, ls, glob, bash hardening", () => {
 		// Invalid regex throws stderr instead of returning matches
 		await expect(exec(grep, { pattern: "[unclosed" })).rejects.toThrow();
 
+		// Exit code 2 with partial matches (e.g. an unreadable file alongside a matching file) returns matches + warning
+		if (typeof process.getuid === "function" && process.getuid() !== 0) {
+			const partialDir = mkDir("grep-partial");
+			writeFileSync(join(partialDir, "ok.txt"), "needle-hit\n");
+			const unreadable = join(partialDir, "nope.txt");
+			writeFileSync(unreadable, "secret\n");
+			chmodSync(unreadable, 0o000);
+			try {
+				const [grepPartial] = buildTools(["grep"], partialDir);
+				const pr = await exec(grepPartial, { pattern: "needle-hit" });
+				expect(pr.content[0].text).toContain("ok.txt:1:needle-hit");
+				expect(pr.content[0].text).toContain("[warning: partial results");
+				expect(pr.details.partial).toBe(true);
+			} finally {
+				chmodSync(unreadable, 0o644);
+			}
+		}
+
 		// Head-first cap at 200 lines + spill
 		const capped = await exec(grep, { pattern: "match-line-", path: "many.txt" });
 		expect(capped.content[0].text).toContain("match-line-1");
@@ -295,7 +373,7 @@ describe("grep, ls, glob, bash hardening", () => {
 		expect(rBig.details.shown).toBe(500);
 	});
 
-	test("glob tool is registered in TOOL_DEFS, DEFAULT_TOOLS, TOGGLEABLE_TOOLS and works with rg and fallback", async () => {
+	test("glob tool is registered in TOOL_DEFS, DEFAULT_TOOLS, TOGGLEABLE_TOOLS and matches identically between rg and fallback", async () => {
 		expect(TOOL_DEFS.glob).toBeDefined();
 		expect(DEFAULT_TOOLS).toContain("glob");
 		expect(TOGGLEABLE_TOOLS).toContain("glob");
@@ -304,6 +382,7 @@ describe("grep, ls, glob, bash hardening", () => {
 		mkdirSync(join(d, "src"), { recursive: true });
 		mkdirSync(join(d, "node_modules/pkg"), { recursive: true });
 		mkdirSync(join(d, ".git"), { recursive: true });
+		writeFileSync(join(d, "root.ts"), "");
 		writeFileSync(join(d, "src/a.ts"), "");
 		writeFileSync(join(d, "src/b.ts"), "");
 		writeFileSync(join(d, "src/c.md"), "");
@@ -312,19 +391,31 @@ describe("grep, ls, glob, bash hardening", () => {
 
 		const [glob] = buildTools(["glob"], d);
 		expect(glob!.executionMode).toBeUndefined();
-		const r = await exec(glob, { pattern: "*.ts" });
-		expect(r.content[0].text).toBe("src/a.ts\nsrc/b.ts");
 
-		const limited = await exec(glob, { pattern: "*.ts", limit: 1 });
-		expect(limited.content[0].text).toContain("src/a.ts");
-		expect(limited.content[0].text).toContain("[1 more files omitted]");
+		// Recursive **/*.ts matches root and nested files identically in rg and fallback
+		const rRec = await exec(glob, { pattern: "**/*.ts" });
+		expect(rRec.content[0].text).toBe("root.ts\nsrc/a.ts\nsrc/b.ts");
+		const fbRec = await globFallback(d, "**/*.ts");
+		expect(fbRec.map((p) => p.slice(d.length + 1)).sort()).toEqual(["root.ts", "src/a.ts", "src/b.ts"]);
 
-		const none = await exec(glob, { pattern: "*.rs" });
+		// Top-level *.ts matches only top-level files identically in rg and fallback
+		const rTop = await exec(glob, { pattern: "*.ts" });
+		expect(rTop.content[0].text).toBe("root.ts");
+		const fbTop = await globFallback(d, "*.ts");
+		expect(fbTop.map((p) => p.slice(d.length + 1)).sort()).toEqual(["root.ts"]);
+
+		// Scoped path: "src" with pattern "*.ts" matches files directly inside src/
+		const rSub = await exec(glob, { pattern: "*.ts", path: "src" });
+		expect(rSub.content[0].text).toBe("src/a.ts\nsrc/b.ts");
+		const fbSub = await globFallback(join(d, "src"), "*.ts");
+		expect(fbSub.map((p) => p.slice(d.length + 1)).sort()).toEqual(["src/a.ts", "src/b.ts"]);
+
+		const limited = await exec(glob, { pattern: "**/*.ts", limit: 1 });
+		expect(limited.content[0].text).toContain("root.ts");
+		expect(limited.content[0].text).toContain("[2 more files omitted]");
+
+		const none = await exec(glob, { pattern: "**/*.rs" });
 		expect(none.content[0].text).toBe("(no matches)");
-
-		// Fallback skips .git and node_modules
-		const fb = await globFallback(d, "*.ts");
-		expect(fb.map((p) => p.slice(d.length + 1)).sort()).toEqual(["src/a.ts", "src/b.ts"]);
 	});
 
 	test("bash spills >50 KB output when spillDir is set, and truncates UTF-8 safely otherwise", async () => {
