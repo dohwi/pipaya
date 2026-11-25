@@ -4,8 +4,9 @@
  * and a repository with a single folder open, stay plain folder rows. The server says which repository a folder is in
  * (`POST /fs/repos`, read from `.git` without starting git); a server from before that lists every folder on its own.
  */
+import { tilde } from "./format";
 import type { DirBlock } from "./nav";
-import { SEP } from "./sidebar-model";
+import { SEP, shortName } from "./sidebar-model";
 
 export interface RepoInfo {
 	/** The repository's main working tree: one value for the main checkout and every worktree of it */
@@ -144,5 +145,47 @@ export function branchLabel(path: string, repo: RepoInfo): { name: string; sub: 
 	const branch = repo.branch ?? (top.slice(top.lastIndexOf("/") + 1) || top);
 	const below = subPath(path, repo.top);
 	return below ? { name: below, sub: branch } : { name: branch, sub: "" };
+}
+
+export interface TabLead {
+	icon: "fork" | "folder";
+	label: string;
+	title: string;
+}
+
+/**
+ * The marker before a folder's run of tabs in a project's tab strip.
+ * A git project names each folder by its checked-out branch with a fork icon; a hand-made project names each folder by
+ * its own label with a folder icon, matching the sidebar's DirBlock.
+ */
+export function tabLead(
+	path: string,
+	opts: {
+		manual: boolean;
+		customName?: string | null;
+		repo?: RepoInfo | null;
+		home?: string;
+	},
+): TabLead {
+	const fallback = shortName(path, opts.home);
+	const custom = opts.customName || null;
+	if (opts.manual) {
+		const label = custom ?? fallback;
+		const full = tilde(path, opts.home);
+		return {
+			icon: "folder",
+			label,
+			title: custom && full && custom !== full ? `${custom} · ${full}` : full || label,
+		};
+	}
+	const repo = opts.repo ?? null;
+	const br = repo ? branchLabel(path, repo) : null;
+	const label = custom ?? (br ? br.name : fallback);
+	const title = br?.sub ? `${label} (${br.sub})` : label;
+	return {
+		icon: repo ? "fork" : "folder",
+		label,
+		title,
+	};
 }
 
