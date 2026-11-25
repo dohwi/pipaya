@@ -51,5 +51,11 @@ describe("question notification", () => {
 test("language: Korean tags and nothing else", () => {
   expect(lang("ko")).toBe("ko"); expect(lang("ko-KR")).toBe("ko"); expect(lang("en-US")).toBe("en"); expect(lang("ja")).toBe("en"); expect(lang(undefined)).toBe("en");
 });
-test("duration", () => { expect(duration(9000, "ko")).toBe("9초"); expect(duration(60_000, "en")).toBe("1m"); });
+test("duration", () => {
+  expect(duration(9000, "ko")).toBe("9초");
+  expect(duration(60_000, "en")).toBe("1m");
+  expect(duration(3_600_000, "ko")).toBe("1시간");
+  expect(duration(3_900_000, "ko")).toBe("1시간 5분");
+  expect(duration(3_900_000, "en")).toBe("1h 5m");
+});
 test("test notification speaks the device's language", () => { expect(testText("ko").title).toContain("시험"); expect(testText("en").title).toContain("Test"); });

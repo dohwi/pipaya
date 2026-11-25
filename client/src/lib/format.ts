@@ -8,14 +8,15 @@ export const compact = (n: number): string =>
       : String(n);
 
 export const duration = (ms: number): string => {
-  if (ms < 1000) return `${Math.round(ms)}ms`;
-  if (ms < 59_950) return `${(ms / 1000).toFixed(1)}s`;
-  const totalSec = Math.round(ms / 1000);
+  const safe = Math.max(0, ms);
+  if (safe < 1000) return `${Math.round(safe)}ms`;
+  if (safe < 59_950) return t("{s}초", { s: (safe / 1000).toFixed(1) });
+  const totalSec = Math.round(safe / 1000);
   const h = Math.floor(totalSec / 3600);
   const m = Math.floor((totalSec % 3600) / 60);
   const s = totalSec % 60;
-  if (h > 0) return m > 0 ? `${h}h ${m}m` : `${h}h`;
-  return s > 0 ? `${m}m ${s}s` : `${m}m`;
+  if (h > 0) return m > 0 ? t("{h}시간 {m}분", { h, m }) : t("{h}시간", { h });
+  return s > 0 ? t("{m}분 {s}초", { m, s }) : t("{m}분", { m });
 };
 
 export const clip = (s: string, n: number): string =>
