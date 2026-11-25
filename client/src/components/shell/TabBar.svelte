@@ -28,7 +28,7 @@
 	import { formatCombo } from "../../lib/keys";
 	import { slidingIndicator } from "../../lib/sliding-indicator";
 	import { tabPanes, type Tab } from "../../lib/nav";
-	import { isManualRoot, tabLead, type TabLead } from "../../lib/projects";
+	import { isManualRoot, manualDirDividers, tabLead, type TabLead } from "../../lib/projects";
 	import { app } from "../../lib/store.svelte";
 	import { WORKSPACE_FILE_MIME } from "../../lib/workspace-edits";
 	import { workspaceViewer } from "../../lib/workspace-viewer.svelte";
@@ -48,27 +48,28 @@
 	const ids = $derived(tabs.map((x) => x.id));
 	/** The folder a tab (or a pane of one of its groups) is listed in */
 	const dirOf = (id: string) => dirs.find((d) => d.tabs.some((x) => x.id === id || tabPanes(x).includes(id)))?.path ?? null;
-	/** Where a folder's run starts, with the name it goes by: its branch inside a git project, else its compact folder label */
+	const manualProject = $derived(!!app.tabProject && app.tabProject.serverId === app.serverId && isManualRoot(app.tabProject.root));
+	/** Where a folder's run starts in a git project (branch label); hand-made projects use a quiet divider (`seps`) instead */
 	const leads = $derived.by(() => {
 		const out: Record<string, TabLead> = {};
 		const sid = app.serverId;
-		if (!multi || !sid) return out;
-		const manual = !!app.tabProject && app.tabProject.serverId === sid && isManualRoot(app.tabProject.root);
+		if (!multi || !sid || manualProject) return out;
 		const repos = app.links[sid]?.repos ?? {};
-		const siblings = dirs.map((d) => d.path);
 		for (const d of dirs) {
 			const first = d.tabs[0];
 			if (!first) continue;
-			out[first.id] = tabLead(d.path, {
-				manual,
+			const lead = tabLead(d.path, {
+				manual: false,
 				customName: app.sidebar.dirName(sid, d.path),
 				repo: repos[d.path],
 				home: app.workspace?.home,
-				siblings,
 			});
+			if (lead) out[first.id] = lead;
 		}
 		return out;
 	});
+	/** Tab ids preceded by a vertical hairline between folders in a hand-made project's strip */
+	const seps = $derived(multi && manualProject ? manualDirDividers(dirs) : new Set<string>());
 
 	const titleOf = (x: Tab) => (x.kind === "group" ? x.group.name : x.kind === "session" ? sessionTitle(x.session.title) : x.terminal.title);
 	/** The `@name` other sessions call this conversation by, as the sidebar row and the split tab's title bar show it. */
@@ -245,7 +246,7 @@
 	/** A double click on the strip's empty part (not a tab, chip, label or button): a new chat where "+" would start one */
 	function blankDouble(e: MouseEvent) {
 		const el = e.target as HTMLElement;
-		if (!app.serverId || el.closest(".tab, .gbox, .lead, button, input")) return;
+		if (!app.serverId || el.closest(".tab, .gbox, .lead, .dirsep, button, input")) return;
 		const p = app.tabDir?.path ?? app.workdirAbs;
 		void app.openIn(app.serverId, { workdir: p === app.workspace?.root ? "." : p });
 	}
@@ -328,6 +329,7 @@
 			{#each tabs as x (x.id)}
 				{@const on = x.id === activeTab}
 				{@const st = stateOf(x)}
+				{#if seps.has(x.id)}<span class="dirsep" aria-hidden="true"></span>{/if}
 				{@const lead = leads[x.id]}
 				{#if lead}<span class="lead mono" title={lead.title}><Icon name={lead.icon} /><span class="ln">{lead.label}</span></span>{/if}
 				<!-- a group is a tray of its sessions' chips, laid out inline with the other tabs (its name is in the page
@@ -487,6 +489,15 @@
 		z-index: 1;
 		background: var(--bg-tabbar-on);
 		border-radius: var(--radius-sm);
+	}
+
+	/* a hand-made project's strip: folders are already named in the sidebar and header, so a quiet hairline parts their runs */
+	.dirsep {
+		flex: none;
+		width: 1px;
+		height: 16px;
+		margin: 0 4px;
+		background: var(--tabbar-line);
 	}
 
 	/* a project's strip: each folder's run of tabs starts with its branch, dim and small, the run before it kept 8px off */

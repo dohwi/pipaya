@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { branchLabel, compactFolderLabel, dissolveProject, flattenBlocks, joinProject, leaveProject, projectBlocks, subPath, tabLead, type RepoMap } from "../src/lib/projects";
+import { branchLabel, dissolveProject, flattenBlocks, joinProject, leaveProject, manualDirDividers, projectBlocks, subPath, tabLead, type RepoMap } from "../src/lib/projects";
 import { withoutDirKeys } from "../src/lib/sidebar.svelte";
 import type { DirBlock } from "../src/lib/nav";
 
@@ -88,69 +88,22 @@ describe("hand-made projects", () => {
 	});
 });
 
-describe("compactFolderLabel", () => {
-	test("uses the folder's own name when no sibling shares it", () => {
-		const dirs = ["/home/u/w/server", "/home/u/w/client"];
-		expect(compactFolderLabel("/home/u/w/server", dirs, "/home/u")).toBe("server");
-		expect(compactFolderLabel("/home/u/w/client", dirs, "/home/u")).toBe("client");
+describe("manualDirDividers", () => {
+	test("marks the first tab of each non-empty folder after the first", () => {
+		expect([...manualDirDividers([dir("/a", "a1", "a2"), dir("/b", "b1"), dir("/c", "c1")])]).toEqual(["b1", "c1"]);
 	});
-	test("uses the nearest distinguishing ancestor when siblings share the last folder name", () => {
-		const dirs = ["/home/u/w/frontend/billing", "/home/u/w/backend/billing"];
-		expect(compactFolderLabel("/home/u/w/frontend/billing", dirs, "/home/u")).toBe("frontend");
-		expect(compactFolderLabel("/home/u/w/backend/billing", dirs, "/home/u")).toBe("backend");
-	});
-	test("climbs past shared ancestors and handles uneven depths", () => {
-		const dirs = ["/a/x/app", "/b/x/app", "/c/y/app"];
-		expect(compactFolderLabel("/a/x/app", dirs)).toBe("a");
-		expect(compactFolderLabel("/b/x/app", dirs)).toBe("b");
-		expect(compactFolderLabel("/c/y/app", dirs)).toBe("y");
-
-		const uneven = ["/home/u/app", "/home/u/sub/app"];
-		expect(compactFolderLabel("/home/u/app", uneven, "/home/u")).toBe("~");
-		expect(compactFolderLabel("/home/u/sub/app", uneven, "/home/u")).toBe("sub");
-
-		const shallow = ["/app", "/sub/app"];
-		expect(compactFolderLabel("/app", shallow)).toBe("app");
-		expect(compactFolderLabel("/sub/app", shallow)).toBe("sub");
-	});
-	test("handles empty siblings and root paths", () => {
-		expect(compactFolderLabel("/home/u/w/api", [], "/home/u")).toBe("api");
-		expect(compactFolderLabel("/", [])).toBe("/");
+	test("skips empty folders so no leading or duplicate divider is drawn", () => {
+		expect([...manualDirDividers([dir("/empty"), dir("/a", "a1"), dir("/mid"), dir("/b", "b1")])]).toEqual(["b1"]);
+		expect([...manualDirDividers([dir("/a", "a1")])]).toEqual([]);
+		expect([...manualDirDividers([])]).toEqual([]);
 	});
 });
 
 describe("tabLead", () => {
-	test("manual project uses folder icon and compact distinguishing name even when the folder is a git repo on main", () => {
-		const dirs = ["/home/u/w/frontend/billing", "/home/u/w/backend/billing"];
+	test("manual project returns null so the tab bar uses a divider instead of text labels", () => {
 		const r = repo("/home/u/w/backend/billing", "/home/u/w/backend/billing", "main");
-		expect(tabLead("/home/u/w/backend/billing", { manual: true, repo: r, home: "/home/u", siblings: dirs })).toEqual({
-			icon: "folder",
-			label: "backend",
-			title: "~/w/backend/billing",
-		});
-		const sub = repo("/home/u/w/frontend", "/home/u/w/frontend", "main");
-		expect(tabLead("/home/u/w/frontend/billing", { manual: true, repo: sub, home: "/home/u", siblings: dirs })).toEqual({
-			icon: "folder",
-			label: "frontend",
-			title: "~/w/frontend/billing",
-		});
-	});
-	test("manual project respects custom folder names and ignores empty/null custom names", () => {
-		expect(tabLead("/home/u/w/api", { manual: true, customName: "프록시", home: "/home/u" })).toEqual({
-			icon: "folder",
-			label: "프록시",
-			title: "프록시 · ~/w/api",
-		});
-		expect(tabLead("/home/u/w/api", { manual: true, customName: "", repo: null, home: "/home/u" })).toEqual({
-			icon: "folder",
-			label: "api",
-			title: "~/w/api",
-		});
-		expect(tabLead("/w/api", { manual: true })).toEqual({
-			icon: "folder",
-			label: "api",
-			title: "/w/api",
-		});
+		expect(tabLead("/home/u/w/backend/billing", { manual: true, repo: r, home: "/home/u" })).toBeNull();
+		expect(tabLead("/home/u/w/api", { manual: true, customName: "프록시", home: "/home/u" })).toBeNull();
 	});
 	test("git project uses fork icon and branch name, with subfolder and detached HEAD handling", () => {
 		expect(tabLead("/w/app-x", { manual: false, repo: repo("/w/app", "/w/app-x", "feat/x") })).toEqual({
