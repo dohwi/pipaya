@@ -1,7 +1,7 @@
 import type { AgentTool, AgentToolResult } from "@earendil-works/pi-agent-core";
 import { randomUUID } from "node:crypto";
-import { realpathSync } from "node:fs";
-import { chmod, lstat, mkdir, open, readdir, readFile, realpath, rename, stat, unlink, writeFile } from "node:fs/promises";
+import { constants as fsConstants, realpathSync } from "node:fs";
+import { access, chmod, lstat, mkdir, open, readdir, readFile, realpath, rename, stat, unlink, writeFile } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import Type, { type TSchema } from "typebox";
 import { formatBytes, isUnsupportedPicture, MAX_IMAGE_BYTES, sniffImage } from "./image-file.ts";
@@ -264,11 +264,28 @@ async function atomicWriteFile(file: string, content: string): Promise<void> {
 
 	const tmp = join(dirname(target), `.${basename(target)}.pipaya-tmp-${randomUUID().slice(0, 8)}`);
 	try {
-		if (existingMode !== undefined) {
-			await writeFile(tmp, content, { encoding: "utf8", mode: 0o600 });
-			await chmod(tmp, existingMode);
-		} else {
-			await writeFile(tmp, content, "utf8");
+		try {
+			if (existingMode !== undefined) {
+				await writeFile(tmp, content, { encoding: "utf8", mode: 0o600 });
+				await chmod(tmp, existingMode);
+			} else {
+				await writeFile(tmp, content, "utf8");
+			}
+		} catch (e) {
+			const code = (e as NodeJS.ErrnoException).code;
+			// If creating the sibling temp file failed in a read-only dir (e.g. 0555) but the existing target itself is writable, write in-place.
+			if ((code === "EACCES" || code === "EPERM") && existingMode !== undefined) {
+				let writable = false;
+				try {
+					await access(target, fsConstants.W_OK);
+					writable = true;
+				} catch {}
+				if (writable) {
+					await writeFile(target, content, "utf8");
+					return;
+				}
+			}
+			throw e;
 		}
 		try {
 			await rename(tmp, target);
@@ -583,14 +600,14 @@ function formatNumberedLine(lineNum: number, line: string, width: number): strin
 	return `${String(lineNum).padStart(width, " ")}│${line.replace(/\r$/, "")}`;
 }
 
-/** Detect binary content in the leading sample: NUL byte, UTF-16 BOM, or >10% invalid UTF-8 replacement chars. */
-function isBinarySample(sample: Buffer, totalSize: number): boolean {
-	if (sample.length === 0) return false;
-	if (sample.includes(0)) return true;
-	// UTF-16 LE / BE BOM
+/** Detect binary or unsupported-encoding content in the leading sample. */
+function detectBinarySample(sample: Buffer, totalSize: number): "nul" | "utf16" | "binary" | null {
+	if (sample.length === 0) return null;
+	// Check UTF-16 BOM before NUL so UTF-16 files get a clearer encoding hint instead of generic binary.
 	if (sample.length >= 2 && ((sample[0] === 0xff && sample[1] === 0xfe) || (sample[0] === 0xfe && sample[1] === 0xff))) {
-		return true;
+		return "utf16";
 	}
+	if (sample.includes(0)) return "nul";
 	// If we only read a prefix of a larger file, trim any partial multi-byte UTF-8 sequence at the cut boundary.
 	let checkEnd = sample.length;
 	if (totalSize > sample.length) {
@@ -603,14 +620,28 @@ function isBinarySample(sample: Buffer, totalSize: number): boolean {
 			checkEnd--;
 		}
 	}
-	if (checkEnd <= 0) return false;
-	const decoded = new TextDecoder("utf-8", { fatal: false }).decode(sample.subarray(0, checkEnd));
-	if (decoded.length === 0) return false;
+	if (checkEnd <= 0) return null;
+	const slice = sample.subarray(0, checkEnd);
+	let hasControl = false;
+	for (let i = 0; i < slice.length; i++) {
+		const b = slice[i]!;
+		if (b < 0x09 || (b >= 0x0e && b <= 0x1f)) {
+			hasControl = true;
+			break;
+		}
+	}
+	const decoded = new TextDecoder("utf-8", { fatal: false }).decode(slice);
+	if (decoded.length === 0) return null;
 	let invalid = 0;
 	for (let i = 0; i < decoded.length; i++) {
 		if (decoded.charCodeAt(i) === 0xfffd) invalid++;
 	}
-	return invalid / decoded.length > 0.1;
+	const ratio = invalid / decoded.length;
+	// Avoid falsely flagging short Latin-1 text (e.g. `café naïve résumé`) as binary: require control bytes or high invalid ratio on >=64 bytes.
+	if (ratio > 0.1 && (hasControl || (checkEnd >= 64 && ratio > 0.3))) {
+		return "binary";
+	}
+	return null;
 }
 
 const readTool: ToolDef = {
@@ -644,7 +675,16 @@ const readTool: ToolDef = {
 					try {
 						const probe = Buffer.alloc(Math.min(info.size, BINARY_SNIFF_BYTES));
 						const { bytesRead } = await fh.read(probe, 0, probe.length, 0);
-						if (isBinarySample(probe.subarray(0, bytesRead), info.size)) {
+						const kind = detectBinarySample(probe.subarray(0, bytesRead), info.size);
+						if (kind === "utf16") {
+							return text(`${params.path} has an unsupported encoding (UTF-16) (${formatBytes(info.size)}); convert it to UTF-8 to read as text.`, {
+								path: params.path,
+								binary: true,
+								encoding: "utf-16",
+								bytes: info.size,
+							});
+						}
+						if (kind) {
 							return text(`${params.path} appears to be a binary file (${formatBytes(info.size)}); cannot display as text.`, {
 								path: params.path,
 								binary: true,
@@ -1027,22 +1067,43 @@ function applyOneEdit(content: string, oldText: string, newText: string, replace
 
 			if (!indentConflict) {
 				const firstNonEmpty = oldLines.findIndex((l) => l.trim().length > 0);
-				const fileIndent = leadingWs(matchedFileTexts[firstNonEmpty]!);
-				const oldIndent = leadingWs(oldLines[firstNonEmpty]!);
-				const newLines = newLinesRaw.map((line) => {
-					if (line.trim().length === 0) return "";
-					if (oldIndent && line.startsWith(oldIndent)) {
-						return fileIndent + line.slice(oldIndent.length);
+				const firstFileWs = leadingWs(matchedFileTexts[firstNonEmpty]!);
+				const firstOldWs = leadingWs(oldLines[firstNonEmpty]!);
+				let addPrefix: string | null = null;
+				let removePrefix: string | null = null;
+				if (firstFileWs.startsWith(firstOldWs)) {
+					addPrefix = firstFileWs.slice(firstOldWs.length);
+				} else if (firstOldWs.startsWith(firstFileWs)) {
+					removePrefix = firstOldWs.slice(firstFileWs.length);
+				}
+
+				let constantDelta = addPrefix !== null || removePrefix !== null;
+				if (constantDelta) {
+					for (let k = 0; k < winLen; k++) {
+						if (oldLines[k]!.trim().length === 0) continue;
+						const fWs = leadingWs(matchedFileTexts[k]!);
+						const oWs = leadingWs(oldLines[k]!);
+						if (addPrefix !== null) {
+							if (fWs !== addPrefix + oWs) { constantDelta = false; break; }
+						} else if (removePrefix !== null) {
+							if (oWs !== removePrefix + fWs) { constantDelta = false; break; }
+						}
 					}
-					const ws = leadingWs(line);
-					const strip = Math.min(oldIndent.length, ws.length);
-					return fileIndent + line.slice(strip);
-				});
-				const sliceStart = ranges[startLine]!.start;
-				const sliceEnd = ranges[startLine + winLen - 1]!.end;
-				const blockEol = ranges[startLine]!.eol || eol;
-				const replaced = content.slice(0, sliceStart) + newLines.join(blockEol) + content.slice(sliceEnd);
-				return { next: replaced, matchLines: [startLine + 1], count: 1, matchKind: "indent" };
+				}
+
+				if (constantDelta) {
+					const newLines = newLinesRaw.map((line) => {
+						if (line.trim().length === 0) return "";
+						if (addPrefix !== null) return addPrefix + line;
+						if (removePrefix && line.startsWith(removePrefix)) return line.slice(removePrefix.length);
+						return line;
+					});
+					const sliceStart = ranges[startLine]!.start;
+					const sliceEnd = ranges[startLine + winLen - 1]!.end;
+					const blockEol = ranges[startLine]!.eol || eol;
+					const replaced = content.slice(0, sliceStart) + newLines.join(blockEol) + content.slice(sliceEnd);
+					return { next: replaced, matchLines: [startLine + 1], count: 1, matchKind: "indent" };
+				}
 			}
 		}
 	}
@@ -1330,9 +1391,24 @@ function makeGlobMatcher(pattern: string): (relToTarget: string) => boolean {
 	return (relToTarget: string) => matcher.match(relToTarget);
 }
 
+// Whether the glob pattern explicitly targets hidden dot-files/folders (e.g. `.*`, `.github/**`, `**/.env*`).
+function patternIncludesHidden(pattern: string): boolean {
+	const cleaned = pattern.replace(/^\.\//, "");
+	return /(?:^|\/)\.[^/]/.test(cleaned);
+}
+
+// Safe `rg -g` pre-filter for simple extension patterns (e.g. `**/*.ts` -> `*.ts`); returns null if pattern is complex.
+function safeRgExtensionFilter(pattern: string): string | null {
+	const cleaned = pattern.replace(/^\.\//, "");
+	if (/[{}[\]!]/.test(cleaned)) return null;
+	const m = /(?:^|\/)\*\.([a-zA-Z0-9_-]+)$/.exec(cleaned);
+	return m ? `*.${m[1]}` : null;
+}
+
 /** Recursive fallback file walker when `rg` is unavailable. Exported for testing. */
 export async function globFallback(target: string, pattern: string, signal?: AbortSignal): Promise<string[]> {
 	const matches = makeGlobMatcher(pattern);
+	const includeHidden = patternIncludesHidden(pattern);
 	const results: string[] = [];
 	const visited = new Set<string>();
 
@@ -1355,13 +1431,14 @@ export async function globFallback(target: string, pattern: string, signal?: Abo
 		}
 		for (const entry of entries) {
 			if (signal?.aborted) throw new Error("Glob aborted");
+			if (GLOB_SKIP_DIRS.has(entry.name)) continue;
+			if (!includeHidden && entry.name.startsWith(".")) continue;
 			const full = join(dir, entry.name);
 			let isDir = entry.isDirectory();
 			if (!isDir && entry.isSymbolicLink()) {
 				try { isDir = (await stat(full)).isDirectory(); } catch { continue; }
 			}
 			if (isDir) {
-				if (GLOB_SKIP_DIRS.has(entry.name)) continue;
 				await walk(full);
 			} else {
 				const rel = relative(target, full).replace(/\\/g, "/");
@@ -1376,7 +1453,7 @@ export async function globFallback(target: string, pattern: string, signal?: Abo
 	return results;
 }
 
-const GLOB_DESCRIPTION = "Find files matching a glob pattern relative to `path` (use `**/*.ts` for recursive matching, `*.ts` for top-level only, or `src/*.svelte`). Respects .gitignore when ripgrep is available.";
+const GLOB_DESCRIPTION = "Find files matching a glob pattern relative to `path` (use `**/*.ts` for recursive matching, `*.ts` for top-level only, or `src/*.svelte`). Skips hidden dotfiles unless the pattern names a dot segment. Respects .gitignore when ripgrep is available.";
 
 const globTool: ToolDef = {
 	name: "glob",
@@ -1398,9 +1475,19 @@ const globTool: ToolDef = {
 				const limit = Math.min(Math.max(1, params.limit ?? MAX_GLOB_DEFAULT), MAX_GLOB_LIMIT);
 				const rg = Bun.which("rg");
 				let absFiles: string[];
+				let captureCapped = false;
 
 				if (rg) {
-					const res = await runProcessSplit([rg, "--files", target], { cwd: base, timeoutMs: 30_000, signal });
+					const includeHidden = patternIncludesHidden(params.pattern);
+					const extFilter = safeRgExtensionFilter(params.pattern);
+					const cmd = [
+						rg,
+						"--files",
+						...(includeHidden ? ["--hidden", "-g", "!.git"] : []),
+						...(extFilter ? ["-g", extFilter] : []),
+						target,
+					];
+					const res = await runProcessSplit(cmd, { cwd: base, timeoutMs: 30_000, signal });
 					if (res.aborted) throw new Error("Glob aborted");
 					if (res.timedOut) throw new Error("Glob timed out after 30s");
 					if (res.exitCode === 1 && !res.stdout.trim()) {
@@ -1410,6 +1497,7 @@ const globTool: ToolDef = {
 					if (res.exitCode !== 0 && res.exitCode !== 1 && !partial) {
 						throw new Error(res.stderr.trim() || res.stdout.trim() || `glob failed (${res.exitCode})`);
 					}
+					captureCapped = res.stdout.length >= MAX_CAPTURE_BYTES;
 					const matches = makeGlobMatcher(params.pattern);
 					absFiles = res.stdout
 						.split("\n")
@@ -1436,8 +1524,14 @@ const globTool: ToolDef = {
 					usedBytes += bytes;
 				}
 				const omitted = relFiles.length - shown.length;
-				const body = shown.join("\n") + (omitted > 0 ? `\n[${omitted} more files omitted]` : "");
-				return text(body, { path: params.path ?? ".", count: relFiles.length, shown: shown.length });
+				const capWarn = captureCapped ? "\n[warning: file list exceeded 10 MB capture limit; results may be incomplete]" : "";
+				const body = shown.join("\n") + (omitted > 0 ? `\n[${omitted} more files omitted]` : "") + capWarn;
+				return text(body, {
+					path: params.path ?? ".",
+					count: relFiles.length,
+					shown: shown.length,
+					...(captureCapped ? { truncated: true } : {}),
+				});
 			},
 		});
 	},

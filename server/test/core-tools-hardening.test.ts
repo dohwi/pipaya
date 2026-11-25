@@ -107,17 +107,29 @@ describe("read tool hardening", () => {
 		expect(bigRes.content[0].text).toContain(`continue with offset=${bigRes.details.to + 1}]`);
 	});
 
-	test("detects binary files via NUL byte, UTF-16 BOM, or high invalid UTF-8 ratio", async () => {
+	test("detects binary files via NUL byte, UTF-16 BOM (clear encoding note), or high invalid UTF-8 ratio without flagging short Latin-1 text", async () => {
 		const d = mkDir("read-bin");
 		writeFileSync(join(d, "prog.bin"), Buffer.from([0x7f, 0x45, 0x4c, 0x46, 0x00, 0x01, 0x02, 0x03]));
 		writeFileSync(join(d, "utf16.bin"), Buffer.from([0xff, 0xfe, 0x41, 0x00, 0x42, 0x00]));
 		writeFileSync(join(d, "badutf8.bin"), Buffer.from(Array.from({ length: 100 }, () => 0xfe)));
+		writeFileSync(join(d, "latin1.txt"), Buffer.from("café naïve résumé\n", "latin1"));
 		const [read] = buildTools(["read"], d);
-		for (const f of ["prog.bin", "utf16.bin", "badutf8.bin"]) {
-			const r = await exec(read, { path: f });
-			expect(r.content[0].text, f).toContain("binary file");
-			expect(r.details.binary, f).toBe(true);
-		}
+
+		const rNul = await exec(read, { path: "prog.bin" });
+		expect(rNul.content[0].text).toContain("binary file");
+		expect(rNul.details.binary).toBe(true);
+
+		const rUtf16 = await exec(read, { path: "utf16.bin" });
+		expect(rUtf16.content[0].text).toContain("unsupported encoding (UTF-16)");
+		expect(rUtf16.details.encoding).toBe("utf-16");
+
+		const rBad = await exec(read, { path: "badutf8.bin" });
+		expect(rBad.content[0].text).toContain("binary file");
+		expect(rBad.details.binary).toBe(true);
+
+		const rLatin1 = await exec(read, { path: "latin1.txt" });
+		expect(rLatin1.details.binary).toBeUndefined();
+		expect(rLatin1.content[0].text).toContain("   1│");
 	});
 
 	test("rejects >20 MB text files cleanly", async () => {
@@ -194,6 +206,27 @@ describe("edit and write hardening", () => {
 		await exec(edit, { path: "hard1.txt", oldText: "hard-orig", newText: "hard-new" });
 		expect(statSync(h1).ino).toBe(statSync(h2).ino);
 		expect(readFileSync(h2, "utf8")).toBe("hard-new\n");
+
+		// Read-only parent directory (0555): writable target succeeds in-place, read-only target still throws EACCES
+		if (typeof process.getuid === "function" && process.getuid() !== 0) {
+			const roDir = mkDir("ro-parent");
+			const writableFile = join(roDir, "ok.txt");
+			const roFile = join(roDir, "locked.txt");
+			writeFileSync(writableFile, "before\n");
+			writeFileSync(roFile, "locked\n");
+			chmodSync(writableFile, 0o644);
+			chmodSync(roFile, 0o444);
+			chmodSync(roDir, 0o555);
+			try {
+				const [roEdit] = buildTools(["edit"], roDir);
+				await exec(roEdit, { path: "ok.txt", oldText: "before", newText: "after" });
+				expect(readFileSync(writableFile, "utf8")).toBe("after\n");
+				await expect(exec(roEdit, { path: "locked.txt", oldText: "locked", newText: "hacked" })).rejects.toThrow();
+			} finally {
+				chmodSync(roDir, 0o755);
+				chmodSync(roFile, 0o644);
+			}
+		}
 	});
 
 	test("staleness check rejects edit when file changed on disk since read", async () => {
@@ -262,6 +295,14 @@ describe("edit and write hardening", () => {
 		await expect(
 			exec(edit, { path: "tabs.ts", oldText: "if (ok) {\n  return 1;\n}", newText: "if (ok) {\n  return 2;\n}" }),
 		).rejects.toThrow(/not found/);
+
+		// Stage 4: refuses when indent delta is not constant across lines (prevents flattening nested indentation)
+		const fNested = join(d, "nested.ts");
+		writeFileSync(fNested, "\tif (a) {\n\t\tb();\n\t}\n");
+		await expect(
+			exec(edit, { path: "nested.ts", oldText: "if (a) {\nb();\n}", newText: "if (a) {\nc();\n}" }),
+		).rejects.toThrow(/not found/);
+		expect(readFileSync(fNested, "utf8")).toBe("\tif (a) {\n\t\tb();\n\t}\n");
 	});
 
 	test("replaceAll, atomic edits[], mismatch closest candidate, and ambiguous line numbers", async () => {
@@ -380,9 +421,12 @@ describe("grep, ls, glob, bash hardening", () => {
 
 		const d = mkDir("glob-test");
 		mkdirSync(join(d, "src"), { recursive: true });
+		mkdirSync(join(d, ".github"), { recursive: true });
 		mkdirSync(join(d, "node_modules/pkg"), { recursive: true });
 		mkdirSync(join(d, ".git"), { recursive: true });
 		writeFileSync(join(d, "root.ts"), "");
+		writeFileSync(join(d, ".env"), "");
+		writeFileSync(join(d, ".github/ci.yml"), "");
 		writeFileSync(join(d, "src/a.ts"), "");
 		writeFileSync(join(d, "src/b.ts"), "");
 		writeFileSync(join(d, "src/c.md"), "");
@@ -392,11 +436,19 @@ describe("grep, ls, glob, bash hardening", () => {
 		const [glob] = buildTools(["glob"], d);
 		expect(glob!.executionMode).toBeUndefined();
 
-		// Recursive **/*.ts matches root and nested files identically in rg and fallback
+		// Recursive **/*.ts matches root and nested files identically in rg and fallback (and skips hidden dotfiles)
 		const rRec = await exec(glob, { pattern: "**/*.ts" });
 		expect(rRec.content[0].text).toBe("root.ts\nsrc/a.ts\nsrc/b.ts");
 		const fbRec = await globFallback(d, "**/*.ts");
 		expect(fbRec.map((p) => p.slice(d.length + 1)).sort()).toEqual(["root.ts", "src/a.ts", "src/b.ts"]);
+
+		// Hidden dotfiles skipped by default in both rg and fallback, included when pattern names a dot segment
+		expect((await exec(glob, { pattern: "**/*" })).content[0].text).not.toContain(".env");
+		expect((await globFallback(d, "**/*")).map((p) => p.slice(d.length + 1))).not.toContain(".env");
+		expect((await exec(glob, { pattern: ".github/**" })).content[0].text).toBe(".github/ci.yml");
+		expect((await globFallback(d, ".github/**")).map((p) => p.slice(d.length + 1))).toEqual([".github/ci.yml"]);
+		expect((await exec(glob, { pattern: ".*" })).content[0].text).toBe(".env");
+		expect((await globFallback(d, ".*")).map((p) => p.slice(d.length + 1))).toEqual([".env"]);
 
 		// Top-level *.ts matches only top-level files identically in rg and fallback
 		const rTop = await exec(glob, { pattern: "*.ts" });

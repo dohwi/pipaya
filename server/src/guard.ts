@@ -47,7 +47,8 @@ const TEE_BLOCK_TARGET = new RegExp(String.raw`\s["']?${BLOCK_DEV}`);
 const REDIRECT_BLOCK_TARGET = new RegExp(String.raw`>{1,2}\s*\|?\s*["']?${BLOCK_DEV}`);
 
 /** Anchors a command to the start of a segment (after optional subshell/control keywords, env assignments, sudo/doas/nohup, or path prefix). */
-const CMD_PREFIX = String.raw`^\s*(?:(?:[({]|!(?=\s)|(?:then|do|else|elif|time|exec)(?=\s))\s*)*(?:[A-Za-z_]\w*=\S*\s+)*(?:(?:sudo|doas|command|nohup|setsid|env)\s+(?:-[uUg]\s+\S+\s+|-(?![uUg]\s)[A-Za-z0-9-]+\s+|[A-Za-z_]\w*=\S*\s+)*)*(?:\/(?:usr\/)?s?bin\/)?`;
+const CMD_PREFIX_BODY = String.raw`(?:(?:[({]|!(?=\s)|(?:then|do|else|elif|time|exec)(?=\s))\s*)*(?:[A-Za-z_]\w*=\S*\s+)*(?:(?:sudo|doas|command|nohup|setsid|env)\s+(?:-[uUg]\s+\S+\s+|-(?![uUg]\s)[A-Za-z0-9-]+\s+|[A-Za-z_]\w*=\S*\s+)*)*(?:\/(?:usr\/)?s?bin\/)?`;
+const CMD_PREFIX = String.raw`^\s*${CMD_PREFIX_BODY}`;
 
 const PIPE_TO_SHELL = /\|(?!\|)\s*(?:(?:sudo|doas)\s+(?:-[uUg]\s+\S+\s+|-(?![uUg]\s)\S+\s+)*|(?:\/usr\/bin\/)?env\s+(?:-\S+\s+|[A-Za-z_]\w*=\S*\s+)*)*(?:\/[\w./-]*\/)?(?:sh|bash|zsh|dash|ash|ksh|fish)\b/;
 const SUBST_REMOTE_EXEC = /\b(?:(?:sh|bash|zsh|dash|ash|ksh|fish)\s+(?:-[a-bd-zA-Z]+\s+)*-[a-zA-Z]*c\s+(?:--\s+)?["']?\$\(\s*(?:curl|wget)\b|(?:sh|bash|zsh|dash|ash|ksh|fish|source|\.)\s+<\(\s*(?:curl|wget)\b|eval\s+["']?\$\(\s*(?:curl|wget)\b)/;
@@ -56,8 +57,13 @@ const SUBST_CURL_WGET = /\$\(\s*(?:curl|wget)\b/;
 const GIT_PUSH_CMD = new RegExp(String.raw`${CMD_PREFIX}git(?:\s+(?:-[Cc]\s+\S+|--[a-z-]+(?:=\S+)?|-(?![Cc]\s|-)[a-zA-Z0-9]+))*\s+push\b`);
 const GIT_FORCE_FLAG = new RegExp(String.raw`(?:^|\s)(?:--force${FLAG_END}|-[uvqnd46]*f[uvqnd46]*${FLAG_END}|\+[A-Za-z0-9_./-]+(?::[A-Za-z0-9_./-]+)?${FLAG_END})`);
 
-const SHELL_C_WRAPPER = /\b(?:(?:ba|z|da|a|k)?sh|fish)\s+(?:-[a-bd-zA-Z]+\s+)*-[a-zA-Z]*c(?:\s+--)?(?=\s)/;
+/** Matches `sh -c`, `bash --norc -c`, `bash -o pipefail -c`, `sh -c --`, `fish -c` on a raw segment (linear, no backtracking). */
+const SHELL_C_WRAPPER = /\b(?:(?:ba|z|da|a|k)?sh|fish)\s+(?:(?:--[a-zA-Z0-9-]+(?:=\S+)?|-[a-bd-zA-Z]+(?:\s+[^-\s'"]\S*)?)\s+)*-[a-zA-Z]*c(?:\s+--)?(?=\s)/;
 const EVAL_WRAPPER = new RegExp(String.raw`${CMD_PREFIX}eval(?=\s)`);
+/** Matches a shell command consuming a heredoc directly (including via `sudo`/`ssh`/`env`), without matching `.sh` filenames. */
+const SHELL_HEREDOC_CMD = new RegExp(
+	String.raw`^\s*${CMD_PREFIX_BODY}(?:ssh\s+(?:-[a-zA-Z0-9]+\s+(?:[^-\s]\S*\s+)?)*\S+\s+)*(?:\/[\w./-]*\/)?(?:sh|bash|zsh|dash|ash|ksh|fish|source)(?=\s|$|<<)`,
+);
 
 const LEGACY_PIPELINE_SPLIT = /\n|;|\|\||&&/g;
 const LEGACY_SEGMENT_SPLIT = /\||(?<![<>])&(?![>&])/g;
@@ -69,8 +75,8 @@ export interface GuardRule {
 	group: GuardRuleGroup;
 	scope?: GuardRuleScope;
 	/**
-	 * - `"trigger"`: match `re` against a same-length quote-masked view (keeping quoted command-position tokens like `"rm"`),
-	 *   then test `needs` on the original unmasked tail so `rm -rf "/"` and `dd of="/dev/dm-0"` stay blocked while `echo "rm -rf /"` is allowed.
+	 * - `"trigger"`: match `re` against a same-length quote-masked view (unmasking quoted no-whitespace tokens like `"rm"`),
+	 *   then test `needs` on the original unmasked tail so `rm -rf "/"` and `sudo "rm" -rf /` stay blocked while `echo "rm -rf /"` is allowed.
 	 * - `"all"`: match both `re` and `needs` against the quote-masked view (e.g. `fork`, `curl | sh`).
 	 * - `"redirect"`: mask quotes except those immediately following `>` / `>>` / `>|`.
 	 * - `"singleOnly"`: mask only single-quoted strings (preserving double-quoted `$(...)` for `remoteExec`).
@@ -82,7 +88,7 @@ export interface GuardRule {
 }
 
 export const GUARD_RULES: readonly GuardRule[] = [
-	// wipe (default ON) — unanchored triggers with quote-masked trigger matching so wrappers (`xargs`, `timeout`, `nice`, `"rm"`, `if`, ...) stay blocked while `echo "rm -rf /"` is allowed
+	// wipe (default ON)
 	{ group: "wipe", mask: "trigger", re: /\brm\b/, needs: [RM_RECURSIVE, FORCE, ROOT_HOME_ARG], why: "deletes the whole disk or home directory" },
 	{ group: "wipe", mask: "trigger", re: /\brm\b/, needs: [RM_RECURSIVE, FORCE, SYS_DIR_ARG], why: "deletes a top-level system directory" },
 	{ group: "wipe", mask: "trigger", re: /\brm\b/, needs: [NO_PRESERVE_ROOT], why: "deletes the whole disk" },
@@ -110,7 +116,7 @@ export const GUARD_RULES: readonly GuardRule[] = [
 	// remoteExec (default OFF)
 	{ group: "remoteExec", scope: "pipeline", mask: "all", re: /\b(?:curl|wget)\b/, needs: [PIPE_TO_SHELL], why: "pipes a remote script directly into a shell" },
 	{ group: "remoteExec", scope: "pipeline", mask: "singleOnly", re: SUBST_CURL_WGET, needs: [PIPE_TO_SHELL], why: "pipes a remote script directly into a shell" },
-	{ group: "remoteExec", scope: "pipeline", mask: "singleOnly", re: SUBST_REMOTE_EXEC, why: "executes a remote script directly in a shell" },
+	{ group: "remoteExec", scope: "pipeline", re: SUBST_REMOTE_EXEC, why: "executes a remote script directly in a shell" },
 
 	// systemPower (default ON)
 	{ group: "systemPower", re: new RegExp(String.raw`${CMD_PREFIX}(?:shutdown|reboot|poweroff|halt)\b`), why: "shuts down or reboots the system" },
@@ -202,6 +208,11 @@ interface HeredocSpec {
 	stripTabs: boolean;
 }
 
+interface CapturedHeredoc {
+	pipeline: string;
+	body: string;
+}
+
 /** Parse a heredoc operator at `i` (where `s[i] === "<" && s[i+1] === "<"` and `s[i+2] !== "<"`). Returns `{ spec, nextIndex }` or null. */
 function parseHeredocOp(s: string, i: number): { spec: HeredocSpec; nextIndex: number } | null {
 	if (s[i] !== "<" || s[i + 1] !== "<" || s[i + 2] === "<") return null;
@@ -234,30 +245,42 @@ function parseHeredocOp(s: string, i: number): { spec: HeredocSpec; nextIndex: n
 	return delim ? { spec: { delim, stripTabs }, nextIndex: j } : null;
 }
 
-/** Skip heredoc bodies starting right after a newline at index `nlIndex`, returning the index of the next command line (or `s.length`). */
-function skipHeredocBodies(s: string, nlIndex: number, queue: HeredocSpec[]): number {
+/** Consume heredoc bodies starting right after a newline at `nlIndex`, returning captured bodies and the next command index. */
+function consumeHeredocBodies(
+	s: string,
+	nlIndex: number,
+	queue: HeredocSpec[],
+	pipeline: string,
+	captured?: CapturedHeredoc[],
+): number {
 	let pos = nlIndex + 1;
 	while (queue.length > 0 && pos <= s.length) {
 		const spec = queue.shift()!;
+		const bodyLines: string[] = [];
 		while (pos <= s.length) {
 			const nextNl = s.indexOf("\n", pos);
 			const lineEnd = nextNl === -1 ? s.length : nextNl;
 			let line = s.slice(pos, lineEnd);
 			if (line.endsWith("\r")) line = line.slice(0, -1);
-			if (spec.stripTabs) line = line.replace(/^\t+/, "");
+			const checkLine = spec.stripTabs ? line.replace(/^\t+/, "") : line;
 			pos = nextNl === -1 ? s.length + 1 : nextNl + 1;
-			if (line === spec.delim) break;
+			if (checkLine === spec.delim) break;
+			if (captured) bodyLines.push(checkLine);
+		}
+		if (captured && bodyLines.length > 0) {
+			captured.push({ pipeline, body: bodyLines.join("\n") });
 		}
 	}
 	return Math.min(pos, s.length);
 }
 
 /** Quote-, comment-, `$'...'`-, and heredoc-aware O(N) splitter for shell pipelines or segments. */
-function splitShell(cmd: string, mode: "pipeline" | "segment"): { parts: string[]; unclosedQuote: boolean } {
+function splitShell(cmd: string, mode: "pipeline" | "segment"): { parts: string[]; unclosedQuote: boolean; heredocs: CapturedHeredoc[] } {
 	const parts: string[] = [];
+	const capturedHeredocs: CapturedHeredoc[] = [];
 	let start = 0;
 	let quote: "'" | '"' | "$'" | null = null;
-	const heredocs: HeredocSpec[] = [];
+	const pendingHeredocs: HeredocSpec[] = [];
 
 	for (let i = 0; i < cmd.length; i++) {
 		const ch = cmd[i]!;
@@ -288,7 +311,7 @@ function splitShell(cmd: string, mode: "pipeline" | "segment"): { parts: string[
 		if (ch === "<" && cmd[i + 1] === "<" && cmd[i + 2] !== "<") {
 			const hd = parseHeredocOp(cmd, i);
 			if (hd) {
-				heredocs.push(hd.spec);
+				pendingHeredocs.push(hd.spec);
 				i = hd.nextIndex - 1;
 				continue;
 			}
@@ -296,9 +319,10 @@ function splitShell(cmd: string, mode: "pipeline" | "segment"): { parts: string[
 
 		if (mode === "pipeline") {
 			if (ch === "\n") {
-				parts.push(cmd.slice(start, i));
-				if (heredocs.length > 0) {
-					const afterBody = skipHeredocBodies(cmd, i, heredocs);
+				const linePart = cmd.slice(start, i);
+				parts.push(linePart);
+				if (pendingHeredocs.length > 0) {
+					const afterBody = consumeHeredocBodies(cmd, i, pendingHeredocs, linePart, capturedHeredocs);
 					start = afterBody;
 					i = afterBody - 1;
 				} else {
@@ -323,12 +347,13 @@ function splitShell(cmd: string, mode: "pipeline" | "segment"): { parts: string[
 		}
 	}
 	parts.push(cmd.slice(start));
-	return { parts, unclosedQuote: quote !== null };
+	return { parts, unclosedQuote: quote !== null, heredocs: capturedHeredocs };
 }
 
 /**
  * Strictly O(N) quote-masking preserving exact string length (1-to-1 character indices with `s`).
- * - `"trigger"`: replaces quoted argument strings with spaces, EXCEPT single-word quoted command names at command position (e.g. `"rm"` → ` rm `).
+ * - `"trigger"`: replaces quoted multi-word strings with spaces while unmasking single-word no-whitespace quoted tokens
+ *   (so `sudo "rm" -rf /`, `xargs 'rm' -rf /`, `"$(echo rm)" -rf /` stay blocked while `echo "rm -rf /"` is allowed).
  * - `"all"`: replaces all quoted strings and `#` comments with spaces.
  * - `"redirect"`: replaces all quoted strings with spaces EXCEPT quotes immediately after `>` / `>>` / `>|` (tracked in O(1)).
  * - `"singleOnly"`: replaces only single-quoted and `$'...'` strings with spaces (keeping double-quoted `$(...)` intact).
@@ -339,7 +364,6 @@ function maskQuoted(s: string, mode: "trigger" | "all" | "redirect" | "singleOnl
 	let unclosedQuote = false;
 	let lastNonWs = "";
 	let prevNonWs = "";
-	let seenWord = false;
 	const heredocs: HeredocSpec[] = [];
 
 	const noteChar = (ch: string) => {
@@ -355,7 +379,6 @@ function maskQuoted(s: string, mode: "trigger" | "all" | "redirect" | "singleOnl
 			chunks.push(ch, s[i + 1]!);
 			noteChar(ch);
 			noteChar(s[i + 1]!);
-			seenWord = true;
 			i += 2;
 			continue;
 		}
@@ -369,9 +392,8 @@ function maskQuoted(s: string, mode: "trigger" | "all" | "redirect" | "singleOnl
 		if (ch === "\n") {
 			chunks.push("\n");
 			noteChar("\n");
-			seenWord = false;
 			if (heredocs.length > 0) {
-				const afterBody = skipHeredocBodies(s, i, heredocs);
+				const afterBody = consumeHeredocBodies(s, i, heredocs, "");
 				if (afterBody > i + 1) chunks.push(" ".repeat(afterBody - (i + 1)));
 				i = afterBody;
 				continue;
@@ -401,7 +423,6 @@ function maskQuoted(s: string, mode: "trigger" | "all" | "redirect" | "singleOnl
 			if (!closed) unclosedQuote = true;
 			chunks.push(" ".repeat(j - i));
 			noteChar("'");
-			seenWord = true;
 			i = j;
 			continue;
 		}
@@ -424,23 +445,17 @@ function maskQuoted(s: string, mode: "trigger" | "all" | "redirect" | "singleOnl
 				chunks.push(rawTok);
 			} else if (mode === "redirect" && afterRedirect) {
 				chunks.push(rawTok);
-			} else if (mode === "trigger" && !seenWord && inner.length > 0 && !/\s/.test(inner)) {
-				// Command-position single-word quoted executable (e.g. `"rm" -rf /` or `'/bin/rm' -rf /`): unmask with same length.
+			} else if (mode === "trigger" && inner.length > 0 && (!/\s/.test(inner) || (q === '"' && (inner.includes("$(") || inner.includes("`"))))) {
+				// Any single-word quoted token without whitespace (e.g. `sudo "rm" -rf /`, `xargs 'rm' -rf /`) or double-quoted command substitution (`"$(echo rm)" -rf /`): unmask with same length.
 				chunks.push(" " + inner + (closed ? " " : ""));
 			} else {
 				chunks.push(" ".repeat(j - i));
 			}
 			noteChar(q);
-			seenWord = true;
 			i = j;
 			continue;
 		}
 
-		if (ch === ";" || ch === "|" || ch === "&" || ch === "(" || ch === "{") {
-			seenWord = false;
-		} else if (ch !== " " && ch !== "\t" && ch !== "\r") {
-			seenWord = true;
-		}
 		chunks.push(ch);
 		noteChar(ch);
 		i++;
@@ -448,35 +463,64 @@ function maskQuoted(s: string, mode: "trigger" | "all" | "redirect" | "singleOnl
 	return { masked: chunks.join(""), unclosedQuote };
 }
 
-/** Unquote one leading shell argument (single-quoted, `$'...'`, double-quoted, or bare) from `s`. */
-function readShellArg(s: string): string | null {
-	const trimmed = s.trimStart();
-	if (!trimmed) return null;
-	if (trimmed[0] === "$" && trimmed[1] === "'") {
-		let res = "";
-		for (let i = 2; i < trimmed.length; i++) {
-			if (trimmed[i] === "\\" && i + 1 < trimmed.length) { res += trimmed[++i]!; continue; }
-			if (trimmed[i] === "'") return res;
-			res += trimmed[i]!;
+/**
+ * Read one complete shell word starting at `pos` (skipping leading spaces), concatenating all adjacent
+ * quoted (`'...'`, `"..."`, `$'...'`) and unquoted chunks up to the first unquoted whitespace.
+ */
+function readShellWord(s: string, startPos = 0): { value: string; nextIndex: number } | null {
+	let i = startPos;
+	while (i < s.length && (s[i] === " " || s[i] === "\t")) i++;
+	if (i >= s.length) return null;
+
+	let value = "";
+	while (i < s.length) {
+		const ch = s[i]!;
+		if (ch === " " || ch === "\t" || ch === "\n" || ch === "\r") break;
+		if (ch === "$" && s[i + 1] === "'") {
+			i += 2;
+			while (i < s.length) {
+				if (s[i] === "\\" && i + 1 < s.length) { value += s[i + 1]!; i += 2; continue; }
+				if (s[i] === "'") { i++; break; }
+				value += s[i]!;
+				i++;
+			}
+		} else if (ch === "'") {
+			i++;
+			while (i < s.length && s[i] !== "'") {
+				value += s[i]!;
+				i++;
+			}
+			if (s[i] === "'") i++;
+		} else if (ch === '"') {
+			i++;
+			while (i < s.length) {
+				if (s[i] === "\\" && i + 1 < s.length) { value += s[i + 1]!; i += 2; continue; }
+				if (s[i] === '"') { i++; break; }
+				value += s[i]!;
+				i++;
+			}
+		} else if (ch === "\\" && i + 1 < s.length) {
+			value += s[i + 1]!;
+			i += 2;
+		} else {
+			value += ch;
+			i++;
 		}
-		return res;
 	}
-	const q = trimmed[0]!;
-	if (q === "'") {
-		const end = trimmed.indexOf("'", 1);
-		return end === -1 ? trimmed.slice(1) : trimmed.slice(1, end);
+	return { value, nextIndex: i };
+}
+
+/** Read and unquote all remaining shell words in `s`, joined by single spaces (used for `eval` multi-arg). */
+function readAllShellWords(s: string): string {
+	const words: string[] = [];
+	let pos = 0;
+	while (pos < s.length) {
+		const w = readShellWord(s, pos);
+		if (!w) break;
+		words.push(w.value);
+		pos = w.nextIndex;
 	}
-	if (q === '"') {
-		let res = "";
-		for (let i = 1; i < trimmed.length; i++) {
-			if (trimmed[i] === "\\" && i + 1 < trimmed.length) { res += trimmed[++i]!; continue; }
-			if (trimmed[i] === '"') return res;
-			res += trimmed[i]!;
-		}
-		return res;
-	}
-	const sp = trimmed.search(/\s/);
-	return sp === -1 ? trimmed : trimmed.slice(0, sp);
+	return words.join(" ");
 }
 
 /** Extract `$(...)` and `` `...` `` command substitutions (outside single quotes and `#` comments) for recursive guard checking. */
@@ -528,6 +572,13 @@ function extractSubstitutions(cmd: string): string[] {
 		}
 	}
 	return found;
+}
+
+function heredocTargetsShell(pipeline: string): boolean {
+	const { masked } = maskQuoted(pipeline, "all");
+	if (PIPE_TO_SHELL.test(masked)) return true;
+	const { parts } = splitShell(pipeline, "segment");
+	return parts.some((seg) => SHELL_HEREDOC_CMD.test(seg));
 }
 
 function matchesRuleRaw(rule: GuardRule, target: string): boolean {
@@ -582,7 +633,7 @@ function checkRawFallback(command: string, groups: Partial<Record<GuardRuleGroup
 }
 
 function checkCommand(command: string, groups: Partial<Record<GuardRuleGroup, boolean>>, depth: number): string | null {
-	let pipeSplit: { parts: string[]; unclosedQuote: boolean } | undefined;
+	let pipeSplit: { parts: string[]; unclosedQuote: boolean; heredocs: CapturedHeredoc[] } | undefined;
 	let segments: string[] | undefined;
 	let anyUnclosed = false;
 
@@ -634,16 +685,25 @@ function checkCommand(command: string, groups: Partial<Record<GuardRuleGroup, bo
 
 	if (depth >= 4) return null;
 
-	// Recursively inspect `sh -c [--] "..."`, `bash -c`, `fish -c`, and `eval ...` payloads.
 	pipeSplit ??= splitShell(command, "pipeline");
 	segments ??= pipeSplit.parts.flatMap((p) => splitShell(p, "segment").parts);
+
+	// Recursively inspect heredoc bodies fed into a shell (e.g. `bash <<EOF`, `cat <<EOF | sh`, `ssh h bash <<EOF`).
+	for (const hd of pipeSplit.heredocs) {
+		if (heredocTargetsShell(hd.pipeline)) {
+			const inner = checkCommand(hd.body, groups, depth + 1);
+			if (inner) return inner;
+		}
+	}
+
+	// Recursively inspect `sh -c [--] "..."`, `bash --norc -c`, `bash -o pipefail -c`, `fish -c`, and `eval ...` payloads.
 	for (const seg of segments) {
 		const { masked } = getMasked(seg, "trigger");
-		const shMatch = SHELL_C_WRAPPER.exec(masked);
-		if (shMatch) {
-			const payload = readShellArg(seg.slice(shMatch.index + shMatch[0].length));
-			if (payload) {
-				const inner = checkCommand(payload, groups, depth + 1);
+		const shMatch = SHELL_C_WRAPPER.exec(seg);
+		if (shMatch && masked[shMatch.index] !== " ") {
+			const word = readShellWord(seg, shMatch.index + shMatch[0].length);
+			if (word?.value) {
+				const inner = checkCommand(word.value, groups, depth + 1);
 				if (inner) return inner;
 			}
 		}
@@ -651,13 +711,14 @@ function checkCommand(command: string, groups: Partial<Record<GuardRuleGroup, bo
 		if (evalMatch) {
 			const tail = seg.slice(evalMatch.index + evalMatch[0].length).trim();
 			if (tail) {
-				// Check both the full remaining tail (for unquoted `eval rm -rf /`) and unquoted first arg (for `eval "rm -rf /"`).
-				const innerTail = checkCommand(tail, groups, depth + 1);
-				if (innerTail) return innerTail;
-				const firstArg = readShellArg(tail);
-				if (firstArg && firstArg !== tail) {
-					const innerArg = checkCommand(firstArg, groups, depth + 1);
-					if (innerArg) return innerArg;
+				const joined = readAllShellWords(tail);
+				if (joined) {
+					const innerJoined = checkCommand(joined, groups, depth + 1);
+					if (innerJoined) return innerJoined;
+				}
+				if (tail !== joined) {
+					const innerRaw = checkCommand(tail, groups, depth + 1);
+					if (innerRaw) return innerRaw;
 				}
 			}
 		}
