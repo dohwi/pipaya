@@ -343,6 +343,9 @@ const RUN: Record<ActionId, () => void | Promise<void>> = {
     if (app.graphOpen || !workspaceViewer.sessionId) return;
     app.toggleFiles();
   },
+  toggleDock: () => {
+    if (!viewport.narrow) app.sidebar.toggleDockCollapsed();
+  },
   newChat: () => app.newChatInPane(),
   clearChat: () => app.clearChatInPane(),
   closeSession: () => {

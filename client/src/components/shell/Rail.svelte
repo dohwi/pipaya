@@ -3,7 +3,6 @@
 	import { liveNext } from "../../lib/minute-clock.svelte";
 	import { slidingIndicator } from "../../lib/sliding-indicator";
 	import { formatCombo } from "../../lib/keys";
-	import IconButton from "../ui/IconButton.svelte";
 	import PipayaMark from "../ui/PipayaMark.svelte";
 	import Pin from "../ui/Pin.svelte";
 	import { updater } from "../../lib/updater.svelte";
@@ -19,7 +18,6 @@
 	import { openContextMenu, closeContextMenu } from "../../lib/context-menu";
 	import { pressMenu, type Point } from "../../lib/press-menu";
 	import Icon from "../ui/Icon.svelte";
-	const hint = $derived(app.prefs.bindings.toggleSidebar ? ` (${formatCombo(app.prefs.bindings.toggleSidebar)})` : "");
 	// the bottom of the rail: the same places as the sidebar's bottom (graph view, scheduled tasks, settings), as icons
 	const graphTip = $derived(app.prefs.bindings.openGraph ? `${t("그래프 뷰")} (${formatCombo(app.prefs.bindings.openGraph)})` : t("그래프 뷰"));
 	const scheduled = $derived(app.schedules.all(app.serverId));
@@ -106,9 +104,6 @@
 <!-- The folded sidebar: a narrow rail with one button per working folder; its tabs are in the tab bar. -->
 <aside class="rail" data-part="rail" aria-label={t("작업 폴더")}>
 	<div class="top" data-logo-frame><PipayaMark tone="color" size={26} /></div>
-	<div class="tools">
-		<IconButton icon="sidebar" size="sm" label={t("사이드바 펼치기")} title={t("사이드바 펼치기") + hint} onclick={() => app.sidebar.toggleCollapsed()} />
-	</div>
 
 	<ul
 	class="agents"
@@ -159,20 +154,6 @@
 		height: 44px;
 		border-bottom: 1px solid var(--border);
 		color: var(--text);
-	}
-	/* the same band as the tab strip beside it (38px with its hairline), so the two lines meet; a 32px button fits it */
-	.tools {
-		display: grid;
-		place-items: center;
-		width: 100%;
-		box-sizing: content-box;
-		height: 37px; /* + the 1px hairline = the strip's 38px */
-		border-bottom: 1px solid var(--border);
-	}
-	@media (min-width: 601px) {
-		:global(:root:has(main > [data-part="tabbar"])) .tools {
-			border-bottom-color: var(--tabbar-line); /* the strip's own hairline colour, so the line runs on unbroken */
-		}
 	}
 	.agents {
 		position: relative;

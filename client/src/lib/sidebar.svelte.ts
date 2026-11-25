@@ -74,6 +74,8 @@ export class SidebarState {
   /** The drawer on a narrow screen. */
   open = $state(false);
   collapsed = $state(read<boolean>(K.sidebar, false));
+  /** Right extension dock collapsed into an edge handle (desktop). */
+  dockCollapsed = $state(read<boolean>(K.dock, false));
   /** The width the user dragged to, or null: follow `--sidebar-w` (app.css, or an extension theme). See `shownWidth`. */
   width = $state<number | null>(storedWidth(read<unknown>(K.sidebarW, null)));
   /** Folded servers, projects and split tabs. Folders are kept apart (`openDirs`): they start folded instead. */
@@ -145,9 +147,26 @@ export class SidebarState {
     remove(K.sidebarW);
   }
 
+  isCollapsed(): boolean {
+    return this.collapsed;
+  }
+
+  setCollapsed(v: boolean, save = true) {
+    this.collapsed = v;
+    if (save) write(K.sidebar, this.collapsed);
+  }
+
   toggleCollapsed() {
-    this.collapsed = !this.collapsed;
-    write(K.sidebar, this.collapsed);
+    this.setCollapsed(!this.collapsed, true);
+  }
+
+  setDockCollapsed(v: boolean, save = true) {
+    this.dockCollapsed = v;
+    if (save) write(K.dock, this.dockCollapsed);
+  }
+
+  toggleDockCollapsed() {
+    this.setDockCollapsed(!this.dockCollapsed, true);
   }
 
   toggleFolded(key: string) {

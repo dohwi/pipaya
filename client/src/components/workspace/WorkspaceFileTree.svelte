@@ -4,6 +4,7 @@
 	import { formatCombo } from "../../lib/keys";
 	import { workDir } from "../../lib/nav";
 	import { app } from "../../lib/store.svelte";
+	import { EdgeResizeController, RAIL_W } from "../../lib/shell/sidebar-resize.svelte";
 	import { viewport } from "../../lib/viewport.svelte";
 	import { formatCompactCount, WORKSPACE_FILE_MIME } from "../../lib/workspace-edits";
 	import { workspaceViewer, type WorkspaceEntry } from "../../lib/workspace-viewer.svelte";
@@ -42,7 +43,19 @@
 
 	// Resizable desktop sidebar width (200..420px).
 	let panelWidth = $state(260);
-	let dragging = $state(false);
+	const fileResize = new EdgeResizeController(
+		{
+			isCollapsed: () => !open,
+			setCollapsed: (v) => {
+				app.filesOpen = !v;
+			},
+			shownWidth: () => panelWidth,
+			setWidth: (w) => {
+				panelWidth = Math.max(200, Math.min(420, Math.round(w)));
+			},
+		},
+		{ side: "right", collapsedWidth: RAIL_W, minWidth: 200, maxWidth: 420 },
+	);
 	let searchTimer: ReturnType<typeof setTimeout> | null = null;
 
 	// Mobile right-drawer touch swipe-to-dismiss state (follows the finger 1:1, closes past 25% or on quick flick).
@@ -137,27 +150,6 @@
 		}
 	}
 
-	function startResize(e: PointerEvent) {
-		if (e.button !== 0) return;
-		e.preventDefault();
-		dragging = true;
-		const startX = e.clientX;
-		const startW = panelWidth;
-		const onMove = (ev: PointerEvent) => {
-			const next = startW + (startX - ev.clientX);
-			panelWidth = Math.max(200, Math.min(420, Math.round(next)));
-		};
-		const onUp = () => {
-			dragging = false;
-			window.removeEventListener("pointermove", onMove);
-			window.removeEventListener("pointerup", onUp);
-			window.removeEventListener("pointercancel", onUp);
-		};
-		window.addEventListener("pointermove", onMove);
-		window.addEventListener("pointerup", onUp);
-		window.addEventListener("pointercancel", onUp);
-	}
-
 	function statusClass(status: string): string {
 		if (status === "A" || status === "?") return "st-add";
 		if (status === "D" || status === "U") return "st-del";
@@ -239,7 +231,8 @@
 	bind:this={drawerEl}
 	class="ftree"
 	class:open
-	class:dragging
+	class:dragging={fileResize.resizing}
+	class:folding={fileResize.resizing && fileResize.foldingPreview}
 	class:swiping={swipeX !== null}
 	inert={viewport.narrow && !open && swipeX === null}
 	data-part="workspace-tree"
@@ -251,18 +244,31 @@
 	ontouchend={onDrawerTouchEnd}
 	ontouchcancel={onDrawerTouchEnd}
 >
-	{#if open && !viewport.narrow}
-		<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-		<div class="grip" role="separator" aria-orientation="vertical" aria-label={t("파일 뷰어 너비 조절")} onpointerdown={startResize}></div>
+	{#if !viewport.narrow}
+		<!-- A window splitter (WAI-ARIA): stays mounted in both open and rail states so dragging or clicking the edge folds and unfolds. -->
+		<!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
+		<div
+			class="grip"
+			role="separator"
+			aria-orientation="vertical"
+			aria-label={t("파일 뷰어 너비 조절")}
+			aria-valuemin={200}
+			aria-valuemax={420}
+			aria-valuenow={open ? panelWidth : 0}
+			tabindex="0"
+			title={open ? t("끌어서 너비 조절 · 밀어넣어 접기 · 클릭으로 접기/펼치기") : t("끌어서 펼치기 · 클릭으로 펼치기")}
+			onpointerdown={fileResize.down}
+			onpointermove={fileResize.move}
+			onpointerup={fileResize.up}
+			onpointercancel={fileResize.up}
+			onkeydown={fileResize.key}
+		></div>
 	{/if}
 
-	<!-- Collapsed desktop rail (56px, mirrors left Rail.svelte): expand button + compact changed-files/+/- summary + quick-jump file icons -->
+	<!-- Collapsed desktop rail (56px, mirrors left Rail.svelte): compact changed-files/+/- summary + quick-jump file icons -->
 	<div class="frail" data-part="workspace-rail" inert={open || viewport.narrow}>
 		<div class="rtop">
 			<IconButton icon="folder" label={t("파일 뷰어 펼치기")} title={t("파일 뷰어 펼치기") + shortcutHint} onclick={() => (app.filesOpen = true)} />
-		</div>
-		<div class="rtools">
-			<IconButton icon="sidebar" size="sm" class="flip-x" label={t("파일 뷰어 펼치기")} title={t("파일 뷰어 펼치기") + shortcutHint} onclick={() => (app.filesOpen = true)} />
 		</div>
 		<div class="rbody">
 			{#if workspaceViewer.changes.length > 0}
@@ -325,8 +331,6 @@
 			<IconButton icon="retry" label={t("새로고침")} onclick={() => workspaceViewer.refreshTree({ preserveOpenDirs: true })} />
 			{#if viewport.narrow}
 				<IconButton icon="x" label={t("파일 뷰어 닫기")} title={t("파일 뷰어 닫기") + shortcutHint} onclick={() => (app.filesOpen = false)} />
-			{:else}
-				<IconButton icon="sidebar" class="flip-x" label={t("파일 뷰어 접기")} title={t("파일 뷰어 접기") + shortcutHint} onclick={() => (app.filesOpen = false)} />
 			{/if}
 		</div>
 	</header>
@@ -480,6 +484,9 @@
 		width: var(--wv-w, 260px);
 	}
 	@media (min-width: 861px) {
+		.ftree {
+			overflow: visible; /* let the 9px edge grip straddle the left border */
+		}
 		.ftree:not(.open) {
 			flex-basis: var(--rail-w);
 			width: var(--rail-w);
@@ -512,6 +519,10 @@
 				opacity var(--motion-fast) var(--ease-std),
 				visibility 0s linear var(--motion-fast);
 		}
+		/* dragged below minWidth toward the fold snap point: subtle fade signals an imminent snap */
+		.ftree.folding .ftree-in {
+			opacity: 0.65;
+		}
 	}
 	.ftree.dragging {
 		user-select: none;
@@ -519,18 +530,51 @@
 	}
 	.grip {
 		position: absolute;
-		top: 44px;
+		top: 0;
 		bottom: 0;
-		left: -4px;
-		width: 8px;
+		left: -4px; /* centres the 9px hit strip over the 1px left border */
+		width: 9px;
 		cursor: col-resize;
-		z-index: 2;
+		touch-action: none;
+		z-index: var(--z-popover);
 	}
-	/* Mirror the sidebar glyph so its panel divider faces right */
-	:global(.iconbtn.flip-x svg) {
-		transform: scaleX(-1);
+	.grip::before {
+		content: "";
+		position: absolute;
+		top: calc(50% - 16px);
+		left: 3px; /* centres the 4px grabber on the 2px hairline at left: 4px */
+		width: 4px;
+		height: 32px;
+		border-radius: 2px;
+		background: var(--accent);
+		opacity: 0;
+		transition: opacity var(--motion-fast) var(--ease-std);
 	}
-	/* Collapsed desktop right rail (56px, exact vertical rhythm with left Rail.svelte, Header & TabBar) */
+	.grip::after {
+		content: "";
+		position: absolute;
+		top: 0;
+		bottom: 0;
+		left: 4px;
+		width: 2px;
+		background: var(--accent);
+		opacity: 0;
+		transition: opacity var(--motion-fast) var(--ease-std);
+	}
+	.grip:hover::after,
+	.grip:focus-visible::after,
+	.ftree.dragging .grip::after {
+		opacity: 0.55;
+	}
+	.grip:hover::before,
+	.grip:focus-visible::before,
+	.ftree.dragging .grip::before {
+		opacity: 0.9;
+	}
+	.grip:focus-visible {
+		outline: none;
+	}
+	/* Collapsed desktop right rail (56px, exact vertical rhythm with left Rail.svelte & Header) */
 	.rtop {
 		display: grid;
 		place-items: center;
@@ -540,22 +584,11 @@
 		height: 44px;
 		border-bottom: 1px solid var(--border);
 	}
-	.rtop :global(.iconbtn:focus-visible),
-	.rtools :global(.iconbtn:focus-visible) {
+	.rtop :global(.iconbtn:focus-visible) {
 		outline-offset: -2px;
 	}
-	.rtools {
-		display: grid;
-		place-items: center;
-		flex: none;
-		width: 100%;
-		box-sizing: content-box;
-		height: 37px; /* + 1px hairline = TabBar 38px, matching left Rail .tools */
-		border-bottom: 1px solid var(--border);
-	}
 	@media (min-width: 601px) {
-		:global(:root:has(main > [data-part="tabbar"])) .rtop,
-		:global(:root:has(main > [data-part="tabbar"])) .rtools {
+		:global(:root:has(main > [data-part="tabbar"])) .rtop {
 			border-bottom-color: var(--tabbar-line);
 		}
 	}

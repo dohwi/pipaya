@@ -47,7 +47,10 @@ class MemoryStorage implements Storage {
 let dir: string;
 let UiOverlayState: typeof UiOverlayModule.UiOverlayState;
 let SidebarResizeController: typeof SidebarResizeModule.SidebarResizeController;
+let EdgeResizeController: typeof SidebarResizeModule.EdgeResizeController;
 let FOLD_PAST: number;
+let UNFOLD_HYSTERESIS: number;
+let RAIL_W: number;
 let DrawerSwipeController: typeof DrawerSwipeModule.DrawerSwipeController;
 
 async function loadRunes(relPath: string) {
@@ -76,7 +79,7 @@ async function loadRunes(relPath: string) {
 beforeAll(async () => {
   dir = await mkdtemp(join(tmpdir(), "pipaya-arch-"));
   ({ UiOverlayState } = await loadRunes("store/ui-overlay"));
-  ({ SidebarResizeController, FOLD_PAST } = await loadRunes("shell/sidebar-resize"));
+  ({ SidebarResizeController, EdgeResizeController, FOLD_PAST, UNFOLD_HYSTERESIS, RAIL_W } = await loadRunes("shell/sidebar-resize"));
   ({ DrawerSwipeController } = await loadRunes("shell/drawer-swipe"));
 });
 
@@ -202,18 +205,21 @@ describe("store/ui-overlay", () => {
 });
 
 describe("shell/sidebar-resize", () => {
-  test("drags width without persisting until release, folds past threshold, and handles keyboard", () => {
+  test("snaps shut mid-drag with hysteresis, unfolds by dragging from rail, toggles on click, and handles keyboard", () => {
     let width = 288;
-    let persisted = 288;
+    let persistedW = 288;
     let collapsed = false;
+    let persistedCollapsed = false;
     const ctrl = new SidebarResizeController({
+      isCollapsed: () => collapsed,
+      setCollapsed: (v, persist = true) => {
+        collapsed = v;
+        if (persist) persistedCollapsed = v;
+      },
       shownWidth: () => width,
       setWidth: (w, persist = true) => {
-        width = Math.max(200, Math.min(480, w));
-        if (persist) persisted = width;
-      },
-      toggleCollapsed: () => {
-        collapsed = !collapsed;
+        width = Math.max(220, Math.min(560, w));
+        if (persist) persistedW = width;
       },
     });
 
@@ -221,30 +227,102 @@ describe("shell/sidebar-resize", () => {
     ctrl.up();
     expect(collapsed).toBe(false);
 
-    ctrl.down({ clientX: 300, pointerId: 1, currentTarget: null } as unknown as PointerEvent);
+    // Drag wider without persisting until release
+    ctrl.down({ clientX: 288, pointerId: 1, button: 0, currentTarget: null } as unknown as PointerEvent);
     expect(ctrl.resizing).toBe(true);
-
-    ctrl.move({ clientX: 340, buttons: 1, pointerType: "mouse" } as unknown as PointerEvent);
+    ctrl.move({ clientX: 328, buttons: 1, pointerType: "mouse" } as unknown as PointerEvent);
     expect(width).toBe(328);
-    expect(persisted).toBe(288);
-
+    expect(persistedW).toBe(288);
     ctrl.up();
     expect(ctrl.resizing).toBe(false);
-    expect(persisted).toBe(328);
+    expect(persistedW).toBe(328);
 
-    // Drag far past minimum to fold and restore starting width
-    ctrl.down({ clientX: 328, pointerId: 2, currentTarget: null } as unknown as PointerEvent);
-    ctrl.move({ clientX: 328 - (328 - (200 - FOLD_PAST - 20)), buttons: 1, pointerType: "mouse" } as unknown as PointerEvent);
-    expect(ctrl.foldOnRelease).toBe(true);
+    // Drag below minWidth (preview), then past fold threshold (snaps immediately), then test hysteresis
+    ctrl.down({ clientX: 328, pointerId: 2, button: 0, currentTarget: null } as unknown as PointerEvent);
+    ctrl.move({ clientX: 180, buttons: 1, pointerType: "mouse" } as unknown as PointerEvent);
+    expect(collapsed).toBe(false);
+    expect(ctrl.foldingPreview).toBe(true);
+    // Past foldAt (220 - 80 = 140) -> snaps immediately
+    ctrl.move({ clientX: 220 - FOLD_PAST - 10, buttons: 1, pointerType: "mouse" } as unknown as PointerEvent);
+    expect(collapsed).toBe(true);
+    expect(ctrl.foldingPreview).toBe(false);
+    // Back inside hysteresis band (140..170) -> stays folded
+    ctrl.move({ clientX: 220 - FOLD_PAST + UNFOLD_HYSTERESIS - 5, buttons: 1, pointerType: "mouse" } as unknown as PointerEvent);
+    expect(collapsed).toBe(true);
+    // Release while folded -> persists folded and restores pre-drag open width (328)
+    ctrl.up();
+    expect(persistedCollapsed).toBe(true);
+    expect(persistedW).toBe(328);
+
+    // Pull out from collapsed rail (starts at RAIL_W = 56) past unfoldAt (170) -> snaps open mid-drag
+    ctrl.down({ clientX: RAIL_W, pointerId: 3, button: 0, currentTarget: null } as unknown as PointerEvent);
+    ctrl.move({ clientX: 220 - FOLD_PAST + UNFOLD_HYSTERESIS - 10, buttons: 1, pointerType: "mouse" } as unknown as PointerEvent);
+    expect(collapsed).toBe(true);
+    ctrl.move({ clientX: 260, buttons: 1, pointerType: "mouse" } as unknown as PointerEvent);
+    expect(collapsed).toBe(false);
+    expect(width).toBe(260);
+    ctrl.up();
+    expect(persistedCollapsed).toBe(false);
+    expect(persistedW).toBe(260);
+
+    // Plain click (no drag) toggles collapsed without altering width
+    ctrl.down({ clientX: 260, pointerId: 4, button: 0, currentTarget: null } as unknown as PointerEvent);
     ctrl.up();
     expect(collapsed).toBe(true);
-    expect(persisted).toBe(328);
+    expect(persistedCollapsed).toBe(true);
+    expect(persistedW).toBe(260);
 
-    // Keyboard steps
+    // Keyboard: ArrowRight unfolds when collapsed; ArrowRight+Shift widens when open; Enter toggles
     let prevented = false;
-    ctrl.key({ key: "ArrowRight", shiftKey: true, preventDefault: () => (prevented = true) } as unknown as KeyboardEvent);
+    ctrl.key({ key: "ArrowRight", shiftKey: false, preventDefault: () => (prevented = true) } as unknown as KeyboardEvent);
     expect(prevented).toBe(true);
-    expect(persisted).toBe(392);
+    expect(collapsed).toBe(false);
+
+    ctrl.key({ key: "ArrowRight", shiftKey: true, preventDefault: () => (prevented = true) } as unknown as KeyboardEvent);
+    expect(persistedW).toBe(324);
+
+    ctrl.key({ key: "Enter", shiftKey: false, preventDefault: () => (prevented = true) } as unknown as KeyboardEvent);
+    expect(collapsed).toBe(true);
+  });
+
+  test("handles right-side dock symmetry (pull left to unfold, push right to fold)", () => {
+    let width = 360;
+    let collapsed = false;
+    const ctrl = new EdgeResizeController(
+      {
+        isCollapsed: () => collapsed,
+        setCollapsed: (v) => {
+          collapsed = v;
+        },
+        shownWidth: () => width,
+        setWidth: (w) => {
+          width = Math.max(200, Math.min(800, w));
+        },
+      },
+      { side: "right", collapsedWidth: 0, minWidth: 200, maxWidth: () => 800 },
+    );
+
+    // Push right past foldAt (200 - 80 = 120): dx = +250 -> want = 110 -> snaps shut
+    ctrl.down({ clientX: 1000, pointerId: 1, button: 0, currentTarget: null } as unknown as PointerEvent);
+    ctrl.move({ clientX: 1250, buttons: 1, pointerType: "mouse" } as unknown as PointerEvent);
+    expect(collapsed).toBe(true);
+    ctrl.up();
+    expect(width).toBe(360);
+
+    // Pull left from collapsed (0px): dx = -160 -> want = 160 >= unfoldAt (150) -> snaps open
+    ctrl.down({ clientX: 1360, pointerId: 2, button: 0, currentTarget: null } as unknown as PointerEvent);
+    ctrl.move({ clientX: 1200, buttons: 1, pointerType: "mouse" } as unknown as PointerEvent);
+    expect(collapsed).toBe(false);
+    expect(width).toBe(200);
+    ctrl.move({ clientX: 1060, buttons: 1, pointerType: "mouse" } as unknown as PointerEvent);
+    expect(width).toBe(300);
+    ctrl.up();
+    expect(collapsed).toBe(false);
+    expect(width).toBe(300);
+
+    // Non-primary mouse button is ignored
+    ctrl.down({ clientX: 1060, pointerId: 3, button: 2, currentTarget: null } as unknown as PointerEvent);
+    expect(ctrl.resizing).toBe(false);
   });
 });
 

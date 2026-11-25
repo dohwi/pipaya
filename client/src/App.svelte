@@ -412,30 +412,27 @@
 	<div class="app" data-part="app">
 		<!-- A closed drawer is only slid off screen: `inert` keeps Tab and screen readers out of it too (they walked 14 hidden
 		     controls before reaching the page). Not while a swipe is pulling it in, so it answers the moment it shows. -->
-		<div class="side" inert={viewport.narrow && !app.sidebar.open && drawerSwipe.swipe === null} bind:this={sideEl} bind:offsetWidth={sideW} class:dragging={drawerSwipe.swipe !== null} style:translate={drawerSwipe.swipe !== null ? `${drawerSwipe.swipe - drawerSwipe.drawerW}px 0` : undefined} class:open={app.sidebar.open} class:collapsed={app.sidebar.collapsed} class:resizing={sidebarResize.resizing} class:folding={sidebarResize.resizing && sidebarResize.foldOnRelease} style:--sidebar-w={app.sidebar.width === null ? undefined : `${app.sidebar.width}px`}>
+		<div class="side" inert={viewport.narrow && !app.sidebar.open && drawerSwipe.swipe === null} bind:this={sideEl} bind:offsetWidth={sideW} class:dragging={drawerSwipe.swipe !== null} style:translate={drawerSwipe.swipe !== null ? `${drawerSwipe.swipe - drawerSwipe.drawerW}px 0` : undefined} class:open={app.sidebar.open} class:collapsed={app.sidebar.collapsed} class:resizing={sidebarResize.resizing} class:folding={sidebarResize.resizing && sidebarResize.foldingPreview} style:--sidebar-w={app.sidebar.width === null ? undefined : `${app.sidebar.width}px`}>
 			<div class="full"><Sidebar /></div>
 			<div class="rail-slot"><Rail /></div>
-			{#if !app.sidebar.collapsed}
-				<!-- A window splitter (WAI-ARIA): focusable, with value attributes and arrow-key handling; the rule does not know the role is interactive. -->
-				<!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
-				<div
-					class="grip"
-					role="separator"
-					aria-orientation="vertical"
-					aria-label={t("사이드바 너비 조절")}
-					aria-valuemin={SIDEBAR_W.min}
-					aria-valuemax={SIDEBAR_W.max}
-					aria-valuenow={app.sidebar.width ?? (sideW || app.sidebar.shownWidth())}
-					tabindex="0"
-					title={t("끌어서 너비 조절 · 끝까지 끌면 접기 · 더블 클릭으로 원래 크기")}
-					onpointerdown={sidebarResize.down}
-					onpointermove={sidebarResize.move}
-					onpointerup={sidebarResize.up}
-					onpointercancel={sidebarResize.up}
-					ondblclick={() => app.sidebar.resetWidth()}
-					onkeydown={sidebarResize.key}
-				></div>
-			{/if}
+			<!-- A window splitter (WAI-ARIA): stays mounted in both open and rail states so dragging or clicking the edge folds and unfolds. -->
+			<!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
+			<div
+				class="grip"
+				role="separator"
+				aria-orientation="vertical"
+				aria-label={t("사이드바 너비 조절")}
+				aria-valuemin={SIDEBAR_W.min}
+				aria-valuemax={SIDEBAR_W.max}
+				aria-valuenow={app.sidebar.collapsed ? 0 : (app.sidebar.width ?? (sideW || app.sidebar.shownWidth()))}
+				tabindex="0"
+				title={app.sidebar.collapsed ? t("끌어서 펼치기 · 클릭으로 펼치기") : t("끌어서 너비 조절 · 밀어넣어 접기 · 클릭으로 접기/펼치기")}
+				onpointerdown={sidebarResize.down}
+				onpointermove={sidebarResize.move}
+				onpointerup={sidebarResize.up}
+				onpointercancel={sidebarResize.up}
+				onkeydown={sidebarResize.key}
+			></div>
 		</div>
 		<!-- Tapping the scrim closes the drawer; with a keyboard the drawer closes with Esc (the app shortcut layer). -->
 		<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
@@ -728,22 +725,28 @@
 		.side.resizing {
 			transition: none; /* follow the pointer exactly */
 		}
-		.side.collapsed .grip {
-			display: none;
-		}
-		/* starts under the 44px brand row: the fold button's 38px box reaches to 1px from the sidebar's edge, and a grip
-		   over it took the last 6px of the button (the click resized instead of folding). The brand row has no border
-		   to drag there anyway. */
 		.grip {
 			display: block;
 			position: absolute;
 			z-index: var(--z-popover);
-			top: 44px;
+			top: 0;
 			bottom: 0;
-			right: -4px;
+			right: -4px; /* centres the 9px hit strip over the 1px right border */
 			width: 9px;
 			cursor: col-resize;
 			touch-action: none;
+		}
+		.grip::before {
+			content: "";
+			position: absolute;
+			top: calc(50% - 16px);
+			left: 3px; /* centres the 4px grabber on the 2px hairline at left: 4px */
+			width: 4px;
+			height: 32px;
+			border-radius: 2px;
+			background: var(--accent);
+			opacity: 0;
+			transition: opacity var(--motion-fast) var(--ease-std);
 		}
 		.grip::after {
 			content: "";
@@ -761,12 +764,17 @@
 		.side.resizing .grip::after {
 			opacity: 0.55;
 		}
+		.grip:hover::before,
+		.grip:focus-visible::before,
+		.side.resizing .grip::before {
+			opacity: 0.9;
+		}
 		.grip:focus-visible {
 			outline: none;
 		}
-		/* dragged past the narrowest width: letting go folds it into the rail. The list fades to say so */
+		/* dragged below minWidth toward the fold snap point: subtle fade signals an imminent snap */
 		.side.folding .full {
-			opacity: 0.4;
+			opacity: 0.65;
 		}
 		/* Folding and unfolding cross-fade the two layers while the wrapper's width animates. Both are pinned to the left
 		   edge at their own width, so neither reflows nor slides: the rail used to fill the wrapper and shrink from 288 to

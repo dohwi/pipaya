@@ -13,6 +13,7 @@ export const K = {
   drafts: "pipaya.composer.drafts", // unsent composer text per session ("" = new chat): { <sessionId>: { text, reply, at } }
   sidebar: "pipaya.sidebar", // "1" when collapsed (desktop)
   sidebarW: "pipaya.sidebar.w", // desktop width in px
+  dock: "pipaya.dock", // true when right extension dock is collapsed (desktop)
   workdir: "pipaya.workdir", // per server: pipaya.workdir.<serverId>
   sound: "pipaya.sound", // notification sounds on/off
   volume: "pipaya.volume2", // notification volume, 0-200 (100 = base loudness)
