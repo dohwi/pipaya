@@ -2,10 +2,8 @@
 	import { tick } from "svelte";
 	import Icon from "./Icon.svelte";
 	import { verticalFade } from "../../lib/edge-fade";
-	import { backLayer, portal } from "../../lib/dialog";
-	import { t } from "../../lib/i18n";
-	import { fadeIn, fadeOut, isPhone, modalIn, modalOut, surfaceIn, surfaceOut } from "../../lib/motion";
-	import { sheetPull } from "../../lib/sheet";
+	import { portal } from "../../lib/dialog";
+	import { surfaceIn, surfaceOut } from "../../lib/motion";
 
 	/**
 	 * One dropdown for every setting, in place of the native <select> (whose popup looks different on each OS, cannot
@@ -63,27 +61,13 @@
 	let root = $state<HTMLElement | null>(null);
 	let trigger = $state<HTMLElement | null>(null);
 	let list = $state<HTMLElement | null>(null);
-	let scrimEl = $state<HTMLElement | null>(null);
 	let open = $state(false);
 	let active = $state(-1);
 	let pos = $state({ left: 0, top: 0, width: 0, maxHeight: 280, up: false });
 	let draft = $state<string | null>(null);
 
-	$effect(() => {
-		if (!open || editable || !isPhone()) return;
-		return backLayer({ onclose: hide });
-	});
-
-	const listIn = (node: Element) => (!editable && isPhone() ? modalIn(node) : surfaceIn(node, { y: pos.up ? 4 : -4 }));
-	const listOut = (node: Element) => (!editable && isPhone() ? modalOut(node) : surfaceOut(node, { y: pos.up ? 4 : -4 }));
-
 	const selected = $derived(options.findIndex((o) => o.value === value));
 	const shown = $derived(selected >= 0 ? options[selected]!.label : editable ? String(value ?? "") : "");
-	const sheetTitle = $derived.by(() => {
-		if (label) return label;
-		if (!open || !id || typeof document === "undefined") return "";
-		return document.querySelector(`label[for="${CSS.escape(id)}"]`)?.textContent?.trim() ?? "";
-	});
 
 	function place() {
 		if (!trigger) return;
@@ -101,11 +85,9 @@
 			up,
 		};
 	}
-	let openedPhone = false;
 	async function show() {
 		if (disabled || open || !options.length) return;
 		place();
-		openedPhone = isPhone();
 		active = selected >= 0 ? selected : options.findIndex((o) => !o.disabled);
 		open = true;
 		await tick();
@@ -198,21 +180,14 @@
 	function outside(e: PointerEvent) {
 		if (!open) return;
 		const n = e.target as Node | null;
-		// The mobile scrim closes on click (not pointerdown) so the tap cannot bleed through to controls underneath.
-		if (n && (root?.contains(n) || list?.contains(n) || scrimEl?.contains(n))) return;
+		if (n && (root?.contains(n) || list?.contains(n))) return;
 		hide();
 	}
 	function onscroll(e: Event) {
-		if (!open) return;
-		if (!editable && isPhone()) return;
-		if (!list?.contains(e.target as Node)) hide();
+		if (open && !list?.contains(e.target as Node)) hide();
 	}
 	function onresize() {
 		if (!open) return;
-		if (!editable && openedPhone) {
-			if (!isPhone()) hide();
-			return;
-		}
 		if (editable && document.activeElement === trigger?.querySelector("input")) {
 			place();
 			return;
@@ -278,59 +253,43 @@
 </div>
 
 {#if open}
-	<div class="portal-host" use:portal>
-		{#if !editable}
-			<!-- Backdrop on phones (<= 640px); hidden on desktop where the list floats next to the trigger. -->
-			<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
-			<div bind:this={scrimEl} class="scrim" onpointerdown={(e) => e.preventDefault()} onclick={hide} in:fadeIn|global out:fadeOut|global></div>
-		{/if}
-		<!-- Focus stays on the trigger and its keys drive this list (aria-activedescendant); the options are only clickable for a pointer. -->
-		<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
-		<div
-			bind:this={list}
-			class="list"
-			class:sheet={!editable}
-			class:up={pos.up}
-			class:sm={size === "sm"}
-			class:mono
-			data-sheet-root={!editable ? "" : undefined}
-			in:listIn
-			out:listOut
-			style:--sel-left="{pos.left}px"
-			style:--sel-top={pos.up ? "auto" : `${pos.top}px`}
-			style:--sel-bottom={pos.up ? `${window.innerHeight - pos.top}px` : "auto"}
-			style:--sel-min-w="{pos.width}px"
-			style:--sel-max-h="{pos.maxHeight}px"
-			onpointerdown={(e) => e.preventDefault()}
-		>
-			{#if !editable}
-				<div class="sh" use:sheetPull={{ onclose: hide }}>
-					{#if sheetTitle}<span class="sttl">{sheetTitle}</span>{/if}
-					<button type="button" class="sx tap" onclick={hide} aria-label={t("닫기")}><Icon name="x" /></button>
-				</div>
-			{/if}
-			<div class="listwrap vfade">
-			<div class="scroller" id={listId} role="listbox" tabindex="-1" aria-label={label} use:verticalFade>
-			{#each options as o, i (o.value)}
-				<div
-					id={optId(i)}
-					class="opt"
-					class:on={i === selected}
-					class:act={i === active}
-					role="option"
-					tabindex="-1"
-					aria-selected={i === selected}
-					aria-disabled={o.disabled ? "true" : undefined}
-					onpointermove={() => !o.disabled && (active = i)}
-					onclick={() => pick(i)}
-				>
-					<span class="ol">{o.label}</span>
-					{#if o.hint}<span class="oh">{o.hint}</span>{/if}
-					<span class="ck">{#if i === selected}<Icon name="check" />{/if}</span>
-				</div>
-			{/each}
+	<!-- Focus stays on the trigger and its keys drive this list (aria-activedescendant); the options are only clickable for a pointer. -->
+	<!-- svelte-ignore a11y_click_events_have_key_events -->
+	<div
+		use:portal
+		bind:this={list}
+		class="list vfade"
+		class:up={pos.up}
+		class:sm={size === "sm"}
+		class:mono
+		in:surfaceIn={{ y: pos.up ? 4 : -4 }}
+		out:surfaceOut={{ y: pos.up ? 4 : -4 }}
+		style:left="{pos.left}px"
+		style:top={pos.up ? undefined : `${pos.top}px`}
+		style:bottom={pos.up ? `${window.innerHeight - pos.top}px` : undefined}
+		style:min-width="{pos.width}px"
+		style:max-height="{pos.maxHeight}px"
+		onpointerdown={(e) => e.preventDefault()}
+	>
+		<div class="scroller" id={listId} role="listbox" tabindex="-1" aria-label={label} use:verticalFade>
+		{#each options as o, i (o.value)}
+			<div
+				id={optId(i)}
+				class="opt"
+				class:on={i === selected}
+				class:act={i === active}
+				role="option"
+				tabindex="-1"
+				aria-selected={i === selected}
+				aria-disabled={o.disabled ? "true" : undefined}
+				onpointermove={() => !o.disabled && (active = i)}
+				onclick={() => pick(i)}
+			>
+				<span class="ol">{o.label}</span>
+				{#if o.hint}<span class="oh">{o.hint}</span>{/if}
+				<span class="ck">{#if i === selected}<Icon name="check" />{/if}</span>
 			</div>
-			</div>
+		{/each}
 		</div>
 	</div>
 {/if}
@@ -434,36 +393,14 @@
 		height: 16px;
 		stroke-width: 2;
 	}
-	.portal-host {
-		display: contents;
-	}
-	.scrim,
-	.sh {
-		display: none;
-	}
 	.list {
 		position: fixed;
-		left: var(--sel-left);
-		top: var(--sel-top);
-		bottom: var(--sel-bottom);
-		min-width: var(--sel-min-w);
-		max-height: var(--sel-max-h);
 		z-index: var(--z-dropdown);
-		display: flex;
-		flex-direction: column;
 		overflow: hidden;
 		border: 1px solid var(--border-strong);
 		border-radius: var(--radius);
 		background: var(--bg-elev);
 		box-shadow: var(--shadow-overlay);
-		--fade-bg: var(--bg-elev);
-		--fade-h: 20px;
-	}
-	.listwrap {
-		flex: 1;
-		min-height: 0;
-		display: flex;
-		flex-direction: column;
 		--fade-bg: var(--bg-elev);
 		--fade-h: 20px;
 	}
@@ -533,66 +470,6 @@
 		/* prevent iOS Safari auto-zoom on focus (design-system.md) */
 		.edit input {
 			font-size: var(--fs-lg);
-		}
-		.scrim {
-			display: block;
-			position: fixed;
-			inset: 0;
-			z-index: var(--z-dropdown-scrim);
-			background: var(--scrim);
-		}
-		.list.sheet {
-			left: 0;
-			right: 0;
-			top: auto;
-			bottom: 0;
-			min-width: 0;
-			width: var(--vw);
-			max-height: calc(var(--dvh) * 0.75);
-			border-bottom: 0;
-			border-radius: var(--radius-panel) var(--radius-panel) 0 0;
-			box-shadow: none;
-			padding-bottom: var(--sab);
-		}
-		.list.sheet .sh {
-			display: flex;
-			align-items: center;
-			gap: 8px;
-			flex: none;
-			padding: 16px 8px 4px 16px; /* top 16 clears the 38×4 grabber bar (.sheet-handle::before) */
-		}
-		.sttl {
-			flex: 1;
-			min-width: 0;
-			overflow: hidden;
-			text-overflow: ellipsis;
-			white-space: nowrap;
-			font-size: var(--fs-sm);
-			line-height: 20px;
-			font-weight: 600;
-			color: var(--text);
-		}
-		.sx {
-			display: grid;
-			place-items: center;
-			margin-left: auto;
-			width: 32px;
-			height: 32px;
-			border-radius: 50%;
-			color: var(--text-faint);
-		}
-		.sx :global(svg) {
-			width: 16px;
-			height: 16px;
-			stroke-width: 2;
-		}
-		.list.sheet .scroller {
-			padding: 4px 8px 8px;
-		}
-		.list.sheet .opt {
-			min-height: 44px;
-			padding: 0 12px;
-			font-size: var(--fs-md);
 		}
 	}
 </style>

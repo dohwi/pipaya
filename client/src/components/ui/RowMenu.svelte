@@ -13,10 +13,9 @@
 
 <script lang="ts">
 	import Icon from "./Icon.svelte";
-	import { backLayer, portal } from "../../lib/dialog";
-	import { fadeIn, fadeOut, isPhone, modalIn, modalOut, surfaceIn, surfaceOut } from "../../lib/motion";
+	import { portal } from "../../lib/dialog";
+	import { surfaceIn, surfaceOut } from "../../lib/motion";
 	import { anchorShifted, hoverMenuZone } from "../../lib/row-menu";
-	import { sheetPull } from "../../lib/sheet";
 
 	/**
 	 * The small "more" menu next to a sidebar row. Hover opens it with a mouse (and a short grace period lets the pointer
@@ -79,9 +78,8 @@
 		shown = null;
 		open = null;
 	}
-	/** Mouse: hovering the button is enough on desktop. Phones (<= 640px) use a bottom sheet opened on click/tap. */
+	/** Mouse: hovering the button is enough. Touch has no hover, so it falls through to the click. */
 	export function hover(e: PointerEvent, id: string, items: RowMenuItem[]) {
-		if (isPhone()) return;
 		if (e.pointerType === "mouse" && !(shown?.sticky && shown.id === id)) show(e.currentTarget as HTMLElement, id, items);
 	}
 	export function leave(e: PointerEvent) {
@@ -167,22 +165,6 @@
 	});
 
 	$effect(() => () => clearLeave());
-	$effect(() => {
-		if (!shown) return;
-		const phone = isPhone();
-		const onResize = () => {
-			if (isPhone() !== phone) close();
-		};
-		window.addEventListener("resize", onResize, { passive: true });
-		const unback = phone ? backLayer({ onclose: close }) : undefined;
-		return () => {
-			window.removeEventListener("resize", onResize);
-			unback?.();
-		};
-	});
-
-	const menuIn = (node: Element) => (isPhone() ? modalIn(node) : surfaceIn(node, { y: -4 }));
-	const menuOut = (node: Element) => (isPhone() ? modalOut(node) : surfaceOut(node, { y: -4 }));
 
 	function pick(run: () => void) {
 		close();
@@ -206,8 +188,7 @@
 	function outside(e: PointerEvent) {
 		if (!shown) return;
 		const target = e.target as Element | null;
-		// .sbmenu-scrim closes on click (not pointerdown) so the tap's click cannot bleed through to the page behind.
-		if (target?.closest(".sbmenu, .sbmenu-scrim, .more, [data-menu-button]")) return;
+		if (target?.closest(".sbmenu, .more, [data-menu-button]")) return;
 		close();
 	}
 </script>
@@ -215,64 +196,41 @@
 <svelte:window onpointerdown={outside} onkeydown={(e) => { if (e.key === "Escape" && shown) { e.preventDefault(); e.stopPropagation(); close(); } }} />
 
 {#if shown}
-	<div class="portal-host" use:portal>
-		<!-- Backdrop on phones (<= 640px); hidden on desktop where the menu floats beside the row. -->
-		<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
-		<div class="scrim sbmenu-scrim" onclick={close} in:fadeIn out:fadeOut></div>
-		<!-- The menu container only routes keys to its items (arrows, Esc); the items are the interactive elements. -->
-		<!-- svelte-ignore a11y_no_static_element_interactions -->
-		<div
-			bind:this={el}
-			class="sbmenu sheet"
-			in:menuIn
-			out:menuOut
-			role="menu"
-			tabindex="-1"
-			style:--menu-top="{shown.top}px"
-			style:--menu-left="{shown.left}px"
-			style:--menu-w="{WIDTH}px"
-			onpointerenter={(e) => { if (shown && !shown.sticky && e.pointerType === "mouse") clearLeave(); }}
-			onpointerleave={leave}
-			onkeydown={keys}
-		>
-			<div class="grip" aria-hidden="true" use:sheetPull={{ onclose: close }}></div>
-			<div class="items">
-				{#each shown.items as it (it.label)}
-					<button class="mi wide" role="menuitem" title={it.title || undefined} style:--tilt={it.tilt ? `${it.tilt}deg` : undefined} onclick={() => pick(it.run)}><Icon name={it.icon} /><span>{it.label}</span></button>
-				{/each}
-			</div>
-		</div>
+	<!-- The menu container only routes keys to its items (arrows, Esc); the items are the interactive elements. -->
+	<!-- svelte-ignore a11y_no_static_element_interactions -->
+	<div
+		use:portal
+		bind:this={el}
+		class="sbmenu"
+		in:surfaceIn={{ y: -4 }}
+		out:surfaceOut={{ y: -4 }}
+		role="menu"
+		tabindex="-1"
+		style:top="{shown.top}px"
+		style:left="{shown.left}px"
+		style:width="{WIDTH}px"
+		onpointerenter={(e) => { if (shown && !shown.sticky && e.pointerType === "mouse") clearLeave(); }}
+		onpointerleave={leave}
+		onkeydown={keys}
+	>
+		{#each shown.items as it (it.label)}
+			<button class="mi wide" role="menuitem" title={it.title || undefined} style:--tilt={it.tilt ? `${it.tilt}deg` : undefined} onclick={() => pick(it.run)}><Icon name={it.icon} /><span>{it.label}</span></button>
+		{/each}
 	</div>
 {/if}
 
 <style>
-	.portal-host {
-		display: contents;
-	}
-	.scrim {
-		display: none;
-	}
 	.sbmenu {
 		position: fixed;
-		top: var(--menu-top);
-		left: var(--menu-left);
-		width: var(--menu-w);
 		z-index: var(--z-modal-3);
 		display: flex;
 		flex-direction: column;
+		gap: 4px;
 		padding: 4px;
 		border: 1px solid var(--border-strong);
 		border-radius: var(--radius);
 		background: var(--bg-elev);
 		box-shadow: var(--shadow-overlay);
-	}
-	.grip {
-		display: none;
-	}
-	.items {
-		display: flex;
-		flex-direction: column;
-		gap: 4px;
 	}
 	.mi {
 		display: flex;
@@ -309,45 +267,5 @@
 		stroke: var(--text-dim);
 		stroke-width: 1.9;
 		transform: rotate(var(--tilt, 0deg));
-	}
-	@media (max-width: 640px) {
-		.scrim {
-			display: block;
-			position: fixed;
-			inset: 0;
-			z-index: var(--z-scrim-3);
-			background: var(--scrim);
-		}
-		.sbmenu.sheet {
-			top: auto;
-			left: 0;
-			right: 0;
-			bottom: 0;
-			width: var(--vw);
-			max-height: calc(var(--dvh) * 0.85);
-			padding: 0;
-			border-bottom: 0;
-			border-radius: var(--radius-panel) var(--radius-panel) 0 0;
-			box-shadow: none;
-			overflow: hidden;
-		}
-		.grip {
-			display: block;
-			flex: none;
-			height: 20px;
-		}
-		.items {
-			flex: 1;
-			min-height: 0;
-			overflow-y: auto;
-			overscroll-behavior: contain;
-			padding: 0 8px calc(8px + var(--sab));
-		}
-		.mi {
-			height: 44px;
-			gap: 12px;
-			padding: 0 12px;
-			font-size: var(--fs-md);
-		}
 	}
 </style>
