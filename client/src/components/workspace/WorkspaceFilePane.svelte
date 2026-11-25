@@ -1087,11 +1087,11 @@
 	.fact {
 		display: inline-flex;
 		align-items: center;
-		gap: 4px;
+		gap: 0; /* 32px sm buttons already carry 8px inner padding each (16px ink-to-ink), keeping icon spacing tight and uniform */
 		flex: none;
 	}
-	/* Pull the 32px sm button's 8px right inset outside the 12px gutter so the 16px glyph right edge aligns with the bar margin */
-	.mbar .fact :global(.iconbtn:last-child) {
+	/* Pull only the final action button's 8px right inset outside the 12px gutter; `>` prevents matching nested wrapper spans like `[data-file-comment-btn]` */
+	.mbar .fact > :global(.iconbtn:last-child) {
 		margin-right: -8px;
 	}
 	.mbar :global(.iconbtn:focus-visible) {
@@ -1512,6 +1512,56 @@
 		display: flex;
 		flex-wrap: wrap;
 		gap: 8px;
+	}
+	@media (max-width: 640px) {
+		.cta {
+			font-size: 16px; /* prevent iOS Safari auto-zoom on comment textarea focus */
+			line-height: 24px;
+		}
+		.float-pop {
+			left: 0 !important;
+			right: 0 !important;
+			top: auto !important;
+			bottom: 0 !important;
+			width: 100vw;
+			max-height: 75dvh;
+			border-left: 0;
+			border-right: 0;
+			border-bottom: 0;
+			border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+			padding-bottom: var(--sab);
+		}
+		.float-pop::before {
+			content: "";
+			position: absolute;
+			top: 6px;
+			left: 50%;
+			transform: translateX(-50%);
+			width: 36px;
+			height: 4px;
+			border-radius: var(--radius-pill);
+			background: var(--border-strong);
+		}
+		.fcard {
+			padding-top: 16px;
+		}
+		.cgrip {
+			display: none;
+		}
+		.chead {
+			cursor: default;
+		}
+		.cact {
+			width: 100%;
+			display: grid;
+			grid-template-columns: repeat(2, minmax(0, 1fr));
+		}
+		.cact :global(.btn) {
+			width: 100%;
+		}
+		.chint {
+			display: none;
+		}
 	}
 	.pad {
 		padding: 16px;

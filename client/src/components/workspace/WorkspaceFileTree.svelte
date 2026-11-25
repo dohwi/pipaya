@@ -445,14 +445,19 @@
 	.hact {
 		display: flex;
 		align-items: center;
-		gap: 4px;
+		gap: 0;
 		flex: none;
 	}
-	/* Pull the 38px button's 9.5px right padding outside the 12px gutter so the 19px glyph right edge aligns with Segmented/search below */
-	.hact :global(.iconbtn:last-child) {
-		margin-right: -9.5px;
+	/* Compact 32px hitboxes (16px icons? no, keep 19px glyph crisp while tightening horizontal footprint to 32px so retry & x sit 13px ink-to-ink like header controls) */
+	.hact :global(.iconbtn) {
+		width: 32px;
+		height: 38px;
 	}
-	/* 38px button in a 44px bar: draw the focus ring inside so it never clips against the bar edge */
+	/* Pull the 32px button's 6.5px right padding outside the 12px gutter so the 19px glyph right edge aligns with Segmented/search below */
+	.hact :global(.iconbtn:last-child) {
+		margin-right: -6.5px;
+	}
+	/* 38px tall button in a 44px bar: draw the focus ring inside so it never clips against the bar edge */
 	.hact :global(.iconbtn:focus-visible) {
 		outline-offset: -2px;
 	}
@@ -627,6 +632,12 @@
 		padding: 8px 12px;
 	}
 
+	@media (max-width: 640px) {
+		.search {
+			height: 36px; /* comfortable mobile input height with 16px text */
+			font-size: 16px; /* prevent iOS Safari auto-zoom on input focus */
+		}
+	}
 	@media (max-width: 860px) {
 		.fscrim {
 			display: block;

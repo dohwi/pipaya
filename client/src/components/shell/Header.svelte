@@ -372,7 +372,7 @@
 	.fact {
 		display: inline-flex;
 		align-items: center;
-		gap: 4px;
+		gap: 0; /* 32px sm buttons already carry 8px inner padding each (16px ink-to-ink), keeping icon spacing tight and uniform */
 		flex: none;
 	}
 	/* 32px sm buttons inside the 44px Header bar: keep focus ring inside to prevent clipping */
@@ -424,12 +424,13 @@
 		height: 19px;
 		stroke-width: 1.75;
 	}
-	.files-toggle {
+	.tool.files-toggle {
 		position: relative;
 		flex: none;
 		/* Pull the 40px button's 10.5px right inset into the 12px capsule padding so the 19px folder glyph aligns with the right edge */
 		margin-right: -8px;
 	}
+	/* Compact 38px/32px icon buttons in desktop right file-drawer header: see WorkspaceFileTree.svelte */
 	.files-toggle.on {
 		background: var(--bg-hover);
 		color: var(--text);
@@ -462,10 +463,10 @@
 			display: contents;
 		}
 		.tabs :global(.ctl) {
-			margin-right: -1px; /* the count's 18px square sits 5px inside its 28px box; 12px capsule padding + 5 - 1 = 16, the window gutter */
+			margin-right: -4px; /* cancel the capsule's 4px flex gap so "+", count, and the right folder toggle read as one even 28px-wide cluster */
 		}
-		.files-toggle {
-			width: 28px;
+		.tool.files-toggle {
+			width: 28px; /* overrides the 640px .tool 32px rule (via specificity) to match TabControls' 28px buttons */
 			margin-right: -4px; /* pull the 28px button's 4.5px right glyph inset into the 12px phone capsule gutter */
 			border-radius: min(var(--radius-pill), 14px);
 		}
