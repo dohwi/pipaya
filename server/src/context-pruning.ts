@@ -113,6 +113,26 @@ function replaceLargeTextBlocks(message: AgentMessage, minChars: number): { mess
 }
 
 /**
+ * Returns a stable per-message identity for a `toolResult` so duplicate `toolCallId`s reused across turns
+ * (e.g. `call_0` from Google/OpenAI-compat gateways) or shifted array indices (e.g. when `syncSkills` inserts a
+ * leading system message) never collide.
+ */
+function messagePruneKey(message: AgentMessage): string {
+	const id = (message as { toolCallId?: unknown }).toolCallId;
+	const ts = (message as { timestamp?: unknown }).timestamp;
+	const tsPart = typeof ts === "number" && Number.isFinite(ts) ? String(ts) : "";
+	if (typeof id === "string" && id) {
+		return `${id}@${tsPart}`;
+	}
+	const name = (message as { toolName?: unknown }).toolName;
+	const content = (message as { content?: unknown }).content;
+	const textLen = Array.isArray(content)
+		? content.reduce((sum, b) => sum + (b && b.type === "text" && typeof b.text === "string" ? b.text.length : 0), 0)
+		: 0;
+	return `anon:${typeof name === "string" ? name : ""}@${tsPart}:${textLen}`;
+}
+
+/**
  * Replaces large (`>= minChars`) `toolResult` text blocks older than the last `keepRecentTurns` assistant turns.
  * When `opts.state` is provided, enforces rare batched triggering so the prompt prefix stays cache-stable between passes.
  */
@@ -128,16 +148,16 @@ export function pruneOldToolResults(messages: AgentMessage[], opts: PruneOptions
 
 	if (state) {
 		let newlyPrunableBytes = 0;
-		const candidateIds: string[] = [];
+		const candidateKeys: string[] = [];
 		for (let i = 0; i < cutoff; i++) {
 			const m = messages[i];
 			if (!m || m.role !== "toolResult") continue;
-			const id = typeof m.toolCallId === "string" && m.toolCallId ? m.toolCallId : `__idx:${i}`;
-			if (state.clearedToolCallIds.has(id)) continue;
+			const key = messagePruneKey(m);
+			if (state.clearedToolCallIds.has(key)) continue;
 			const bytes = prunableTextBytes(m, minChars);
 			if (bytes > 0) {
 				newlyPrunableBytes += bytes;
-				candidateIds.push(id);
+				candidateKeys.push(key);
 			}
 		}
 
@@ -145,30 +165,32 @@ export function pruneOldToolResults(messages: AgentMessage[], opts: PruneOptions
 			DEFAULT_PRUNE_BATCH_MIN_BYTES,
 			Math.floor((opts.contextWindow ?? 0) * DEFAULT_PRUNE_WINDOW_FRACTION * 4),
 		);
-		const isIdle = state.lastModelCallAt > 0 && now - state.lastModelCallAt >= DEFAULT_PRUNE_IDLE_MS;
+		// Treat cold-start / post-eviction (`lastModelCallAt === 0`) as idle since prompt cache is cold.
+		const isIdle = state.lastModelCallAt === 0 || now - state.lastModelCallAt >= DEFAULT_PRUNE_IDLE_MS;
 		const shouldTrigger =
-			candidateIds.length > 0 &&
+			candidateKeys.length > 0 &&
 			(newlyPrunableBytes >= batchThreshold || (isIdle && newlyPrunableBytes >= DEFAULT_PRUNE_IDLE_MIN_BYTES));
 
 		if (shouldTrigger) {
 			triggered = true;
-			for (const id of candidateIds) {
-				state.clearedToolCallIds.add(id);
-				newlyPruned.push(id);
+			for (const key of candidateKeys) {
+				state.clearedToolCallIds.add(key);
+				newlyPruned.push(key);
 			}
 		}
 		state.lastModelCallAt = now;
 
-		if (state.clearedToolCallIds.size === 0) {
+		if (state.clearedToolCallIds.size === 0 || cutoff <= 0) {
 			return { messages, prunedIds: [], clearedBytes: 0, triggered: false };
 		}
 
 		let anyChanged = false;
 		let clearedBytes = 0;
 		const out = messages.map((m, i) => {
-			if (!m || m.role !== "toolResult") return m;
-			const id = typeof m.toolCallId === "string" && m.toolCallId ? m.toolCallId : `__idx:${i}`;
-			if (!state.clearedToolCallIds.has(id)) return m;
+			// Never prune messages inside the protected recent-turn window (`i >= cutoff`).
+			if (i >= cutoff || !m || m.role !== "toolResult") return m;
+			const key = messagePruneKey(m);
+			if (!state.clearedToolCallIds.has(key)) return m;
 			const res = replaceLargeTextBlocks(m, minChars);
 			if (res.message !== m) {
 				anyChanged = true;
@@ -189,7 +211,7 @@ export function pruneOldToolResults(messages: AgentMessage[], opts: PruneOptions
 		if (res.message !== m) {
 			anyChanged = true;
 			clearedBytes += res.savedBytes;
-			newlyPruned.push(typeof m.toolCallId === "string" && m.toolCallId ? m.toolCallId : `__idx:${i}`);
+			newlyPruned.push(messagePruneKey(m));
 		}
 		return res.message;
 	});

@@ -2,6 +2,7 @@ import { Agent, type AgentEvent, type AgentMessage, type AgentTool } from "@eare
 import { createInitialSystemMessage, isContextOverflow, toToolDeclaration, type ImageContent } from "@earendil-works/pi-ai";
 import { randomUUID } from "node:crypto";
 import { mkdirSync, rmSync, statSync } from "node:fs";
+import { readdir, rm } from "node:fs/promises";
 import { homedir } from "node:os";
 import { isAbsolute, join, relative, resolve, sep } from "node:path";
 import { askQuestion, type QuestionManager } from "./questions.ts";
@@ -16,7 +17,7 @@ import type { EventBus } from "./events.ts";
 import { checkServiceTier, modelDefaultTier, modelDefaultLevel, reasoningOption, type ModelRegistry } from "./models.ts";
 import { streamAtTier } from "./served-tier.ts";
 import type { ServiceTier } from "./openrouter-catalog.ts";
-import { contextTokens, effectiveContextTokens, estimateTokens, formatTouchedFiles, KEEP_RECENT_TOKENS, pickCut, SUMMARY_MAX_TOKENS, SUMMARY_SYSTEM, summaryMessage, summaryRequest, thresholdFor, type CompactionSettings } from "./compaction.ts";
+import { attachTouchedFiles, contextTokens, effectiveContextTokens, estimateTokens, KEEP_RECENT_TOKENS, pickCut, SUMMARY_MAX_TOKENS, SUMMARY_SYSTEM, summaryMessage, summaryRequest, thresholdFor, type CompactionSettings } from "./compaction.ts";
 import { THINKING_LEVELS, type DelegateCall, type SessionPatch, type SessionRecord, type SessionStore, type ThinkingLevel } from "./store.ts";
 import type { McpManager } from "./mcp.ts";
 import { ALWAYS_TOOLS, buildTools, DEFAULT_TOOLS, DELEGATE_TOOL, isInside, modelList, PEER_TOOLS, TOOL_DEFS, WORKDIR_TOOL, type ReadTrackEntry, type ToolContext, type ToolDef } from "./tools.ts";
@@ -182,6 +183,7 @@ export class SessionManager {
 				dissolve: (g) => this.groupOps.dissolve(g),
 			},
 		});
+		if (this.cfg.dataDir) void this.sweepOrphanSpills();
 	}
 
 	/** Group changes for `peer(action=group_*)`, wired by the app once the group manager exists. */
@@ -476,8 +478,7 @@ export class SessionManager {
 			if (reply.stopReason === "error") throw new Error(reply.errorMessage || "the summary model failed");
 			const rawSummary = reply.content.flatMap((c) => (c.type === "text" ? [c.text] : [])).join("").trim();
 			if (!rawSummary) throw new Error("the summary model returned nothing");
-			const touchedFiles = formatTouchedFiles(toSummarizeMessages);
-			const summary = touchedFiles ? `${rawSummary}\n\n${touchedFiles}` : rawSummary;
+			const summary = attachTouchedFiles(rawSummary, toSummarizeMessages, stored.summary);
 			// The transcript may have grown while the summary was written; only what was summarized is replaced.
 			const u = reply.usage;
 			this.store.addCompaction(id, {
@@ -1136,6 +1137,8 @@ export class SessionManager {
 		live.recentCalls = [];
 		live.cycleWindow = [];
 		live.recentErrors = [];
+		const initialGoalNote = this.goals?.systemNote(id);
+		live.runGoalNote = initialGoalNote ? { note: initialGoalNote, userTimestamp: pendingPrompt?.timestamp } : undefined;
 		live.stopCause = undefined;
 		live.limitReason = undefined;
 		live.forceStopped = false;
@@ -1207,6 +1210,7 @@ export class SessionManager {
 				}
 				if (live.forceStopped) return; // run_finished was already published when it was cut loose
 				live.running = false;
+				live.runGoalNote = undefined;
 				live.lastActive = Date.now();
 				const record = this.store.get(id);
 				if (!record) return;
@@ -1603,6 +1607,23 @@ export class SessionManager {
 		return join(this.cfg.dataDir, "tmp", "spill", sessionId);
 	}
 
+	/** Best-effort startup cleanup of `<dataDir>/tmp/spill/<id>` folders whose sessions no longer exist. */
+	private async sweepOrphanSpills(): Promise<void> {
+		if (!this.cfg.dataDir) return;
+		const root = join(this.cfg.dataDir, "tmp", "spill");
+		let entries: string[];
+		try {
+			entries = await readdir(root);
+		} catch {
+			return;
+		}
+		for (const id of entries) {
+			if (!this.store.get(id)) {
+				await rm(join(root, id), { recursive: true, force: true }).catch(() => {});
+			}
+		}
+	}
+
 	private availableModelsHint(): string {
 		const list = modelList(this.chatModelIds);
 		return list ? `; available: ${list}` : "";
@@ -1626,6 +1647,7 @@ export class SessionManager {
 			delegateRoles: () => this.delegatePolicy().roles,
 			delegateModels: () => this.delegatePolicy(),
 			chatModels: () => this.chatModelIds,
+			peerEnabled: () => !this.disabledTools().includes("peer"),
 			peers: {
 				send: (to, message, opts) => this.peers.send(sessionId, to, message, opts),
 				read: (from, count, detail) => this.peers.read(sessionId, from, count, detail),
@@ -1762,26 +1784,40 @@ export class SessionManager {
 		});
 		if (signal?.aborted) throw new Error("delegate aborted");
 		const release = this.delegates.acquire(sessionId, { calls: pol.maxCalls, running: pol.maxConcurrent });
-		let released = false;
-		const releaseOnce = () => {
-			if (released) return;
-			released = true;
-			release();
-		};
 		const retryStop = new AbortController();
 		const retrySignal = signal ? AbortSignal.any([signal, retryStop.signal]) : retryStop.signal;
 		startedAt = performance.now();
-		let outcome: "finished" | "deadline" | "cancelled";
-		try {
-			outcome = await runDelegateWithinDeadline(
-				async () => {
-					try {
-						await agent.prompt(input.task);
-						// A stream cut off after thinking/partial text (e.g. post-thought MALFORMED_FUNCTION_CALL or reset)
-						// bypasses withUpstreamRetry; drop the half-written reply and continue just like SessionManager.run.
-						await retryDroppedMidStream({
+		const outcome = await runDelegateWithinDeadline(
+			async () => {
+				// A detached tool still occupies a slot until it settles; retries must not pile up stuck work.
+				try {
+					await agent.prompt(input.task);
+					// A stream cut off after thinking/partial text (e.g. post-thought MALFORMED_FUNCTION_CALL or reset)
+					// bypasses withUpstreamRetry; drop the half-written reply and continue just like SessionManager.run.
+					await retryDroppedMidStream({
+						getLastMessage: () => agent.state.messages[agent.state.messages.length - 1],
+						shouldStop: () => stopping || retrySignal.aborted,
+						sleep: async (delayMs) => {
+							await sleepAbortable(delayMs, retrySignal);
+							return { aborted: stopping || retrySignal.aborted };
+						},
+						dropLastReply: () => {
+							agent.state.messages = agent.state.messages.slice(0, -1);
+							turns = Math.max(0, turns - 1);
+						},
+						continueRun: () => agent.continue(),
+					});
+					const fallbackSettings = this.fallbackModel;
+					if (!stopping && !retrySignal.aborted && fallbackSettings) {
+						await recoverWithFallback({
 							getLastMessage: () => agent.state.messages[agent.state.messages.length - 1],
-							shouldStop: () => stopping || retrySignal.aborted,
+							resolveFallback: async () => {
+								const active = agent.state.model;
+								const fb = fallbackSettings.resolve({ provider: active.provider, model: active.id });
+								const fbModel = fb && this.registry.models.getModel(fb.provider, fb.model);
+								if (!fb || !fbModel || !(await this.registry.models.checkAuth(fb.provider))) return null;
+								return { fb, fbModel, label: `${fb.provider}/${fb.model}` };
+							},
 							sleep: async (delayMs) => {
 								await sleepAbortable(delayMs, retrySignal);
 								return { aborted: stopping || retrySignal.aborted };
@@ -1790,41 +1826,17 @@ export class SessionManager {
 								agent.state.messages = agent.state.messages.slice(0, -1);
 								turns = Math.max(0, turns - 1);
 							},
-							continueRun: () => agent.continue(),
+							runWithFallback: async ({ fb, fbModel }) => {
+								agent.state.model = fbModel;
+								agent.state.thinkingLevel = fb.thinkingLevel ?? this.subagentThinking(rec, requestedThinking, def.thinking, fb.provider, fb.model);
+								await agent.continue();
+							},
 						});
-						const fallbackSettings = this.fallbackModel;
-						if (!stopping && !retrySignal.aborted && fallbackSettings) {
-							await recoverWithFallback({
-								getLastMessage: () => agent.state.messages[agent.state.messages.length - 1],
-								resolveFallback: async () => {
-									const active = agent.state.model;
-									const fb = fallbackSettings.resolve({ provider: active.provider, model: active.id });
-									const fbModel = fb && this.registry.models.getModel(fb.provider, fb.model);
-									if (!fb || !fbModel || !(await this.registry.models.checkAuth(fb.provider))) return null;
-									return { fb, fbModel, label: `${fb.provider}/${fb.model}` };
-								},
-								sleep: async (delayMs) => {
-									await sleepAbortable(delayMs, retrySignal);
-									return { aborted: stopping || retrySignal.aborted };
-								},
-								dropLastReply: () => {
-									agent.state.messages = agent.state.messages.slice(0, -1);
-									turns = Math.max(0, turns - 1);
-								},
-								runWithFallback: async ({ fb, fbModel }) => {
-									agent.state.model = fbModel;
-									agent.state.thinkingLevel = fb.thinkingLevel ?? this.subagentThinking(rec, requestedThinking, def.thinking, fb.provider, fb.model);
-									await agent.continue();
-								},
-							});
-						}
-					} finally { releaseOnce(); }
-				},
-				() => { stopping = true; retryStop.abort(); agent.abort(); }, signal, this.delegateTimeoutMs, undefined, releaseOnce,
-			);
-		} finally {
-			releaseOnce();
-		}
+					}
+				} finally { release(); }
+			},
+			() => { stopping = true; retryStop.abort(); agent.abort(); }, signal, this.delegateTimeoutMs,
+		);
 		if (outcome === "cancelled" || signal?.aborted) throw new Error("delegate aborted");
 		const timedOut = outcome === "deadline";
 		if (timedOut) limit = "deadline";
@@ -1840,15 +1852,25 @@ export class SessionManager {
 	/** Stops a run that has gone past the turn budget, keeps issuing the identical tool call/cycle, or repeats the same tool error. */
 	private guardRunaway(sessionId: string, live: Live, event: Extract<AgentEvent, { type: "turn_end" }>): void {
 		const limits = { maxTurns: MAX_RUN_TURNS, maxRepeated: MAX_REPEATED_CALLS };
+		const rawContent = (event.message as { content?: unknown }).content;
+		const callArgsById = new Map<string, unknown>();
+		if (Array.isArray(rawContent)) {
+			for (const block of rawContent as { type?: unknown; id?: unknown; arguments?: unknown }[]) {
+				if (block?.type === "toolCall" && typeof block.id === "string") {
+					callArgsById.set(block.id, block.arguments);
+				}
+			}
+		}
 		const errorParts = event.toolResults
 			.filter((r) => r.isError)
 			.map((r) => {
 				const firstText = Array.isArray(r.content) ? r.content.find((b) => b.type === "text") : undefined;
 				const msg = firstText && "text" in firstText ? String(firstText.text).trim().slice(0, 200) : "";
-				return `${r.toolName}:${msg}`;
+				const args = callArgsById.get(r.toolCallId);
+				return `${r.toolName}:${JSON.stringify(args ?? {})}:${msg}`;
 			});
 		const errorSignature = errorParts.length ? errorParts.join("|") : undefined;
-		const next = afterTurn(live, (event.message as { content?: unknown }).content, limits, errorSignature);
+		const next = afterTurn(live, rawContent, limits, errorSignature);
 		live.turns = next.turns;
 		live.recentCalls = next.recentCalls;
 		live.cycleWindow = next.cycleWindow ?? [];
@@ -1921,19 +1943,47 @@ export class SessionManager {
 				state: live.pruneState,
 			}).messages;
 		}
-		const goalNote = this.goals?.systemNote(sessionId);
-		if (goalNote) {
-			for (let i = out.length - 1; i >= 0; i--) {
-				const msg = out[i] as { role?: string; content?: unknown } | undefined;
-				if (!msg || (msg.role !== "user" && msg.role !== "toolResult")) continue;
-				if (typeof msg.content === "string") {
-					const copy = { ...msg, content: `${msg.content}\n\n${goalNote}` } as AgentMessage;
-					out = [...out.slice(0, i), copy, ...out.slice(i + 1)];
-				} else if (Array.isArray(msg.content)) {
-					const copy = { ...msg, content: [...msg.content, { type: "text" as const, text: goalNote }] } as AgentMessage;
-					out = [...out.slice(0, i), copy, ...out.slice(i + 1)];
+		if (live && !live.runGoalNote) {
+			const freshGoalNote = this.goals?.systemNote(sessionId);
+			if (freshGoalNote) {
+				let lastUserTs: number | undefined;
+				for (let i = out.length - 1; i >= 0; i--) {
+					if (out[i]?.role === "user") {
+						lastUserTs = (out[i] as { timestamp?: number }).timestamp;
+						break;
+					}
 				}
-				break;
+				live.runGoalNote = { note: freshGoalNote, userTimestamp: lastUserTs };
+			}
+		}
+		const goalAnchor = live?.runGoalNote;
+		if (goalAnchor?.note) {
+			let anchorIdx = -1;
+			if (goalAnchor.userTimestamp !== undefined) {
+				for (let i = out.length - 1; i >= 0; i--) {
+					if (out[i]?.role === "user" && (out[i] as { timestamp?: number }).timestamp === goalAnchor.userTimestamp) {
+						anchorIdx = i;
+						break;
+					}
+				}
+			}
+			if (anchorIdx === -1) {
+				for (let i = out.length - 1; i >= 0; i--) {
+					if (out[i]?.role === "user") {
+						anchorIdx = i;
+						break;
+					}
+				}
+			}
+			if (anchorIdx !== -1) {
+				const msg = out[anchorIdx] as { role?: string; content?: unknown };
+				if (typeof msg.content === "string") {
+					const copy = { ...msg, content: `${msg.content}\n\n${goalAnchor.note}` } as AgentMessage;
+					out = [...out.slice(0, anchorIdx), copy, ...out.slice(anchorIdx + 1)];
+				} else if (Array.isArray(msg.content)) {
+					const copy = { ...msg, content: [...msg.content, { type: "text" as const, text: goalAnchor.note }] } as AgentMessage;
+					out = [...out.slice(0, anchorIdx), copy, ...out.slice(anchorIdx + 1)];
+				}
 			}
 		}
 		const resize = model?.inputLimits?.images?.resize;
@@ -1993,7 +2043,8 @@ export class SessionManager {
 				this.store.appendMessage(sessionId, seq, event.message);
 				if (event.message.role === "assistant" && event.message.stopReason !== "error" && event.message.stopReason !== "aborted") {
 					const u = (event.message as { usage?: { input?: number; cacheRead?: number; cacheWrite?: number } }).usage;
-					if (u) {
+					const turnInput = (u?.input ?? 0) + (u?.cacheRead ?? 0) + (u?.cacheWrite ?? 0);
+					if (u && turnInput > 0) {
 						live.cacheStats.turns++;
 						live.cacheStats.input += u.input ?? 0;
 						live.cacheStats.cacheRead += u.cacheRead ?? 0;
@@ -2074,21 +2125,16 @@ export class SessionManager {
 	}
 
 	/**
-	 * Rebuilds the session's tools for the folder it works in now when that changed (a run keeps the tools it started
-	 * with until its next turn). Returns the new tools, or undefined when they still fit.
+	 * Sends a session home if its active worktree disappeared and tracks `live.toolsDir`. Tools resolve cwd dynamically
+	 * through `ToolContext.getCwd`, so `live.agent.state.tools` does not need to be rebuilt mid-run.
 	 */
 	private retargetTools(sessionId: string): AgentTool<any>[] | undefined {
 		const live = this.live.get(sessionId);
 		this.workdirOps.homeIfGone(sessionId);
 		const rec = this.store.get(sessionId);
-		const snap = this.store.context(sessionId);
-		if (!live || !rec || !snap) return undefined;
-		const dir = workDirOf(rec);
-		if (live.toolsDir === dir) return undefined;
-		const tools = this.sessionTools(sessionId, snap.tools, dir, live.readRoots);
-		live.agent.state.tools = tools;
-		live.toolsDir = dir;
-		return tools;
+		if (!live || !rec) return undefined;
+		live.toolsDir = workDirOf(rec);
+		return undefined;
 	}
 
 	private forwardToExtensions(sessionId: string, event: AgentEvent): void {
@@ -2103,7 +2149,7 @@ export class SessionManager {
 		}
 	}
 
-	/** The configured chat models (credentials present, no image models), cached briefly: a run's tool texts list them. */
+	/** The configured chat models (credentials present, no image models), cached briefly for `peer(action="list_models")` and runtime error hints. */
 	async refreshChatModels(): Promise<void> {
 		if (Date.now() - this.chatModelsAt < 5_000) return;
 		try {

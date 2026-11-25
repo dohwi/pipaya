@@ -180,7 +180,7 @@ export const SessionContext = Type.Object({
 		cacheWrite: Type.Number({ minimum: 0 }),
 		input: Type.Number({ minimum: 0 }),
 		hitRate: Type.Number({ minimum: 0, maximum: 1 }),
-	}, { description: "Live prompt-cache hit telemetry for this session" })),
+	}, { description: "Live prompt-cache hit telemetry for this session (since live load)" })),
 });
 
 export const CreateSessionBody = Type.Object({

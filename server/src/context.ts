@@ -143,7 +143,7 @@ export function buildEnvContext(cwd: string, opts?: { platform?: NodeJS.Platform
 	const platform = opts?.platform ?? process.platform;
 	const arch = opts?.arch ?? process.arch;
 	const shell = opts?.shell ?? pickCommandShell(platform);
-	return `Environment: cwd=${cwd} | os=${platform}/${arch} | shell=${shell.name} (${shell.path})`;
+	return `Environment: home cwd=${cwd} (active folder may change via workdir) | os=${platform}/${arch} | shell=${shell.name} (${shell.path})`;
 }
 
 /** The model's system prompt: base + optional static env context + current AGENTS.md + the skills that are currently enabled. */

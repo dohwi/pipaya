@@ -65,8 +65,10 @@ export interface ToolContext {
 	delegateRoles?(): "defined" | "any";
 	/** The model policy of `delegate` now (read in `create`, so the tool text lists the models a call may name). */
 	delegateModels?(): { policy: "defined" | "allowlist" | "any"; models: string[] };
-	/** The chat models a new session or subagent may run on now, as provider/model (read in `create`, so the tool text lists them). */
+	/** The chat models a new session or subagent may run on now, as provider/model (returned by `peer(action="list_models")`). */
 	chatModels?(): readonly string[];
+	/** Whether the `peer` tool is enabled for this session (controls whether `delegate` references `peer(action="list_models")`). */
+	peerEnabled?(): boolean;
 	/** Other sessions of this server (`peer`). */
 	peers?: {
 		send(to: string, message: string, opts?: { mode?: "steer" | "follow_up"; notify?: boolean }): Promise<string>;
@@ -1779,10 +1781,15 @@ const DELEGATE_DESCRIPTION_FREE =
 
 const MODEL_HINT = "Pick a fast, cheap model for searches, summaries and simple checks, a strong one for root-cause analysis or design judgement. Omit `model` to use the role's own model, else this session's.";
 /** What the tool text says about `model` under the model policy (the ids only in the parameter, not twice); `null` = the argument is not offered (the role decides). */
-export function delegateModelText(p: { policy: "defined" | "allowlist" | "any"; models: string[] } | undefined): { tool: string; param: string } | null {
+export function delegateModelText(p: { policy: "defined" | "allowlist" | "any"; models: string[] } | undefined, peerEnabled = true): { tool: string; param: string } | null {
 	if (!p || p.policy === "defined") return null;
 	if (p.policy === "allowlist") return { tool: ` ${MODEL_HINT}`, param: `provider/model, one of: ${p.models.join(", ")}` };
-	return { tool: ` ${MODEL_HINT}`, param: 'provider/model of any configured model; call peer(action="list_models") to see available models' };
+	return {
+		tool: ` ${MODEL_HINT}`,
+		param: peerEnabled
+			? 'provider/model of any configured model; call peer(action="list_models") to see available models'
+			: "provider/model of any configured model",
+	};
 }
 
 const delegateTool: ToolDef = {
@@ -1790,7 +1797,7 @@ const delegateTool: ToolDef = {
 	description: "Run a one-off subagent and return its answer.",
 	create(_cwd, _roots, ctx) {
 		const free = ctx?.delegateRoles?.() === "any";
-		const models = delegateModelText(ctx?.delegateModels?.());
+		const models = delegateModelText(ctx?.delegateModels?.(), ctx?.peerEnabled?.() ?? true);
 		return defineTool({
 			name: DELEGATE_TOOL,
 			label: "Delegate to a subagent",

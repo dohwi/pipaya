@@ -124,6 +124,8 @@ export interface Live {
 	hinted?: Set<string>;
 	/** Set by `before_agent_start` extensions; applies to the current run only. */
 	runSystem?: { replace?: string; append?: string };
+	/** Goal status note snapshotted once at run start and anchored to the run's opening user message for full-prefix prompt cache stability. */
+	runGoalNote?: { note: string; userTimestamp?: number };
 }
 
 /** How long a cooperative abort may take before the run is forcibly cut loose. */

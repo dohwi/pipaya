@@ -1,7 +1,10 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, rename, unlink, writeFile } from "node:fs/promises";
+import { mkdir, readdir, rename, stat, unlink, writeFile } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
 import { formatBytes } from "./image-file.ts";
+
+/** Maximum spill files retained per directory; older files are evicted best-effort when exceeded. */
+export const MAX_SPILL_FILES_PER_DIR = 50;
 
 /**
  * Truncate a UTF-8 string to at most `maxBytes` from the start without splitting a multi-byte character
@@ -63,7 +66,33 @@ export async function spillText(dir: string, prefix: string, content: string): P
 	}
 	const bytes = Buffer.byteLength(content, "utf8");
 	const lines = content.length === 0 ? 0 : content.split("\n").length;
+	await pruneSpillDir(dir, finalPath).catch(() => {});
 	return { path: finalPath, bytes, lines };
+}
+
+async function pruneSpillDir(dir: string, keepPath: string): Promise<void> {
+	const entries = (await readdir(dir)).filter((name) => name.endsWith(".txt") && !name.startsWith("."));
+	if (entries.length <= MAX_SPILL_FILES_PER_DIR) return;
+	const withMtime = await Promise.all(
+		entries.map(async (name) => {
+			const full = join(dir, name);
+			try {
+				const st = await stat(full);
+				return { full, mtimeMs: st.mtimeMs };
+			} catch {
+				return { full, mtimeMs: 0 };
+			}
+		}),
+	);
+	withMtime.sort((a, b) => a.mtimeMs - b.mtimeMs);
+	const toDelete = withMtime.length - MAX_SPILL_FILES_PER_DIR;
+	let removed = 0;
+	for (const entry of withMtime) {
+		if (removed >= toDelete) break;
+		if (entry.full === keepPath) continue;
+		await unlink(entry.full).catch(() => {});
+		removed++;
+	}
 }
 
 export interface FormatSpilledOptions {

@@ -117,7 +117,7 @@ const dirOf = (scope: SubagentDef["scope"], cwd: string, home: string) => join(s
 
 const scopeCache = new Map<string, { fingerprint: string; defs: SubagentDef[] }>();
 
-/** Clears the cached subagent definitions (called automatically by saveSubagent/removeSubagent). */
+/** Clears the cached subagent definitions (primarily for tests; saveSubagent/removeSubagent invalidate their own scope via scopeCache.delete). */
 export function clearSubagentCache(): void {
 	scopeCache.clear();
 }

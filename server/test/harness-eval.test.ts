@@ -5,6 +5,7 @@ import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync 
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { buildApp, type App } from "../src/app.ts";
+import { attachTouchedFiles } from "../src/compaction.ts";
 import {
 	createContextPruneState,
 	DEFAULT_PRUNE_BATCH_MIN_BYTES,
@@ -13,7 +14,8 @@ import {
 	resetContextPruneState,
 } from "../src/context-pruning.ts";
 import { GOAL_NOTE } from "../src/session-helpers.ts";
-import { MAX_SUBAGENT_OUTPUT_CHARS, loadSubagents, runDelegateWithinDeadline } from "../src/subagents.ts";
+import { DelegateLimits, MAX_SUBAGENT_OUTPUT_CHARS, loadSubagents, runDelegateWithinDeadline } from "../src/subagents.ts";
+import { buildTools } from "../src/tools.ts";
 import { ECHO_MODEL, echoProviderBody, startEchoUpstream } from "./support/openai-upstream.ts";
 
 interface ScriptedReply {
@@ -93,7 +95,7 @@ function startScriptedUpstream(handler: (req: any, index: number) => ScriptedRep
 	};
 }
 
-function makeToolResult(id: string, text: string, details?: Record<string, unknown>): AgentMessage {
+function makeToolResult(id: string, text: string, details?: Record<string, unknown>, timestamp = Date.now()): AgentMessage {
 	return {
 		role: "toolResult",
 		toolCallId: id,
@@ -101,7 +103,7 @@ function makeToolResult(id: string, text: string, details?: Record<string, unkno
 		content: [{ type: "text", text }],
 		details,
 		isError: false,
-		timestamp: Date.now(),
+		timestamp,
 	} as AgentMessage;
 }
 
@@ -130,7 +132,7 @@ describe("rare batched cache-safe tool-result pruning", () => {
 				const body = withSpill && i === 1
 					? `${"x".repeat(payloadSize)}\n[output truncated: 500 lines, 100 KB (102400 bytes); full output saved to ${spillPath} — use read/grep to inspect]`
 					: "a".repeat(payloadSize);
-				msgs.push(makeToolResult(id, body, withSpill && i === 1 ? { spillPath } : undefined));
+				msgs.push(makeToolResult(id, body, withSpill && i === 1 ? { spillPath } : undefined, i * 1000));
 			}
 			return msgs;
 		};
@@ -153,7 +155,7 @@ describe("rare batched cache-safe tool-result pruning", () => {
 		const aboveBatch = buildTranscript(8, 45_000, true);
 		const r2 = pruneOldToolResults(aboveBatch, { contextWindow: 100_000, state, now: 3_000 });
 		expect(r2.triggered).toBe(true);
-		expect(r2.prunedIds).toEqual(["call-1", "call-2"]);
+		expect(r2.prunedIds).toEqual(["call-1@1000", "call-2@2000"]);
 		expect(r2.clearedBytes).toBeGreaterThan(DEFAULT_PRUNE_BATCH_MIN_BYTES);
 		const cleared1 = (r2.messages[2] as any).content[0].text as string;
 		const cleared2 = (r2.messages[4] as any).content[0].text as string;
@@ -178,13 +180,56 @@ describe("rare batched cache-safe tool-result pruning", () => {
 		// 5) Idle >= 5 minutes with >= 24 KiB newly prunable triggers pass
 		const r4 = pruneOldToolResults(nextTurn, { contextWindow: 100_000, state, now: 4_000 + DEFAULT_PRUNE_IDLE_MS });
 		expect(r4.triggered).toBe(true);
-		expect(r4.prunedIds).toEqual(["call-3"]);
+		expect(r4.prunedIds).toEqual(["call-3@3000"]);
 		expect((r4.messages[6] as any).content[0].text).toContain("earlier tool result cleared");
 
 		// 6) Reset on compaction clears recorded IDs
 		resetContextPruneState(state);
 		expect(state.clearedToolCallIds.size).toBe(0);
 		expect(state.lastModelCallAt).toBe(0);
+	});
+
+	test("duplicate toolCallId (call_0 across 8 turns) never clears the latest protected toolResult; cold-start triggers 24 KiB idle pass", () => {
+		const state = createContextPruneState();
+		const msgs: AgentMessage[] = [{ role: "user", content: "start", timestamp: 1 }];
+		for (let i = 1; i <= 8; i++) {
+			msgs.push(makeAssistantTurn("call_0"));
+			// Every turn reuses the exact same provider toolCallId "call_0" (and even identical timestamp 0 on turns 1 & 8!)
+			const ts = i === 1 || i === 8 ? 0 : i * 1000;
+			msgs.push(makeToolResult("call_0", `turn-${i}-` + "z".repeat(15_000), undefined, ts));
+		}
+		// Cold-start (lastModelCallAt === 0) with 2 old turns = 30,000 bytes >= 24 KiB triggers immediately!
+		const res = pruneOldToolResults(msgs, { contextWindow: 100_000, state, now: 50_000 });
+		expect(res.triggered).toBe(true);
+		expect(res.prunedIds).toHaveLength(2);
+		// Old turns 1 & 2 ARE cleared
+		expect((res.messages[2] as any).content[0].text).toContain("earlier tool result cleared");
+		expect((res.messages[4] as any).content[0].text).toContain("earlier tool result cleared");
+		// Latest turn 8 (even with identical toolCallId "call_0" AND identical timestamp 0!) is NEVER cleared
+		const latestText = (res.messages[16] as any).content[0].text as string;
+		expect(latestText.startsWith("turn-8-")).toBe(true);
+		expect(latestText.length).toBeGreaterThan(15_000);
+	});
+
+	test("attachTouchedFiles merges prior summaries, strips duplicated blocks, and caps at 50 per category; delegate omits peer hint when peer is disabled", () => {
+		const msgs: AgentMessage[] = [];
+		for (let i = 0; i < 55; i++) {
+			msgs.push(makeToolResult(`r-${i}`, "ok", { path: `file-${String(i).padStart(2, "0")}.ts` }, i + 1));
+		}
+		const prev = "Earlier summary.\n\nFiles touched before compaction:\n- Modified: old-mod.ts\n- Read: aaa-old-read.ts";
+		const llmEchoed = "New summary.\n\nFiles touched before compaction:\n- Modified: old-mod.ts\n- Read: aaa-old-read.ts";
+		const merged = attachTouchedFiles(llmEchoed, msgs, prev);
+		// Header appears exactly once (echoed duplicate stripped)
+		expect(merged.split("Files touched before compaction:").length).toBe(2);
+		expect(merged).toContain("- Modified: old-mod.ts");
+		expect(merged).toContain("aaa-old-read.ts");
+		expect(merged).toContain("(and 6 more)");
+
+		const delNoPeer = buildTools(["delegate"], tmpdir(), [], {
+			delegateModels: () => ({ policy: "any", models: [] }),
+			peerEnabled: () => false,
+		})[0]!;
+		expect((delNoPeer.parameters as any).properties.model.description).not.toContain('peer(action="list_models")');
 	});
 });
 
@@ -226,33 +271,56 @@ describe("end-to-end harness evaluation suite", () => {
 		rmSync(root, { recursive: true, force: true });
 	});
 
-	test("goal cache-prefix stability: system message stays byte-identical while goal note rides on trailing message", async () => {
-		const id = (await api("POST", "/sessions", { cwd: ws, systemPrompt: "Stable base" })).json.id as string;
-		expect((await api("PUT", `/sessions/${id}/goal`, { objective: "Finish eval" })).status).toBe(200);
-		const startIdx = echoUpstream.requests.length;
+	test("goal cache-prefix stability: entire message prefix stays byte-identical across multi-turn goal runs", async () => {
+		let turn = 0;
+		const goalUpstream = startScriptedUpstream(() => {
+			turn++;
+			if (turn === 1) return { toolCalls: [{ id: "gt-1", name: "ls", args: { path: "." } }] };
+			if (turn === 2) return { toolCalls: [{ id: "gt-2", name: "ls", args: { path: "." } }] };
+			return { text: "Goal turn finished." };
+		});
+		try {
+			expect((await api("PUT", "/configuration/providers/goal-cache", echoProviderBody(goalUpstream.baseUrl, "GoalCache"))).status).toBe(200);
+			const id = (await api("POST", "/sessions", { cwd: ws, provider: "goal-cache", model: ECHO_MODEL.id, systemPrompt: "Stable base" })).json.id as string;
+			expect((await api("PUT", `/sessions/${id}/goal`, { objective: "Finish eval" })).status).toBe(200);
 
-		expect((await api("POST", `/sessions/${id}/messages`, { text: "turn one" })).status).toBe(202);
-		await app.sessions.idle();
-		expect((await api("POST", `/sessions/${id}/messages`, { text: "turn two" })).status).toBe(202);
-		await app.sessions.idle();
+			expect((await api("POST", `/sessions/${id}/messages`, { text: "multi-turn goal work" })).status).toBe(202);
+			await app.sessions.idle();
 
-		const reqs = echoUpstream.requests.slice(startIdx);
-		expect(reqs.length).toBeGreaterThanOrEqual(2);
-		const sys0 = reqs[0]!.body.messages[0].content as string;
-		const sys1 = reqs[1]!.body.messages[0].content as string;
-		// System prompt is byte-identical and includes static Environment context, NOT live goal counters
-		expect(sys0).toBe(sys1);
-		expect(sys0).toContain(`Environment: cwd=${ws}`);
-		expect(sys0).not.toContain("Finish eval");
-		expect(sys0).not.toContain("Active goal");
-		// Trailing user message carries the ephemeral goal status note
-		const tail0 = reqs[0]!.body.messages.at(-1);
-		const tailText = typeof tail0.content === "string" ? tail0.content : tail0.content.map((c: any) => c.text ?? "").join("");
-		expect(tailText).toContain("Finish eval");
-		// Stored transcript does NOT have the ephemeral goal note baked into it
-		const stored = (await api("GET", `/sessions/${id}/messages`)).json.messages as any[];
-		const firstUser = stored.find((m) => m.message?.role === "user");
-		expect(JSON.stringify(firstUser)).not.toContain("Active goal");
+			expect(goalUpstream.requests.length).toBeGreaterThanOrEqual(3);
+			const [req0, req1, req2] = goalUpstream.requests;
+			const sys0 = req0.messages[0].content as string;
+			const sys1 = req1.messages[0].content as string;
+			const sys2 = req2.messages[0].content as string;
+			// System prompt is byte-identical and includes updated static Environment context, NOT live goal counters
+			expect(sys0).toBe(sys1);
+			expect(sys1).toBe(sys2);
+			expect(sys0).toContain(`Environment: home cwd=${ws} (active folder may change via workdir)`);
+			expect(sys0).not.toContain("Finish eval");
+			expect(sys0).not.toContain("Active goal");
+
+			// ENTIRE message prefix is byte-identical across tool turns (goal note anchored on opening user message, never moving!)
+			expect(JSON.stringify(req1.messages.slice(0, req0.messages.length))).toBe(JSON.stringify(req0.messages));
+			expect(JSON.stringify(req2.messages.slice(0, req1.messages.length))).toBe(JSON.stringify(req1.messages));
+
+			// Opening user message carries the ephemeral goal status note; toolResult messages do NOT
+			const openUser = req1.messages.find((m: any) => m.role === "user");
+			const openUserText = typeof openUser.content === "string" ? openUser.content : openUser.content.map((c: any) => c.text ?? "").join("");
+			expect(openUserText).toContain("Finish eval");
+			const toolMsgs = req2.messages.filter((m: any) => m.role === "tool");
+			expect(toolMsgs.length).toBeGreaterThanOrEqual(2);
+			for (const tm of toolMsgs) {
+				expect(JSON.stringify(tm.content)).not.toContain("Finish eval");
+			}
+
+			// Stored transcript does NOT have the ephemeral goal note baked into it
+			const stored = (await api("GET", `/sessions/${id}/messages`)).json.messages as any[];
+			const firstUser = stored.find((m) => m.message?.role === "user");
+			expect(JSON.stringify(firstUser)).not.toContain("Active goal");
+			expect((await api("DELETE", `/sessions/${id}`)).status).toBe(204);
+		} finally {
+			goalUpstream.stop();
+		}
 	});
 
 	test("same-turn workdir move via getCwd and readTracker staleness survival across turns", async () => {
@@ -434,14 +502,24 @@ describe("end-to-end harness evaluation suite", () => {
 			const path = cycleTurn % 2 === 1 ? "." : "./";
 			return { toolCalls: [{ id: `cy-${cycleTurn}`, name: "ls", args: { path } }] };
 		});
-		// 2) Repeated identical tool error (5 consecutive turns)
+		// 2) 5 DIFFERENT bash commands exiting 1 must NOT falsely trip repeated-error guard
+		let diffErrTurn = 0;
+		const diffErrUpstream = startScriptedUpstream(() => {
+			diffErrTurn++;
+			if (diffErrTurn <= 5) {
+				return { toolCalls: [{ id: `de-${diffErrTurn}`, name: "bash", args: { command: `test -f nonexistent-file-${diffErrTurn}` } }] };
+			}
+			return { text: "Completed 5 different checks." };
+		});
+		// 3) Repeated identical failing bash command (5 consecutive turns) MUST abort
 		let errTurn = 0;
 		const errUpstream = startScriptedUpstream(() => {
 			errTurn++;
-			return { toolCalls: [{ id: `er-${errTurn}`, name: "read", args: { path: `missing-file-always.txt` } }] };
+			return { toolCalls: [{ id: `er-${errTurn}`, name: "bash", args: { command: "test -f same-missing-file" } }] };
 		});
 		try {
 			expect((await api("PUT", "/configuration/providers/cycle-eval", echoProviderBody(cycleUpstream.baseUrl, "Cycle"))).status).toBe(200);
+			expect((await api("PUT", "/configuration/providers/diff-err-eval", echoProviderBody(diffErrUpstream.baseUrl, "DiffErr"))).status).toBe(200);
 			expect((await api("PUT", "/configuration/providers/err-eval", echoProviderBody(errUpstream.baseUrl, "Err"))).status).toBe(200);
 
 			const id1 = (await api("POST", "/sessions", { cwd: ws, provider: "cycle-eval", model: ECHO_MODEL.id })).json.id as string;
@@ -456,6 +534,17 @@ describe("end-to-end harness evaluation suite", () => {
 			expect(limits1[0]).toMatch(/cycle|loop/i);
 			expect(cycleTurn).toBeLessThanOrEqual(8);
 
+			const idDiff = (await api("POST", "/sessions", { cwd: ws, provider: "diff-err-eval", model: ECHO_MODEL.id })).json.id as string;
+			const limitsDiff: string[] = [];
+			const unsubDiff = app.bus.subscribe((e) => {
+				if (e.sessionId === idDiff && e.type === "run_limit") limitsDiff.push((e.data as any).reason);
+			});
+			expect((await api("POST", `/sessions/${idDiff}/messages`, { text: "different checks" })).status).toBe(202);
+			await app.sessions.idle();
+			unsubDiff();
+			expect(limitsDiff).toEqual([]);
+			expect(diffErrTurn).toBe(6);
+
 			const id2 = (await api("POST", "/sessions", { cwd: ws, provider: "err-eval", model: ECHO_MODEL.id })).json.id as string;
 			const limits2: string[] = [];
 			const unsub2 = app.bus.subscribe((e) => {
@@ -469,6 +558,7 @@ describe("end-to-end harness evaluation suite", () => {
 			expect(errTurn).toBeLessThanOrEqual(6);
 		} finally {
 			cycleUpstream.stop();
+			diffErrUpstream.stop();
 			errUpstream.stop();
 		}
 	});
@@ -482,18 +572,28 @@ describe("end-to-end harness evaluation suite", () => {
 		const defs = loadSubagents(ws, home);
 		expect(defs.get("eval-role")!.tools).toEqual(["read", "glob"]);
 
-		// 2) onDetach releases concurrency slot immediately when a subagent ignores abort
-		let detached = 0;
+		// 2) Anti-pileup invariant (#342): detached hung subagent keeps its slot until the inner run settles
+		const limits = new DelegateLimits();
+		const release = limits.acquire("s-slot", { calls: 10, running: 1 });
+		let finishHung!: () => void;
+		const hungPromise = new Promise<void>((r) => { finishHung = r; });
 		const outcome = await runDelegateWithinDeadline(
-			() => new Promise<void>(() => {}), // never settles
+			async () => {
+				try { await hungPromise; } finally { release(); }
+			},
 			() => {},
 			undefined,
 			20,
 			20,
-			() => { detached++; },
 		);
 		expect(outcome).toBe("deadline");
-		expect(detached).toBe(1);
+		// While hung work has not settled, acquiring a 2nd slot MUST fail (anti-pileup)
+		expect(() => limits.acquire("s-slot", { calls: 10, running: 1 })).toThrow(/at most 1 subagent/i);
+		// Once the hung work settles, the slot is released and a new acquire succeeds
+		finishHung();
+		await new Promise((r) => setTimeout(r, 10));
+		const release2 = limits.acquire("s-slot", { calls: 10, running: 1 });
+		release2();
 
 		// 3) capSubagentOutput caps > 32,000 char subagent answer + OpenRouter org/model resolves via splitSpec
 		const huge = "Z".repeat(MAX_SUBAGENT_OUTPUT_CHARS + 500);
