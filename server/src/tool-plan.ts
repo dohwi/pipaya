@@ -40,15 +40,18 @@ export function describeTools(plan: readonly ToolPlanEntry[], defs: Record<strin
 	return plan.flatMap((t) => {
 		const def = defs[t.name];
 		if (!def) return [];
+		let description = def.description;
 		let parameters: unknown = null;
 		try {
-			parameters = def.create(cwd, [], ctx).parameters ?? null;
+			const tool = def.create(cwd, [], ctx);
+			if (tool.description) description = tool.description;
+			parameters = tool.parameters ?? null;
 		} catch {
 			/* a tool that cannot be built here still shows its name and description */
 		}
-		const json = JSON.stringify({ name: def.name, description: def.description, parameters });
+		const json = JSON.stringify({ name: def.name, description, parameters });
 		// Cloned through the JSON that is measured anyway: unlike structuredClone it tolerates a schema carrying a function (an extension's).
 		const plain = (JSON.parse(json) as { parameters?: unknown }).parameters ?? null;
-		return [{ name: t.name, description: def.description, parameters: plain, source: t.source, enabled: !t.off, bytes: Buffer.byteLength(json) }];
+		return [{ name: t.name, description, parameters: plain, source: t.source, enabled: !t.off, bytes: Buffer.byteLength(json) }];
 	});
 }

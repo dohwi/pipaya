@@ -248,14 +248,60 @@ export function aggregateTouchedFiles(messages: readonly AgentMessage[]): Touche
 	};
 }
 
-/** Formats touched files into a deterministic block suitable for appending to a compaction summary. */
-export function formatTouchedFiles(messages: readonly AgentMessage[]): string {
-	const { read, modified } = aggregateTouchedFiles(messages);
+const TOUCHED_FILES_HEADER = "Files touched before compaction:";
+const MAX_TOUCHED_FILES_PER_CATEGORY = 50;
+
+function formatPathList(paths: readonly string[]): string {
+	if (paths.length <= MAX_TOUCHED_FILES_PER_CATEGORY) return paths.join(", ");
+	const shown = paths.slice(0, MAX_TOUCHED_FILES_PER_CATEGORY).join(", ");
+	return `${shown} (and ${paths.length - MAX_TOUCHED_FILES_PER_CATEGORY} more)`;
+}
+
+function parseTouchedFilesBlock(text: string | null | undefined): { read: string[]; modified: string[] } {
+	const read: string[] = [];
+	const modified: string[] = [];
+	if (!text) return { read, modified };
+	const idx = text.lastIndexOf(TOUCHED_FILES_HEADER);
+	if (idx === -1) return { read, modified };
+	const block = text.slice(idx + TOUCHED_FILES_HEADER.length);
+	for (const line of block.split("\n")) {
+		const trimmed = line.trim();
+		if (!trimmed) continue;
+		if (!trimmed.startsWith("- ")) break;
+		const modMatch = /^- Modified:\s*(.+)$/.exec(trimmed);
+		const readMatch = /^- Read:\s*(.+)$/.exec(trimmed);
+		const raw = (modMatch?.[1] ?? readMatch?.[1] ?? "").replace(/\s*\(and \d+ more\)\s*$/, "");
+		const items = raw.split(",").map((s) => s.trim()).filter(Boolean);
+		if (modMatch) modified.push(...items);
+		else if (readMatch) read.push(...items);
+	}
+	return { read, modified };
+}
+
+function stripTouchedFilesBlock(text: string): string {
+	return text
+		.replace(/\n*Files touched before compaction:\n(?:- (?:Modified|Read):[^\n]*\n?)*/g, "\n")
+		.trim();
+}
+
+/** Formats touched files into a deterministic block suitable for appending to a compaction summary (capped at 50 per category). */
+export function formatTouchedFiles(messages: readonly AgentMessage[], previousSummary?: string | null): string {
+	const current = aggregateTouchedFiles(messages);
+	const prior = parseTouchedFilesBlock(previousSummary);
+	const modified = [...new Set([...prior.modified, ...current.modified])].sort();
+	const read = [...new Set([...prior.read, ...current.read])].sort();
 	if (!read.length && !modified.length) return "";
-	const lines = ["Files touched before compaction:"];
-	if (modified.length) lines.push(`- Modified: ${modified.join(", ")}`);
-	if (read.length) lines.push(`- Read: ${read.join(", ")}`);
+	const lines = [TOUCHED_FILES_HEADER];
+	if (modified.length) lines.push(`- Modified: ${formatPathList(modified)}`);
+	if (read.length) lines.push(`- Read: ${formatPathList(read)}`);
 	return lines.join("\n");
+}
+
+/** Strips any duplicate touched-files block echoed by the summarizer and attaches a single merged deterministic block. */
+export function attachTouchedFiles(summary: string, messages: readonly AgentMessage[], previousSummary?: string | null): string {
+	const cleaned = stripTouchedFilesBlock(summary);
+	const block = formatTouchedFiles(messages, previousSummary);
+	return block ? `${cleaned}\n\n${block}` : cleaned;
 }
 
 export const SUMMARY_PREFIX = "The earlier part of this conversation was compacted. Summary of what happened so far:\n\n";

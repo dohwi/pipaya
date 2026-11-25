@@ -73,7 +73,7 @@ export async function runDelegateWithinDeadline(
 const FORBIDDEN = (n: string) =>
 	n === "delegate" || n === "ask_user" || n === "peer" || n.startsWith("peer_") || n === "schedule"
 	|| n === "goal" || n === "workdir" || n === "generate_image";
-export const DEFAULT_SUBAGENT_TOOLS = ["read", "grep", "ls"];
+export const DEFAULT_SUBAGENT_TOOLS = ["read", "grep", "glob", "ls"];
 
 export interface SubagentDef {
 	name: string;
@@ -117,7 +117,7 @@ const dirOf = (scope: SubagentDef["scope"], cwd: string, home: string) => join(s
 
 const scopeCache = new Map<string, { fingerprint: string; defs: SubagentDef[] }>();
 
-/** Clears the cached subagent definitions (called automatically by saveSubagent/removeSubagent). */
+/** Clears the cached subagent definitions (primarily for tests; saveSubagent/removeSubagent invalidate their own scope via scopeCache.delete). */
 export function clearSubagentCache(): void {
 	scopeCache.clear();
 }

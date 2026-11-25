@@ -204,7 +204,7 @@ describe("2. Compaction & context helpers", () => {
 
 	test("buildEnvContext returns static block and buildSystemPrompt includes it only when provided", () => {
 		const env = buildEnvContext("/tmp/project", { platform: "linux", arch: "x64", shell: { kind: "bash", name: "bash", path: "/bin/bash" } });
-		expect(env).toBe("Environment: cwd=/tmp/project | os=linux/x64 | shell=bash (/bin/bash)");
+		expect(env).toBe("Environment: home cwd=/tmp/project (active folder may change via workdir) | os=linux/x64 | shell=bash (/bin/bash)");
 		expect(buildSystemPrompt("Base", [], [])).toBe("Base");
 		expect(buildSystemPrompt("Base", [], [], env)).toBe(`Base\n\n${env}`);
 	});

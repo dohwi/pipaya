@@ -224,6 +224,9 @@ describe("context API and application", () => {
 			await run(id, '!read {"path":"missing.txt"}');
 			expect((await api("GET", `/sessions/${id}/context`)).json.readFiles).toEqual(applied.readFiles);
 			// AGENTS.md follows the disk like skills: an edit shows at once and reaches the model on the next run.
+			const withoutCache = ({ cache: _c, ...rest }: Record<string, unknown>) => rest;
+			const appliedStable = withoutCache(applied);
+			expect(applied.cache).toMatchObject({ turns: 2 });
 			writeFileSync(join(f.cwd, "AGENTS.md"), "Edited version");
 			const edited = (await api("GET", `/sessions/${id}/context`)).json;
 			expect(edited).toMatchObject({ state: "applied", capturedAt: applied.capturedAt, systemPrompt: "Updated base" });
@@ -234,7 +237,7 @@ describe("context API and application", () => {
 			writeFileSync(join(f.cwd, "AGENTS.md"), "Applied version");
 			await run(id, "after revert");
 			expect(upstream.requests.at(-1)?.body.messages[0].content).toBe(applied.effectiveSystemPrompt);
-			expect((await api("GET", `/sessions/${id}/context`)).json).toEqual(applied);
+			expect(withoutCache((await api("GET", `/sessions/${id}/context`)).json)).toEqual(appliedStable);
 
 			// Idle-agent eviction/reload without changing persistence.
 			const manager = app.sessions as unknown as { live: Map<string, { lastActive: number }>; evictIdle(): void };
@@ -242,16 +245,16 @@ describe("context API and application", () => {
 			manager.evictIdle();
 			expect(manager.live.has(id)).toBe(false);
 			await run(id, "after eviction");
-			expect((await api("GET", `/sessions/${id}/context`)).json).toEqual(applied);
+			expect(withoutCache((await api("GET", `/sessions/${id}/context`)).json)).toEqual(appliedStable);
 			expect(upstream.requests.at(-1)?.body.messages[0].content).toBe(applied.effectiveSystemPrompt);
 			await app.close();
 			app = await buildApp(cfg, opts);
-			expect((await api("GET", `/sessions/${id}/context`)).json).toEqual(applied);
+			expect(withoutCache((await api("GET", `/sessions/${id}/context`)).json)).toEqual(appliedStable);
 			await run(id, "after restart");
 			expect(upstream.requests.at(-1)?.body.messages[0].content).toBe(applied.effectiveSystemPrompt);
 
 			const fork = (await api("POST", `/sessions/${id}/fork`, { atSeq: 0 })).json.id as string;
-			expect((await api("GET", `/sessions/${fork}/context`)).json).toEqual({ ...applied, readFiles: [] });
+			expect(withoutCache((await api("GET", `/sessions/${fork}/context`)).json)).toEqual({ ...appliedStable, readFiles: [] });
 			expect((await api("PATCH", `/sessions/${fork}`, { systemPrompt: "different" })).status).toBe(409);
 			await run(fork, "fork run");
 			expect(upstream.requests.at(-1)?.body.messages[0].content).toBe(applied.effectiveSystemPrompt);

@@ -60,6 +60,8 @@ export interface SessionContext extends Omit<ContextSnapshot, "capturedAt" | "sk
 	capturedAt: number | null;
 	/** Historical successful read results, not a guarantee of retained model context. */
 	readFiles: ReadFileTrace[];
+	/** Live prompt-cache hit telemetry aggregated across assistant turns (present once the live session has completed turns). */
+	cache?: { turns: number; cacheRead: number; cacheWrite: number; input: number; hitRate: number };
 }
 
 export const INSTRUCTION_MAX_FILE_BYTES = 64 * 1024;
@@ -141,7 +143,7 @@ export function buildEnvContext(cwd: string, opts?: { platform?: NodeJS.Platform
 	const platform = opts?.platform ?? process.platform;
 	const arch = opts?.arch ?? process.arch;
 	const shell = opts?.shell ?? pickCommandShell(platform);
-	return `Environment: cwd=${cwd} | os=${platform}/${arch} | shell=${shell.name} (${shell.path})`;
+	return `Environment: home cwd=${cwd} (active folder may change via workdir) | os=${platform}/${arch} | shell=${shell.name} (${shell.path})`;
 }
 
 /** The model's system prompt: base + optional static env context + current AGENTS.md + the skills that are currently enabled. */
