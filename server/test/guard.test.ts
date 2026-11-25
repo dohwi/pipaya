@@ -360,6 +360,14 @@ describe("Guard rules", () => {
 		}
 		expect(performance.now() - started).toBeLessThan(200);
 	});
+
+	test("associates each heredoc with its own pipeline before &&, ||, or ;", () => {
+		expect(guardRefusal("bash <<EOF && echo ok\nrm -rf /\nEOF", ALL_ON)).not.toBeNull();
+		expect(guardRefusal("bash <<EOF; echo ok\nrm -rf /\nEOF", ALL_ON)).not.toBeNull();
+		expect(guardRefusal("bash <<EOF || true\nrm -rf /\nEOF", ALL_ON)).not.toBeNull();
+		expect(guardRefusal("cat > script.sh <<'A' && bash <<'B'\necho hi\nA\nrm -rf /\nB", ALL_ON)).not.toBeNull();
+		expect(guardRefusal("cat > script.sh <<'A' && echo ok\nrm -rf /\nA", ALL_ON)).toBeNull();
+	});
 });
 
 describe("GuardSettings & routes", () => {

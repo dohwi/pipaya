@@ -206,6 +206,7 @@ const isWordBoundaryBeforeHash = (s: string, i: number): boolean =>
 interface HeredocSpec {
 	delim: string;
 	stripTabs: boolean;
+	pipeline?: string;
 }
 
 interface CapturedHeredoc {
@@ -268,7 +269,7 @@ function consumeHeredocBodies(
 			if (captured) bodyLines.push(checkLine);
 		}
 		if (captured && bodyLines.length > 0) {
-			captured.push({ pipeline, body: bodyLines.join("\n") });
+			captured.push({ pipeline: spec.pipeline ?? pipeline, body: bodyLines.join("\n") });
 		}
 	}
 	return Math.min(pos, s.length);
@@ -281,6 +282,11 @@ function splitShell(cmd: string, mode: "pipeline" | "segment"): { parts: string[
 	let start = 0;
 	let quote: "'" | '"' | "$'" | null = null;
 	const pendingHeredocs: HeredocSpec[] = [];
+	const bindPendingPipeline = (pipeline: string) => {
+		for (const spec of pendingHeredocs) {
+			if (spec.pipeline === undefined) spec.pipeline = pipeline;
+		}
+	};
 
 	for (let i = 0; i < cmd.length; i++) {
 		const ch = cmd[i]!;
@@ -321,6 +327,7 @@ function splitShell(cmd: string, mode: "pipeline" | "segment"): { parts: string[
 			if (ch === "\n") {
 				const linePart = cmd.slice(start, i);
 				parts.push(linePart);
+				bindPendingPipeline(linePart);
 				if (pendingHeredocs.length > 0) {
 					const afterBody = consumeHeredocBodies(cmd, i, pendingHeredocs, linePart, capturedHeredocs);
 					start = afterBody;
@@ -329,10 +336,14 @@ function splitShell(cmd: string, mode: "pipeline" | "segment"): { parts: string[
 					start = i + 1;
 				}
 			} else if (ch === ";") {
-				parts.push(cmd.slice(start, i));
+				const part = cmd.slice(start, i);
+				parts.push(part);
+				bindPendingPipeline(part);
 				start = i + 1;
 			} else if ((ch === "&" && cmd[i + 1] === "&") || (ch === "|" && cmd[i + 1] === "|")) {
-				parts.push(cmd.slice(start, i));
+				const part = cmd.slice(start, i);
+				parts.push(part);
+				bindPendingPipeline(part);
 				i++;
 				start = i + 1;
 			}

@@ -1503,7 +1503,11 @@ const globTool: ToolDef = {
 						.split("\n")
 						.filter(Boolean)
 						.map((l) => (isAbsolute(l) ? l : resolve(base, l)))
-						.filter((abs) => matches(relative(target, abs).replace(/\\/g, "/")));
+						.filter((abs) => {
+							const rel = relative(target, abs).replace(/\\/g, "/");
+							if (!includeHidden && /(?:^|\/)\.[^/]/.test(rel)) return false;
+							return matches(rel);
+						});
 				} else {
 					absFiles = await globFallback(target, params.pattern, signal);
 				}
