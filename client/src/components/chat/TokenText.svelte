@@ -50,7 +50,9 @@
 		font: inherit;
 		font-size: 0.88em; /* inline code's size: the chip (content box + 2px) stays under the 1.55 line, so chips on wrapped lines never touch */
 		line-height: 18px; /* whole-pixel 20px box (18 + 2 padding) so button and span chips share one height */
-		vertical-align: -1px; /* measured: aligns chip text ink with surrounding 24px body text (<= 0.5px) */
+		vertical-align: middle; /* box-centred so icon-bearing chips (#file, /skill) and text-only @mentions share one y-axis */
+		position: relative;
+		top: -1px; /* measured: lifts middle (x-height/2) onto the 24px line and Hangul ink centre */
 		transition: none; /* instant hover tint avoids GPU background-color layer promotion snapping inline chips by 1px */
 	}
 	.tlabel {

@@ -197,22 +197,22 @@
 	}
 	.mname :global(.lockic) {
 		margin-left: 4px;
-		vertical-align: -2px;
+		vertical-align: -2px; /* measured: centres the 14px glyph on the 20px model name line */
 		display: inline-flex;
 	}
 	.mname :global(.lockic svg) {
-		width: 13px;
-		height: 13px;
+		width: 14px;
+		height: 14px;
 		opacity: 0.7;
 	}
 	.mname :global(.mchk) {
 		margin-left: 4px;
-		vertical-align: -2px;
+		vertical-align: -2px; /* measured: centres the 14px glyph on the 20px model name line */
 		display: inline-flex;
 	}
 	.mname :global(.mchk svg) {
-		width: 13px;
-		height: 13px;
+		width: 14px;
+		height: 14px;
 		stroke: var(--ok);
 		stroke-width: 2.4;
 	}
@@ -226,8 +226,8 @@
 	/* a badge's icon keeps the badge's own size and colour */
 	/* same :not() chain as the generic icon rule above, or that rule (higher specificity) makes badge icons 16px */
 	.mitem :global(.badge svg:not(.model):not(.logo)) {
-		width: 11px;
-		height: 11px;
+		width: 12px;
+		height: 12px;
 		stroke: currentColor;
 		stroke-width: 2.4;
 	}
