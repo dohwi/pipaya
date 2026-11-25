@@ -73,7 +73,7 @@ export async function runDelegateWithinDeadline(
 const FORBIDDEN = (n: string) =>
 	n === "delegate" || n === "ask_user" || n === "peer" || n.startsWith("peer_") || n === "schedule"
 	|| n === "goal" || n === "workdir" || n === "generate_image";
-export const DEFAULT_SUBAGENT_TOOLS = ["read", "grep", "ls"];
+export const DEFAULT_SUBAGENT_TOOLS = ["read", "grep", "glob", "ls"];
 
 export interface SubagentDef {
 	name: string;

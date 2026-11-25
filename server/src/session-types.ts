@@ -1,8 +1,10 @@
 import type { Agent, AgentMessage } from "@earendil-works/pi-agent-core";
+import type { ContextPruneState } from "./context-pruning.ts";
 import type { RunStopCause } from "./run-guard.ts";
 import type { ModelChoiceValue } from "./model-choice.ts";
 import type { SkillRef } from "./skills.ts";
 import type { ThinkingLevel } from "./store.ts";
+import type { ReadTrackEntry } from "./tools.ts";
 
 /** Plain types, limits and the default prompt used by SessionManager (kept apart so the manager file is only logic). */
 export const DEFAULT_SYSTEM_PROMPT = `You are a capable coding assistant working inside a sandboxed working directory.
@@ -64,6 +66,14 @@ export interface CompactionOutcome {
 	model: ModelChoiceValue & { custom: boolean };
 }
 
+export interface CacheStats {
+	turns: number;
+	cacheRead: number;
+	cacheWrite: number;
+	input: number;
+	hitRate: number;
+}
+
 export interface Live {
 	agent: Agent;
 	nextSeq: number;
@@ -77,6 +87,12 @@ export interface Live {
 	promptKey: string;
 	/** Directories the read tool may open besides the cwd; mutated in place when skills change. */
 	readRoots: string[];
+	/** Per-session read staleness tracker shared across turns and tool calls. */
+	readTracker: Map<string, ReadTrackEntry>;
+	/** Cache-safe rare batched pruning state for old oversized tool results; reset on compaction. */
+	pruneState: ContextPruneState;
+	/** Live prompt-cache hit telemetry aggregated across assistant turns in this session. */
+	cacheStats: CacheStats;
 	/** Set while a compaction runs; aborting it cancels the summary call. */
 	compacting?: AbortController;
 	/** Set while a dropped stream waits for its retry; aborting it stops the wait and ends the run as aborted. */
@@ -87,9 +103,11 @@ export interface Live {
 	compactSettled?: Promise<void>;
 	/** Settles after the run's own wrap-up (run_finished) has been published, not just when the agent is idle. */
 	settled?: Promise<void>;
-	/** Runaway guard: model calls in this run, and the last tool-call fingerprints (to spot a repeating loop). */
+	/** Runaway guard: model calls in this run, and the last tool-call/error fingerprints (to spot repeating loops). */
 	turns: number;
 	recentCalls: string[];
+	cycleWindow: string[];
+	recentErrors: string[];
 	/** Set when abort did not take effect in time and the run was cut loose; its late wrap-up must stay silent. */
 	forceStopped?: boolean;
 	/** Releases `idle()` from waiting on a stuck run once `abortRun` has forcibly finalized it. */

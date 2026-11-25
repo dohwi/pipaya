@@ -2,7 +2,7 @@ import Type, { type Static } from "typebox";
 import { badRequest, HttpError } from "./errors.ts";
 import type { ModelRegistry } from "./models.ts";
 import { ModelRoles, ROLE_NAME } from "./model-roles.ts";
-import { COMPLETION_RETRY, completeWithUpstreamRetry } from "./upstream-retry.ts";
+import { COMPLETION_RETRY, completeWithUpstreamRetry, retryReason } from "./upstream-retry.ts";
 
 export const MAX_INPUT_CHARS = 200_000;
 export const MAX_SYSTEM_CHARS = 20_000;
@@ -69,6 +69,9 @@ export class Llm {
 			{ systemPrompt: input.system, messages: [{ role: "user", content: input.input, timestamp: Date.now() }] },
 			COMPLETION_RETRY,
 			signal,
+			(attempt, maxRetries, delayMs, errorMessage) => {
+				console.warn(`[llm] ${target.provider}/${target.model} retry ${attempt}/${maxRetries} in ${delayMs}ms: ${retryReason(errorMessage) || errorMessage || "upstream error"}`);
+			},
 		);
 		if (reply.stopReason === "error" || reply.stopReason === "aborted") {
 			throw new HttpError(502, "upstream_error", reply.errorMessage || `model call ${reply.stopReason}`);

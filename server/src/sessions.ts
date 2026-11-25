@@ -1,12 +1,13 @@
 import { Agent, type AgentEvent, type AgentMessage, type AgentTool } from "@earendil-works/pi-agent-core";
-import { isContextOverflow, type ImageContent } from "@earendil-works/pi-ai";
+import { createInitialSystemMessage, isContextOverflow, toToolDeclaration, type ImageContent } from "@earendil-works/pi-ai";
 import { randomUUID } from "node:crypto";
-import { mkdirSync, statSync } from "node:fs";
+import { mkdirSync, rmSync, statSync } from "node:fs";
 import { homedir } from "node:os";
-import { isAbsolute, relative, resolve, sep } from "node:path";
+import { isAbsolute, join, relative, resolve, sep } from "node:path";
 import { askQuestion, type QuestionManager } from "./questions.ts";
 import { DEFAULT_MAX_SESSIONS, type Config } from "./config.ts";
-import { advertisedSkills, aggregateReadFiles, buildSystemPrompt, discoverInstructions, previewContext, type ContextSnapshot, type ContextTool, type SessionContext, type SystemPromptEntry } from "./context.ts";
+import { advertisedSkills, aggregateReadFiles, buildEnvContext, buildSystemPrompt, discoverInstructions, previewContext, type ContextSnapshot, type ContextTool, type SessionContext, type SystemPromptEntry } from "./context.ts";
+import { createContextPruneState, pruneOldToolResults, resetContextPruneState } from "./context-pruning.ts";
 import { systemPromptEntries } from "./system-prompts.ts";
 import { mentionedSkills, readSkillText, skillCallHint, skillsPrompt, type SkillRef, type SkillService } from "./skills.ts";
 import { badRequest, conflict, HttpError, notFound } from "./errors.ts";
@@ -15,10 +16,10 @@ import type { EventBus } from "./events.ts";
 import { checkServiceTier, modelDefaultTier, modelDefaultLevel, reasoningOption, type ModelRegistry } from "./models.ts";
 import { streamAtTier } from "./served-tier.ts";
 import type { ServiceTier } from "./openrouter-catalog.ts";
-import { contextTokens, estimateTokens, pickCut, SUMMARY_MAX_TOKENS, SUMMARY_SYSTEM, summaryMessage, summaryRequest, thresholdFor, type CompactionSettings } from "./compaction.ts";
+import { contextTokens, effectiveContextTokens, estimateTokens, formatTouchedFiles, KEEP_RECENT_TOKENS, pickCut, SUMMARY_MAX_TOKENS, SUMMARY_SYSTEM, summaryMessage, summaryRequest, thresholdFor, type CompactionSettings } from "./compaction.ts";
 import { THINKING_LEVELS, type DelegateCall, type SessionPatch, type SessionRecord, type SessionStore, type ThinkingLevel } from "./store.ts";
 import type { McpManager } from "./mcp.ts";
-import { ALWAYS_TOOLS, buildTools, DEFAULT_TOOLS, DELEGATE_TOOL, isInside, PEER_TOOLS, TOOL_DEFS, WORKDIR_TOOL, type ToolContext, type ToolDef } from "./tools.ts";
+import { ALWAYS_TOOLS, buildTools, DEFAULT_TOOLS, DELEGATE_TOOL, isInside, modelList, PEER_TOOLS, TOOL_DEFS, WORKDIR_TOOL, type ReadTrackEntry, type ToolContext, type ToolDef } from "./tools.ts";
 import { isGone, workDirOf } from "./work-tree.ts";
 import { SessionWorkdirs } from "./session-workdirs.ts";
 import { SessionDescriber } from "./session-describer.ts";
@@ -36,7 +37,7 @@ import { fitImagesInContext } from "./image-guard.ts";
 import { stripOversizedToolResultImages, stripToolMessageImages, stripToolResultImages } from "./tool-images.ts";
 import { describeTools, enabledTools, planTools } from "./tool-plan.ts";
 import { afterTurn, FORCE_STOP_ERROR, isEmptyFailedReply, RESTART_RUN_ERROR, RESTART_TOOL_ERROR, runawayReason, SHUTDOWN_RUN_ERROR, SHUTDOWN_TOOL_ERROR, type RunStopCause } from "./run-guard.ts";
-import { chooseModel, DelegateLimits, finalText, freeRole, repeatedReadSignature, runDelegateWithinDeadline, subagentReport, subagentReportReserveMs, subagentUsage, loadSubagents, SUBAGENT_NAME, SUBAGENT_TIMEOUT_MS, SUBAGENT_WRAP_UP, subagentSystem, type SubagentDef, type SubagentLimit } from "./subagents.ts";
+import { capSubagentOutput, chooseModel, DelegateLimits, finalText, freeRole, repeatedToolSignature, runDelegateWithinDeadline, subagentReport, subagentReportReserveMs, subagentUsage, loadSubagents, SUBAGENT_NAME, SUBAGENT_TIMEOUT_MS, SUBAGENT_WRAP_UP, subagentSystem, type SubagentDef, type SubagentLimit } from "./subagents.ts";
 import { COMPLETION_RETRY, completeWithUpstreamRetry, DEFAULT_UPSTREAM_RETRY, isZeroOutputError, retryReason, sleepAbortable, withUpstreamRetry } from "./upstream-retry.ts";
 import { recoverWithFallback, retryDroppedMidStream } from "./stream-runner.ts";
 import { autoTitle, type SystemModelSettings } from "./system-model.ts";
@@ -157,6 +158,14 @@ export class SessionManager {
 			onQuestion: (fn) => {
 				this.bus.subscribe((e) => {
 					if (e.type === "question_requested" && e.sessionId) fn(e.sessionId, e.data as QuestionRequest);
+				});
+			},
+			onQuestionResolved: (fn) => {
+				this.bus.subscribe((e) => {
+					if (e.type === "question_resolved" && e.sessionId) {
+						const toolCallId = (e.data as { toolCallId?: string } | undefined)?.toolCallId;
+						if (toolCallId) fn(e.sessionId, toolCallId);
+					}
 				});
 			},
 			questions: (id) => this.questions?.list(id) ?? [],
@@ -322,12 +331,18 @@ export class SessionManager {
 		const base = snapshot ?? previewContext(record, this.skills?.active(record.cwd, id), undefined);
 		const skills = snapshot ? this.currentSkills(id, snapshot) : (base.skills ?? []);
 		const { instructions, warnings } = snapshot ? this.currentInstructions(snapshot) : base;
+		const cacheStats = this.live.get(id)?.cacheStats;
 		return {
 			...base,
 			instructions,
 			warnings,
 			skillsPrompt: skills.length ? skillsPrompt(skills) : "",
-			effectiveSystemPrompt: snapshot ? buildSystemPrompt(snapshot.systemPrompt, instructions, skills) : base.effectiveSystemPrompt,
+			effectiveSystemPrompt: buildSystemPrompt(
+				snapshot ? snapshot.systemPrompt : base.systemPrompt,
+				instructions,
+				skills,
+				buildEnvContext(snapshot ? snapshot.cwd : base.cwd),
+			),
 			// baseDir is an internal read allow-list entry, not part of the API.
 			skills: skills.map(({ name, description, path, scope }) => ({ name, description, path, scope })),
 			state: snapshot ? "applied" : "preview",
@@ -335,6 +350,7 @@ export class SessionManager {
 			toolSpecs: this.toolSpecs(base.tools, workDirOf(record)),
 			systemPrompts: this.systemPromptList(record.provider, record.model, auth.anthropicOAuth),
 			readFiles: aggregateReadFiles(record.cwd, this.store.toolResults(id, "read")),
+			...(cacheStats && cacheStats.turns > 0 ? { cache: { ...cacheStats } } : {}),
 		};
 	}
 
@@ -346,6 +362,7 @@ export class SessionManager {
 		const skills = base.skills ?? [];
 		return {
 			...base,
+			effectiveSystemPrompt: buildSystemPrompt(base.systemPrompt, base.instructions, skills, buildEnvContext(cwd)),
 			skillsPrompt: skills.length ? skillsPrompt(skills) : "",
 			skills: skills.map(({ name, description, path, scope }) => ({ name, description, path, scope })),
 			state: "preview",
@@ -382,6 +399,17 @@ export class SessionManager {
 		return { tokens: contextTokens(messages, systemChars, this.store.latestCompaction(id)?.createdAt), contextWindow: model.contextWindow };
 	}
 
+	/** Always-numeric token estimate used for automatic compaction thresholds (never null after compaction). */
+	private effectiveContextUsage(id: string): { tokens: number; contextWindow: number } | null {
+		const record = this.get(id);
+		const model = this.registry.models.getModel(record.provider, record.model);
+		if (!model) return null;
+		const live = this.live.get(id);
+		const messages = live ? live.agent.state.messages : this.projectedMessages(id);
+		const systemChars = live ? live.agent.state.systemPrompt.length : 0;
+		return { tokens: effectiveContextTokens(messages, systemChars, this.store.latestCompaction(id)?.createdAt), contextWindow: model.contextWindow };
+	}
+
 	/** What the model sees for a session: the latest summary, then everything after it. */
 	private projectedMessages(id: string): AgentMessage[] {
 		const { summary, messages } = this.store.projection(id);
@@ -404,7 +432,7 @@ export class SessionManager {
 		if (!this.compaction) throw new HttpError(501, "compaction_not_supported", "compaction is not available on this server");
 
 		const stored = this.store.projection(id);
-		const cutAt = pickCut(stored.messages.map((m) => m.message), undefined, reason === "threshold" && live.running);
+		const cutAt = pickCut(stored.messages.map((m) => m.message), KEEP_RECENT_TOKENS, reason === "threshold" && live.running, reason === "manual");
 		if (cutAt === null) throw conflict("not enough history to compact yet");
 		const toSummarize = stored.messages.slice(0, cutAt).map((m) => ({ ...m, message: withoutNotes([m.message])[0]! }));
 		const uptoSeq = toSummarize[toSummarize.length - 1]!.seq;
@@ -414,7 +442,7 @@ export class SessionManager {
 		if (!model) throw badRequest(`model ${target.provider}/${target.model} is not available`);
 		if (!(await this.registry.models.checkAuth(target.provider))) throw badRequest(`provider ${target.provider} is not configured; set its API key first`);
 
-		const before = this.contextUsage(id)?.tokens ?? 0;
+		const before = this.contextUsage(id)?.tokens ?? this.effectiveContextUsage(id)?.tokens ?? 0;
 		let custom: string | undefined;
 		if (this.ext?.has("session_before_compact")) {
 			let cancelled = false;
@@ -432,25 +460,34 @@ export class SessionManager {
 		live.compactSettled = new Promise<void>((r) => { settle = r; });
 		this.bus.publish(id, "compaction_started", { reason });
 		try {
+			const toSummarizeMessages = toSummarize.map((m) => m.message);
 			const summaryOptions = { maxTokens: SUMMARY_MAX_TOKENS, signal: controller.signal, ...reasoningOption(target.thinkingLevel, model) };
-			const summaryContext = { systemPrompt: SUMMARY_SYSTEM, messages: [{ role: "user" as const, content: summaryRequest(stored.summary, toSummarize.map((m) => m.message), instructions), timestamp: Date.now() }] };
+			const summaryContext = { systemPrompt: SUMMARY_SYSTEM, messages: [{ role: "user" as const, content: summaryRequest(stored.summary, toSummarizeMessages, instructions, undefined, model.contextWindow), timestamp: Date.now() }] };
 			const reply = custom !== undefined ? ({ stopReason: "stop", content: [{ type: "text", text: custom }], usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { total: 0 } } } as unknown as Awaited<ReturnType<typeof this.registry.models.completeSimple>>) : await completeWithUpstreamRetry(
 				(ctx) => this.registry.models.completeSimple(model, ctx, summaryOptions),
 				summaryContext,
 				COMPLETION_RETRY,
 				controller.signal,
+				(attempt, maxRetries, delayMs, errorMessage) => {
+					console.warn(`[compaction] session=${id} retry ${attempt}/${maxRetries} in ${delayMs}ms: ${retryReason(errorMessage) || errorMessage || "upstream error"}`);
+				},
 			);
 			if (reply.stopReason === "aborted") throw Object.assign(new Error("compaction cancelled"), { aborted: true });
 			if (reply.stopReason === "error") throw new Error(reply.errorMessage || "the summary model failed");
-			const summary = reply.content.flatMap((c) => (c.type === "text" ? [c.text] : [])).join("").trim();
-			if (!summary) throw new Error("the summary model returned nothing");
+			const rawSummary = reply.content.flatMap((c) => (c.type === "text" ? [c.text] : [])).join("").trim();
+			if (!rawSummary) throw new Error("the summary model returned nothing");
+			const touchedFiles = formatTouchedFiles(toSummarizeMessages);
+			const summary = touchedFiles ? `${rawSummary}\n\n${touchedFiles}` : rawSummary;
 			// The transcript may have grown while the summary was written; only what was summarized is replaced.
 			const u = reply.usage;
 			this.store.addCompaction(id, {
 				uptoSeq, summary, tokensBefore: before,
 				usage: { input: u.input, output: u.output, cacheRead: u.cacheRead, cacheWrite: u.cacheWrite, totalTokens: u.totalTokens, cost: u.cost.total },
 			});
-			live.agent.state.messages = this.projectedMessages(id);
+			resetContextPruneState(live.pruneState);
+			const head = live.agent.state.messages[0];
+			const projected = this.projectedMessages(id);
+			live.agent.state.messages = head?.role === "system" ? [head, ...projected] : projected;
 			live.lastActive = Date.now();
 			const context = this.contextUsage(id) ?? { tokens: null, contextWindow: model.contextWindow };
 			const outcome: CompactionOutcome = { tokensBefore: before, context, model: target };
@@ -476,8 +513,8 @@ export class SessionManager {
 	private async autoCompact(id: string): Promise<void> {
 		const settings = this.compaction?.get();
 		if (!settings?.auto) return;
-		const usage = this.contextUsage(id);
-		if (!usage?.tokens || usage.tokens < thresholdFor(usage.contextWindow, settings.thresholdPercent)) return;
+		const usage = this.effectiveContextUsage(id);
+		if (!usage || usage.tokens < thresholdFor(usage.contextWindow, settings.thresholdPercent)) return;
 		try {
 			await this.compact(id, undefined, "threshold");
 		} catch { /* the prompt still goes out; compact() already published why it did not happen */ }
@@ -490,8 +527,8 @@ export class SessionManager {
 	private async compactMidRun(id: string, tools: AgentTool<any>[] | undefined): Promise<{ context: { messages: AgentMessage[]; tools?: AgentTool<any>[] } } | undefined> {
 		const settings = this.compaction?.get();
 		if (!settings?.auto) return undefined;
-		const usage = this.contextUsage(id);
-		if (!usage?.tokens || usage.tokens < thresholdFor(usage.contextWindow, settings.thresholdPercent)) return undefined;
+		const usage = this.effectiveContextUsage(id);
+		if (!usage || usage.tokens < thresholdFor(usage.contextWindow, settings.thresholdPercent)) return undefined;
 		try {
 			await this.compact(id, undefined, "threshold");
 		} catch { return undefined; } // compact() already published why; the run goes on with the full context
@@ -519,7 +556,7 @@ export class SessionManager {
 			const model = patch.model ?? current.model;
 			// A new model starts at the speed a new chat with it would: the speed never carries over to a model that may not offer it.
 			if (patch.serviceTier === undefined && (model !== current.model || provider !== current.provider)) clean.serviceTier = this.startingTier(provider, model);
-			if (!this.registry.models.getModel(provider, model)) throw badRequest(`unknown model ${provider}/${model}`);
+			if (!this.registry.models.getModel(provider, model)) throw badRequest(`unknown model ${provider}/${model}${this.availableModelsHint()}`);
 			this.assertChatModel(provider, model);
 		}
 		if (patch.tools !== undefined || patch.systemPrompt !== undefined) {
@@ -622,6 +659,10 @@ export class SessionManager {
 		this.describer.abort(id);
 		this.dispose(id);
 		this.clearSessionMemory(id, true);
+		const spillDir = this.spillDir(id);
+		if (spillDir) {
+			try { rmSync(spillDir, { recursive: true, force: true }); } catch { /* ignore cleanup failure */ }
+		}
 		this.store.delete(id);
 		this.bus.publish(null, "session_deleted", { id });
 	}
@@ -739,8 +780,11 @@ export class SessionManager {
 		if (moved) content.push({ type: "text", text: `${HINT_OPEN}${moved}</pipaya-hint>` });
 		for (const hint of this.peers.hints(id, input.text)) content.push({ type: "text", text: hint });
 		if (input.origin === "schedule") content.push({ type: "text", text: SCHEDULE_NOTE });
-		if (input.origin === "goal") content.push({ type: "text", text: GOAL_NOTE });
-		else this.goals?.cancelPending(id);
+		if (input.origin === "goal") {
+			if (mode !== "steer") content.push({ type: "text", text: GOAL_NOTE });
+		} else {
+			this.goals?.cancelPending(id);
+		}
 		if (this.skills) {
 			const callable = this.skills.callable(record.cwd, id);
 			for (const name of mentionedSkills(input.text, callable.map((s) => s.name))) {
@@ -1090,6 +1134,8 @@ export class SessionManager {
 		live.turns = 0;
 		live.hinted = undefined;
 		live.recentCalls = [];
+		live.cycleWindow = [];
+		live.recentErrors = [];
 		live.stopCause = undefined;
 		live.limitReason = undefined;
 		live.forceStopped = false;
@@ -1149,7 +1195,10 @@ export class SessionManager {
 				}
 				// Repeated zero-output failures on a large transcript (e.g. 300k+ tokens where Gemini/CLIProxyAPI stalls
 				// deterministically even after pre-commit / mid-stream retries): compact once and continue.
-				if (!error && !interrupted && !live.forceStopped && !live.stopCause && (await this.recoverFromZeroOutput(id, live))) {
+				// Even if fallback also failed with a zero-output error, still attempt zero-output compaction recovery.
+				const fallbackZeroOutput = error !== null && isZeroOutputError(error);
+				if ((!error || fallbackZeroOutput) && !interrupted && !live.forceStopped && !live.stopCause && (await this.recoverFromZeroOutput(id, live))) {
+					error = null;
 					try {
 						await live.agent.continue();
 					} catch (e) {
@@ -1436,7 +1485,7 @@ export class SessionManager {
 				const snap = this.store.context(record.id);
 				if (snap) {
 					existing.toolsDir = workDirOf(record);
-					existing.agent.state.tools = this.sessionTools(record.id, snap.tools, existing.toolsDir, existing.readRoots);
+					existing.agent.state.tools = this.sessionTools(record.id, snap.tools, existing.toolsDir, existing.readRoots, existing.readTracker);
 				}
 			}
 			return existing;
@@ -1452,12 +1501,13 @@ export class SessionManager {
 		const skills = this.currentSkills(record.id, snapshot);
 		const { instructions } = this.currentInstructions(snapshot);
 		const readRoots = skills.map((k) => k.baseDir);
+		const readTracker = new Map<string, ReadTrackEntry>();
 		const agent = new Agent({
 			initialState: {
-				systemPrompt: buildSystemPrompt(snapshot.systemPrompt, instructions, skills),
+				systemPrompt: buildSystemPrompt(snapshot.systemPrompt, instructions, skills, buildEnvContext(snapshot.cwd)),
 				model,
 				thinkingLevel: record.thinkingLevel,
-				tools: this.sessionTools(record.id, snapshot.tools, workDirOf(record), readRoots),
+				tools: this.sessionTools(record.id, snapshot.tools, workDirOf(record), readRoots, readTracker),
 				messages: history,
 			},
 			// A gateway that drops for a moment (502 …) is waited out instead of ending the run
@@ -1490,9 +1540,14 @@ export class SessionManager {
 			unsubscribe: () => {},
 			promptKey: promptKey(skills, instructions),
 			readRoots,
+			readTracker,
+			pruneState: createContextPruneState(),
+			cacheStats: { turns: 0, cacheRead: 0, cacheWrite: 0, input: 0, hitRate: 0 },
 			toolsDir: workDirOf(record),
 			turns: 0,
 			recentCalls: [],
+			cycleWindow: [],
+			recentErrors: [],
 		};
 		live.unsubscribe = agent.subscribe((event) => this.onAgentEvent(record.id, live, event));
 		this.live.set(record.id, live);
@@ -1500,9 +1555,9 @@ export class SessionManager {
 	}
 
 	/**
-	 * Applies skill on/off and AGENTS.md changes to an idle session before its next run: rewrites the leading
-	 * system message and the read allow-list. Nothing happens (and the provider's prompt cache is untouched)
-	 * unless the enabled skills or the instruction files actually changed.
+	 * Applies skill on/off and AGENTS.md changes to an idle session before its next run: rewrites the system prompt
+	 * (both `agent.state.systemPrompt` and any leading system message) and the read allow-list. Nothing happens (and
+	 * the provider's prompt cache is untouched) unless the enabled skills or the instruction files actually changed.
 	 */
 	private syncSkills(id: string, live: Live): void {
 		const snapshot = this.store.context(id);
@@ -1511,17 +1566,21 @@ export class SessionManager {
 		const { instructions } = this.currentInstructions(snapshot);
 		const key = promptKey(skills, instructions);
 		if (key === live.promptKey) return;
+		const prompt = buildSystemPrompt(snapshot.systemPrompt, instructions, skills, buildEnvContext(snapshot.cwd));
 		const [head, ...rest] = live.agent.state.messages;
 		if (head?.role === "system") {
-			live.agent.state.messages = [{ ...head, content: buildSystemPrompt(snapshot.systemPrompt, instructions, skills) } as AgentMessage, ...rest];
+			live.agent.state.messages = [{ ...head, content: prompt } as AgentMessage, ...rest];
+		} else {
+			const sys = createInitialSystemMessage(prompt, live.agent.state.tools.map(toToolDeclaration));
+			if (sys) live.agent.state.messages = [sys, ...live.agent.state.messages];
 		}
 		live.readRoots.splice(0, live.readRoots.length, ...skills.map((k) => k.baseDir));
 		live.promptKey = key;
 	}
 
 	/** The tools a session's agent gets; tools the user switched off in the settings are left out. */
-	private sessionTools(id: string, names: string[], cwd: string, readRoots: string[]) {
-		return buildTools(enabledTools(this.toolPlan(names)), cwd, readRoots, this.toolContext(id), this.toolDefs());
+	private sessionTools(id: string, names: string[], cwd: string, readRoots: string[], readTracker?: Map<string, ReadTrackEntry>) {
+		return buildTools(enabledTools(this.toolPlan(names)), cwd, readRoots, this.toolContext(id, readTracker, cwd), this.toolDefs());
 	}
 
 	private toolPlan(names: string[]) {
@@ -1536,25 +1595,54 @@ export class SessionManager {
 	}
 
 	private toolSpecs(names: string[], cwd: string): ContextTool[] {
-		return describeTools(this.toolPlan(names), this.toolDefs(), cwd, this.toolContext("preview"));
+		return describeTools(this.toolPlan(names), this.toolDefs(), cwd, this.toolContext("preview", undefined, cwd));
+	}
+
+	private spillDir(sessionId: string): string | undefined {
+		if (!this.cfg.dataDir || sessionId === "preview") return undefined;
+		return join(this.cfg.dataDir, "tmp", "spill", sessionId);
+	}
+
+	private availableModelsHint(): string {
+		const list = modelList(this.chatModelIds);
+		return list ? `; available: ${list}` : "";
 	}
 
 	/** What tools may ask of the running session. */
-	private toolContext(sessionId: string): ToolContext {
+	private toolContext(sessionId: string, readTracker?: Map<string, ReadTrackEntry>, fallbackCwd?: string): ToolContext {
 		const q = this.questions;
-		const ctx: ToolContext = { sessionId, delegate: (_toolCallId, input, signal, progress) => this.delegate(sessionId, input, signal, progress), delegateRoles: () => this.delegatePolicy().roles, delegateModels: () => this.delegatePolicy(), chatModels: () => this.chatModelIds, peers: {
-			send: (to, message, opts) => this.peers.send(sessionId, to, message, opts),
-			read: (from, count, detail) => this.peers.read(sessionId, from, count, detail),
-			list: () => this.peers.list(sessionId),
-			abort: (name) => this.peers.abort(sessionId, name),
-			answer: (name, a) => this.peers.answer(sessionId, name, a),
-			create: (input) => this.peers.create(sessionId, input),
-			manage: (name, action, a) => this.peers.manage(sessionId, name, action, a),
-			group: (action, a) => this.peers.group(sessionId, action, a),
-		}, schedules: this.scheduleOps(sessionId), goals: this.goalOps(sessionId), workdir: {
-			show: () => this.workdirOps.show(sessionId),
-			move: (path) => this.moveWorkdir(sessionId, path, "agent").note,
-		} };
+		const isPreview = sessionId === "preview";
+		const ctx: ToolContext = {
+			sessionId,
+			...(!isPreview ? {
+				getCwd: () => {
+					const rec = this.store.get(sessionId);
+					return rec ? workDirOf(rec) : (fallbackCwd ?? this.defaultWorkdir());
+				},
+				readTracker: readTracker ?? this.live.get(sessionId)?.readTracker,
+				spillDir: this.spillDir(sessionId),
+			} : {}),
+			delegate: (_toolCallId, input, signal, progress) => this.delegate(sessionId, input, signal, progress),
+			delegateRoles: () => this.delegatePolicy().roles,
+			delegateModels: () => this.delegatePolicy(),
+			chatModels: () => this.chatModelIds,
+			peers: {
+				send: (to, message, opts) => this.peers.send(sessionId, to, message, opts),
+				read: (from, count, detail) => this.peers.read(sessionId, from, count, detail),
+				list: () => this.peers.list(sessionId),
+				abort: (name) => this.peers.abort(sessionId, name),
+				answer: (name, a) => this.peers.answer(sessionId, name, a),
+				create: (input) => this.peers.create(sessionId, input),
+				manage: (name, action, a) => this.peers.manage(sessionId, name, action, a),
+				group: (action, a) => this.peers.group(sessionId, action, a),
+			},
+			schedules: this.scheduleOps(sessionId),
+			goals: this.goalOps(sessionId),
+			workdir: {
+				show: () => this.workdirOps.show(sessionId),
+				move: (path) => this.moveWorkdir(sessionId, path, "agent").note,
+			},
+		};
 		if (q) {
 			ctx.ask = (toolCallId, req, signal) => askQuestion(q, sessionId, toolCallId, req, signal);
 		}
@@ -1612,20 +1700,34 @@ export class SessionManager {
 		const spec = chooseModel(pol, input.model, def.model);
 		let provider = rec.provider, modelId = rec.model;
 		if (spec) {
-			const i = spec.indexOf("/");
-			[provider, modelId] = i > 0 ? [spec.slice(0, i), spec.slice(i + 1)] : [rec.provider, spec];
+			const split = this.splitSpec(undefined, spec, rec.provider);
+			if (split.provider && split.model) {
+				provider = split.provider;
+				modelId = split.model;
+			} else if (this.registry.models.getModel(rec.provider, spec)) {
+				provider = rec.provider;
+				modelId = spec;
+			} else {
+				const i = spec.indexOf("/");
+				[provider, modelId] = i > 0 ? [spec.slice(0, i), spec.slice(i + 1)] : [rec.provider, spec];
+			}
 		}
 		const model = this.registry.models.getModel(provider, modelId);
-		if (!model || this.registry.isImageModel?.(provider, modelId)) throw badRequest(`model ${provider}/${modelId} is not available for subagents`);
+		if (!model || this.registry.isImageModel?.(provider, modelId)) throw badRequest(`model ${provider}/${modelId} is not available for subagents${this.availableModelsHint()}`);
 		const defs2 = this.toolDefs();
 		const off = this.disabledTools();
 		const names = def.tools.filter((n) => defs2[n] && !off.includes(n));
-		const tools = buildTools(names, workDirOf(rec), this.live.get(sessionId)?.readRoots ?? [], { sessionId, canSeeImages: () => model.input.includes("image") }, defs2);
+		const tools = buildTools(names, workDirOf(rec), this.live.get(sessionId)?.readRoots ?? [], {
+			sessionId,
+			canSeeImages: () => model.input.includes("image"),
+			imageLimits: () => model.inputLimits?.images?.resize,
+			spillDir: this.spillDir(sessionId),
+		}, defs2);
 		const cap = Math.min(def.maxTurns, pol.maxTurns);
 		const tier = this.subagentTier(rec, provider, modelId);
 		// The report uses the same run and context, and counts toward the existing ceiling.
 		const oneCall = cap === 1 && tools.length > 0;
-		const readOnly = new Set(names.filter((n) => (n === "read" || n === "grep" || n === "ls") && defs2[n] === TOOL_DEFS[n]));
+		const readOnly = new Set(names.filter((n) => (n === "read" || n === "grep" || n === "glob" || n === "ls") && defs2[n] === TOOL_DEFS[n]));
 		let turns = 0, repeatCount = 0;
 		let lastRead: string | undefined, limit: SubagentLimit | undefined;
 		let startedAt = 0, stopping = false;
@@ -1648,7 +1750,7 @@ export class SessionManager {
 					if (!limit && (turn.message.content.some((c) => c.type === "toolCall") || (oneCall && !finalText([turn.message]).text))) limit = "maxTurns";
 					return { action: "end" };
 				}
-				const read = repeatedReadSignature(turn, readOnly);
+				const read = repeatedToolSignature(turn, readOnly);
 				repeatCount = !read ? 0 : read === lastRead ? repeatCount + 1 : 1;
 				lastRead = read;
 			},
@@ -1660,40 +1762,26 @@ export class SessionManager {
 		});
 		if (signal?.aborted) throw new Error("delegate aborted");
 		const release = this.delegates.acquire(sessionId, { calls: pol.maxCalls, running: pol.maxConcurrent });
+		let released = false;
+		const releaseOnce = () => {
+			if (released) return;
+			released = true;
+			release();
+		};
 		const retryStop = new AbortController();
 		const retrySignal = signal ? AbortSignal.any([signal, retryStop.signal]) : retryStop.signal;
 		startedAt = performance.now();
-		const outcome = await runDelegateWithinDeadline(
-			async () => {
-				// A detached tool still occupies a slot until it settles; retries must not pile up stuck work.
-				try {
-					await agent.prompt(input.task);
-					// A stream cut off after thinking/partial text (e.g. post-thought MALFORMED_FUNCTION_CALL or reset)
-					// bypasses withUpstreamRetry; drop the half-written reply and continue just like SessionManager.run.
-					await retryDroppedMidStream({
-						getLastMessage: () => agent.state.messages[agent.state.messages.length - 1],
-						shouldStop: () => stopping || retrySignal.aborted,
-						sleep: async (delayMs) => {
-							await sleepAbortable(delayMs, retrySignal);
-							return { aborted: stopping || retrySignal.aborted };
-						},
-						dropLastReply: () => {
-							agent.state.messages = agent.state.messages.slice(0, -1);
-							turns = Math.max(0, turns - 1);
-						},
-						continueRun: () => agent.continue(),
-					});
-					const fallbackSettings = this.fallbackModel;
-					if (!stopping && !retrySignal.aborted && fallbackSettings) {
-						await recoverWithFallback({
+		let outcome: "finished" | "deadline" | "cancelled";
+		try {
+			outcome = await runDelegateWithinDeadline(
+				async () => {
+					try {
+						await agent.prompt(input.task);
+						// A stream cut off after thinking/partial text (e.g. post-thought MALFORMED_FUNCTION_CALL or reset)
+						// bypasses withUpstreamRetry; drop the half-written reply and continue just like SessionManager.run.
+						await retryDroppedMidStream({
 							getLastMessage: () => agent.state.messages[agent.state.messages.length - 1],
-							resolveFallback: async () => {
-								const active = agent.state.model;
-								const fb = fallbackSettings.resolve({ provider: active.provider, model: active.id });
-								const fbModel = fb && this.registry.models.getModel(fb.provider, fb.model);
-								if (!fb || !fbModel || !(await this.registry.models.checkAuth(fb.provider))) return null;
-								return { fb, fbModel, label: `${fb.provider}/${fb.model}` };
-							},
+							shouldStop: () => stopping || retrySignal.aborted,
 							sleep: async (delayMs) => {
 								await sleepAbortable(delayMs, retrySignal);
 								return { aborted: stopping || retrySignal.aborted };
@@ -1702,32 +1790,69 @@ export class SessionManager {
 								agent.state.messages = agent.state.messages.slice(0, -1);
 								turns = Math.max(0, turns - 1);
 							},
-							runWithFallback: async ({ fb, fbModel }) => {
-								agent.state.model = fbModel;
-								agent.state.thinkingLevel = fb.thinkingLevel ?? this.subagentThinking(rec, requestedThinking, def.thinking, fb.provider, fb.model);
-								await agent.continue();
-							},
+							continueRun: () => agent.continue(),
 						});
-					}
-				} finally { release(); }
-			},
-			() => { stopping = true; retryStop.abort(); agent.abort(); }, signal, this.delegateTimeoutMs,
-		);
+						const fallbackSettings = this.fallbackModel;
+						if (!stopping && !retrySignal.aborted && fallbackSettings) {
+							await recoverWithFallback({
+								getLastMessage: () => agent.state.messages[agent.state.messages.length - 1],
+								resolveFallback: async () => {
+									const active = agent.state.model;
+									const fb = fallbackSettings.resolve({ provider: active.provider, model: active.id });
+									const fbModel = fb && this.registry.models.getModel(fb.provider, fb.model);
+									if (!fb || !fbModel || !(await this.registry.models.checkAuth(fb.provider))) return null;
+									return { fb, fbModel, label: `${fb.provider}/${fb.model}` };
+								},
+								sleep: async (delayMs) => {
+									await sleepAbortable(delayMs, retrySignal);
+									return { aborted: stopping || retrySignal.aborted };
+								},
+								dropLastReply: () => {
+									agent.state.messages = agent.state.messages.slice(0, -1);
+									turns = Math.max(0, turns - 1);
+								},
+								runWithFallback: async ({ fb, fbModel }) => {
+									agent.state.model = fbModel;
+									agent.state.thinkingLevel = fb.thinkingLevel ?? this.subagentThinking(rec, requestedThinking, def.thinking, fb.provider, fb.model);
+									await agent.continue();
+								},
+							});
+						}
+					} finally { releaseOnce(); }
+				},
+				() => { stopping = true; retryStop.abort(); agent.abort(); }, signal, this.delegateTimeoutMs, undefined, releaseOnce,
+			);
+		} finally {
+			releaseOnce();
+		}
 		if (outcome === "cancelled" || signal?.aborted) throw new Error("delegate aborted");
 		const timedOut = outcome === "deadline";
 		if (timedOut) limit = "deadline";
 		const messages = agent.state.messages;
 		const { text: answer, error } = finalText(messages);
 		if (error && !limit) throw new Error(`subagent ${def.name} failed: ${error}`);
-		const text = limit ? subagentReport(messages, limit, { turns, maxRepeated: MAX_REPEATED_CALLS, timeoutMs: this.delegateTimeoutMs, timedOut }) : answer || "(the subagent returned no text)";
+		const rawText = limit ? subagentReport(messages, limit, { turns, maxRepeated: MAX_REPEATED_CALLS, timeoutMs: this.delegateTimeoutMs, timedOut }) : answer || "(the subagent returned no text)";
+		const text = capSubagentOutput(rawText);
 		const usedModel = agent.state.model;
 		return { content: [{ type: "text" as const, text }], details: { role: def.name, model: `${usedModel.provider}/${usedModel.id}`, thinking: agent.state.thinkingLevel, turns, durationMs: Math.round(performance.now() - startedAt), limited: !!limit, ...(limit && { limit }), usage: subagentUsage(messages), task: input.task.slice(0, 500) } };
 	}
 
-	/** Stops a run that has gone past the turn budget or keeps issuing the identical tool call. */
+	/** Stops a run that has gone past the turn budget, keeps issuing the identical tool call/cycle, or repeats the same tool error. */
 	private guardRunaway(sessionId: string, live: Live, event: Extract<AgentEvent, { type: "turn_end" }>): void {
 		const limits = { maxTurns: MAX_RUN_TURNS, maxRepeated: MAX_REPEATED_CALLS };
-		({ turns: live.turns, recentCalls: live.recentCalls } = afterTurn(live, (event.message as { content?: unknown }).content, limits));
+		const errorParts = event.toolResults
+			.filter((r) => r.isError)
+			.map((r) => {
+				const firstText = Array.isArray(r.content) ? r.content.find((b) => b.type === "text") : undefined;
+				const msg = firstText && "text" in firstText ? String(firstText.text).trim().slice(0, 200) : "";
+				return `${r.toolName}:${msg}`;
+			});
+		const errorSignature = errorParts.length ? errorParts.join("|") : undefined;
+		const next = afterTurn(live, (event.message as { content?: unknown }).content, limits, errorSignature);
+		live.turns = next.turns;
+		live.recentCalls = next.recentCalls;
+		live.cycleWindow = next.cycleWindow ?? [];
+		live.recentErrors = next.recentErrors ?? [];
 		const reason = runawayReason(live, limits);
 		if (!reason || !live.running) return;
 		live.limitReason = reason;
@@ -1776,21 +1901,42 @@ export class SessionManager {
 		return this.imageModel?.resolve() && !defs[IMAGE_TOOL] ? { ...defs, [IMAGE_TOOL]: imageTool(this.registry, this.imageModel) } : defs;
 	}
 
-	/** Per-run system prompt tweaks and the `context` hook, applied to what the model sees (never stored). */
+	/** Per-run system prompt tweaks, cache-safe pruning, ephemeral goal note, and the `context` hook (never stored). */
 	private async transformContext(sessionId: string, messages: AgentMessage[]): Promise<AgentMessage[]> {
 		const live = this.live.get(sessionId);
 		let out = messages;
 		const sys = live?.runSystem;
-		const goalNote = this.goals?.systemNote(sessionId);
-		if ((sys || goalNote) && out[0]?.role === "system") {
+		if (sys && out[0]?.role === "system") {
 			const head = out[0] as { content?: unknown };
 			const base = typeof head.content === "string" ? head.content : "";
-			const body = `${sys?.replace ?? base}${sys?.append ?? ""}${goalNote ? `\n\n${goalNote}` : ""}`;
+			const body = `${sys.replace ?? base}${sys.append ?? ""}`;
 			out = [{ ...out[0], content: body } as AgentMessage, ...out.slice(1)];
 		}
 		out = withoutNotes(out);
 		const rec = this.store.get(sessionId);
-		const resize = rec ? this.registry.models.getModel(rec.provider, rec.model)?.inputLimits?.images?.resize : undefined;
+		const model = rec ? this.registry.models.getModel(rec.provider, rec.model) : undefined;
+		if (live) {
+			out = pruneOldToolResults(out, {
+				contextWindow: model?.contextWindow,
+				state: live.pruneState,
+			}).messages;
+		}
+		const goalNote = this.goals?.systemNote(sessionId);
+		if (goalNote) {
+			for (let i = out.length - 1; i >= 0; i--) {
+				const msg = out[i] as { role?: string; content?: unknown } | undefined;
+				if (!msg || (msg.role !== "user" && msg.role !== "toolResult")) continue;
+				if (typeof msg.content === "string") {
+					const copy = { ...msg, content: `${msg.content}\n\n${goalNote}` } as AgentMessage;
+					out = [...out.slice(0, i), copy, ...out.slice(i + 1)];
+				} else if (Array.isArray(msg.content)) {
+					const copy = { ...msg, content: [...msg.content, { type: "text" as const, text: goalNote }] } as AgentMessage;
+					out = [...out.slice(0, i), copy, ...out.slice(i + 1)];
+				}
+				break;
+			}
+		}
+		const resize = model?.inputLimits?.images?.resize;
 		out = await fitImagesInContext(out, resize ?? {});
 		if (this.ext?.has("context")) {
 			await this.ext.emit("context", { sessionId, messages: out }, sessionId, (r) => {
@@ -1845,6 +1991,20 @@ export class SessionManager {
 					(event.message as { thinkingLevel?: string }).thinkingLevel = st.thinkingLevel;
 				}
 				this.store.appendMessage(sessionId, seq, event.message);
+				if (event.message.role === "assistant" && event.message.stopReason !== "error" && event.message.stopReason !== "aborted") {
+					const u = (event.message as { usage?: { input?: number; cacheRead?: number; cacheWrite?: number } }).usage;
+					if (u) {
+						live.cacheStats.turns++;
+						live.cacheStats.input += u.input ?? 0;
+						live.cacheStats.cacheRead += u.cacheRead ?? 0;
+						live.cacheStats.cacheWrite += u.cacheWrite ?? 0;
+						const totalInput = live.cacheStats.input + live.cacheStats.cacheRead + live.cacheStats.cacheWrite;
+						live.cacheStats.hitRate = totalInput > 0 ? live.cacheStats.cacheRead / totalInput : 0;
+						if (this.cfg.logLevel === "debug") {
+							console.debug(`[cache] session=${sessionId} turn=${live.cacheStats.turns} cacheRead=${u.cacheRead ?? 0} cacheWrite=${u.cacheWrite ?? 0} input=${u.input ?? 0} hitRate=${(live.cacheStats.hitRate * 100).toFixed(1)}%`);
+						}
+					}
+				}
 				if (this.goals) {
 					const m = event.message;
 					if (m.role === "assistant") {
@@ -1970,7 +2130,7 @@ export class SessionManager {
 		const p = provider ?? defaults?.provider;
 		const m = model ?? (!provider || provider === defaults?.provider ? defaults?.model : undefined);
 		if (p && m) {
-			if (!this.registry.models.getModel(p, m)) throw badRequest(`unknown model ${p}/${m}`);
+			if (!this.registry.models.getModel(p, m)) throw badRequest(`unknown model ${p}/${m}${this.availableModelsHint()}`);
 			if (!(await this.registry.models.checkAuth(p))) throw badRequest(`provider ${p} is not configured; set its API key first`);
 			return { provider: p, model: m };
 		}

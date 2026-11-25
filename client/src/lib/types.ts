@@ -171,6 +171,13 @@ export interface SessionContext {
 		lastReadAt: number;
 		ranges: { from: number; to: number }[];
 	}[];
+	cache?: {
+		turns: number;
+		cacheRead: number;
+		cacheWrite: number;
+		input: number;
+		hitRate: number;
+	};
 }
 
 export type SkillScope = "global" | "project" | "builtin";

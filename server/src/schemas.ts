@@ -174,6 +174,13 @@ export const SessionContext = Type.Object({
 		lastReadAt: Type.Integer(),
 		ranges: Type.Array(Type.Object({ from: Type.Integer({ minimum: 1 }), to: Type.Integer({ minimum: 1 }) })),
 	}), { description: "Historical successful persisted read tool results, not a guarantee that these files remain in model context. Bash output is not inspected." }),
+	cache: Type.Optional(Type.Object({
+		turns: Type.Integer({ minimum: 0 }),
+		cacheRead: Type.Number({ minimum: 0 }),
+		cacheWrite: Type.Number({ minimum: 0 }),
+		input: Type.Number({ minimum: 0 }),
+		hitRate: Type.Number({ minimum: 0, maximum: 1 }),
+	}, { description: "Live prompt-cache hit telemetry for this session" })),
 });
 
 export const CreateSessionBody = Type.Object({

@@ -73,7 +73,7 @@ export interface ToolContext {
 		read(from: string, count: number, detail?: boolean): string;
 		list(): string;
 		abort(name: string): string;
-		answer(name: string, a: { answer?: string; answers?: string[]; toolCallId?: string }): string;
+		answer(name: string, a: { answer?: string | null; answers?: (string | null)[]; toolCallId?: string }): string;
 		create(input: PeerCreateInput): Promise<string>;
 		manage(name: string, action: ManageAction, a?: ManageArgs): string;
 		group(action: "create" | "add" | "remove" | "dissolve", a: { group?: string; members?: string[]; name?: string }): string;
@@ -1685,7 +1685,7 @@ export function modelList(ids: readonly string[]): string {
 	return [...by].map(([p, ms]) => `${p}: ${ms.join(", ")}`).join("; ") + more;
 }
 
-const PEER_ACTIONS = ["send", "read", "list", "abort", "answer", "create", "close", "resume", "delete", "cancel_queued", "rename", "set", "group_create", "group_add", "group_remove", "group_dissolve"] as const;
+const PEER_ACTIONS = ["send", "read", "list", "list_models", "abort", "answer", "create", "close", "resume", "delete", "cancel_queued", "rename", "set", "group_create", "group_add", "group_remove", "group_dissolve"] as const;
 type PeerAction = (typeof PEER_ACTIONS)[number];
 const need = <T>(v: T | undefined, what: string, action: string): T => {
 	if (v === undefined || v === "") throw new Error(`peer ${action} needs \`${what}\``);
@@ -1694,9 +1694,8 @@ const need = <T>(v: T | undefined, what: string, action: string): T => {
 
 const peerTool: ToolDef = {
 	name: "peer",
-	description: "Work with the other sessions (agents) on this server: message, read, list, create, stop, answer, manage, group.",
+	description: "Work with the other sessions (agents) on this server: message, read, list, list_models, create, stop, answer, manage, group.",
 	create(_cwd, _roots, ctx) {
-		const models = modelList(ctx?.chatModels?.() ?? []);
 		return defineTool({
 			name: "peer",
 			label: "Other sessions",
@@ -1705,6 +1704,7 @@ const peerTool: ToolDef = {
 				"send (to, message, mode?, notify?): message another active session, or every other session of a group when `to` is a group name. It runs independently, sees only what you write, and does not answer unless you ask it to reply with peer send. mode only matters when the target is working: follow_up (default) is delivered after its run, steer is injected into the run now. notify true: you get one report when the target ends its run.",
 				"read (name, count?, detail?): what the session recently said and did, text only, newest last; detail also shows tool call arguments and results.",
 				"list: every other open session with name, working or idle, title, branch and directory.",
+				"list_models: configured chat models (provider/model) available for create, set, and delegate.",
 				"abort (name): stop what it is doing right now, like the user pressing stop. Only when it is stuck or going the wrong way; prefer send with mode steer first.",
 				"answer (name, answer | answers, toolCallId?): answer the ask_user question it waits on. Answer only what you can decide with what you know; anything that needs the user's judgment goes back to the user.",
 				"create (message, title?, purpose?, cwd?, provider?, model?, thinkingLevel?, notify?): start a new session on `message` and get its @name back. Include all the context it needs; it sees nothing else. You get a report when it ends or asks (notify defaults to true). The directory defaults to yours; for code changes give each session its own git worktree.",
@@ -1721,14 +1721,14 @@ const peerTool: ToolDef = {
 				notify: Type.Optional(Type.Boolean({ description: "send, create: report to you when it ends its run" })),
 				count: Type.Optional(Type.Integer({ minimum: 1, maximum: 40, description: "read: how many recent messages (default 10)" })),
 				detail: Type.Optional(Type.Boolean({ description: "read: also show tool call arguments and results, errors included" })),
-				answer: Type.Optional(Type.String({ maxLength: 8000, description: "answer: the answer (one of its options when it offers only options; several picks one per line)" })),
-				answers: Type.Optional(Type.Array(Type.String({ maxLength: 8000 }), { maxItems: 20, description: "answer: one answer per question, when it asked several at once" })),
+				answer: Type.Optional(Type.Union([Type.String({ maxLength: 8000 }), Type.Null()], { description: "answer: the answer (one of its options when it offers only options; several picks one per line; null to leave unanswered)" })),
+				answers: Type.Optional(Type.Array(Type.Union([Type.String({ maxLength: 8000 }), Type.Null()]), { maxItems: 8, description: "answer: one answer per question, when it asked several at once (null leaves a question unanswered)" })),
 				toolCallId: Type.Optional(Type.String({ description: "answer: which question, when several wait (default: the oldest)" })),
 				title: Type.Optional(Type.String({ maxLength: 100, description: "create" })),
 				purpose: Type.Optional(Type.String({ maxLength: 200, description: "create, set: its role in a few words (shown in @mention hints)" })),
 				cwd: Type.Optional(Type.String({ description: "create: working directory (default: yours)" })),
 				provider: Type.Optional(Type.String({ description: "create, set: the provider of `model`" })),
-				model: Type.Optional(Type.String({ description: `create, set: model id, given with its provider; omit for the default.${models ? ` Available (provider: models): ${models}.` : ""} Pick a fast, cheap one for light work, a strong one for hard or long work` })),
+				model: Type.Optional(Type.String({ description: 'create, set: model id, given with its provider; omit for the default. Call peer(action="list_models") to see available models. Pick a fast, cheap one for light work, a strong one for hard or long work' })),
 				thinkingLevel: Type.Optional(Type.String({ description: "create, set: off, minimal, low, medium, high, xhigh or max" })),
 				text: Type.Optional(Type.String({ maxLength: 500, description: "cancel_queued: a piece of the message to take back" })),
 				newName: Type.Optional(Type.String({ maxLength: 30, description: "rename" })),
@@ -1737,9 +1737,13 @@ const peerTool: ToolDef = {
 				groupName: Type.Optional(Type.String({ maxLength: 100, description: "group_create: the group's name" })),
 			}),
 			async execute(_id, p) {
+				const a: PeerAction = p.action;
+				if (a === "list_models") {
+					const list = modelList(ctx?.chatModels?.() ?? []);
+					return text(list ? `Available chat models (provider: models): ${list}` : "No chat models are configured.", { action: a });
+				}
 				const peers = ctx?.peers;
 				if (!peers) throw new Error("messaging other sessions is not available in this session");
-				const a: PeerAction = p.action;
 				const name = () => need(p.name, "name", a);
 				switch (a) {
 					case "send": return text(await peers.send(need(p.to, "to", a), need(p.message, "message", a), { mode: p.mode, notify: p.notify }), { action: a, to: p.to });
@@ -1769,16 +1773,16 @@ const DELEGATE_DESCRIPTION =
 /** Free role policy: `role` may name no file; the subagent is a general read-only one that takes `task` as its instructions. */
 const DELEGATE_DESCRIPTION_FREE =
 	"Hand a self-contained task to a short-lived subagent and get its final answer back as text. " +
-	"`role` may be a role defined in ~/.agents/subagents or the project's .agents/subagents (its own model and tools), or any other short name (e.g. explore, summarize): then the subagent is a general one with read-only tools (read, grep, ls) and no write, edit or shell access, and `task` is its whole instruction. " +
+	"`role` may be a role defined in ~/.agents/subagents or the project's .agents/subagents (its own model and tools), or any other short name (e.g. explore, summarize): then the subagent is a general one with read-only tools (read, grep, glob, ls) and no write, edit or shell access, and `task` is its whole instruction. " +
 	"The subagent does not see this conversation: put the goal, paths and the exact question in `task`. It runs once, is not a session (nothing appears in the session list; use peer (action create) for a lasting chat) and cannot delegate further or ask the user. " +
 	"Use it like a tool, to save your own context on searches or noisy commands, when only the result matters; if the user may want to open the work, or it edits files or runs long, use peer (action create) instead. Limits apply (model calls, concurrent subagents, calls per run and elapsed time).";
 
 const MODEL_HINT = "Pick a fast, cheap model for searches, summaries and simple checks, a strong one for root-cause analysis or design judgement. Omit `model` to use the role's own model, else this session's.";
 /** What the tool text says about `model` under the model policy (the ids only in the parameter, not twice); `null` = the argument is not offered (the role decides). */
-export function delegateModelText(p: { policy: "defined" | "allowlist" | "any"; models: string[] } | undefined, available: readonly string[] = []): { tool: string; param: string } | null {
+export function delegateModelText(p: { policy: "defined" | "allowlist" | "any"; models: string[] } | undefined): { tool: string; param: string } | null {
 	if (!p || p.policy === "defined") return null;
 	if (p.policy === "allowlist") return { tool: ` ${MODEL_HINT}`, param: `provider/model, one of: ${p.models.join(", ")}` };
-	return { tool: ` ${MODEL_HINT}`, param: `provider/model of any configured model${available.length ? `; available (provider: models): ${modelList(available)}` : ""}` };
+	return { tool: ` ${MODEL_HINT}`, param: 'provider/model of any configured model; call peer(action="list_models") to see available models' };
 }
 
 const delegateTool: ToolDef = {
@@ -1786,7 +1790,7 @@ const delegateTool: ToolDef = {
 	description: "Run a one-off subagent and return its answer.",
 	create(_cwd, _roots, ctx) {
 		const free = ctx?.delegateRoles?.() === "any";
-		const models = delegateModelText(ctx?.delegateModels?.(), ctx?.chatModels?.() ?? []);
+		const models = delegateModelText(ctx?.delegateModels?.());
 		return defineTool({
 			name: DELEGATE_TOOL,
 			label: "Delegate to a subagent",

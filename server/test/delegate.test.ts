@@ -29,7 +29,7 @@ describe("loadSubagents", () => {
 			expect(e.model).toBeUndefined();
 			const g = loadSubagents(join(root, "none"), home).get("explore")!;
 			expect(g).toMatchObject({ scope: "global", model: "p/m", thinking: "medium", maxTurns: 7, tools: ["read", "grep"] }); // delegate, peer_* and ask_user are never handed down
-			expect(defs.get("runner")!.tools).toEqual(["read", "grep", "ls"]);
+			expect(defs.get("runner")!.tools).toEqual(["read", "grep", "glob", "ls"]);
 		} finally { rmSync(root, { recursive: true, force: true }); }
 	});
 
@@ -146,7 +146,7 @@ describe("chooseModel", () => {
 describe("freeRole", () => {
 	test("a role with no file gets read-only tools only, the default turn budget and no instructions of its own", () => {
 		const r = freeRole("summarize");
-		expect(r).toMatchObject({ name: "summarize", tools: ["read", "grep", "ls"], maxTurns: DEFAULT_SUBAGENT_TURNS, prompt: "", file: "" });
+		expect(r).toMatchObject({ name: "summarize", tools: ["read", "grep", "glob", "ls"], maxTurns: DEFAULT_SUBAGENT_TURNS, prompt: "", file: "" });
 		expect(r.tools.some((t) => ["write", "edit", "bash", "delegate", "ask_user"].includes(t) || t.startsWith("peer"))).toBe(false);
 	});
 });
@@ -523,23 +523,34 @@ describe("delegate tool", () => {
 		expect(props(make("any")).thinking.anyOf.map((x: any) => x.const)).toEqual(["off", "minimal", "low", "medium", "high", "xhigh", "max"]);
 	});
 
-	test("peer and delegate list the models a session can run on, grouped by provider", async () => {
+	test("peer and delegate schemas are decoupled from live chatModels; peer(action=list_models) returns grouped models", async () => {
 		const peer = buildTools(["peer"], dir, [], { chatModels: () => ["a/fast", "a/strong", "b/other"] })[0]!;
-		expect((peer.parameters as any).properties.model.description).toContain("a: fast, strong; b: other");
-		expect((buildTools(["peer"], dir, [], {})[0]!.parameters as any).properties.model.description).not.toContain("Available");
+		expect((peer.parameters as any).properties.model.description).toContain('peer(action="list_models")');
+		expect((peer.parameters as any).properties.model.description).not.toContain("a: fast");
+		const listed = await peer.execute("call-1", { action: "list_models" });
+		const listedText = listed.content.map((c: any) => c.text ?? "").join("");
+		expect(listedText).toContain("a: fast, strong; b: other");
+		const emptyPeer = buildTools(["peer"], dir, [], {})[0]!;
+		const emptyRes = await emptyPeer.execute("call-2", { action: "list_models" });
+		expect(emptyRes.content.map((c: any) => c.text ?? "").join("")).toContain("No chat models");
 		const free = buildTools(["delegate"], dir, [], { delegateModels: () => ({ policy: "any", models: [] }), chatModels: () => ["a/fast"] })[0]!;
-		expect((free.parameters as any).properties.model.description).toContain("a: fast");
+		expect((free.parameters as any).properties.model.description).toContain('peer(action="list_models")');
+		expect((free.parameters as any).properties.model.description).not.toContain("a: fast");
 		expect(modelList(Array.from({ length: 45 }, (_, i) => `p/m${i}`))).toEndWith("(and 5 more)");
 	});
 
-	test("a running session's tool text names the configured chat models", async () => {
+	test("a running session's peer tool supports list_models and keeps its schema cache-stable", async () => {
 		const id = (await api("POST", "/sessions", {})).json.id as string;
 		const n = upstream.requests.length;
-		await api("POST", `/sessions/${id}/messages`, { text: "hello" });
+		await api("POST", `/sessions/${id}/messages`, { text: '!peer {"action":"list_models"}' });
 		await idle(id);
 		const req = upstream.requests.slice(n).find((r: any) => r.body?.tools);
 		const peer = (req!.body as any).tools.find((t: any) => t.function?.name === "peer");
-		expect(peer.function.parameters.properties.model.description).toContain(`echo: ${ECHO_MODEL.id}`);
+		expect(peer.function.parameters.properties.model.description).toContain('peer(action="list_models")');
+		expect(peer.function.parameters.properties.action.enum).toContain("list_models");
+		const msgs = (await api("GET", `/sessions/${id}/messages`)).json.messages as any[];
+		const toolRes = msgs.find((m) => m.message?.role === "toolResult" && m.message?.toolName === "peer");
+		expect(toolRes?.message?.content?.[0]?.text).toContain(`echo: ${ECHO_MODEL.id}`);
 	});
 
 	test("a session's model may be given as provider/model in `model` alone", async () => {

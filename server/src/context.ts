@@ -60,6 +60,8 @@ export interface SessionContext extends Omit<ContextSnapshot, "capturedAt" | "sk
 	capturedAt: number | null;
 	/** Historical successful read results, not a guarantee of retained model context. */
 	readFiles: ReadFileTrace[];
+	/** Live prompt-cache hit telemetry aggregated across assistant turns (present once the live session has completed turns). */
+	cache?: { turns: number; cacheRead: number; cacheWrite: number; input: number; hitRate: number };
 }
 
 export const INSTRUCTION_MAX_FILE_BYTES = 64 * 1024;
