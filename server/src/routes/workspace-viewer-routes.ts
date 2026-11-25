@@ -1,5 +1,5 @@
 import { closeSync, existsSync, lstatSync, openSync, readdirSync, readSync, realpathSync, writeFileSync } from "node:fs";
-import { isAbsolute, join, relative, resolve } from "node:path";
+import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import type { FastifyInstance } from "fastify";
 import Type from "typebox";
 import { badRequest, notFound } from "../errors.ts";
@@ -60,7 +60,15 @@ function realpathSafe(p: string): string | null {
 	}
 }
 
-/** Ensure a relative path stays strictly inside `root` (blocks `..`, null bytes, absolute paths, and symlink escapes). */
+function lstatSafe(p: string) {
+	try {
+		return lstatSync(p);
+	} catch {
+		return null;
+	}
+}
+
+/** Ensure a relative path stays strictly inside `root` (blocks `..`, null bytes, absolute paths, symlink escapes, and symlinked ancestors). */
 export function safeInsideRoot(root: string, relPath: string): string | null {
 	if (relPath.includes("\0") || isAbsolute(relPath)) return null;
 	const realRoot = realpathSafe(root);
@@ -70,16 +78,31 @@ export function safeInsideRoot(root: string, relPath: string): string | null {
 	const candidate = resolve(realRoot, normalized);
 	const rel = relative(realRoot, candidate);
 	if (!rel || rel.startsWith("..") || isAbsolute(rel)) return null;
-	if (existsSync(candidate)) {
-		try {
-			const st = lstatSync(candidate);
-			const realTarget = st.isSymbolicLink() ? realpathSync(candidate) : realpathSafe(candidate);
-			if (!realTarget) return null;
-			const realRel = relative(realRoot, realTarget);
-			if (realRel.startsWith("..") || isAbsolute(realRel)) return null;
-		} catch {
-			return null;
+
+	// Check existing target (including dangling symlinks where existsSync is false).
+	const st = lstatSafe(candidate);
+	if (st) {
+		const realTarget = realpathSafe(candidate);
+		if (!realTarget) return null; // dangling symlink
+		const realRel = relative(realRoot, realTarget);
+		if (realRel.startsWith("..") || isAbsolute(realRel)) return null;
+		return candidate;
+	}
+
+	// Target does not exist yet: verify its nearest existing ancestor resolves inside realRoot.
+	let cur = dirname(candidate);
+	while (cur && cur !== realRoot) {
+		const anc = lstatSafe(cur);
+		if (anc) {
+			const realAnc = realpathSafe(cur);
+			if (!realAnc) return null;
+			const ancRel = relative(realRoot, realAnc);
+			if (ancRel.startsWith("..") || isAbsolute(ancRel)) return null;
+			break;
 		}
+		const parent = dirname(cur);
+		if (parent === cur) return null;
+		cur = parent;
 	}
 	return candidate;
 }
@@ -441,10 +464,8 @@ export function registerWorkspaceViewerRoutes(server: FastifyInstance, deps: { s
 		if (Buffer.byteLength(content, "utf-8") > 2 * 1024 * 1024) {
 			throw badRequest("file content too large");
 		}
-		if (existsSync(abs)) {
-			const st = lstatSync(abs);
-			if (!st.isFile()) throw badRequest("not a regular file");
-		}
+		const st = lstatSafe(abs);
+		if (st && !st.isFile()) throw badRequest("not a regular file");
 		writeFileSync(abs, content, "utf-8");
 		const size = Buffer.byteLength(content, "utf-8");
 		const lineCount = content ? content.split(/\r?\n/).length : 0;

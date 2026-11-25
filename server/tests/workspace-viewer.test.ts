@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import Fastify from "fastify";
@@ -161,6 +161,25 @@ describe("workspace viewer routes", () => {
 				payload: { path: "../escape.ts", content: "nope" },
 			});
 			expect(badPut.statusCode).toBe(400);
+
+			// Symlinked ancestor directory & dangling symlink refused on save
+			const outside = mkTempDir("pipaya-wv-out-");
+			symlinkSync(outside, join(repo, "ext-link"));
+			symlinkSync(join(outside, "dangling.txt"), join(repo, "dangling-link.txt"));
+			expect(safeInsideRoot(repo, "ext-link/new-file.txt")).toBeNull();
+			expect(safeInsideRoot(repo, "dangling-link.txt")).toBeNull();
+			const symDirPut = await app.inject({
+				method: "PUT",
+				url: "/sessions/s1/workspace/file",
+				payload: { path: "ext-link/new-file.txt", content: "nope" },
+			});
+			expect(symDirPut.statusCode).toBe(400);
+			const danglingPut = await app.inject({
+				method: "PUT",
+				url: "/sessions/s1/workspace/file",
+				payload: { path: "dangling-link.txt", content: "nope" },
+			});
+			expect(danglingPut.statusCode).toBe(400);
 		} finally {
 			await app.close();
 			db.close();
