@@ -120,7 +120,8 @@ const DEFAULT_TIMERS: GoalTimers = {
 
 const DEFAULT_CONTINUE_DELAY_MS = 250;
 const MAX_EMPTY_CONTINUATIONS = 3;
-const MAX_CONSECUTIVE_LIMIT_ABORTS = 2;
+/** Consecutive per-run turn-cap aborts before marking a goal blocked (tracked separately because `hadActivity` is always true on a max-turn run). */
+const MAX_CONSECUTIVE_LIMIT_ABORTS = 3;
 
 const USAGE_LIMIT_RE = /rate[\s_-]?limit|usage[\s_-]?limit|insufficient[\s_-]?quota|quota[\s_-]?exceeded|too many requests|\b429\b/i;
 

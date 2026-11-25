@@ -124,21 +124,31 @@ describe("schedule tool", () => {
 		expect((await call(id, { action: "delete" })).text).toContain("needs `id`");
 	});
 
-	test("refuses update, delete and run on another session's task", async () => {
+	test("run sends another session's task now; creator may update/delete its cross-session task, others cannot", async () => {
 		const self = await mk();
 		const other = await mk();
+		const bystander = await mk();
 		const name = (await api("GET", `/sessions/${other}`)).json.name as string;
 		await call(self, { action: "create", prompt: "hello there", everyMinutes: 10, session: name });
 		const t = (await tasks(other))[0]!;
-		const up = await call(self, { action: "update", id: t.id, prompt: "hijack" });
-		expect(up.error).toBe(true);
-		expect(up.text).toContain("belongs to another session");
-		const del = await call(self, { action: "delete", id: t.id });
-		expect(del.error).toBe(true);
-		expect(del.text).toContain("belongs to another session");
-		const run = await call(self, { action: "run", id: t.id });
-		expect(run.error).toBe(true);
-		expect(run.text).toContain("belongs to another session");
+		// `run` works on another session's idle task
+		expect((await call(self, { action: "run", id: t.id })).text).toContain("Sent now:");
+		await idle(other);
+		expect(JSON.stringify((await api("GET", `/sessions/${other}/messages`)).json)).toContain("Echo: hello there");
+		// Unrelated session cannot update or delete another session's task
+		const badUp = await call(bystander, { action: "update", id: t.id, prompt: "hijack" });
+		expect(badUp.error).toBe(true);
+		expect(badUp.text).toContain("belongs to another session");
+		const badDel = await call(bystander, { action: "delete", id: t.id });
+		expect(badDel.error).toBe(true);
+		expect(badDel.text).toContain("belongs to another session");
+		// Creator can update and delete the task it created for `other`
+		const okUp = await call(self, { action: "update", id: t.id, prompt: "updated prompt" });
+		expect(okUp.error).toBe(false);
+		expect(okUp.text).toContain("Updated:");
+		const okDel = await call(self, { action: "delete", id: t.id });
+		expect(okDel.error).toBe(false);
+		expect(okDel.text).toContain("Deleted:");
 		// Single-digit hour in `at` is zero-padded and parsed cleanly.
 		const year = new Date().getFullYear() + 1;
 		const singleHour = await call(self, { action: "create", prompt: "morning", at: `${year}-03-01T9:05` });

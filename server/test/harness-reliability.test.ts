@@ -17,7 +17,8 @@ import { DEFAULT_DELEGATE_POLICY, DelegatePolicy } from "../src/configuration.ts
 import { buildEnvContext, buildSystemPrompt } from "../src/context.ts";
 import { openDb } from "../src/db.ts";
 import { GoalManager, type GoalHost } from "../src/goals.ts";
-import { formatMcpToolResult, MAX_MCP_IMAGE_RAW_BYTES, MAX_RESULT_CHARS, MAX_TOTAL_MCP_TOOLS, McpManager } from "../src/mcp.ts";
+import { buildMcpStdioEnv, formatMcpToolResult, MAX_MCP_IMAGE_RAW_BYTES, MAX_RESULT_CHARS, MAX_TOTAL_MCP_TOOLS, McpManager } from "../src/mcp.ts";
+import Value from "typebox/value";
 import { PeerService, type PeerHost } from "../src/peers.ts";
 import { afterTurn, runawayReason, type RunGuardState } from "../src/run-guard.ts";
 import { Scheduler, type SchedulerHost, type Timers } from "../src/scheduler.ts";
@@ -87,7 +88,19 @@ describe("1. MCP security & guardrails", () => {
 		expect(resized.content).toEqual([{ type: "image", data: "cmVzaXplZA==", mimeType: "image/jpeg" }]);
 	});
 
-	test("McpManager enforces MAX_TOTAL_MCP_TOOLS = 128 across servers", () => {
+	test("McpManager enforces MAX_TOTAL_MCP_TOOLS = 128 in deterministic order, reports truncatedTools, and supports inheritEnv", () => {
+		// inheritEnv: false (default) strips host tokens; inheritEnv: true keeps host env while STILL stripping PIPAYA_*
+		const fakeEnv = { PATH: "/usr/bin", GITHUB_TOKEN: "ghp_secret", PIPAYA_TOKEN: "tok", pipaya_secret: "tok2" };
+		const filtered = buildMcpStdioEnv({ env: { CUSTOM: "1" } }, fakeEnv);
+		expect(filtered.GITHUB_TOKEN).toBeUndefined();
+		expect(filtered.PIPAYA_TOKEN).toBeUndefined();
+		expect(filtered.CUSTOM).toBe("1");
+		const inherited = buildMcpStdioEnv({ inheritEnv: true, env: { CUSTOM: "2" } }, fakeEnv);
+		expect(inherited.GITHUB_TOKEN).toBe("ghp_secret");
+		expect(inherited.PIPAYA_TOKEN).toBeUndefined();
+		expect(inherited.pipaya_secret).toBeUndefined();
+		expect(inherited.CUSTOM).toBe("2");
+
 		const db = openDb(":memory:");
 		try {
 			const mgr = new McpManager(db);
@@ -98,10 +111,27 @@ describe("1. MCP security & guardrails", () => {
 					description: `desc ${i}`,
 					schema: { type: "object" },
 				}));
-			(mgr as any).conns.set("s1", { status: "ready", tools: makeTools("s1", 80), gen: 1 });
-			(mgr as any).conns.set("s2", { status: "ready", tools: makeTools("s2", 80), gen: 2 });
-			expect(Object.keys(mgr.toolDefs())).toHaveLength(MAX_TOTAL_MCP_TOOLS);
+			// Insert in reverse order (z before a): deterministic sorted/config order must still pick a first
+			(mgr as any).conns.set("z_srv", { status: "ready", tools: makeTools("z_srv", 80), gen: 1 });
+			(mgr as any).conns.set("a_srv", { status: "ready", tools: makeTools("a_srv", 80), gen: 2 });
+			const defs = mgr.toolDefs();
+			const names = Object.keys(defs);
+			expect(names).toHaveLength(MAX_TOTAL_MCP_TOOLS);
 			expect(MAX_TOTAL_MCP_TOOLS).toBe(128);
+			expect(names[0]).toBe("mcp_a_srv_t0");
+			expect(names.filter((n) => n.startsWith("mcp_a_srv_"))).toHaveLength(80);
+			expect(names.filter((n) => n.startsWith("mcp_z_srv_"))).toHaveLength(48);
+
+			// Save config rows so info() reports truncatedTools
+			db.query("INSERT INTO settings (key, data) VALUES ('mcp_servers', $d)").run({
+				d: JSON.stringify([
+					{ name: "a_srv", enabled: true, transport: "http", url: "http://127.0.0.1:1" },
+					{ name: "z_srv", enabled: true, transport: "http", url: "http://127.0.0.1:2" },
+				]),
+			});
+			const info = mgr.info();
+			expect(info.tools).toBe(128);
+			expect(info.truncatedTools).toBe(32);
 		} finally {
 			db.close();
 		}
@@ -224,7 +254,8 @@ describe("3. Retry & stream runner: thinking_start -> empty-content error", () =
 		expect(first.stopReason).toBe("error");
 		expect(first.content).toEqual([]);
 
-		// retryDroppedMidStream closes the gap by dropping the empty error reply and retrying cleanly.
+		// retryDroppedMidStream closes the gap by dropping the empty error reply and retrying cleanly with restart: true.
+		const notices: { restart?: true }[] = [];
 		const res = await retryDroppedMidStream({
 			getLastMessage: () => messages[messages.length - 1],
 			shouldStop: () => false,
@@ -234,15 +265,70 @@ describe("3. Retry & stream runner: thinking_start -> empty-content error", () =
 				const next = await (wrapped as any)({}, {}, {}).result();
 				messages.push(next);
 			},
+			onRetry: (n) => notices.push(n),
 			retryOpts: { maxRetries: 2, baseDelayMs: 5, maxDelayMs: 20 },
 		});
 		expect(res).toEqual({ attempts: 1, aborted: false, forceStopped: false, error: null });
+		expect(notices[0]?.restart).toBe(true);
 		expect(attempt).toBe(2);
 		expect(messages).toHaveLength(1);
 		expect((messages[0] as AssistantMessage).stopReason).toBe("stop");
 	});
 
-	test("completeWithUpstreamRetry retries thrown unknown error once and notifies onRetry", async () => {
+	test("stream throwing after thinking_start marks synthetic error as committed and retryDroppedMidStream retries with restart: true", async () => {
+		const okMsg = {
+			role: "assistant",
+			content: [{ type: "text", text: "recovered-from-throw" }],
+			stopReason: "stop",
+			timestamp: Date.now(),
+		} as unknown as AssistantMessage;
+
+		let attempt = 0;
+		const wrapped = withUpstreamRetry(
+			(() => {
+				attempt++;
+				if (attempt === 1) {
+					return (async function* () {
+						yield { type: "start", partial: okMsg } as any;
+						yield { type: "thinking_start", contentIndex: 0, partial: okMsg } as any;
+						throw new Error("503 stream socket reset mid-thinking");
+					})();
+				}
+				const s = createAssistantMessageEventStream();
+				s.push({ type: "start", partial: okMsg });
+				s.push({ type: "done", reason: "stop", message: okMsg });
+				s.end(okMsg);
+				return s;
+			}) as any,
+			{ maxRetries: 2, baseDelayMs: 5, maxDelayMs: 20, sleep: async () => {} },
+		);
+
+		const messages: AgentMessage[] = [];
+		const first = await (wrapped as any)({}, {}, {}).result();
+		messages.push(first);
+		expect(attempt).toBe(1);
+		expect(first.stopReason).toBe("error");
+		expect(first.content).toEqual([]);
+
+		const notices: { restart?: true }[] = [];
+		const res = await retryDroppedMidStream({
+			getLastMessage: () => messages[messages.length - 1],
+			shouldStop: () => false,
+			sleep: async () => ({ aborted: false }),
+			dropLastReply: () => { messages.pop(); },
+			continueRun: async () => {
+				messages.push(await (wrapped as any)({}, {}, {}).result());
+			},
+			onRetry: (n) => notices.push(n),
+			retryOpts: { maxRetries: 2, baseDelayMs: 5, maxDelayMs: 20 },
+		});
+		expect(res).toEqual({ attempts: 1, aborted: false, forceStopped: false, error: null });
+		expect(notices[0]?.restart).toBe(true);
+		expect(attempt).toBe(2);
+		expect((messages[0] as AssistantMessage).stopReason).toBe("stop");
+	});
+
+	test("completeWithUpstreamRetry retries thrown unknown error once, but never retries local programming errors", async () => {
 		const ctx = { messages: [{ role: "user" as const, content: "hi", timestamp: 1 }] } as unknown as Context;
 		let calls = 0;
 		const notices: number[] = [];
@@ -259,6 +345,18 @@ describe("3. Retry & stream runner: thinking_start -> empty-content error", () =
 		expect(reply.stopReason).toBe("stop");
 		expect(calls).toBe(2);
 		expect(notices).toEqual([1]);
+
+		for (const err of [new TypeError("bad type"), new RangeError("bad range"), new SyntaxError("bad json"), new ReferenceError("undef")]) {
+			let progCalls = 0;
+			await expect(
+				completeWithUpstreamRetry(
+					async () => { progCalls++; throw err; },
+					ctx,
+					{ maxRetries: 3, baseDelayMs: 5, maxDelayMs: 20, sleep: async () => {} },
+				),
+			).rejects.toThrow(err.message);
+			expect(progCalls).toBe(1);
+		}
 	});
 });
 
@@ -324,7 +422,7 @@ describe("5. Goals: origin preservation and consecutive limit abort guard", () =
 		}
 	});
 
-	test("GoalManager marks goal blocked after 2 consecutive turn-limit aborts", () => {
+	test("GoalManager marks goal blocked after 3 consecutive turn-limit aborts and resets on normal turn", () => {
 		const db = openDb(":memory:");
 		try {
 			const store = new SessionStore(db);
@@ -343,14 +441,26 @@ describe("5. Goals: origin preservation and consecutive limit abort guard", () =
 			});
 			goals.put("s1", { objective: "finish work" });
 
-			// 1st turn-limit abort: stays active and schedules continuation
+			// 1st and 2nd turn-limit aborts stay active
+			for (let i = 0; i < 2; i++) {
+				goals.onRunStarted("s1");
+				goals.onRunFinished("s1", { status: "aborted", cause: "limit", error: "Stopped after 200 model calls in one run.", origin: "goal" });
+				expect(goals.get("s1")!.status).toBe("active");
+			}
+			// A normal turn resets the counter
 			goals.onRunStarted("s1");
-			goals.onRunFinished("s1", { status: "aborted", cause: "limit", error: "Stopped after 50 model calls in one run.", origin: "goal" });
+			goals.onMessageEnd("s1", { role: "assistant", textLength: 10 });
+			goals.onRunFinished("s1", { status: "ok", origin: "goal" });
 			expect(goals.get("s1")!.status).toBe("active");
 
-			// 2nd consecutive turn-limit abort: marks blocked
+			// 3 consecutive turn-limit aborts mark blocked
+			for (let i = 0; i < 2; i++) {
+				goals.onRunStarted("s1");
+				goals.onRunFinished("s1", { status: "aborted", cause: "limit", error: "Stopped after 200 model calls in one run.", origin: "goal" });
+				expect(goals.get("s1")!.status).toBe("active");
+			}
 			goals.onRunStarted("s1");
-			goals.onRunFinished("s1", { status: "aborted", cause: "limit", error: "Stopped after 50 model calls in one run.", origin: "goal" });
+			goals.onRunFinished("s1", { status: "aborted", cause: "limit", error: "Stopped after 200 model calls in one run.", origin: "goal" });
 			expect(goals.get("s1")!.status).toBe("blocked");
 			goals.stop();
 		} finally {
@@ -360,10 +470,13 @@ describe("5. Goals: origin preservation and consecutive limit abort guard", () =
 });
 
 describe("6. Subagent fixes", () => {
-	test("FORBIDDEN excludes goal, workdir, generate_image; MAX_SUBAGENT_TURNS aligned with configuration", () => {
+	test("FORBIDDEN excludes goal, workdir, generate_image; DelegatePolicy preserves stored maxTurns 31..50", () => {
 		expect(subagentTools(["read", "bash", "goal", "workdir", "generate_image", "delegate", "peer", "schedule"])).toEqual(["read", "bash"]);
-		expect((DelegatePolicy.properties.maxTurns as { maximum?: number }).maximum).toBe(MAX_SUBAGENT_TURNS);
+		expect((DelegatePolicy.properties.maxTurns as { maximum?: number }).maximum).toBe(50);
 		expect(DEFAULT_DELEGATE_POLICY.maxTurns).toBe(MAX_SUBAGENT_TURNS);
+		expect(Value.Check(DelegatePolicy, { ...DEFAULT_DELEGATE_POLICY, maxTurns: 50 })).toBe(true);
+		expect(Value.Check(DelegatePolicy, { ...DEFAULT_DELEGATE_POLICY, maxTurns: 35 })).toBe(true);
+		expect(Value.Check(DelegatePolicy, { ...DEFAULT_DELEGATE_POLICY, maxTurns: 51 })).toBe(false);
 	});
 
 	test("repeatedReadSignature detects repeated bash calls and multi-tool batches", () => {
@@ -501,12 +614,19 @@ describe("7. Peer fixes", () => {
 			expect(ansMsg).toContain("Answered @둘");
 			expect(receivedAnswers[0]).toEqual({ answer: null, answers: undefined });
 
-			// Concurrent creates are serialized by internal async mutex
+			// Concurrent creates for the SAME selfId are serialized; DIFFERENT selfIds run concurrently without blocking each other
 			await Promise.all([
 				peers.create("s1", { message: "task 1" }),
 				peers.create("s1", { message: "task 2" }),
 			]);
 			expect(maxConcurrentCreates).toBe(1);
+
+			maxConcurrentCreates = 0;
+			await Promise.all([
+				peers.create("s1", { message: "task a" }),
+				peers.create("s2", { message: "task b" }),
+			]);
+			expect(maxConcurrentCreates).toBe(2);
 		} finally {
 			db.close();
 		}
@@ -567,17 +687,17 @@ describe("8. Scheduler optional bounded busy-retry & mutex", () => {
 });
 
 describe("9. Skills XML escaping", () => {
-	test("skillsPrompt XML-escapes name, description, and path", () => {
+	test("skillsPrompt XML-escapes name and description, leaving filesystem path unescaped", () => {
 		const out = skillsPrompt([
 			{
 				name: "a&b<c>",
 				description: "Do </available_skills> & <inject>",
-				path: "/tmp/<dir>/a&b/SKILL.md",
-				baseDir: "/tmp/<dir>/a&b",
+				path: "/tmp/R&D/a&b/SKILL.md",
+				baseDir: "/tmp/R&D/a&b",
 				scope: "global",
 			},
 		]);
-		expect(out).toContain("- a&amp;b&lt;c&gt;: Do &lt;/available_skills&gt; &amp; &lt;inject&gt; (/tmp/&lt;dir&gt;/a&amp;b/SKILL.md)");
+		expect(out).toContain("- a&amp;b&lt;c&gt;: Do &lt;/available_skills&gt; &amp; &lt;inject&gt; (/tmp/R&D/a&b/SKILL.md)");
 		expect(out.match(/<\/available_skills>/g)).toHaveLength(1);
 	});
 });

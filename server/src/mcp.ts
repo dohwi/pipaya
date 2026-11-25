@@ -31,6 +31,7 @@ export const McpServerBody = Type.Object({
 	command: Type.Optional(Type.String({ maxLength: 1000, description: "stdio: program to run" })),
 	args: Type.Optional(Type.Array(Type.String({ maxLength: 2000 }), { maxItems: 50 })),
 	env: Type.Optional(Strings),
+	inheritEnv: Type.Optional(Type.Boolean({ description: "stdio: inherit full host environment (still excluding PIPAYA_*) instead of filtered defaults" })),
 	url: Type.Optional(Type.String({ maxLength: 2000, description: "http: endpoint URL" })),
 	headers: Type.Optional(Strings),
 	allowTools: Type.Optional(ToolFilterList),
@@ -49,7 +50,23 @@ export const McpInfo = Type.Object({
 	})),
 	ready: Type.Integer({ description: "Servers connected right now" }),
 	tools: Type.Integer({ description: "Tools the connected servers offer" }),
+	truncatedTools: Type.Optional(Type.Integer({ description: "Tools dropped because total MCP tools exceeded MAX_TOTAL_MCP_TOOLS" })),
 });
+
+/** Builds the environment for a stdio MCP server: filtered by default, or full host env (excluding PIPAYA_*) when `inheritEnv` is true. */
+export function buildMcpStdioEnv(
+	c: Pick<McpServerConfig, "env" | "inheritEnv">,
+	source: Record<string, string | undefined> = process.env,
+): Record<string, string> {
+	if (c.inheritEnv) {
+		const base: Record<string, string> = {};
+		for (const [k, v] of Object.entries(source)) {
+			if (v !== undefined && !/^PIPAYA_/i.test(k)) base[k] = v;
+		}
+		return { ...base, ...(c.env ?? {}) };
+	}
+	return { ...buildChildEnv(source), ...(c.env ?? {}) };
+}
 
 type Status = "off" | "connecting" | "ready" | "error";
 interface RemoteTool { name: string; tool: string; description: string; schema: Record<string, unknown> }
@@ -94,7 +111,13 @@ export class McpManager {
 				tools: status === "ready" ? (conn?.tools ?? []).map(({ name, tool, description }) => ({ name, tool, description })) : [],
 			};
 		});
-		return { servers, ready: servers.filter((s) => s.status === "ready").length, tools: servers.reduce((n, s) => n + s.tools.length, 0) };
+		const totalTools = servers.reduce((n, s) => n + s.tools.length, 0);
+		return {
+			servers,
+			ready: servers.filter((s) => s.status === "ready").length,
+			tools: Math.min(totalTools, MAX_TOTAL_MCP_TOOLS),
+			truncatedTools: Math.max(0, totalTools - MAX_TOTAL_MCP_TOOLS),
+		};
 	}
 
 	set(input: McpServerConfig[]): Static<typeof McpInfo> {
@@ -119,6 +142,7 @@ export class McpManager {
 				delete c.command;
 				delete c.args;
 				delete c.env;
+				delete c.inheritEnv;
 			}
 			// A masked value means "unchanged": put the stored secret back.
 			const before = old.get(c.name);
@@ -168,7 +192,7 @@ export class McpManager {
 		const client = new Client({ name: "pipaya", version: "1.0.0" });
 		try {
 			const transport = c.transport === "stdio"
-				? new StdioClientTransport({ command: c.command!, args: c.args ?? [], env: { ...buildChildEnv(), ...(c.env ?? {}) }, stderr: "ignore" })
+				? new StdioClientTransport({ command: c.command!, args: c.args ?? [], env: buildMcpStdioEnv(c), stderr: "ignore" })
 				: new StreamableHTTPClientTransport(new URL(c.url!), { requestInit: { headers: c.headers ?? {} } });
 			conn.client = client;
 			client.onclose = () => {
@@ -213,12 +237,24 @@ export class McpManager {
 		this.onChange();
 	}
 
-	/** Tools of the connected servers, ready to be added to the built-in ones (capped globally at MAX_TOTAL_MCP_TOOLS). */
+	/** Tools of the connected servers, in deterministic config/sorted order, capped globally at MAX_TOTAL_MCP_TOOLS. */
 	toolDefs(): Record<string, ToolDef> {
 		const defs: Record<string, ToolDef> = {};
+		const orderedNames: string[] = [];
+		const seen = new Set<string>();
+		for (const c of this.config()) {
+			if (this.conns.has(c.name) && !seen.has(c.name)) {
+				seen.add(c.name);
+				orderedNames.push(c.name);
+			}
+		}
+		for (const name of [...this.conns.keys()].sort()) {
+			if (!seen.has(name)) orderedNames.push(name);
+		}
 		let total = 0;
-		for (const [server, conn] of this.conns) {
-			if (conn.status !== "ready") continue;
+		for (const server of orderedNames) {
+			const conn = this.conns.get(server);
+			if (!conn || conn.status !== "ready") continue;
 			for (const t of conn.tools) {
 				if (total >= MAX_TOTAL_MCP_TOOLS) return defs;
 				total++;

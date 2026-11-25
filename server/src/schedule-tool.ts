@@ -70,12 +70,15 @@ const need = <T>(v: T | undefined, what: string, action: Action): T => {
 	return v;
 };
 
+/** Tracks task IDs created by each session (including cross-session schedules) so the creator may update or delete them. */
+const createdBySession = new Map<string, Set<string>>();
+
 const DESCRIPTION = [
 	"Scheduled tasks: a prompt sent automatically to a session once at a set time, or every so often (the user sees the same list in the settings). Pick `action`; each uses only the parameters named here.",
 	"list (all?): this session's tasks with id, timing, next and last run, and the server's current time; all true lists every task on the server.",
 	"create (prompt, at | inMinutes | everyMinutes, title?, session?): one-time with `at` or `inMinutes`, repeating with `everyMinutes` (first run one interval from now). Sent to this session unless `session` names another one (@name). Write the prompt as an instruction to your future self: that run sees the conversation but not this moment, and nobody is there to clarify.",
-	"update (id, prompt?, title?, at? | inMinutes?, everyMinutes?, enabled?): change a task; a one-time task takes a new time, a repeating one a new interval; enabled false pauses it.",
-	"delete (id): remove it. run (id): send it now; refused while its session is busy, so it cannot run a task of this session during your own run. A one-time task is used up by it.",
+	"update (id, prompt?, title?, at? | inMinutes?, everyMinutes?, enabled?): change a task owned by this session (or created by this session); a one-time task takes a new time, a repeating one a new interval; enabled false pauses it.",
+	"delete (id): remove a task owned by this session (or created by this session). run (id): send a task now; refused while its target session is busy, so it cannot run a task of this session during your own run. A one-time task is used up by it.",
 	"Times are the server's local time unless `at` carries an offset. A due task finding its session busy or closed is skipped, not queued. Set tasks up only when the user asked for something recurring or for later.",
 ].join("\n");
 
@@ -114,8 +117,8 @@ export const scheduleTool: ToolDef = {
 				const assertOwned = (taskId: string) => {
 					if (!ctx?.sessionId) return;
 					const target = ops.list(true).find((t) => t.id === taskId);
-					if (target && target.sessionId !== ctx.sessionId) {
-						throw new Error(`schedule "${taskId}" belongs to another session (${ops.label(target.sessionId)}) and cannot be modified or run from this session`);
+					if (target && target.sessionId !== ctx.sessionId && !createdBySession.get(ctx.sessionId)?.has(taskId)) {
+						throw new Error(`schedule "${taskId}" belongs to another session (${ops.label(target.sessionId)}) and cannot be modified or deleted from this session`);
 					}
 				};
 				switch (a) {
@@ -132,6 +135,11 @@ export const scheduleTool: ToolDef = {
 							if (runAt !== undefined && p.everyMinutes !== undefined) throw new Error("a task is either one-time (`at` / `inMinutes`) or repeating (`everyMinutes`), not both");
 							if (runAt === undefined && p.everyMinutes === undefined) throw new Error("schedule create needs `at`, `inMinutes` or `everyMinutes`");
 							const t = ops.create({ session: p.session, title: p.title, prompt, ...(runAt !== undefined ? { runAt } : { everyMs: p.everyMinutes! * 60_000 }) });
+							if (ctx?.sessionId) {
+								let owned = createdBySession.get(ctx.sessionId);
+								if (!owned) { owned = new Set(); createdBySession.set(ctx.sessionId, owned); }
+								owned.add(t.id);
+							}
 							return text(`Scheduled:\n${show(t)}`, { action: a, id: t.id });
 						});
 					}
@@ -156,13 +164,13 @@ export const scheduleTool: ToolDef = {
 							const id = need(p.id, "id", a);
 							assertOwned(id);
 							const t = ops.delete(id);
+							if (ctx?.sessionId) createdBySession.get(ctx.sessionId)?.delete(id);
 							return text(`Deleted:\n${show(t)}`, { action: a, id: t.id });
 						});
 					}
 					case "run": {
 						return withLock(async () => {
 							const id = need(p.id, "id", a);
-							assertOwned(id);
 							const t = await ops.run(id);
 							return text(`Sent now:\n${show(t)}`, { action: a, id: t.id });
 						});

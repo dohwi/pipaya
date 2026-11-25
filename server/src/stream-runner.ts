@@ -70,7 +70,7 @@ export async function retryDroppedMidStream(opts: MidStreamRetryOptions): Promis
 		}
 		const delayMs = kind === "unknown" ? cfg.baseDelayMs : retryDelayMs({ baseDelayMs: cfg.baseDelayMs, maxAgentDelayMs: cfg.maxDelayMs }, attempt);
 		const reason = retryReason(last.errorMessage);
-		opts.onRetry?.({ attempt, maxRetries, delayMs, ...(last.content.length ? { restart: true as const } : {}), ...(reason ? { reason } : {}) });
+		opts.onRetry?.({ attempt, maxRetries, delayMs, restart: true, ...(reason ? { reason } : {}) });
 
 		const waited = await opts.sleep(delayMs);
 		if (waited.forceStopped) return { attempts, aborted: false, forceStopped: true, error: null };

@@ -141,14 +141,18 @@ export class PeerService {
 	/** Questions already reported to a watcher (`sessionId:toolCallId`), so a restart or replay cannot report one twice. */
 	private reported = new Set<string>();
 
-	/** Async mutex serializing mutating peer/group operations (`create`, `manageAsync`, `groupAsync`). */
-	private mutex: Promise<void> = Promise.resolve();
+	/** Per-session async locks serializing `create` mutations for the same caller without blocking other sessions. */
+	private createLocks = new Map<string, Promise<void>>();
 
-	private withLock<T>(fn: () => Promise<T> | T): Promise<T> {
-		const prev = this.mutex;
+	private withCreateLock<T>(selfId: string, fn: () => Promise<T> | T): Promise<T> {
+		const prev = this.createLocks.get(selfId) ?? Promise.resolve();
 		let release!: () => void;
-		this.mutex = new Promise<void>((resolve) => { release = resolve; });
-		return prev.then(fn).finally(() => release());
+		const next = new Promise<void>((resolve) => { release = resolve; });
+		this.createLocks.set(selfId, next);
+		return prev.then(fn).finally(() => {
+			if (this.createLocks.get(selfId) === next) this.createLocks.delete(selfId);
+			release();
+		});
 	}
 
 	/** Watchers (who asked for `notify`) live in the database, so a restart does not lose them. They get one report per ended run. */
@@ -239,6 +243,7 @@ export class PeerService {
 	forget(id: string): void {
 		this.sends.delete(id);
 		this.chains.delete(id);
+		this.createLocks.delete(id);
 		const prefix = `${id}:`;
 		for (const k of this.reported) if (k.startsWith(prefix)) this.reported.delete(k);
 	}
@@ -354,25 +359,26 @@ export class PeerService {
 	}
 
 	/** `peer(action=create)`: a new session that starts on `message`. The caller hears when it ends or asks something, unless `notify` is false. */
-	create(selfId: string, input: PeerCreateInput): Promise<string> {
-		return this.withLock(async () => {
+	async create(selfId: string, input: PeerCreateInput): Promise<string> {
+		const notify = input.notify ?? true;
+		const { r, ownName } = await this.withCreateLock(selfId, async () => {
 			const count = (this.sends.get(selfId) ?? 0) + 1;
 			if (count > MAX_SENDS_PER_RUN) throw conflict(`at most ${MAX_SENDS_PER_RUN} peer messages per run; stop and report to the user instead`);
 			this.sends.set(selfId, count);
 			const own = this.host.store.get(selfId);
-			const notify = input.notify ?? true;
-			const r = await this.host.create({ title: input.title, cwd: input.cwd ?? (own ? workDirOf(own) : undefined), provider: input.provider, model: input.model, thinkingLevel: input.thinkingLevel }, selfId);
-			if (input.purpose) this.host.update(r.id, { purpose: input.purpose.slice(0, 200) });
-			if (notify) this.host.store.watch(r.id, selfId);
-			try {
-				await this.host.deliver(r.id, peerMessage(own?.name, input.message), "prompt");
-			} catch (e) {
-				this.host.store.unwatch(r.id);
-				this.host.remove(r.id); // a session that never got its task is of no use
-				throw e;
-			}
-			return `Created @${r.name} (${r.provider}/${r.model}, ${r.cwd}) and gave it the task. ${notify ? "You get a report when it ends its run or asks a question." : "Use peer(action=read) to check on it."}`;
+			const created = await this.host.create({ title: input.title, cwd: input.cwd ?? (own ? workDirOf(own) : undefined), provider: input.provider, model: input.model, thinkingLevel: input.thinkingLevel }, selfId);
+			if (input.purpose) this.host.update(created.id, { purpose: input.purpose.slice(0, 200) });
+			if (notify) this.host.store.watch(created.id, selfId);
+			return { r: created, ownName: own?.name };
 		});
+		try {
+			await this.host.deliver(r.id, peerMessage(ownName, input.message), "prompt");
+		} catch (e) {
+			this.host.store.unwatch(r.id);
+			this.host.remove(r.id); // a session that never got its task is of no use
+			throw e;
+		}
+		return `Created @${r.name} (${r.provider}/${r.model}, ${r.cwd}) and gave it the task. ${notify ? "You get a report when it ends its run or asks a question." : "Use peer(action=read) to check on it."}`;
 	}
 
 	/** A session of this server by name, closed ones too (`peer(action=close|resume|delete|rename|set)` resume). */
@@ -454,16 +460,6 @@ export class PeerService {
 			case "dissolve":
 				return this.host.groupOps.dissolve(need());
 		}
-	}
-
-	/** Mutex-serialized async wrapper around `manage` for callers that can await. */
-	manageAsync(selfId: string, name: string, action: ManageAction, a: ManageArgs = {}): Promise<string> {
-		return this.withLock(() => this.manage(selfId, name, action, a));
-	}
-
-	/** Mutex-serialized async wrapper around `group` for callers that can await. */
-	groupAsync(selfId: string, action: "create" | "add" | "remove" | "dissolve", a: { group?: string; members?: string[]; name?: string }): Promise<string> {
-		return this.withLock(() => this.group(selfId, action, a));
 	}
 
 	/** `peer(action=read)`: the latest messages of another session, text only. */

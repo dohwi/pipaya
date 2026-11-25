@@ -198,8 +198,6 @@ export class Scheduler {
 	private inflight = new Set<string>();
 	/** Consecutive `skipped_busy` retries for a one-time task when `retryBusyOnceMs > 0`. */
 	private busyRetries = new Map<string, number>();
-	/** Async mutex serializing async schedule mutations. */
-	private mutex: Promise<void> = Promise.resolve();
 	/** Last timestamp (from `this.now()`) when `prune()` executed; throttles write locks on `list()`. */
 	private lastPruneAt = -Infinity;
 	private now: () => number;
@@ -218,14 +216,6 @@ export class Scheduler {
 		this.maxBusyRetries = Math.max(0, Math.floor(opts.maxBusyRetries ?? 3));
 		this.onChange = opts.onChange ?? (() => {});
 		this.log = opts.log ?? (() => {});
-	}
-
-	/** Serializes async schedule mutations so concurrent updates/runs do not interleave. */
-	withLock<T>(fn: () => Promise<T> | T): Promise<T> {
-		const prev = this.mutex;
-		let release!: () => void;
-		this.mutex = new Promise<void>((resolve) => { release = resolve; });
-		return prev.then(fn).finally(() => release());
 	}
 
 	// ── reading ──

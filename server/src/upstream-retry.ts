@@ -223,6 +223,7 @@ export function withUpstreamRetry<A extends [unknown, unknown, { signal?: AbortS
 			zeroOutputStreak = 0;
 		}
 		const out = createAssistantMessageEventStream();
+		let committed = false;
 		void (async () => {
 			let attempt = 0;
 			let warmupAttempts = 0;
@@ -243,7 +244,7 @@ export function withUpstreamRetry<A extends [unknown, unknown, { signal?: AbortS
 			for (;;) {
 				let kind: UpstreamErrorKind | undefined;
 				const pending: AssistantMessageEvent[] = [];
-				let committed = false;
+				committed = false;
 				let failure: AssistantMessage | undefined;
 				const callArgs = (zeroOutputStreak >= 2 ? [args[0], nudgeZeroOutputContext(args[1], zeroOutputStreak), ...args.slice(2)] : args) as A;
 				try {
@@ -304,6 +305,7 @@ export function withUpstreamRetry<A extends [unknown, unknown, { signal?: AbortS
 		})().catch((e) => {
 			const message = e instanceof Error ? e.message : String(e);
 			const error = { role: "assistant", content: [], stopReason: "error", errorMessage: message, timestamp: Date.now() } as unknown as AssistantMessage;
+			if (committed) markCommittedMidStreamError(error);
 			out.push({ type: "error", reason: "error", error });
 			out.end(error);
 		});
@@ -311,10 +313,13 @@ export function withUpstreamRetry<A extends [unknown, unknown, { signal?: AbortS
 	};
 }
 
+const isProgrammingError = (e: unknown): boolean =>
+	e instanceof TypeError || e instanceof RangeError || e instanceof SyntaxError || e instanceof ReferenceError;
+
 /**
  * Retries a one-shot `completeSimple` call on known transient upstream errors (502/503/504, socket reset, zero output, proxy warm-up)
- * and gives an unclassified ("unknown") error a single retry (matching `withUpstreamRetry`).
- * Permanent errors return immediately.
+ * and gives an unclassified ("unknown") upstream error a single retry (matching `withUpstreamRetry`).
+ * Permanent errors and local programming errors (TypeError, RangeError, SyntaxError, ReferenceError) return/throw immediately.
  */
 export async function completeWithUpstreamRetry(
 	inner: (ctx: Context) => Promise<AssistantMessage>,
@@ -337,7 +342,7 @@ export async function completeWithUpstreamRetry(
 		try {
 			reply = await inner(callCtx);
 		} catch (e) {
-			if (signal?.aborted || attempt >= opts.maxRetries) throw e;
+			if (signal?.aborted || attempt >= opts.maxRetries || isProgrammingError(e)) throw e;
 			const message = e instanceof Error ? e.message : String(e);
 			const probe = { role: "assistant", stopReason: "error", errorMessage: message } as AssistantMessage;
 			const kind = classifyUpstreamError(probe);

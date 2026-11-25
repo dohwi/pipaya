@@ -261,7 +261,7 @@ export function subagentReport(messages: readonly AgentMessage[], limit: Subagen
 	const { text, error } = finalText(messages);
 	const askedForTools = last?.content.some((c) => c.type === "toolCall");
 	const reason = limit === "maxTurns" ? "the model call budget was reached (maxTurns)"
-		: limit === "repeatedTools" ? `the same read-only tool call returned unchanged results ${maxRepeated} times in a row`
+		: limit === "repeatedTools" ? `the same tool call returned unchanged results ${maxRepeated} times in a row`
 		: `the ${timeoutMs / 1000}s time limit was ${timedOut ? "reached" : "nearly reached"}`;
 	const note = `[Subagent ended after ${turns} model call${turns === 1 ? "" : "s"}: ${reason}. The answer may be incomplete.]`;
 	if (!timedOut && text && !error && !askedForTools) return `${text}\n\n${note}`;

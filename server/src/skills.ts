@@ -512,7 +512,7 @@ const xmlEscape = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").
 /** The block appended to the system prompt; same shape pi uses so skills stay portable. */
 export function skillsPrompt(skills: SkillRef[]): string {
 	const one = (s: string) => xmlEscape(s.replace(/\s+/g, " ").trim());
-	const items = skills.map((s) => `- ${one(s.name)}: ${one(s.description)} (${xmlEscape(s.path)})`);
+	const items = skills.map((s) => `- ${one(s.name)}: ${one(s.description)} (${s.path})`);
 	return [
 		"Skills: when a task matches one, read its file first; resolve relative paths against the file's directory.",
 		"<available_skills>",

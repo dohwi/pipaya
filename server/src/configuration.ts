@@ -128,7 +128,7 @@ export const DelegatePolicy = Type.Object({
 	models: Type.Array(Type.String({ minLength: 3, maxLength: 200 }), { maxItems: 50, description: "provider/model entries the allowlist permits" }),
 	maxConcurrent: Type.Integer({ minimum: 1, maximum: 8, description: "Subagents running at once per session" }),
 	maxCalls: Type.Integer({ minimum: 1, maximum: 50, description: "delegate calls per run of the calling session" }),
-	maxTurns: Type.Integer({ minimum: 1, maximum: MAX_SUBAGENT_TURNS, description: "Upper bound on a subagent's model calls, whatever its role file asks for" }),
+	maxTurns: Type.Integer({ minimum: 1, maximum: 50, description: "Upper bound on a subagent's model calls, whatever its role file asks for" }),
 }, { additionalProperties: false });
 export type DelegatePolicyValue = Static<typeof DelegatePolicy> & { roles: "defined" | "any" };
 export const DEFAULT_DELEGATE_POLICY: DelegatePolicyValue = { roles: "defined", policy: "defined", models: [], maxConcurrent: 4, maxCalls: 12, maxTurns: MAX_SUBAGENT_TURNS };

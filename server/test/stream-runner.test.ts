@@ -171,7 +171,7 @@ describe("retryDroppedMidStream", () => {
 		expect(drops).toBe(1);
 		expect(continues).toBe(1);
 		expect(notices).toHaveLength(1);
-		expect(notices[0]!.restart).toBeUndefined();
+		expect(notices[0]!.restart).toBe(true);
 		expect(messages).toHaveLength(1);
 		expect((messages[0] as AssistantMessage).stopReason).toBe("stop");
 	});
