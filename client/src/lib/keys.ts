@@ -11,6 +11,7 @@ import { msg } from "./i18n";
 export type ActionId =
   | "toggleSidebar"
   | "toggleFiles"
+  | "toggleDock"
   | "renameTab"
   | "newChat"
   | "clearChat"
@@ -100,6 +101,12 @@ const BASE: Omit<ActionDef, "group">[] = [
     label: msg("파일 뷰어 접기 / 펼치기"),
     hint: msg("오른쪽 파일 사이드바를 접거나 펼칩니다. 좁은 화면에서는 파일 서랍을 열고 닫습니다"),
     default: "Mod+Shift+E",
+  },
+  {
+    id: "toggleDock",
+    label: msg("확장 패널 접기 / 펼치기"),
+    hint: msg("오른쪽 확장 패널을 접거나 펼칩니다"),
+    default: "Mod+Shift+B",
   },
   {
     id: "renameTab",

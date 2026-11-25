@@ -533,11 +533,9 @@
 	<div class="brandrow" data-logo-frame>
 		<PipayaMark tone="color" size={26} />
 		<Wordmark size={16} />
-		<!-- folds the sidebar into the rail; on a phone it closes the drawer instead (it had no visible way out but the scrim) -->
+		<!-- on a phone, closes the drawer (it has no edge resize handle; desktop folds by dragging or clicking the edge) -->
 		{#if viewport.narrow}
 			<IconButton icon="x" label={t("사이드바 닫기")} title={t("사이드바 닫기") + hint} class="foldbtn" onclick={closeDrawer} />
-		{:else}
-			<IconButton icon="sidebar" label={t("사이드바 접기")} title={t("사이드바 접기") + hint} class="foldbtn" onclick={() => app.sidebar.toggleCollapsed()} />
 		{/if}
 	</div>
 	<ExtensionMount slot="sidebar.top" />
