@@ -6,7 +6,7 @@
 	import Modal from "../ui/Modal.svelte";
 	import SessionsPanel from "./SessionsPanel.svelte";
 
-	/** A server's conversation list: close, reopen and delete conversations by folder. Opened from the server's header in the sidebar. */
+	/** A server's deleted (closed) conversation list: restore or permanently delete conversations by folder. Opened from the server's header in the sidebar. */
 	let { serverId }: { serverId: string } = $props();
 	const server = $derived(app.servers.find((s) => s.id === serverId));
 	const filter = $derived(app.sessionsFilter);
@@ -17,7 +17,7 @@
 	let count = $state<number | null>(null);
 	let busy = $state(false);
 	let reload = $state<(() => void) | undefined>();
-	const title = t("대화 목록");
+	const title = t("삭제된 대화 목록");
 	const sub = $derived([server ? app.serverLabel(server) : null, filter?.cwd].filter(Boolean).join(" · ") || null);
 </script>
 

@@ -105,7 +105,7 @@
 			</span>
 			{#if folded && dcount}<span class="cbadge tint {ACTIVITY_TONE[dstate]}" title={t("{n}개", { n: dcount }) + (dstate !== "idle" ? ` · ${ACTIVITY_LABEL[dstate]}` : "")}>{dcount}</span>{/if}
 		</button>
-		<ListButton serverId={n.server.id} filter={{ cwd: d.path }} name={t("대화 목록 관리")} tip={t("이 폴더의 대화 목록 관리")} />
+		<ListButton serverId={n.server.id} filter={{ cwd: d.path }} name={t("삭제된 대화 목록")} tip={t("이 폴더의 삭제된 대화 목록")} />
 		<NewButton {n} workdir={asWorkdir(d.path, n.root)} {key} name={parent} tip={t("이 폴더에서 새 대화 또는 터미널")} />
 	</div>
 	{#if !folded && !empty}
