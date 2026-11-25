@@ -38,9 +38,9 @@
 		gap: 12px;
 		align-items: flex-start;
 		padding: 12px;
-		/* a borderless tinted surface (no box-in-box): the group tint on a dialog, the page colour inside a tinted .set-group */
+		/* hairline tinted card on a dialog (--bg-side + 1px --border); borderless page-coloured row inside a bordered .set-group (no box-in-box) */
 		background: var(--item-bg, var(--bg-side));
-		border: 1px solid transparent;
+		border: 1px solid var(--item-border, var(--border));
 		border-radius: var(--radius-sm);
 	}
 	.info {

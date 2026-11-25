@@ -32,7 +32,8 @@
 
 <style>
 	.es { margin: 0; color: var(--text-faint); font-size: var(--fs-sm); line-height: 20px; overflow-wrap: anywhere; }
-	.card { padding: 16px 12px; background: var(--bg); border-radius: var(--radius); }
+	/* hairline tinted box on a dialog (--bg-side + 1px --border); borderless page-coloured box inside a bordered .set-group (no box-in-box) */
+	.card { padding: 16px 12px; background: var(--item-bg, var(--bg-side)); border: 1px solid var(--item-border, var(--border)); border-radius: var(--radius-sm); }
 	.plain { padding: 24px 12px; text-align: center; }
 	.dashed { padding: 16px; border: 1px dashed var(--border); border-radius: var(--radius); text-align: center; }
 	.compact { padding-block: 12px; }

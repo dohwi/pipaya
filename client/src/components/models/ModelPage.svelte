@@ -344,13 +344,12 @@
 	:global(.btn.danger-text) {
 		align-self: flex-start;
 	}
-	/* the abilities: one card of switch rows (like the agent tools list), a hairline between rows */
+	/* the abilities: borderless page-tinted surface inside .set-group (no box-in-box, matching ListItem), a hairline between rows */
 	.capsw {
 		display: flex;
 		flex-direction: column;
-		background: var(--bg);
-		border: 1px solid var(--border);
-		border-radius: var(--radius);
+		background: var(--item-bg, var(--bg));
+		border-radius: var(--radius-sm);
 	}
 	.caprow {
 		display: flex;

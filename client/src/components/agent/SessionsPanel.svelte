@@ -248,8 +248,9 @@
 		gap: 12px;
 	}
 	.group {
-		/* a borderless tinted group (no box-in-box); a row sits 12px in, like the header, so every control lines up */
+		/* hairline tinted group (no box-in-box); a row sits 12px in, like the header, so every control lines up */
 		background: var(--bg-set);
+		border: 1px solid var(--border);
 		border-radius: var(--radius-sm);
 		padding: 4px 0;
 		overflow: hidden;

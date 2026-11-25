@@ -881,15 +881,17 @@ kbd {
 	font-feature-settings: "calt" 0, "liga" 0;
 }
 
-/* One group of related settings (a section label and its rows) on its own tinted card, so groups read apart at a glance. */
+/* One group of related settings (a section label and its rows) on its own hairline tinted card, so groups read apart at a glance. */
 .set-group {
 	padding: var(--dlg-gap);
 	background: var(--bg-set);
+	border: 1px solid var(--border);
 	--fa-bg: var(--bg-set); /* a sticky form footer inside (.form-actions) covers the card's own colour, edge to edge */
 	--fa-px: var(--dlg-gap);
-	border-radius: var(--radius-sm); /* a borderless tinted surface, 8px */
+	border-radius: var(--radius-sm); /* hairline tinted group, 8px */
 	/* choice cards inside: unselected sit flat on the group, the selected one lifts onto the page colour with a dark ring */
-	--item-bg: var(--bg); /* a ListItem on this tint reads as the page colour, borderless */
+	--item-bg: var(--bg); /* a ListItem / inner group on this tint reads as the page colour, borderless (no box-in-box) */
+	--item-border: transparent;
 	--card-bg: transparent;
 	--card-border: var(--border-strong);
 	--card-on-bg: var(--bg);
