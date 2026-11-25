@@ -361,6 +361,10 @@
 		gap: 4px;
 		flex: none;
 	}
+	/* 32px sm buttons inside the 44px Header bar: keep focus ring inside to prevent clipping */
+	.ftools :global(.iconbtn:focus-visible) {
+		outline-offset: -2px;
+	}
 	@media (max-width: 640px) {
 		.ftools {
 			display: none;

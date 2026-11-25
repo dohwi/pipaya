@@ -1090,6 +1090,13 @@
 		gap: 4px;
 		flex: none;
 	}
+	/* Pull the 32px sm button's 8px right inset outside the 12px gutter so the 16px glyph right edge aligns with the bar margin */
+	.mbar .fact :global(.iconbtn:last-child) {
+		margin-right: -8px;
+	}
+	.mbar :global(.iconbtn:focus-visible) {
+		outline-offset: -2px;
+	}
 	.cnav {
 		display: inline-flex;
 		align-items: center;
@@ -1413,7 +1420,7 @@
 		position: fixed;
 		z-index: var(--z-popover);
 		width: min(480px, calc(100vw - 24px));
-		border-radius: var(--radius-md);
+		border-radius: var(--radius);
 		border: 1px solid var(--border-strong);
 		background: var(--bg-elev);
 		box-shadow: var(--shadow-overlay);
@@ -1436,6 +1443,10 @@
 		cursor: grab;
 		user-select: none;
 		-webkit-user-select: none;
+	}
+	/* Pull the 32px sm close button's 8px right inset outside the 12px card padding so the 16px glyph aligns with .fcard's right content edge */
+	.chead :global(.iconbtn:last-child) {
+		margin-right: -8px;
 	}
 	.float-pop.moving .chead {
 		cursor: grabbing;

@@ -341,8 +341,8 @@
 		flex: none;
 	}
 	.fi svg {
-		width: 15px;
-		height: 15px;
+		width: 16px;
+		height: 16px;
 		display: block;
 	}
 </style>

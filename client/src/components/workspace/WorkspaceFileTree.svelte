@@ -46,7 +46,7 @@
 
 	// Avoid stacking left sidebar drawer and right file drawer on narrow viewports.
 	$effect(() => {
-		if (app.sidebar.open && open && typeof window !== "undefined" && window.innerWidth <= 900) {
+		if (app.sidebar.open && open && typeof window !== "undefined" && window.innerWidth <= 860) {
 			app.filesOpen = false;
 		}
 	});
@@ -55,7 +55,7 @@
 	$effect(() => {
 		if (!open) return;
 		const onKey = (e: KeyboardEvent) => {
-			if (e.key === "Escape" && typeof window !== "undefined" && window.innerWidth <= 900) {
+			if (e.key === "Escape" && typeof window !== "undefined" && window.innerWidth <= 860) {
 				e.preventDefault();
 				app.filesOpen = false;
 			}
@@ -65,7 +65,7 @@
 	});
 
 	function onDrawerTouchStart(e: TouchEvent) {
-		if (!open || e.touches.length !== 1 || typeof window === "undefined" || window.innerWidth > 900) return;
+		if (!open || e.touches.length !== 1 || typeof window === "undefined" || window.innerWidth > 860) return;
 		const pt = e.touches[0]!;
 		touchStart = { x: pt.clientX, y: pt.clientY, t: Date.now(), locked: null };
 	}
@@ -109,7 +109,7 @@
 	async function pickFile(path: string, mode?: "file" | "diff") {
 		await workspaceViewer.openFile(path, mode);
 		// On narrow screens, slide the drawer away right away so the opened file tab takes focus cleanly.
-		if (typeof window !== "undefined" && window.innerWidth <= 900) {
+		if (typeof window !== "undefined" && window.innerWidth <= 860) {
 			app.filesOpen = false;
 		}
 	}
@@ -167,7 +167,7 @@
 				class="trow dir"
 				draggable="true"
 				ondragstart={(e) => startFileDrag(e, entry.path, true)}
-				style:padding-left="{12 + depth * 14}px"
+				style:padding-left="{12 + depth * 16}px"
 				onclick={() => workspaceViewer.toggleDir(entry.path)}
 				title={entry.path}
 			>
@@ -188,7 +188,7 @@
 				class:on={workspaceViewer.activeFile === entry.path}
 				class:opened={workspaceViewer.openFiles.includes(entry.path) && workspaceViewer.activeFile !== entry.path}
 				class:recent
-				style:padding-left="{28 + depth * 14}px"
+				style:padding-left="{28 + depth * 16}px"
 				onclick={() => pickFile(entry.path)}
 				title={entry.path}
 			>
@@ -241,8 +241,8 @@
 			{/if}
 		</div>
 		<div class="hact">
-			<IconButton icon="retry" size="sm" label={t("새로고침")} onclick={() => workspaceViewer.refreshTree({ preserveOpenDirs: true })} />
-			<IconButton icon="x" size="sm" label={t("닫기")} onclick={() => (app.filesOpen = false)} />
+			<IconButton icon="retry" label={t("새로고침")} onclick={() => workspaceViewer.refreshTree({ preserveOpenDirs: true })} />
+			<IconButton icon="x" label={t("닫기")} onclick={() => (app.filesOpen = false)} />
 		</div>
 	</header>
 
@@ -375,7 +375,7 @@
 		display: flex;
 		flex-direction: column;
 	}
-	@media (min-width: 901px) {
+	@media (min-width: 861px) {
 		.ftree:not(.open) {
 			flex-basis: 0;
 			width: 0;
@@ -398,12 +398,13 @@
 		z-index: 2;
 	}
 	.head {
+		box-sizing: content-box;
 		flex: none;
 		display: flex;
 		align-items: center;
 		gap: 8px;
 		height: 44px;
-		padding: 0 8px 0 12px;
+		padding: 0 12px;
 		background: var(--bg-side);
 		border-bottom: 1px solid var(--border);
 	}
@@ -436,6 +437,14 @@
 		align-items: center;
 		gap: 4px;
 		flex: none;
+	}
+	/* Pull the 38px button's 9.5px right padding outside the 12px gutter so the 19px glyph right edge aligns with Segmented/search below */
+	.hact :global(.iconbtn:last-child) {
+		margin-right: -9.5px;
+	}
+	/* 38px button in a 44px bar: draw the focus ring inside so it never clips against the bar edge */
+	.hact :global(.iconbtn:focus-visible) {
+		outline-offset: -2px;
 	}
 	.tctrl {
 		flex: none;
@@ -608,7 +617,7 @@
 		padding: 8px 12px;
 	}
 
-	@media (max-width: 900px) {
+	@media (max-width: 860px) {
 		.fscrim {
 			display: block;
 			position: fixed;
