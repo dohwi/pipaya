@@ -221,6 +221,7 @@
 		border-left: 3px solid var(--border-strong);
 		color: var(--text-faint);
 		font-size: var(--fs-sm);
+		line-height: 20px; /* whole-pixel line box (vs 20.15px at 1.55) so inline chips sit cleanly in quotes */
 		white-space: pre-wrap;
 	}
 	.txt {

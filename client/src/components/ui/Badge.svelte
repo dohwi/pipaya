@@ -66,16 +66,13 @@
 		padding: 0 6px 1px;
 		font-size: var(--fs-2xs);
 	}
-	/* an icon inside a badge follows its text size */
+	/* even 12px icon in an even 18/22px badge; -1px gives back the badge's 1px bottom padding (which lifts text only) so the icon stays centred */
 	.badge :global(svg) {
 		flex: none;
-		width: 11px;
-		height: 11px;
-		stroke-width: 2.4;
-	}
-	.md :global(svg) {
 		width: 12px;
 		height: 12px;
+		margin-bottom: -1px;
+		stroke-width: 2.4;
 	}
 	.mono {
 		font-family: var(--mono);

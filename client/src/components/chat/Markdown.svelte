@@ -504,7 +504,9 @@
 		text-decoration: none;
 		font-size: 0.88em;
 		line-height: 18px; /* whole-pixel 20px box (18 + 2 padding), matching TokenText */
-		vertical-align: -1px; /* measured: aligns chip ink with surrounding 24px body text (<= 0.5px) */
+		vertical-align: middle; /* box-centred so icon-bearing chips and text-only @mentions share one y-axis */
+		position: relative;
+		top: -1px; /* measured: lifts middle (x-height/2) onto the 24px line and Hangul ink centre */
 		cursor: pointer;
 		transition: none; /* instant hover tint avoids GPU background-color layer promotion snapping inline chips by 1px */
 	}
@@ -573,7 +575,9 @@
 		font-size: 0.88em;
 		font-weight: 600;
 		line-height: 18px; /* whole-pixel 20px box (18 + 2 padding), matching TokenText */
-		vertical-align: -1px; /* measured: aligns chip ink with surrounding 24px body text (<= 0.5px) */
+		vertical-align: middle; /* box-centred so icon-bearing chips and text-only @mentions share one y-axis */
+		position: relative;
+		top: -1px; /* measured: lifts middle (x-height/2) onto the 24px line and Hangul ink centre */
 		cursor: pointer;
 		transition: none; /* instant hover tint avoids GPU background-color layer promotion snapping inline chips by 1px */
 	}
