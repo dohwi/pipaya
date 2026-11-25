@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { asWorkdir, connectionState, dirKey, edgeOf, groupKey, headMenuEntries, newKey, newMenuEntries, orderServers, parentPath, rowMenuEntries, shortName, targetId, unreachable, type RowActions, type ServerState } from "../src/lib/sidebar-model";
+import { asWorkdir, connectionState, dirKey, edgeOf, groupKey, headMenuEntries, leafName, newKey, newMenuEntries, orderServers, parentPath, rowMenuEntries, shortName, targetId, unreachable, type RowActions, type ServerState } from "../src/lib/sidebar-model";
 
 describe("server state", () => {
 	test("the app's connection state maps onto the sidebar's", () => {
@@ -43,6 +43,17 @@ describe("folder labels", () => {
 	});
 	test("a path with no segments falls back to the path itself", () => {
 		expect(shortName("/", undefined)).toBe("/");
+	});
+	test("leafName shows only the folder's own name and keeps ~ for home", () => {
+		expect(leafName("/h/a/b/lib", "/h")).toBe("lib");
+		expect(leafName("/h/work", "/h")).toBe("work");
+		expect(leafName("/h", "/h")).toBe("~");
+		expect(leafName("C:\\Users\\me\\work\\app", "C:\\Users\\me")).toBe("app");
+		expect(leafName("C:\\Users\\me", "C:\\Users\\me")).toBe("~");
+		expect(leafName("/", undefined)).toBe("/");
+		expect(parentPath("/h/work/tools/widget", "/h", leafName("/h/work/tools/widget", "/h"))).toBe("~/work/tools");
+		expect(parentPath("/h/work", "/h", leafName("/h/work", "/h"))).toBe("~");
+		expect(parentPath("/h", "/h", leafName("/h", "/h"))).toBe("");
 	});
 	test("the dim path does not repeat the label: the folder's own tail is cut", () => {
 		expect(parentPath("/h/work/meet-clone", "/h", shortName("/h/work/meet-clone", "/h"))).toBe("~");

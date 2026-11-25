@@ -38,7 +38,7 @@
 	import { DragMarks } from "../../lib/drag-marks.svelte";
 	import { dirPaneCount, workDir, type DirBlock, type Tab } from "../../lib/nav";
 	import { dissolveProject, flattenBlocks, isManualRoot, joinProject, leaveProject, newProjectId, projectKey, type SidebarBlock } from "../../lib/projects";
-	import { dirKey, connectionState, edgeOf, headMenuEntries, newKey, newMenuEntries, orderServers, projectMenuEntries, rowMenuEntries, shortName, targetId, type RowActions } from "../../lib/sidebar-model";
+	import { dirKey, connectionState, edgeOf, headMenuEntries, leafName, newKey, newMenuEntries, orderServers, projectMenuEntries, rowMenuEntries, shortName, targetId, type RowActions } from "../../lib/sidebar-model";
 	import type { Group, Session } from "../../lib/types";
 	import { isTerminalId, platformName } from "../../lib/terminal";
 	import { setSidebarCtx, type MenuTarget, type SidebarNode } from "../../lib/sidebar-ctx";
@@ -81,8 +81,8 @@
 
 	/** `~/workspace/x` for display; each server has its own home */
 	const pretty = (n: Node, path: string) => tilde(path, n.home);
-	/** A folder's label on server `n` (see sidebar-model). */
-	const shortLabel = (n: Node, path: string) => app.sidebar.dirName(n.server.id, path) ?? shortName(path, n.home);
+	/** A folder's label on server `n`: its own name, leaving `parentPath` to disambiguate twins. */
+	const shortLabel = (n: Node, path: string) => app.sidebar.dirName(n.server.id, path) ?? leafName(path, n.home);
 
 	const nodes = $derived.by<Node[]>(() => {
 		const list = app.servers.map((server) => {
@@ -127,7 +127,7 @@
 	 * The row that stands for what is open: the open tab, or, while its folder (or the project holding it) is folded, that
 	 * folder's row. Only one of them is ever drawn: a folded row hides the tabs under it.
 	 */
-	const OPEN_ROW = ".srv:not(.off) :is(.item.active, .dir.folded.cur, .proj.shown)";
+	const OPEN_ROW = ".srv:not(.off) :is(.item.active, .dir.folded.cur, .dir.empty.cur, .proj.shown)";
 	/** The open row, when the list has it out of view (null while it is visible or missing). */
 	function offscreen(host: HTMLElement): HTMLElement | null {
 		const row = host.querySelector<HTMLElement>(OPEN_ROW);
@@ -671,9 +671,12 @@
 		min-width: 20px;
 		padding: 0 3px 2px; /* same 1px lift as the base badge (measured at 3x: digits centred in the circle; 4px sat them 1px high) */
 	}
-	/* a quiet count is a bare number, like the server's; only a state inside (working, asking, done, failed) gets the tinted circle */
-	:global(:where(.side) .cbadge.neutral) {
+	/* folded counts are bare numbers (muted while idle, coloured for working/done); only states needing attention (asking, failed) keep the tinted circle */
+	:global(:where(.side) .cbadge.neutral),
+	:global(:where(.side) .cbadge.tint:is(.info, .ok)) {
 		background: transparent;
+	}
+	:global(:where(.side) .cbadge.neutral) {
 		font-weight: 500;
 	}
 	:global(:where(.side) .dirnew) {

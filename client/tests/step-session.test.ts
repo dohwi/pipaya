@@ -1,11 +1,14 @@
 import { describe, expect, test } from "bun:test";
 import { attentionTarget, stepRowTarget, stepWorkspaceTarget, type AttentionMarks, type StepServer } from "../src/lib/step-session";
+import { projectKey, type SidebarBlock } from "../src/lib/projects";
 import { dirKey, groupKey } from "../src/lib/sidebar-model";
 import type { DirBlock } from "../src/lib/nav";
 
 const tab = (id: string) => ({ kind: "session", id }) as never;
 const dir = (path: string, ...ids: string[]): DirBlock => ({ path, tabs: ids.map(tab) });
 const grp = (id: string, ...members: string[]) => ({ kind: "group", id, members: members.map((m) => ({ id: m })) }) as never;
+const proj = (root: string, ...dirs: DirBlock[]): SidebarBlock => ({ kind: "project", root, dirs });
+const solo = (d: DirBlock): SidebarBlock => ({ kind: "dir", dir: d });
 
 const A: StepServer = { id: "A", dirs: [dir("/a", "a1", "a2"), dir("/b", "a3")] };
 const B: StepServer = { id: "B", dirs: [dir("/c", "b1", "b2")] };
@@ -29,14 +32,46 @@ describe("stepRowTarget", () => {
 		expect(row([A, B], onlyB, "A", "a3", 1)).toEqual({ server: "B", id: "b1", dir: "/c" });
 		expect(row([A, B], onlyB, "B", "b2", 1)).toEqual({ server: "A", id: "a1", dir: "/a" });
 	});
-	test("a folded split tab shows its first pane only; a folded server or project is passed by", () => {
+	test("a folded split tab shows its first pane only; a folded server is passed by", () => {
 		const G: StepServer = { id: "A", dirs: [dir("/a", "x"), { path: "/g", tabs: [grp("g", "p", "q")] }, dir("/z", "y")] };
 		const none = () => false;
 		expect(row([G], none, "A", "x", 1)).toEqual({ server: "A", id: "p" });
 		expect(row([G], none, "A", "p", 1)).toEqual({ server: "A", id: "q" });
 		expect(row([G], none, "A", "p", 1, [groupKey("g")])).toEqual({ server: "A", id: "y" });
 		expect(row([A, B], all, "A", "a3", 1, ["B"])).toEqual({ server: "A", id: "a1" });
-		expect(row([{ ...A, foldedDirs: ["/b"] }, B], all, "A", "a2", 1)).toEqual({ server: "B", id: "b1" });
+	});
+	test("a folded project is one row that opens the project; an open project walks its folders", () => {
+		const d1 = dir("/p", "p1");
+		const d2 = dir("/p-x", "x1", "x2");
+		const dn = dir("/n", "n1");
+		const S: StepServer = { id: "A", dirs: [d1, d2, dn], blocks: [proj("/p", d1, d2), solo(dn)] };
+		const pFold = [projectKey("A", "/p")];
+		const allFolded = () => true;
+		// stepping up from /n onto the folded project lands on the project itself
+		expect(row([S], allFolded, "A", "n1", -1, pFold)).toEqual({ server: "A", id: "p1", project: "/p" });
+		expect(row([S], allFolded, "A", "n1", 1, pFold)).toEqual({ server: "A", id: "p1", project: "/p" });
+		// from any pane inside the folded project, stepping goes straight to the neighbouring row
+		expect(row([S], allFolded, "A", "p1", 1, pFold)).toEqual({ server: "A", id: "n1", dir: "/n" });
+		expect(row([S], allFolded, "A", "x2", -1, pFold)).toEqual({ server: "A", id: "n1", dir: "/n" });
+		// when nothing is open, forward lands on the folded project first
+		expect(row([S], allFolded, "A", null, 1, pFold)).toEqual({ server: "A", id: "p1", project: "/p" });
+		// empty folded projects are skipped
+		const emptyProj: StepServer = { id: "A", dirs: [dir("/e1"), dir("/e2"), dn], blocks: [proj("/e1", dir("/e1"), dir("/e2")), solo(dn)] };
+		expect(row([emptyProj], allFolded, "A", "n1", -1, [projectKey("A", "/e1")])).toBeNull();
+		// a lone folded project has nowhere else to go when already inside it
+		const loneProj: StepServer = { id: "A", dirs: [d1, d2], blocks: [proj("/p", d1, d2)] };
+		expect(row([loneProj], allFolded, "A", "x1", 1, pFold)).toBeNull();
+		// when the project is unfolded, its worktree rows are walked in order
+		expect(row([S], () => false, "A", "p1", 1)).toEqual({ server: "A", id: "x1" });
+		expect(row([S], () => false, "A", "x2", 1)).toEqual({ server: "A", id: "n1" });
+		expect(row([S], allFolded, "A", "p1", 1)).toEqual({ server: "A", id: "x1", dir: "/p-x" });
+	});
+	test("a folded project inside a folded or unreachable server is skipped", () => {
+		const d1 = dir("/p", "p1");
+		const d2 = dir("/p-x", "x1");
+		const P: StepServer = { id: "B", dirs: [d1, d2], blocks: [proj("/p", d1, d2)] };
+		expect(row([A, P], () => true, "A", "a3", 1, ["B", projectKey("B", "/p")])).toEqual({ server: "A", id: "a1", dir: "/a" });
+		expect(row([A, { ...P, hidden: true }], () => true, "A", "a3", 1, [projectKey("B", "/p")])).toEqual({ server: "A", id: "a1", dir: "/a" });
 	});
 	test("nothing open starts at an end; a single row has nowhere to go", () => {
 		expect(row([A, B], all, "A", null, 1)).toEqual({ server: "A", id: "a1" });
@@ -85,22 +120,30 @@ describe("stepWorkspaceTarget", () => {
 });
 
 describe("stepWorkspaceTarget with projects", () => {
-	const ws = (servers: StepServer[], server: string | null, id: string | null, n: 1 | -1) => {
-		const to = stepWorkspaceTarget(servers, [], { server, id }, n);
-		return to && { server: to.server, id: to.id };
-	};
-	// /p and /p-x are one project (listed together), /n a plain folder
-	const S: StepServer = { id: "A", dirs: [dir("/p", "p1"), dir("/p-x", "x1", "x2"), dir("/n", "n1")] };
-	test("each worktree row is a stop, landing on its first tab", () => {
-		expect(ws([S], "A", "p1", 1)).toEqual({ server: "A", id: "x1" });
-		expect(ws([S], "A", "x2", 1)).toEqual({ server: "A", id: "n1" });
+	const d1 = dir("/p", "p1");
+	const d2 = dir("/p-x", "x1", "x2");
+	const dn = dir("/n", "n1");
+	const dm = dir("/m", "m1");
+	// /p and /p-x are one project (listed together), /n and /m plain folders
+	const S: StepServer = { id: "A", dirs: [d1, d2, dn, dm], blocks: [proj("/p", d1, d2), solo(dn), solo(dm)] };
+	test("when unfolded, each worktree row is a stop, landing on its first tab", () => {
+		expect(stepWorkspaceTarget([S], [], { server: "A", id: "p1" }, 1)).toEqual({ server: "A", id: "x1", dir: "/p-x" });
+		expect(stepWorkspaceTarget([S], [], { server: "A", id: "x2" }, 1)).toEqual({ server: "A", id: "n1", dir: "/n" });
 	});
-	test("the rows of a folded project are passed by", () => {
-		const F: StepServer = { ...S, dirs: [...S.dirs, dir("/m", "m1")], foldedDirs: ["/p", "/p-x"] };
-		expect(ws([F], "A", "n1", 1)).toEqual({ server: "A", id: "m1" });
-		expect(ws([F], "A", "m1", 1)).toEqual({ server: "A", id: "n1" });
-		// from inside the folded project (its tab is open) the step walks out of it
-		expect(ws([F], "A", "x1", 1)).toEqual({ server: "A", id: "n1" });
+	test("when folded, the whole project is one stop that opens the project", () => {
+		const folded = [projectKey("A", "/p")];
+		expect(stepWorkspaceTarget([S], folded, { server: "A", id: "n1" }, -1)).toEqual({ server: "A", id: "p1", project: "/p" });
+		expect(stepWorkspaceTarget([S], folded, { server: "A", id: "m1" }, 1)).toEqual({ server: "A", id: "p1", project: "/p" });
+		// from inside the folded project (any worktree pane) the step moves to the next / previous folder
+		expect(stepWorkspaceTarget([S], folded, { server: "A", id: "x1" }, 1)).toEqual({ server: "A", id: "n1", dir: "/n" });
+		expect(stepWorkspaceTarget([S], folded, { server: "A", id: "p1" }, -1)).toEqual({ server: "A", id: "m1", dir: "/m" });
+		// empty folded projects are skipped
+		const emptyProj: StepServer = { id: "A", dirs: [dir("/e1"), dir("/e2"), dn], blocks: [proj("/e1", dir("/e1"), dir("/e2")), solo(dn)] };
+		expect(stepWorkspaceTarget([emptyProj], [projectKey("A", "/e1")], { server: "A", id: "n1" }, 1)).toEqual({ server: "A", id: "n1", dir: "/n" });
+		// folded project in a folded or unreachable server is skipped
+		const B2: StepServer = { id: "B", dirs: [d1, d2], blocks: [proj("/p", d1, d2)] };
+		expect(stepWorkspaceTarget([A, B2], ["B", projectKey("B", "/p")], { server: "A", id: "a3" }, 1)).toEqual({ server: "A", id: "a1", dir: "/a" });
+		expect(stepWorkspaceTarget([A, { ...B2, hidden: true }], [projectKey("B", "/p")], { server: "A", id: "a3" }, 1)).toEqual({ server: "A", id: "a1", dir: "/a" });
 	});
 });
 

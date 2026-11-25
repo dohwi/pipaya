@@ -7,7 +7,6 @@ import { chooseGroupLayout } from "./layout-picker";
 import { paneToward, panesOf, type Edge } from "./layout";
 import { connectionState, orderServers, unreachable } from "./sidebar-model";
 import { attentionTarget, stepRowTarget, stepWorkspaceTarget, type StepTarget } from "./step-session";
-import { projectKey } from "./projects";
 import { stepFrom, tabPanes } from "./nav";
 import { appTakesKey } from "./terminal";
 import {
@@ -93,14 +92,15 @@ function stepBands() {
   return orderServers(
     app.servers.map((s) => {
       const link = app.links[s.id];
-      return { id: s.id, local: s.local, state: link ? connectionState(link.net) : ("checking" as const), dirs: app.dirsByServer[s.id] ?? [] };
+      return {
+        id: s.id,
+        local: s.local,
+        state: link ? connectionState(link.net) : ("checking" as const),
+        dirs: app.dirsByServer[s.id] ?? [],
+        blocks: app.blocksByServer[s.id] ?? [],
+      };
     }),
-  ).map((b) => ({ id: b.id, dirs: b.dirs, hidden: unreachable(b.state), foldedDirs: foldedProjectDirs(b.id) }));
-}
-
-/** The folders of a server that sit inside a folded project (their rows are hidden under its header). */
-function foldedProjectDirs(serverId: string): string[] {
-  return (app.blocksByServer[serverId] ?? []).flatMap((b) => (b.kind === "project" && app.sidebar.folded.includes(projectKey(serverId, b.root)) ? b.dirs.map((d) => d.path) : []));
+  ).map((b) => ({ id: b.id, dirs: b.dirs, blocks: b.blocks, hidden: unreachable(b.state) }));
 }
 
 /** Focus pane `id` of the open server. A zoomed pane covers its neighbours: it shrinks back so the new one is seen. */
@@ -110,11 +110,19 @@ function focusPane(id: string) {
 }
 
 /**
- * Go where a step landed. A folder row (`dir`) opens like a click on it, on the tab last used there; a tab row opens
- * that pane. Nothing to go to says so, instead of a key that seems dead.
+ * Go where a step landed. A folded project row (`project`) opens the whole project in the tab bar like a click on its
+ * header; a folder row (`dir`) opens like a click on it, on the tab last used there; a tab row opens that pane. Nothing
+ * to go to says so, instead of a key that seems dead.
  */
 function goTo(to: StepTarget | null, none: string) {
   if (!to) return void app.toast(none, "info");
+  if (to.project !== undefined) {
+    if (to.server === app.serverId && app.tabProject?.serverId === to.server && app.tabProject.root === to.project && app.activeTab) {
+      return void app.toast(none, "info");
+    }
+    if (to.server === app.serverId) app.zoomId = null;
+    return app.openProject(to.server, to.project);
+  }
   if (to.dir !== undefined) {
     if (to.server === app.serverId && app.activeTab?.dir.path === to.dir) return void app.toast(none, "info");
     if (to.server === app.serverId) app.zoomId = null;

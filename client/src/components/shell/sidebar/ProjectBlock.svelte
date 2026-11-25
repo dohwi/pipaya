@@ -121,7 +121,8 @@
 	.proj.shown .projtoggle {
 		color: var(--text);
 	}
-	/* the tab bar lists the whole project: its name reads as the open place, like an open folder's */
+	/* the tab bar lists the whole project (or its folded row holds the open tab): its name reads as the open place */
+	.proj.cur .dname,
 	.proj.shown .dname {
 		font-weight: 700;
 	}
@@ -148,7 +149,7 @@
 		text-overflow: ellipsis;
 		white-space: nowrap;
 		font-size: var(--fs-sm);
-		font-weight: 600;
+		font-weight: 500;
 		line-height: 20px; /* whole-pixel line box */
 	}
 	/* a folder's tabs inside a project hang one column further in, under the branch icon (x 68 -> 88) */
