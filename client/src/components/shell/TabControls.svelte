@@ -1,7 +1,6 @@
 <script lang="ts">
 	import { t } from "../../lib/i18n";
 	import { app } from "../../lib/store.svelte";
-	import { workspaceViewer } from "../../lib/workspace-viewer.svelte";
 	import { platformName } from "../../lib/terminal";
 	import { newMenuEntries } from "../../lib/sidebar-model";
 	import Icon from "../ui/Icon.svelte";
@@ -43,19 +42,6 @@
 		title={t("이 폴더에서 새 대화 또는 터미널")}><Icon name="plus" /></button
 	>{/if}
 	{#if count && part !== "add"}<TabCountButton {count} {place} />{/if}
-	{#if part !== "add" && !app.graphOpen && workspaceViewer.sessionId}
-		<button
-			class="add files tap"
-			class:on={app.filesOpen}
-			onclick={() => app.toggleFiles()}
-			aria-label={t("파일 뷰어")}
-			aria-pressed={app.filesOpen}
-			title={t("파일 뷰어 (현재 폴더 · 실시간 변경 확인)")}
-		>
-			<Icon name="folder" />
-			{#if workspaceViewer.changes.length > 0}<span class="fdot" aria-hidden="true"></span>{/if}
-		</button>
-	{/if}
 </div>
 <RowMenu bind:this={menu} bind:open={menuId} />
 
@@ -111,22 +97,5 @@
 			background: var(--bg-hover);
 			color: var(--text);
 		}
-	}
-	.files {
-		position: relative;
-	}
-	.fdot {
-		position: absolute;
-		top: 4px;
-		right: 4px;
-		width: 6px; /* optical 6px indicator matching tab/tree change dots */
-		height: 6px; /* optical 6px indicator matching tab/tree change dots */
-		border-radius: var(--radius-pill);
-		background: var(--warn);
-		pointer-events: none;
-	}
-	.header .fdot {
-		top: 10px;
-		right: 4px;
 	}
 </style>

@@ -207,6 +207,20 @@
 		{/if}
 		<!-- a phone only: "+" and the tab count, the cluster the tab strip carries at its right end on wider screens -->
 		{#if app.serverId && app.net !== "idle"}<span class="tabs"><TabControls place="header" /></span>{/if}
+		<!-- Right workspace drawer toggle: sits at the far right edge of the top NAV, mirroring the left sidebar toggle -->
+		{#if !app.graphOpen && workspaceViewer.sessionId}
+			<button
+				class="tool files-toggle tap"
+				class:on={app.filesOpen}
+				onclick={() => app.toggleFiles()}
+				aria-label={t("파일 뷰어")}
+				aria-pressed={app.filesOpen}
+				title={t("파일 뷰어 (현재 폴더 · 실시간 변경 확인)")}
+			>
+				<Icon name="folder" />
+				{#if workspaceViewer.changes.length > 0}<span class="fdot" aria-hidden="true"></span>{/if}
+			</button>
+		{/if}
 
 	</div>
 </header>
@@ -366,7 +380,8 @@
 		outline-offset: -2px;
 	}
 	@media (max-width: 640px) {
-		.ftools {
+		.ftools,
+		.navsep {
 			display: none;
 		}
 	}
@@ -409,6 +424,31 @@
 		height: 19px;
 		stroke-width: 1.75;
 	}
+	.files-toggle {
+		position: relative;
+		flex: none;
+		/* Pull the 40px button's 10.5px right inset into the 12px capsule padding so the 19px folder glyph aligns with the right edge */
+		margin-right: -8px;
+	}
+	.files-toggle.on {
+		background: var(--bg-hover);
+		color: var(--text);
+	}
+	@media (min-width: 601px) {
+		:global(main:has(> [data-part="tabbar"])) > header .files-toggle.on {
+			background: var(--bg-tabbar-hover);
+		}
+	}
+	.fdot {
+		position: absolute;
+		top: 9px;
+		right: 9px;
+		width: 6px; /* optical 6px indicator matching tab/tree change dots */
+		height: 6px; /* optical 6px indicator matching tab/tree change dots */
+		border-radius: var(--radius-pill);
+		background: var(--warn);
+		pointer-events: none;
+	}
 	.menu {
 		display: none;
 	}
@@ -423,6 +463,15 @@
 		}
 		.tabs :global(.ctl) {
 			margin-right: -1px; /* the count's 18px square sits 5px inside its 28px box; 12px capsule padding + 5 - 1 = 16, the window gutter */
+		}
+		.files-toggle {
+			width: 28px;
+			margin-right: -4px; /* pull the 28px button's 4.5px right glyph inset into the 12px phone capsule gutter */
+			border-radius: min(var(--radius-pill), 14px);
+		}
+		.fdot {
+			top: 10px;
+			right: 4px;
 		}
 	}
 	@media (max-width: 640px) {
