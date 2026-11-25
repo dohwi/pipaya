@@ -4,7 +4,7 @@
 	import { errorText } from "../../lib/api";
 	import { copyText } from "../../lib/clipboard";
 	import { highlightCode, onHighlightReady } from "../../lib/code-highlight";
-	import { baseName, extOf, parseTable, previewKind, sizeLabel, splitFilePath, type PreviewKind } from "../../lib/files";
+	import { baseName, extOf, parseTable, previewKind, sizeLabel, type PreviewKind } from "../../lib/files";
 	import { t } from "../../lib/i18n";
 	import { surfaceIn, surfaceOut } from "../../lib/motion";
 	import { saveFile } from "../../lib/save-file";
@@ -18,14 +18,12 @@
 	import IconButton from "../ui/IconButton.svelte";
 	import Notice from "../ui/Notice.svelte";
 	import Segmented from "../ui/Segmented.svelte";
-	import FileIcon from "./FileIcon.svelte";
 
 	const IMAGE_PREVIEW_MAX = 1600;
 
 	const sessionId = $derived(app.current?.id ?? workspaceViewer.sessionId);
 	const selectedPath = $derived(workspaceViewer.activeFile ?? workspaceViewer.selectedPath);
 	const fileName = $derived(selectedPath ? baseName(selectedPath) : "");
-	const pathParts = $derived(selectedPath ? splitFilePath(selectedPath) : null);
 	const selectedChange = $derived(selectedPath ? workspaceViewer.changeFor(selectedPath) : undefined);
 
 	// Only treat `fileData` as valid for the currently active tab (prevents stale content from another tab).
@@ -709,42 +707,72 @@
 	}
 
 	const displaySize = $derived(mediaSize ?? currentFileData?.size);
+
+	// Publish file controls & metadata to the topmost Header bar so desktop needs zero extra nav rows.
+	$effect(() => {
+		const path = selectedPath;
+		if (!path) {
+			workspaceViewer.paneControl = null;
+			return;
+		}
+		workspaceViewer.paneControl = {
+			path,
+			size: displaySize,
+			imgDims,
+			editing,
+			editDirty,
+			editSaving,
+			canEdit: canEditText,
+			canCopy: !!currentFileData && !currentFileData.binary && !isMediaKind,
+			copied,
+			saving,
+			fileCommentOpen: selection?.kind === "file",
+			modeOptions,
+			activeModeId,
+			showChangeNav: workspaceViewer.viewMode === "diff" && !!selectedChange && changeAnchors.length > 1,
+			changeCount: changeAnchors.length,
+			activeChangeIdx,
+			onModeChange,
+			onStartEdit: () => startEdit(),
+			onCommitEdit: () => void commitEdit(),
+			onCancelEdit: cancelEdit,
+			onToggleFileComment: toggleFileComment,
+			onCopy: () => void copyFileText(),
+			onDownload: () => void downloadCurrentFile(),
+			onJumpChange: jumpToChange,
+		};
+	});
+
+	onDestroy(() => {
+		workspaceViewer.paneControl = null;
+	});
 </script>
 
 <section class="fpane" data-part="workspace-file-pane" aria-label={selectedPath ?? t("파일 뷰어")}>
 	{#if selectedPath}
-		<div class="fbar">
-			<div class="fmeta" title={selectedPath}>
-				<FileIcon name={fileName} />
-				<span class="fpath mono">
-					{#if pathParts}<span class="fdir">{pathParts.dir}</span><span class="fname">{pathParts.base}</span>{:else}<span class="fname">{selectedPath}</span>{/if}
-				</span>
-				{#if editDirty}
-					<span class="edirty">{t("수정됨")}</span>
-				{/if}
-				{#if imgDims}
-					<span class="fsub mono">{imgDims.w}×{imgDims.h}</span>
-				{/if}
-				{#if displaySize !== undefined && !editing}
-					<span class="fsub mono">{sizeLabel(displaySize)}</span>
-				{/if}
-				{#if !editing && selectedChange && (selectedChange.additions > 0 || selectedChange.deletions > 0)}
-					<span class="cstat mono">
-						{#if selectedChange.additions > 0}<span class="add">+{selectedChange.additions}</span>{/if}
-						{#if selectedChange.deletions > 0}<span class="del">-{selectedChange.deletions}</span>{/if}
-					</span>
-				{/if}
-			</div>
-
-			<div class="ftools">
-				{#if editing}
+		<!-- Compact action strip shown on phones (<=640px) only; on desktop all file info & controls live in the top Header -->
+		<div class="mbar">
+			{#if editing}
+				<div class="mtools">
 					<Button size="sm" variant="primary" disabled={editSaving} onclick={() => void commitEdit()}>
 						{t("저장")}
 					</Button>
 					<Button size="sm" variant="default" disabled={editSaving} onclick={cancelEdit}>
 						{t("취소")}
 					</Button>
-				{:else}
+				</div>
+			{:else}
+				<div class="mleft">
+					{#if modeOptions.length > 0}
+						<Segmented
+							label={t("보기 모드")}
+							options={modeOptions}
+							value={activeModeId}
+							size="sm"
+							full={false}
+							onchange={onModeChange}
+						/>
+					{/if}
 					{#if workspaceViewer.viewMode === "diff" && selectedChange && changeAnchors.length > 1}
 						<div class="cnav">
 							<IconButton icon="arrow-up" size="sm" label={t("이전 변경")} onclick={() => jumpToChange(activeChangeIdx - 1)} />
@@ -752,46 +780,33 @@
 							<IconButton icon="arrow-down" size="sm" label={t("다음 변경")} onclick={() => jumpToChange(activeChangeIdx + 1)} />
 						</div>
 					{/if}
-					{#if modeOptions.length > 0}
-						<div class="mtoggle">
-							<Segmented
-								label={t("보기 모드")}
-								options={modeOptions}
-								value={activeModeId}
-								size="sm"
-								full={false}
-								onchange={onModeChange}
-							/>
-						</div>
-						<span class="fsep" aria-hidden="true"></span>
+				</div>
+				<div class="fact">
+					{#if canEditText}
+						<IconButton
+							icon="pencil"
+							size="sm"
+							label={t("직접 수정 (더블클릭)")}
+							tip
+							onclick={() => startEdit()}
+						/>
 					{/if}
-					<div class="fact">
-						{#if canEditText}
-							<IconButton
-								icon="pencil"
-								size="sm"
-								label={t("직접 수정 (더블클릭)")}
-								tip
-								onclick={() => startEdit()}
-							/>
-						{/if}
-						<span data-file-comment-btn="true">
-							<IconButton
-								icon="chat"
-								size="sm"
-								label={t("이 파일에 코멘트")}
-								tip
-								class={{ on: selection?.kind === "file" }}
-								onclick={toggleFileComment}
-							/>
-						</span>
-						{#if currentFileData && !currentFileData.binary && !isMediaKind}
-							<IconButton icon={copied ? "check" : "copy"} size="sm" label={t("복사")} tip onclick={copyFileText} />
-						{/if}
-						<IconButton icon="download" size="sm" label={t("저장")} tip disabled={saving} onclick={downloadCurrentFile} />
-					</div>
-				{/if}
-			</div>
+					<span data-file-comment-btn="true">
+						<IconButton
+							icon="chat"
+							size="sm"
+							label={t("이 파일에 코멘트")}
+							tip
+							class={{ on: selection?.kind === "file" }}
+							onclick={toggleFileComment}
+						/>
+					</span>
+					{#if currentFileData && !currentFileData.binary && !isMediaKind}
+						<IconButton icon={copied ? "check" : "copy"} size="sm" label={t("복사")} tip onclick={copyFileText} />
+					{/if}
+					<IconButton icon="download" size="sm" label={t("저장")} tip disabled={saving} onclick={downloadCurrentFile} />
+				</div>
+			{/if}
 		</div>
 
 		{#if editing}
@@ -1046,104 +1061,34 @@
 		flex-direction: column;
 		background: var(--bg);
 	}
-	.fbar {
-		flex: none;
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		gap: 8px;
-		padding: 0 12px;
-		min-height: 44px;
-		border-bottom: 1px solid var(--border);
-		background: var(--bg-side);
+	.mbar {
+		display: none;
 	}
-	.fmeta {
-		flex: 1;
-		min-width: 0;
-		display: flex;
-		align-items: center;
-		gap: 8px;
+	@media (max-width: 640px) {
+		.mbar {
+			flex: none;
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			gap: 8px;
+			padding: 4px 12px;
+			min-height: 40px;
+			border-bottom: 1px solid var(--border);
+			background: var(--bg-side);
+		}
 	}
-	.fpath {
-		min-width: 0;
+	.mleft,
+	.mtools {
 		display: inline-flex;
-		align-items: baseline;
-		font-size: var(--fs-xs);
-		color: var(--text);
-		line-height: 20px;
-	}
-	.fdir {
-		flex: 0 1 auto;
-		min-width: 0;
-		color: var(--text-faint);
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
-	}
-	.fname {
-		flex: 0 0 auto;
-		font-weight: 600;
-		color: var(--text);
-		white-space: nowrap;
-	}
-	.edirty {
-		font-size: var(--fs-2xs);
-		color: var(--warn);
-		flex: none;
-		line-height: 16px;
-	}
-	.fsub {
-		font-size: var(--fs-2xs);
-		color: var(--text-faint);
-		flex: none;
-		line-height: 16px;
-	}
-	.cstat {
-		display: inline-flex;
-		gap: 4px;
-		font-size: var(--fs-2xs);
-		flex: none;
-		line-height: 16px;
-	}
-	.add {
-		color: var(--ok);
-	}
-	.del {
-		color: var(--danger);
-	}
-	.ftools {
-		display: flex;
 		align-items: center;
 		gap: 8px;
-		flex: none;
-	}
-	.fsep {
-		width: 1px;
-		height: 16px;
-		background: var(--border-strong);
-		flex: none;
+		min-width: 0;
 	}
 	.fact {
 		display: inline-flex;
 		align-items: center;
 		gap: 4px;
 		flex: none;
-	}
-	@media (max-width: 640px) {
-		.fbar {
-			flex-wrap: wrap;
-			padding: 8px 12px;
-		}
-		.fmeta {
-			flex: 1 1 100%;
-		}
-		.ftools {
-			flex: 1 1 100%;
-			justify-content: space-between;
-		}
-		.fsep {
-			display: none;
-		}
 	}
 	.cnav {
 		display: inline-flex;
@@ -1155,9 +1100,6 @@
 		font-size: var(--fs-2xs);
 		color: var(--text-faint);
 		line-height: 16px;
-	}
-	.mtoggle {
-		flex: none;
 	}
 	.cscroll {
 		flex: 1;

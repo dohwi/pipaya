@@ -3,14 +3,20 @@
 	import { RENAME_KEY } from "../../lib/keys";
 	import { t } from "../../lib/i18n";
 	import { formatCombo } from "../../lib/keys";
+	import { baseName, sizeLabel, splitFilePath } from "../../lib/files";
+	import Button from "../ui/Button.svelte";
 	import Icon from "../ui/Icon.svelte";
+	import IconButton from "../ui/IconButton.svelte";
 	import InlineRenameField from "../ui/InlineRenameField.svelte";
+	import Segmented from "../ui/Segmented.svelte";
+	import FileIcon from "../workspace/FileIcon.svelte";
 	import TabControls from "./TabControls.svelte";
 	import NavbarItems from "../extensions/NavbarItems.svelte";
 	import ExtensionSlot from "../extensions/ExtensionSlot.svelte";
 	import ExtensionMount from "../extensions/ExtensionMount.svelte";
 	import ExtensionPart from "../extensions/ExtensionPart.svelte";
 	import { app } from "../../lib/store.svelte";
+	import { workspaceViewer } from "../../lib/workspace-viewer.svelte";
 	import { panesOf } from "../../lib/layout";
 	import { workDir } from "../../lib/nav";
 	import { viewport } from "../../lib/viewport.svelte";
@@ -22,6 +28,19 @@
 
 	const s = $derived(app.current);
 	const term = $derived(app.terminal(app.activeId));
+	const activeFile = $derived(!app.graphOpen ? workspaceViewer.activeFile : null);
+	const fileName = $derived(activeFile ? baseName(activeFile) : "");
+	const fileDir = $derived(activeFile ? (splitFilePath(activeFile)?.dir.replace(/\/$/, "") ?? "") : "");
+	const fileChange = $derived(activeFile ? workspaceViewer.changeFor(activeFile) : undefined);
+	const fileCtrl = $derived(activeFile && workspaceViewer.paneControl?.path === activeFile ? workspaceViewer.paneControl : null);
+	const fileSub = $derived.by(() => {
+		if (!activeFile) return "";
+		const parts: string[] = [];
+		if (fileDir) parts.push(fileDir);
+		if (fileCtrl?.imgDims) parts.push(`${fileCtrl.imgDims.w}×${fileCtrl.imgDims.h}`);
+		if (fileCtrl?.size !== undefined && !fileCtrl.editing) parts.push(sizeLabel(fileCtrl.size));
+		return parts.join(" · ");
+	});
 	/** The open group: the header reads as a path, "group › the session being looked at" (on every screen size). */
 	const group = $derived(app.activeGroup);
 	/** The session in the group shown alone (a phone, or one pane enlarged), named after the group; none while all panes show. */
@@ -33,7 +52,7 @@
 	 *  session is the current step, so the keyboard and a double click on it rename the session; the group's name renames the group. */
 	const sessionTarget = $derived(term ? { id: term.id, name: term.title } : s ? { id: s.id, name: s.title } : null);
 	const groupTarget = $derived(group ? { id: group.id, name: group.name } : null);
-	const target = $derived(group && !crumb ? groupTarget : sessionTarget);
+	const target = $derived(activeFile ? null : group && !crumb ? groupTarget : sessionTarget);
 	/**
 	 * The title is where F2 renames the open thing when the sidebar is folded away (it has no row then); while the sidebar
 	 * shows, its row comes first (see `rename-places`).
@@ -64,13 +83,14 @@
 	}
 	/** What the title shows, also handed to an extension that replaces it. */
 	const heading = $derived(
-		group ? { title: crumb ? `${group.name} › ${crumbTitle}` : group.name, sub: crumb ? workDir(crumb).split(/[\\/]/).slice(-2).join("/") : t("대화 {n}개", { n: panesOf(group.layout).length }) }
+		activeFile ? { title: fileName, sub: fileSub }
+		: group ? { title: crumb ? `${group.name} › ${crumbTitle}` : group.name, sub: crumb ? workDir(crumb).split(/[\\/]/).slice(-2).join("/") : t("대화 {n}개", { n: panesOf(group.layout).length }) }
 		: term ? { title: term.title, sub: `${t("터미널")} · ${term.cwd.split(/[\\/]/).slice(-2).join("/")}` }
 		: { title: sessionTitle(s?.title), sub: s ? workDir(s).split(/[\\/]/).slice(-2).join("/") : "" },
 	);
 </script>
 
-<header class:group={!!group} data-part="header">
+<header class:group={!!group && !activeFile} data-part="header">
 	<div class="capsule">
 		<!-- the extension parts of the bar move to the graph view's header while it covers this one (GraphView .head) -->
 		{#if !app.graphOpen}<ExtensionMount slot="header.start" />{/if}
@@ -78,10 +98,25 @@
 			<Icon name="sidebar" />
 		</button>
 
-		<ExtensionPart part="header.title" props={{ title: heading.title, subtitle: heading.sub, kind: group ? "group" : term ? "terminal" : "chat" }}>
+		<ExtensionPart part="header.title" props={{ title: heading.title, subtitle: heading.sub, kind: activeFile ? "file" : group ? "group" : term ? "terminal" : "chat" }}>
 		<!-- svelte-ignore a11y_no_static_element_interactions -->
 		<div class="title" data-part="header.title" tabindex="-1" onkeydown={(e) => e.key === RENAME_KEY && target && !rename.is(target.id) && (e.preventDefault(), rename.start(target.id, target.name))} use:pressMenu={titleMenu}>
-			{#if (target && rename.is(target.id)) || (groupTarget && rename.is(groupTarget.id))}
+			{#if activeFile}
+				<span class="t fhead" title={activeFile}>
+					<FileIcon name={fileName} />
+					<span class="fname mono">{fileName}</span>
+					{#if fileCtrl?.editDirty}
+						<span class="edirty">{t("수정됨")}</span>
+					{/if}
+					{#if !fileCtrl?.editing && fileChange && (fileChange.additions > 0 || fileChange.deletions > 0)}
+						<span class="fstat mono">
+							{#if fileChange.additions > 0}<span class="fadd">+{fileChange.additions}</span>{/if}
+							{#if fileChange.deletions > 0}<span class="fdel">-{fileChange.deletions}</span>{/if}
+						</span>
+					{/if}
+				</span>
+				{#if fileSub}<span class="sub mono" title={activeFile}>{fileSub}</span>{/if}
+			{:else if (target && rename.is(target.id)) || (groupTarget && rename.is(groupTarget.id))}
 				{@const renamingGroup = !!groupTarget && rename.is(groupTarget.id)}
 				<InlineRenameField
 					variant="bar"
@@ -111,6 +146,62 @@
 		</ExtensionPart>
 
 		{#if !app.graphOpen}
+			{#if activeFile && fileCtrl}
+				<div class="ftools" data-part="header.file-tools">
+					{#if fileCtrl.editing}
+						<Button size="sm" variant="primary" disabled={fileCtrl.editSaving} onclick={fileCtrl.onCommitEdit}>
+							{t("저장")}
+						</Button>
+						<Button size="sm" variant="default" disabled={fileCtrl.editSaving} onclick={fileCtrl.onCancelEdit}>
+							{t("취소")}
+						</Button>
+					{:else}
+						{#if fileCtrl.showChangeNav}
+							<div class="fcnav">
+								<IconButton icon="arrow-up" size="sm" label={t("이전 변경")} onclick={() => fileCtrl.onJumpChange(fileCtrl.activeChangeIdx - 1)} />
+								<span class="fcidx mono">{fileCtrl.activeChangeIdx + 1}/{fileCtrl.changeCount}</span>
+								<IconButton icon="arrow-down" size="sm" label={t("다음 변경")} onclick={() => fileCtrl.onJumpChange(fileCtrl.activeChangeIdx + 1)} />
+							</div>
+						{/if}
+						{#if fileCtrl.modeOptions.length > 0}
+							<Segmented
+								label={t("보기 모드")}
+								options={fileCtrl.modeOptions}
+								value={fileCtrl.activeModeId}
+								size="sm"
+								full={false}
+								onchange={fileCtrl.onModeChange}
+							/>
+							<span class="fsep" aria-hidden="true"></span>
+						{/if}
+						<div class="fact">
+							{#if fileCtrl.canEdit}
+								<IconButton
+									icon="pencil"
+									size="sm"
+									label={t("직접 수정 (더블클릭)")}
+									tip
+									onclick={fileCtrl.onStartEdit}
+								/>
+							{/if}
+							<span data-file-comment-btn="true">
+								<IconButton
+									icon="chat"
+									size="sm"
+									label={t("이 파일에 코멘트")}
+									tip
+									class={{ on: fileCtrl.fileCommentOpen }}
+									onclick={fileCtrl.onToggleFileComment}
+								/>
+							</span>
+							{#if fileCtrl.canCopy}
+								<IconButton icon={fileCtrl.copied ? "check" : "copy"} size="sm" label={t("복사")} tip onclick={fileCtrl.onCopy} />
+							{/if}
+							<IconButton icon="download" size="sm" label={t("저장")} tip disabled={fileCtrl.saving} onclick={fileCtrl.onDownload} />
+						</div>
+					{/if}
+				</div>
+			{/if}
 			<NavbarItems />
 			<ExtensionMount slot="header.end" />
 		{/if}
@@ -204,6 +295,76 @@
 		text-overflow: ellipsis;
 		white-space: nowrap;
 		line-height: 17px;
+	}
+	.fhead {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		min-width: 0;
+		line-height: 20px;
+	}
+	.fname {
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		font-size: var(--fs-sm);
+		line-height: 20px;
+	}
+	.edirty {
+		font-size: var(--fs-2xs);
+		font-weight: 500;
+		color: var(--warn);
+		flex: none;
+		line-height: 16px;
+	}
+	.fstat {
+		display: inline-flex;
+		gap: 4px;
+		font-size: var(--fs-2xs);
+		font-weight: 500;
+		flex: none;
+		line-height: 16px;
+	}
+	.fadd {
+		color: var(--ok);
+	}
+	.fdel {
+		color: var(--danger);
+	}
+	.ftools {
+		flex: none;
+		display: flex;
+		align-items: center;
+		gap: 8px;
+	}
+	.fcnav {
+		display: inline-flex;
+		align-items: center;
+		gap: 4px;
+		flex: none;
+	}
+	.fcidx {
+		font-size: var(--fs-2xs);
+		color: var(--text-faint);
+		line-height: 16px;
+	}
+	.fsep {
+		width: 1px;
+		height: 16px;
+		background: var(--border-strong);
+		flex: none;
+	}
+	.fact {
+		display: inline-flex;
+		align-items: center;
+		gap: 4px;
+		flex: none;
+	}
+	@media (max-width: 640px) {
+		.ftools {
+			display: none;
+		}
 	}
 	.title :global(.header-rename) {
 		flex: none;

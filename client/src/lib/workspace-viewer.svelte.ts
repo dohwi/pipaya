@@ -26,6 +26,33 @@ export {
 	type WorkspaceFileData,
 };
 
+export interface WorkspacePaneControl {
+	path: string;
+	size?: number;
+	imgDims: { w: number; h: number } | null;
+	editing: boolean;
+	editDirty: boolean;
+	editSaving: boolean;
+	canEdit: boolean;
+	canCopy: boolean;
+	copied: boolean;
+	saving: boolean;
+	fileCommentOpen: boolean;
+	modeOptions: { id: string; label: string }[];
+	activeModeId: string;
+	showChangeNav: boolean;
+	changeCount: number;
+	activeChangeIdx: number;
+	onModeChange: (id: string) => void;
+	onStartEdit: () => void;
+	onCommitEdit: () => void;
+	onCancelEdit: () => void;
+	onToggleFileComment: (e: MouseEvent) => void;
+	onCopy: () => void;
+	onDownload: () => void;
+	onJumpChange: (idx: number) => void;
+}
+
 const RECENT_HIGHLIGHT_MS = 10_000;
 const FALLBACK_MAX_BYTES = 256 * 1024;
 
@@ -57,6 +84,8 @@ export class WorkspaceViewerStore {
 	openFiles = $state<string[]>([]);
 	/** Currently focused file tab in the main stage (`null` = showing the active chat/terminal pane). */
 	activeFile = $state<string | null>(null);
+	/** Live header metadata & action callbacks registered by the mounted `WorkspaceFilePane` so `Header.svelte` renders them natively. */
+	paneControl = $state<WorkspacePaneControl | null>(null);
 
 	selectedPath = $state<string | null>(null);
 	fileData = $state<WorkspaceFileData | null>(null);
