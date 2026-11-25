@@ -25,6 +25,7 @@
 	import { closeContextMenu, openContextMenu } from "../../lib/context-menu";
 	import { pressMenu, type Point } from "../../lib/press-menu";
 	const hint = $derived(app.prefs.bindings.toggleSidebar ? ` (${formatCombo(app.prefs.bindings.toggleSidebar)})` : "");
+	const filesHint = $derived(app.prefs.bindings.toggleFiles ? ` (${formatCombo(app.prefs.bindings.toggleFiles)})` : "");
 
 	const s = $derived(app.current);
 	const term = $derived(app.terminal(app.activeId));
@@ -207,15 +208,14 @@
 		{/if}
 		<!-- a phone only: "+" and the tab count, the cluster the tab strip carries at its right end on wider screens -->
 		{#if app.serverId && app.net !== "idle"}<span class="tabs"><TabControls place="header" /></span>{/if}
-		<!-- Right workspace drawer toggle: sits at the far right edge of the top NAV, mirroring the left sidebar toggle -->
+		<!-- Narrow viewports only (<= 860px): right workspace drawer toggle mirroring `.menu` on the left. On desktop, the right sidebar stays docked as a collapsible rail. -->
 		{#if !app.graphOpen && workspaceViewer.sessionId}
 			<button
 				class="tool files-toggle tap"
-				class:on={app.filesOpen}
 				onclick={() => app.toggleFiles()}
 				aria-label={t("파일 뷰어")}
-				aria-pressed={app.filesOpen}
-				title={t("파일 뷰어 (현재 폴더 · 실시간 변경 확인)")}
+				aria-expanded={app.filesOpen}
+				title={t("파일 뷰어") + filesHint}
 			>
 				<Icon name="folder" />
 				{#if workspaceViewer.changes.length > 0}<span class="fdot" aria-hidden="true"></span>{/if}
@@ -380,8 +380,7 @@
 		outline-offset: -2px;
 	}
 	@media (max-width: 640px) {
-		.ftools,
-		.navsep {
+		.ftools {
 			display: none;
 		}
 	}
@@ -424,21 +423,11 @@
 		height: 19px;
 		stroke-width: 1.75;
 	}
+	/* Shown only below the desktop sidebar breakpoint (<= 860px), mirroring `.menu` on the left */
 	.tool.files-toggle {
+		display: none;
 		position: relative;
 		flex: none;
-		/* Pull the 40px button's 10.5px right inset into the 12px capsule padding so the 19px folder glyph aligns with the right edge */
-		margin-right: -8px;
-	}
-	/* Compact 38px/32px icon buttons in desktop right file-drawer header: see WorkspaceFileTree.svelte */
-	.files-toggle.on {
-		background: var(--bg-hover);
-		color: var(--text);
-	}
-	@media (min-width: 601px) {
-		:global(main:has(> [data-part="tabbar"])) > header .files-toggle.on {
-			background: var(--bg-tabbar-hover);
-		}
 	}
 	.fdot {
 		position: absolute;
@@ -458,6 +447,34 @@
 	.tabs {
 		display: none;
 	}
+	@media (max-width: 860px) {
+		.capsule { padding-left: 4px; }
+		.menu {
+			display: grid;
+		}
+		.tool.files-toggle {
+			display: grid;
+			/* 12px capsule padding - 7px + 20px (half of 40px button) = 25px from right edge, matching TabBar TabCountButton center (11 + 14 = 25px) */
+			margin-right: -7px;
+		}
+	}
+	@media (max-width: 640px) {
+		/* declared after the 860px rule so it wins: the 32px button leaves 6.5px around the icon */
+		.capsule { padding-left: 8px; padding-right: 12px; }
+		.title { padding: 0 4px; }
+		.tool {
+			width: 32px;
+			border-radius: min(var(--radius-pill), 16px); /* 32 x 40: a rounded slot, not a 50% oval */
+		}
+		.tool.files-toggle {
+			/* 12px capsule padding - 3px + 16px (half of 32px button) = 25px from right edge, matching TabCountButton center */
+			margin-right: -3px;
+		}
+		.fdot {
+			top: 9px;
+			right: 5px;
+		}
+	}
 	@media (max-width: 600px) {
 		.tabs {
 			display: contents;
@@ -474,24 +491,5 @@
 			top: 10px;
 			right: 4px;
 		}
-	}
-	@media (max-width: 640px) {
-		/* the nav slot pads 2px here */
-		.capsule { padding-right: 12px; }
-		.title { padding: 0 4px; }
-		.tool {
-			width: 32px;
-			border-radius: min(var(--radius-pill), 16px); /* 32 x 40: a rounded slot, not a 50% oval */
-		}
-	}
-	@media (max-width: 860px) {
-		.capsule { padding-left: 4px; }
-		.menu {
-			display: grid;
-		}
-	}
-	@media (max-width: 640px) {
-		/* declared after the 860px rule so it wins: the 32px button leaves 6.5px around the icon */
-		.capsule { padding-left: 8px; }
 	}
 </style>

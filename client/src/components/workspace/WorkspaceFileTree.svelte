@@ -1,8 +1,10 @@
 <script lang="ts">
 	import { t } from "../../lib/i18n";
+	import { formatCombo } from "../../lib/keys";
 	import { workDir } from "../../lib/nav";
 	import { app } from "../../lib/store.svelte";
-	import { WORKSPACE_FILE_MIME } from "../../lib/workspace-edits";
+	import { viewport } from "../../lib/viewport.svelte";
+	import { WORKSPACE_FILE_MIME, type WorkspaceChange } from "../../lib/workspace-edits";
 	import { workspaceViewer, type WorkspaceEntry } from "../../lib/workspace-viewer.svelte";
 	import EmptyState from "../ui/EmptyState.svelte";
 	import Icon from "../ui/Icon.svelte";
@@ -19,6 +21,29 @@
 		workspaceViewer.workDir.split(/[\\/]/).filter(Boolean).pop() ??
 			(session ? workDir(session).split(/[\\/]/).filter(Boolean).pop() ?? workDir(session) : ""),
 	);
+	const shortcutHint = $derived(app.prefs.bindings.toggleFiles ? ` (${formatCombo(app.prefs.bindings.toggleFiles)})` : "");
+	const totalAdd = $derived(workspaceViewer.changes.reduce((n, c) => n + c.additions, 0));
+	const totalDel = $derived(workspaceViewer.changes.reduce((n, c) => n + c.deletions, 0));
+	const anyPending = $derived(workspaceViewer.changes.some((c) => c.pending));
+	const railFiles = $derived.by(() => {
+		const seen = new Set<string>();
+		const out: { path: string; name: string; change?: WorkspaceChange }[] = [];
+		for (const ch of workspaceViewer.changes) {
+			seen.add(ch.path);
+			out.push({ path: ch.path, name: ch.path.split("/").pop() ?? ch.path, change: ch });
+		}
+		for (const fp of workspaceViewer.openFiles) {
+			if (seen.has(fp)) continue;
+			seen.add(fp);
+			out.push({ path: fp, name: fp.split("/").pop() ?? fp });
+		}
+		return out;
+	});
+
+	function expandToChanges() {
+		workspaceViewer.filter = "changed";
+		app.filesOpen = true;
+	}
 
 	// Resizable desktop sidebar width (200..420px).
 	let panelWidth = $state(260);
@@ -218,7 +243,7 @@
 	class:open
 	class:dragging
 	class:swiping={swipeX !== null}
-	inert={!open}
+	inert={viewport.narrow && !open && swipeX === null}
 	data-part="workspace-tree"
 	style:--wv-w="{panelWidth}px"
 	style:translate={swipeX !== null ? `${swipeX}px 0` : undefined}
@@ -228,10 +253,61 @@
 	ontouchend={onDrawerTouchEnd}
 	ontouchcancel={onDrawerTouchEnd}
 >
-	<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-	<div class="grip" role="separator" aria-orientation="vertical" aria-label={t("파일 뷰어 너비 조절")} onpointerdown={startResize}></div>
+	{#if open && !viewport.narrow}
+		<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+		<div class="grip" role="separator" aria-orientation="vertical" aria-label={t("파일 뷰어 너비 조절")} onpointerdown={startResize}></div>
+	{/if}
 
-	<div class="ftree-in">
+	<!-- Collapsed desktop rail (56px, mirrors left Rail.svelte): expand button + compact changed-files/+/- summary + quick-jump file icons -->
+	<div class="frail" data-part="workspace-rail" inert={open || viewport.narrow}>
+		<div class="rtop">
+			<IconButton icon="folder" label={t("파일 뷰어 펼치기")} title={t("파일 뷰어 펼치기") + shortcutHint} onclick={() => (app.filesOpen = true)} />
+		</div>
+		<div class="rtools">
+			<IconButton icon="sidebar" size="sm" class="flip-x" label={t("파일 뷰어 펼치기")} title={t("파일 뷰어 펼치기") + shortcutHint} onclick={() => (app.filesOpen = true)} />
+		</div>
+		<div class="rbody">
+			{#if workspaceViewer.changes.length > 0}
+				<button
+					type="button"
+					class="rchg tap"
+					class:pending={anyPending}
+					onclick={expandToChanges}
+					title={totalAdd > 0 || totalDel > 0
+						? t("변경된 파일 {n}개 (+{add} / -{del})", { n: workspaceViewer.changes.length, add: totalAdd, del: totalDel })
+						: t("변경된 파일 {n}개", { n: workspaceViewer.changes.length })}
+					aria-label={t("변경된 파일 {n}개", { n: workspaceViewer.changes.length })}
+				>
+					<span class="rcnt mono">{workspaceViewer.changes.length}</span>
+					{#if totalAdd > 0}<span class="radd mono">+{totalAdd}</span>{/if}
+					{#if totalDel > 0}<span class="rdel mono">-{totalDel}</span>{/if}
+				</button>
+			{/if}
+			{#if workspaceViewer.changes.length > 0 && railFiles.length > 0}
+				<span class="rsep" aria-hidden="true"></span>
+			{/if}
+			{#each railFiles as item (item.path)}
+				{@const isCur = workspaceViewer.activeFile === item.path}
+				{@const ch = item.change}
+				<button
+					type="button"
+					class="rfile tap"
+					class:active={isCur}
+					onclick={() => pickFile(item.path, ch ? "diff" : undefined)}
+					title={ch && (ch.additions > 0 || ch.deletions > 0) ? `${item.path} (+${ch.additions} -${ch.deletions})` : item.path}
+					aria-label={item.path}
+					aria-current={isCur ? "true" : undefined}
+				>
+					<FileIcon name={item.name} />
+					{#if ch}
+						<span class="rdot {statusClass(ch.status)}" aria-hidden="true"></span>
+					{/if}
+				</button>
+			{/each}
+		</div>
+	</div>
+
+	<div class="ftree-in" inert={!open}>
 	<header class="head">
 		<div class="htitle" title={workspaceViewer.workDir}>
 			{#if workspaceViewer.branch}
@@ -242,7 +318,11 @@
 		</div>
 		<div class="hact">
 			<IconButton icon="retry" label={t("새로고침")} onclick={() => workspaceViewer.refreshTree({ preserveOpenDirs: true })} />
-			<IconButton icon="x" label={t("닫기")} onclick={() => (app.filesOpen = false)} />
+			{#if viewport.narrow}
+				<IconButton icon="x" label={t("파일 뷰어 닫기")} title={t("파일 뷰어 닫기") + shortcutHint} onclick={() => (app.filesOpen = false)} />
+			{:else}
+				<IconButton icon="sidebar" class="flip-x" label={t("파일 뷰어 접기")} title={t("파일 뷰어 접기") + shortcutHint} onclick={() => (app.filesOpen = false)} />
+			{/if}
 		</div>
 	</header>
 
@@ -358,9 +438,6 @@
 		max-width: 45vw;
 		height: 100%;
 		min-height: 0;
-		padding-top: var(--sat);
-		padding-right: var(--sar);
-		padding-bottom: var(--sab);
 		display: flex;
 		flex-direction: column;
 		overflow: hidden;
@@ -368,24 +445,53 @@
 		border-left: 1px solid var(--border);
 		transition:
 			flex-basis var(--motion-normal) var(--ease),
-			width var(--motion-normal) var(--ease),
-			opacity var(--motion-fast) var(--ease-std),
-			border-left-color var(--motion-fast) var(--ease-std);
+			width var(--motion-normal) var(--ease);
+	}
+	.ftree-in,
+	.frail {
+		display: flex;
+		flex-direction: column;
+		min-height: 0;
+		padding-top: var(--sat);
+		padding-right: var(--sar);
+		padding-bottom: var(--sab);
 	}
 	.ftree-in {
 		flex: 1;
-		min-height: 0;
 		width: var(--wv-w, 260px);
-		display: flex;
-		flex-direction: column;
 	}
 	@media (min-width: 861px) {
 		.ftree:not(.open) {
-			flex-basis: 0;
-			width: 0;
+			flex-basis: var(--rail-w);
+			width: var(--rail-w);
+		}
+		.ftree-in,
+		.frail {
+			position: absolute;
+			top: 0;
+			height: 100%;
+			overflow: hidden;
+			transition:
+				opacity var(--motion-normal) var(--ease-std),
+				visibility 0s;
+		}
+		.ftree-in {
+			left: 0;
+			width: var(--wv-w, 260px);
+		}
+		.frail {
+			right: 0;
+			width: var(--rail-w);
+			align-items: center;
+		}
+		.ftree:not(.open) .ftree-in,
+		.ftree.open .frail {
 			opacity: 0;
-			border-left-color: transparent;
+			visibility: hidden;
 			pointer-events: none;
+			transition:
+				opacity var(--motion-fast) var(--ease-std),
+				visibility 0s linear var(--motion-fast);
 		}
 	}
 	.ftree.dragging {
@@ -394,12 +500,158 @@
 	}
 	.grip {
 		position: absolute;
-		top: 0;
+		top: 44px;
 		bottom: 0;
 		left: -4px;
 		width: 8px;
 		cursor: col-resize;
 		z-index: 2;
+	}
+	/* Mirror the sidebar glyph so its panel divider faces right */
+	:global(.iconbtn.flip-x svg) {
+		transform: scaleX(-1);
+	}
+	/* Collapsed desktop right rail (56px, exact vertical rhythm with left Rail.svelte, Header & TabBar) */
+	.rtop {
+		display: grid;
+		place-items: center;
+		flex: none;
+		width: 100%;
+		box-sizing: content-box;
+		height: 44px;
+		border-bottom: 1px solid var(--border);
+	}
+	.rtop :global(.iconbtn:focus-visible),
+	.rtools :global(.iconbtn:focus-visible) {
+		outline-offset: -2px;
+	}
+	.rtools {
+		display: grid;
+		place-items: center;
+		flex: none;
+		width: 100%;
+		box-sizing: content-box;
+		height: 37px; /* + 1px hairline = TabBar 38px, matching left Rail .tools */
+		border-bottom: 1px solid var(--border);
+	}
+	@media (min-width: 601px) {
+		:global(:root:has(main > [data-part="tabbar"])) .rtop,
+		:global(:root:has(main > [data-part="tabbar"])) .rtools {
+			border-bottom-color: var(--tabbar-line);
+		}
+	}
+	.rbody {
+		flex: 1;
+		min-height: 0;
+		width: 100%;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 4px;
+		padding: 8px 0;
+		overflow-y: auto;
+		overflow-x: hidden;
+		scrollbar-width: none;
+	}
+	.rbody::-webkit-scrollbar {
+		display: none;
+	}
+	.rchg {
+		flex: none;
+		width: 44px;
+		padding: 4px;
+		border: 0;
+		border-radius: var(--radius-sm);
+		background: color-mix(in srgb, var(--bg-hover) 55%, transparent);
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 0;
+		cursor: pointer;
+		transition:
+			background var(--motion-fast) var(--ease-std),
+			color var(--motion-fast) var(--ease-std);
+	}
+	@media (hover: hover) {
+		.rchg:hover {
+			background: var(--bg-hover);
+		}
+	}
+	.rcnt {
+		font-size: var(--fs-xs);
+		font-weight: 700;
+		color: var(--text);
+		line-height: 16px;
+		font-variant-numeric: tabular-nums;
+	}
+	.radd {
+		font-size: var(--fs-2xs);
+		font-weight: 600;
+		color: var(--ok);
+		line-height: 16px;
+		font-variant-numeric: tabular-nums;
+	}
+	.rdel {
+		font-size: var(--fs-2xs);
+		font-weight: 600;
+		color: var(--danger);
+		line-height: 16px;
+		font-variant-numeric: tabular-nums;
+	}
+	.rsep {
+		flex: none;
+		width: 28px;
+		height: 1px;
+		margin: 4px 0;
+		background: var(--border-strong);
+	}
+	.rfile {
+		position: relative;
+		flex: none;
+		width: 40px;
+		height: 36px;
+		display: grid;
+		place-items: center;
+		border: 0;
+		border-radius: var(--radius-sm);
+		background: transparent;
+		cursor: pointer;
+		transition: background var(--motion-fast) var(--ease-std);
+	}
+	@media (hover: hover) {
+		.rfile:hover {
+			background: var(--bg-hover);
+		}
+	}
+	.rfile.active {
+		background: var(--accent-soft);
+	}
+	/* Mirror left Rail's edge bar on the right side for the currently focused file tab */
+	.rfile.active::after {
+		content: "";
+		position: absolute;
+		right: -8px;
+		top: 8px;
+		bottom: 8px;
+		width: 3px;
+		border-radius: 2px 0 0 2px;
+		background: var(--text);
+	}
+	.rdot {
+		position: absolute;
+		top: 6px;
+		right: 6px;
+		width: 6px; /* optical 6px status indicator matching tree/tab dots */
+		height: 6px; /* optical 6px status indicator matching tree/tab dots */
+		border-radius: var(--radius-pill);
+		background: var(--info);
+		pointer-events: none;
+	}
+	.rdot.st-add {
+		background: var(--ok);
+	}
+	.rdot.st-del {
+		background: var(--danger);
 	}
 	.head {
 		box-sizing: content-box;
@@ -639,6 +891,9 @@
 		}
 	}
 	@media (max-width: 860px) {
+		.frail {
+			display: none;
+		}
 		.fscrim {
 			display: block;
 			position: fixed;
@@ -663,15 +918,13 @@
 			bottom: 0;
 			width: min(max(296px, 82vw), 360px);
 			max-width: 100%;
-			padding-top: var(--sat);
-			padding-right: var(--sar);
-			padding-bottom: var(--sab);
 			z-index: var(--z-drawer);
 			translate: 102% 0;
 			transition: translate var(--motion-normal) var(--ease);
 		}
 		.ftree-in {
 			width: 100%;
+			height: 100%;
 		}
 		.ftree.open {
 			translate: 0 0;

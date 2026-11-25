@@ -331,6 +331,10 @@ const RUN: Record<ActionId, () => void | Promise<void>> = {
       app.sidebar.open = !app.sidebar.open;
     else app.sidebar.toggleCollapsed();
   },
+  toggleFiles: () => {
+    if (app.graphOpen || !workspaceViewer.sessionId) return;
+    app.toggleFiles();
+  },
   newChat: () => app.newChatInPane(),
   clearChat: () => app.clearChatInPane(),
   closeSession: () => {

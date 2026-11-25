@@ -478,8 +478,10 @@
 			</div>
 		</main>
 
-		<!-- Right workspace sidebar: full-height sibling of <main> just like the left sidebar, pushing Header + TabBar + stage cleanly -->
-		<WorkspaceFileTree open={app.filesOpen && !app.graphOpen} />
+		<!-- Right workspace sidebar: full-height sibling of <main> just like the left sidebar (collapses to a slim rail on desktop, slide-over drawer on mobile) -->
+		{#if !app.graphOpen && workspaceViewer.sessionId}
+			<WorkspaceFileTree open={app.filesOpen} />
+		{/if}
 
 	</div>
 {/if}
