@@ -1993,7 +1993,10 @@ class AppStore {
     // the folder as the sidebar lists it (a group's is the one it was placed under), else the pane's own directory
     const path = tabOf(this.dirs, id)?.dir.path ?? this.memberDir(id);
     const project = path ? this.blocksByServer[sid]?.find((b) => b.kind === "project" && b.dirs.some((d) => d.path === path)) : undefined;
-    if (project?.kind === "project") this.sidebar.reveal(projectKey(sid, project.root));
+    // when the tab bar shows the whole project, its folded header already stands for it (like a folded folder), so keep the fold as the user left it
+    if (project?.kind === "project" && !(this.tabProject?.serverId === sid && this.tabProject.root === project.root)) {
+      this.sidebar.reveal(projectKey(sid, project.root));
+    }
     this.sidebar.reveal(sid);
   }
 

@@ -51,6 +51,8 @@
 	/** The most urgent state among the folder's tabs: tints the count while folded */
 	const dstate = $derived(mostUrgent(d.tabs.flatMap((x) => tabPanes(x)).map((id) => sb.stateOfId(n, id))));
 	const dcount = $derived(dirPaneCount(d));
+	/** No tabs inside: keep the chevron's column for alignment, but hide the arrow and never mount an empty fold block */
+	const empty = $derived(d.tabs.length === 0);
 </script>
 
 <!-- A drop and drag target for folders; the folder toggle inside is a real button. -->
@@ -59,15 +61,20 @@
 	<div
 		class="dir grabbable"
 		class:folded
+		class:empty
 		class:cur
 		class:over={sb.marks.over(key)}
 		use:dropTarget={{ accepts: sb.acceptsOnDir(n, d.path), hover: sb.hover(key), drop: sb.dropOnDir(n, d.path) }}
 		use:sb.dirSource={{ kind: "dir", serverId: n.server.id, path: d.path, paths: n.dirs.map((x) => x.path), disabled: n.dirs.length < 2, menu: (pt) => sb.headMenuAt(pt, n, d.path, key) }}
 	>
-		<button class="dirfold" onclick={() => app.sidebar.toggleDir(key, !!inProject)} aria-expanded={!folded} aria-label={folded ? t("탭 펼치기") : t("탭 접기")} title={folded ? t("탭 펼치기") : t("탭 접기")}>
-			<span class="chev" class:folded><Icon name="chevron-down" /></span>
-		</button>
-		<button class="dirtoggle" onclick={() => (d.tabs.length ? app.openDir(n.server.id, d.path) : app.sidebar.toggleDir(key, !!inProject))} aria-current={cur ? "true" : undefined} title={parent}>
+		{#if empty}
+			<span class="dirfold" aria-hidden="true"><span class="chev hidden"><Icon name="chevron-down" /></span></span>
+		{:else}
+			<button class="dirfold" onclick={() => app.sidebar.toggleDir(key, !!inProject)} aria-expanded={!folded} aria-label={folded ? t("탭 펼치기") : t("탭 접기")} title={folded ? t("탭 펼치기") : t("탭 접기")}>
+				<span class="chev" class:folded><Icon name="chevron-down" /></span>
+			</button>
+		{/if}
+		<button class="dirtoggle" onclick={() => (d.tabs.length ? app.openDir(n.server.id, d.path) : undefined)} aria-disabled={empty ? "true" : undefined} aria-current={cur ? "true" : undefined} title={parent}>
 			<span class="dicon">{#if branch}<Icon name="fork" />{:else}<Icon name="folder" />{/if}{#if pinned}<PinMark />{/if}</span>
 			<span class="dlabel">
 				{#if sb.dirRename.is(key)}
@@ -87,7 +94,13 @@
 					{#if branch.sub}<span class="dparent mono" use:tail={branch.sub}></span>{/if}
 				{:else}
 					<span class="dname" title={label}>{label}</span>
-					{#if above && !inProject}<span class="dparent mono" class:twin use:tail={above}></span>{/if}
+					{#if above && !inProject}
+						{#if twin}
+							<span class="dparent mono twin" use:tailKeepLast={above}></span>
+						{:else}
+							<span class="dparent mono" use:tail={above}></span>
+						{/if}
+					{/if}
 				{/if}
 			</span>
 			{#if folded && dcount}<span class="cbadge tint {ACTIVITY_TONE[dstate]}" title={t("{n}개", { n: dcount }) + (dstate !== "idle" ? ` · ${ACTIVITY_LABEL[dstate]}` : "")}>{dcount}</span>{/if}
@@ -95,7 +108,7 @@
 		<ListButton serverId={n.server.id} filter={{ cwd: d.path }} name={t("대화 목록 관리")} tip={t("이 폴더의 대화 목록 관리")} />
 		<NewButton {n} workdir={asWorkdir(d.path, n.root)} {key} name={parent} tip={t("이 폴더에서 새 대화 또는 터미널")} />
 	</div>
-	{#if !folded}
+	{#if !folded && !empty}
 		<div class="fold" in:collapseIn out:collapseOut>
 			{#each d.tabs as tab (tab.id)}
 				{@const drop = { accepts: (id: string) => n.current && id !== tab.id, hover: sb.tabHover(n, d, tab), drop: sb.tabDropAt(n, d, tab) }}
@@ -163,6 +176,12 @@
 		padding-left: 4px; /* the chevron's column, as when it sat inside the toggle */
 		border-radius: var(--radius-sm);
 	}
+	.chev.hidden {
+		visibility: hidden;
+	}
+	.dir.empty .dirtoggle {
+		cursor: default;
+	}
 	.dirtoggle {
 		flex: 1;
 		min-width: 0;
@@ -215,8 +234,12 @@
 		overflow: hidden;
 		white-space: nowrap; /* no ellipsis: `tail` cuts at folder boundaries or hides the path, never mid-name */
 		font-size: var(--fs-2xs);
+		line-height: 16px; /* whole-pixel line box centred against the 20px folder name */
 		color: var(--text-faint);
 		transition: opacity var(--motion-fast) var(--ease-std);
+	}
+	.dparent.twin {
+		text-overflow: ellipsis;
 	}
 	/* the path after the name shows on hover (the tooltip has it too); a folder that shares its name with another keeps it */
 	@media (hover: hover) {
@@ -235,7 +258,7 @@
 		text-overflow: ellipsis;
 		white-space: nowrap;
 		font-size: var(--fs-sm);
-		font-weight: 600;
+		font-weight: 500;
 		line-height: 20px; /* a whole-pixel line box centred by the row (rule 3): line-height 1 left a plain name's ink 1.5px below the folder glyph, and clipped its descenders */
 	}
 	/* a pinned row's mark (PinMark) is set into its icon's corner: the icon boxes are its hosts */

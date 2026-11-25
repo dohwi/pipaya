@@ -29,6 +29,12 @@ export function shortName(path: string, home?: string): string {
 	return nameSegs(path, home).slice(-2).join("/") || tilde(path, home);
 }
 
+/** A folder's concise sidebar label: its own final segment (`~/work/app` -> `app`, home -> `~`), letting `parentPath` disambiguate twins. */
+export function leafName(path: string, home?: string): string {
+	const segs = nameSegs(path, home);
+	return segs[segs.length - 1] || tilde(path, home);
+}
+
 /**
  * The dim path after a folder's label: where the folder sits, with the label's own tail cut off the end (`~/work/app`
  * shows `work/app` and then `~`), so the two never repeat the same text and read as one smeared, overlapping line.
