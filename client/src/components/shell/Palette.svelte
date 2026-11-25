@@ -41,10 +41,6 @@
 			scrollToIndex();
 		});
 	});
-	$effect(() => {
-		query;
-		index = 0;
-	});
 
 	function scrollToIndex() {
 		listEl?.querySelector<HTMLElement>(`[data-i="${index}"]`)?.scrollIntoView({ block: "nearest" });
@@ -96,6 +92,7 @@
 			<input
 				bind:this={input}
 				bind:value={query}
+				oninput={() => (index = 0)}
 				onkeydown={onKey}
 				placeholder={t("검색…")}
 				spellcheck="false"

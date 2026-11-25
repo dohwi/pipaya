@@ -19,7 +19,6 @@
 	import { registerRenamePlace } from "../../lib/rename-places";
 	import { chooseGroup } from "../../lib/group-picker";
 	import { chooseGroupLayout } from "../../lib/layout-picker";
-	import { nextArrangedPreset } from "../../lib/layout-presets";
 	import { activityOf, ACTIVITY_LABEL, ACTIVITY_TONE, URGENCY, type Activity } from "../../lib/activity";
 	import { drag, dragSource, dropTarget, type Point } from "../../lib/dnd.svelte";
 	import { dragScroll } from "../../lib/drag-scroll";
@@ -185,13 +184,7 @@
 			renameTab: (id, title) => rename.start(id, title),
 			renameGroup: (g) => rename.start(g.id, g.name),
 			groupWith: chooseGroup,
-			arrangeGroup: (id) => void app.arrangeGroup(id),
-			chooseLayout: (g) => chooseGroupLayout(g.id),
-			nextLayoutHint: (id) => {
-				const g = app.groupById(id);
-				const next = g ? nextArrangedPreset(g.layout) : null;
-				return next ? { label: next.label, recommended: next.recommended } : undefined;
-			},
+			arrangeGroup: (id) => chooseGroupLayout(id),
 			arrangeShortcut: app.prefs.bindings.arrangePanes ? formatCombo(app.prefs.bindings.arrangePanes) : undefined,
 			closeSession: (id) => void app.close(id),
 			closeTerminal: (id) => void app.closeTerminal(id),

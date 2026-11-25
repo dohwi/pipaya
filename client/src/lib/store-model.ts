@@ -21,7 +21,7 @@ export interface PaletteItem {
 }
 /** A searchable list shown over the chat; opened by commands such as /resume and /tree. */
 export interface PaletteSpec {
-  closeShortcut?: "findChat" | "workdir" | "chooseLayout";
+  closeShortcut?: "findChat" | "workdir" | "arrangePanes";
   title: string;
   items: PaletteItem[];
   empty: string;

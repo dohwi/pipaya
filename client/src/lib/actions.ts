@@ -299,12 +299,6 @@ function toggleFull() {
 function arrangePanes() {
   const g = app.activeGroup;
   if (!g) return void app.toast(t("그룹에 속한 대화가 아닙니다"), "error");
-  void app.arrangeGroup(g.id);
-}
-
-function chooseLayout() {
-  const g = app.activeGroup;
-  if (!g) return void app.toast(t("그룹에 속한 대화가 아닙니다"), "error");
   chooseGroupLayout(g.id);
 }
 
@@ -398,7 +392,6 @@ const RUN: Record<ActionId, () => void | Promise<void>> = {
   zoomPane,
   toggleFull,
   arrangePanes,
-  chooseLayout,
   workdir: () => runCommand("cd"),
   skills: () => app.openSkills(),
   toggleSound: () => app.prefs.setSound(!app.prefs.soundOn),

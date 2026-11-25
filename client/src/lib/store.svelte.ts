@@ -24,7 +24,7 @@ import { sidebarDirs, tabOf, tabPanes, workDir, type DirBlock, type Tab } from "
 import { flattenBlocks, projectBlocks, projectKey, type SidebarBlock } from "./projects";
 import { dirKey } from "./sidebar-model";
 import { MAX_PANES, append, has as layoutHas, pair, panesOf, place, remove as layoutRemove, replaceSession, worthKeeping, type Layout, type Zone } from "./layout";
-import { findPreset, nextArrangedPreset, type LayoutPreset, type LayoutPresetId } from "./layout-presets";
+import { findPreset, type LayoutPreset, type LayoutPresetId } from "./layout-presets";
 import { extensions } from "./extensions/host.svelte";
 import { extensionUpdates } from "./extension-updates.svelte";
 import { notifications } from "./notifications";
@@ -2647,16 +2647,13 @@ class AppStore {
     }
   }
 
-  /**
-   * Arrange a split group's panes into a clean preset layout.
-   * When `presetId` is omitted, applies the recommended layout for the pane count (or cycles to the next preset if already arranged).
-   */
-  async arrangeGroup(id: string, presetId?: LayoutPresetId, serverId?: string | null): Promise<LayoutPreset | null> {
+  /** Arrange a split group's panes into the chosen preset layout. */
+  async arrangeGroup(id: string, presetId: LayoutPresetId, serverId?: string | null): Promise<LayoutPreset | null> {
     const link = this.linkOf(serverId);
     if (!link) return null;
     const g = link.data.groups.find((x) => x.id === id);
     if (!g) return null;
-    const preset = presetId ? findPreset(g.layout, presetId) : nextArrangedPreset(g.layout);
+    const preset = findPreset(g.layout, presetId);
     if (!preset) {
       this.toast(t("적용할 레이아웃이 없습니다"), "error");
       return null;
