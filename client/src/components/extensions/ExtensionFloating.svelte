@@ -6,6 +6,9 @@
 	import type { UIPanelPosition } from "../../lib/extensions/ui";
 	import ExtensionSurface from "./ExtensionSurface.svelte";
 	import { released } from "../../lib/pointer";
+	import { backLayer } from "../../lib/dialog";
+	import { isPhone, modalIn, modalOut, surfaceIn, surfaceOut } from "../../lib/motion";
+	import { sheetPull } from "../../lib/sheet";
 	import { MARGIN as M, clampBox as clampTo, nudgeBox, type Box } from "../../lib/extensions/float-box";
 
 	/**
@@ -43,12 +46,15 @@
 
 	let drag: { k: string; mode: "move" | "size"; x: number; y: number; from: Box } | null = null;
 	function down(e: PointerEvent, p: ExtensionPanel, mode: "move" | "size") {
+		if (isPhone()) return; // on phones the panel docks as a bottom sheet and sheetPull owns the header drag
 		if (mode === "move" && (e.target as HTMLElement).closest("button")) return;
 		(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
 		raise(p);
 		drag = { k: key(p), mode, x: e.clientX, y: e.clientY, from: boxOf(p) };
 		document.body.style.userSelect = "none";
 	}
+	const floatIn = (node: Element) => (isPhone() ? modalIn(node) : surfaceIn(node, { y: 6 }));
+	const floatOut = (node: Element) => (isPhone() ? modalOut(node) : surfaceOut(node, { y: 6 }));
 	function move(e: PointerEvent) {
 		if (!drag) return;
 		if (released(e)) return up();
@@ -70,19 +76,29 @@
 	function hide(p: ExtensionPanel) {
 		try { extensions.setPanelOpen(p.owner, p.id, false); } catch { /* gone */ }
 	}
+	const topShown = $derived.by(() => {
+		if (!shown.length) return null;
+		return [...shown].sort((a, b) => order.indexOf(key(a)) - order.indexOf(key(b))).at(-1) ?? null;
+	});
+	$effect(() => {
+		const top = topShown;
+		if (!top || vw > 640) return;
+		return backLayer({ onclose: () => hide(top) });
+	});
 </script>
 
 <svelte:window bind:innerWidth={vw} bind:innerHeight={vh} />
 
 {#each shown as p (key(p))}
 	{@const b = boxOf(p)}
-	<section class="float" data-part="floating" aria-label={p.title}
-		style:left="{b.x}px" style:top="{b.y}px" style:width="{b.w}px" style:height="{b.h}px" style:z-index={30 + Math.max(0, order.indexOf(key(p)))}
+	<section class="float sheet" data-part="floating" data-sheet-root="" aria-label={p.title}
+		style:--fx="{b.x}px" style:--fy="{b.y}px" style:--fw="{b.w}px" style:--fh="{b.h}px" style:z-index={30 + Math.max(0, order.indexOf(key(p)))}
+		in:floatIn out:floatOut
 		onpointerdowncapture={() => raise(p)}>
 		<!-- The title bar is a drag handle; its keyboard twin is the arrow keys (named in its label). -->
 		<!-- A window frame is a non-interactive group that also behaves as a drag handle; it holds the close button, so it cannot itself be a button. -->
 		<!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
-		<div class="bar" role="group" tabindex="0" aria-label={t("{title} 창: 화살표 키로 이동, Shift와 화살표 키로 크기 조절", { title: p.title })} onkeydown={(e) => nudge(e, p, "move")} onpointerdown={(e) => down(e, p, "move")} onpointermove={move} onpointerup={up} onpointercancel={up}>
+		<div class="bar" role="group" tabindex="0" aria-label={t("{title} 창: 화살표 키로 이동, Shift와 화살표 키로 크기 조절", { title: p.title })} use:sheetPull={{ onclose: () => hide(p) }} onkeydown={(e) => nudge(e, p, "move")} onpointerdown={(e) => down(e, p, "move")} onpointermove={move} onpointerup={up} onpointercancel={up}>
 			<span class="title">{p.title}</span>
 			<span class="owner">{ownerName(p.owner)}</span>
 			<IconButton icon="x" label={t("확장 창 닫기")} onclick={() => hide(p)} />
@@ -93,7 +109,7 @@
 {/each}
 
 <style>
-	.float { position: fixed; display: flex; flex-direction: column; min-width: 0; background: var(--bg); border: 1px solid var(--border-strong); border-radius: var(--radius-panel); box-shadow: var(--shadow-overlay); overflow: hidden; }
+	.float { position: fixed; left: var(--fx); top: var(--fy); width: var(--fw); height: var(--fh); display: flex; flex-direction: column; min-width: 0; background: var(--bg); border: 1px solid var(--border-strong); border-radius: var(--radius-panel); box-shadow: var(--shadow-overlay); overflow: hidden; }
 	.bar { flex: none; display: flex; align-items: center; gap: 8px; padding: 4px 12px 4px 12px; background: var(--bg-side); border-bottom: 1px solid var(--border); cursor: grab; touch-action: none; }
 	/* the 19px glyph of the 38px button lands on the body's 12px right edge: 12 - 9.5 bleed */
 	.bar :global(.iconbtn:last-child) { margin-right: -9.5px; }
@@ -104,4 +120,25 @@
 	.owner { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--fs-2xs); color: var(--text-faint); }
 	.body { flex: 1; min-height: 0; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; padding: 12px; }
 	.corner { position: absolute; right: 0; bottom: 0; width: 16px; height: 16px; cursor: nwse-resize; touch-action: none; background: linear-gradient(135deg, transparent 50%, var(--border-strong) 50%, var(--border-strong) 60%, transparent 60%, transparent 70%, var(--border-strong) 70%, var(--border-strong) 80%, transparent 80%); }
+	@media (max-width: 640px) {
+		.float.sheet {
+			left: 0;
+			right: 0;
+			top: auto;
+			bottom: 0;
+			width: var(--vw);
+			height: auto;
+			max-height: calc(var(--dvh) * 0.8);
+			border-bottom: 0;
+			border-radius: var(--radius-panel) var(--radius-panel) 0 0;
+			box-shadow: none;
+			padding-bottom: var(--sab);
+		}
+		.bar {
+			padding: 16px 12px 4px 16px; /* top 16 clears the 38×4 grabber bar (.sheet-handle::before) */
+		}
+		.corner {
+			display: none;
+		}
+	}
 </style>
