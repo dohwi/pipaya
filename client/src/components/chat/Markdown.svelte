@@ -594,7 +594,7 @@
 			background: color-mix(in srgb, var(--mark-file) 22%, transparent);
 		}
 	}
-	/* Matches TokenText's `.tok.mention` and `.tok.skill` chips: amber @session / @group, sky self @session, and accent /skill: & /prompt: marks. */
+	/* Matches TokenText's `.tok.mention` and `.tok.skill` chips: neutral @session / @group, sky self @session, and accent /skill: & /prompt: marks. */
 	.md :global(.wd-mention),
 	.md :global(button.wd-skill),
 	.md :global(button.wd-prompt) {

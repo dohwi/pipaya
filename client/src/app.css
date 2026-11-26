@@ -254,14 +254,14 @@
 	--lv-high: #f472b6;
 	--lv-xhigh: #fb923c;
 	--lv-max: #f87171;
-	/* mention marks (composer and sent messages): @member amber (the agent-to-agent hue of --mark-header) is the one accent;
-	   #image and #file are a neutral grey so a tagged message stays calm */
+	/* mention marks (composer and sent messages): neutral zinc chips so inline @mentions, #files and #images stay calm
+	   and never compete with activity dots; --mark-header stays amber for peer message headers */
 	--mark-img: #a1a1aa;
 	--mark-file: #a1a1aa;
 	--mark-header: #fcd34d;
-	--mark-mention: #fcd34d;
-	--mark-mention-self: #7dd3fc; /* sky-300: cool counterpart to amber @mention so tagging the current chat stands apart (7.7:1+ on --user-bg tint) */
-	--mark-mention-closed: #a1a1aa; /* zinc-400: calm muted chip for closed sessions so finished workers remain clickable without competing with live ones */
+	--mark-mention: #e4e4e7; /* zinc-200: calm neutral chip for live @mentions so status dots read cleanly without clashing with a coloured fill */
+	--mark-mention-self: #7dd3fc; /* sky-300: cool accent so tagging the current chat stands apart from neutral @mentions (7.7:1+ on --user-bg tint) */
+	--mark-mention-closed: #a1a1aa; /* zinc-400: softer muted chip for closed sessions so finished workers remain clickable without competing with live ones */
 	--info: #5aa9ff;
 	--pinned: #ffffff; /* the pinned mark: white on dark, black on light; no status hue, so it is never read as one */
 	--ok: #3ecf8e;
@@ -329,7 +329,7 @@
 	--mark-img: #71717a;
 	--mark-file: #71717a;
 	--mark-header: #92400e; /* amber-800: 4.5:1+ even over tinted chips on --user-bg #f5f5f7 (dark uses #fcd34d) */
-	--mark-mention: #92400e;
+	--mark-mention: #27272a; /* zinc-800: neutral dark grey for live @mentions (12:1+ on --user-bg tint; dark uses #e4e4e7) */
 	--mark-mention-self: #075985; /* sky-800: 5.9:1+ over tinted chips on --user-bg #f5f5f7 (dark uses #7dd3fc) */
 	--mark-mention-closed: #52525b; /* zinc-600: 5.7:1+ over tinted chips on --user-bg #f5f5f7 (dark uses #a1a1aa) */
 	/* The four status colours are text as often as fills (badges, chips, the who/@name, notices, errors), so each is set

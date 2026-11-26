@@ -241,8 +241,8 @@
 		padding: 0 8px;
 	}
 	.line.hl {
-		background: color-mix(in srgb, var(--mark-mention) 14%, transparent);
-		box-shadow: inset 2px 0 0 var(--mark-mention); /* crisp left hairline marks the target line range cleanly */
+		background: color-mix(in srgb, var(--mark-header) 14%, transparent);
+		box-shadow: inset 2px 0 0 var(--mark-header); /* crisp amber left hairline marks the target line range cleanly */
 	}
 	.winnote {
 		padding: 4px 8px;
