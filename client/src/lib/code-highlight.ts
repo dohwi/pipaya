@@ -74,6 +74,58 @@ export function languageOf(label: string | undefined | null): string | null {
 	return Object.hasOwn(LOADERS, name) ? name : null;
 }
 
+const SPECIAL_FILES: Record<string, string> = {
+	dockerfile: "dockerfile",
+	containerfile: "dockerfile",
+	makefile: "makefile",
+	gnumakefile: "makefile",
+	"nginx.conf": "nginx",
+	".bashrc": "bash",
+	".zshrc": "bash",
+	".profile": "bash",
+	".bash_profile": "bash",
+	".env": "bash",
+};
+
+/** Infer a highlight.js grammar name from a file path (basename or extension), or null for plain text. */
+export function languageFromPath(path: string | undefined | null): string | null {
+	const clean = (path ?? "").trim().replace(/[\\/]+$/, "");
+	if (!clean) return null;
+	const base = (clean.split(/[\\/]/).at(-1) ?? "").toLowerCase();
+	if (!base) return null;
+	if (Object.hasOwn(SPECIAL_FILES, base)) return SPECIAL_FILES[base]!;
+	if (base.startsWith("dockerfile.")) return "dockerfile";
+	if (base.startsWith(".env.")) return "bash";
+	const dot = base.lastIndexOf(".");
+	if (dot <= 0 || dot === base.length - 1) return null;
+	return languageOf(base.slice(dot + 1));
+}
+
+/**
+ * Split highlight.js HTML into per-line HTML strings, balancing any `<span ...>` tags that cross a newline
+ * (e.g. multi-line comments or template literals) so each line can be placed inside its own grid row.
+ */
+export function splitHighlightedLines(html: string): string[] {
+	const lines = html.split("\n");
+	const out: string[] = [];
+	const openTags: string[] = [];
+	const tagRe = /<span\b[^>]*>|<\/span>/g;
+	for (const raw of lines) {
+		const prefix = openTags.join("");
+		tagRe.lastIndex = 0;
+		for (let m = tagRe.exec(raw); m; m = tagRe.exec(raw)) {
+			if (m[0] === "</span>") {
+				openTags.pop();
+			} else {
+				openTags.push(m[0]);
+			}
+		}
+		const suffix = "</span>".repeat(openTags.length);
+		out.push(`${prefix}${raw}${suffix}`);
+	}
+	return out;
+}
+
 let hljs: HLJSApi | null = null;
 let core: Promise<HLJSApi> | null = null;
 /** Grammars by name: registered, loading, or failed (a failed one stays plain and is not fetched again). */
@@ -130,4 +182,12 @@ export function highlightCode(code: string, label: string | undefined | null): s
 	} catch {
 		return null;
 	}
+}
+
+/** Highlight `code` and split into balanced per-line HTML strings, or null when plain/loading. */
+export function highlightLines(code: string, label: string | undefined | null): string[] | null {
+	const normalized = code.replace(/\r\n?/g, "\n");
+	const res = highlightCode(normalized, label);
+	if (!res || res === "wait") return null;
+	return splitHighlightedLines(res);
 }

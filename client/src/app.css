@@ -881,6 +881,35 @@ kbd {
 	font-feature-settings: "calt" 0, "liga" 0;
 }
 
+/* syntax colours (code-highlight.ts): colour only, never weight or size, so blocks keep their layout when coloured in */
+:is(.hljs-keyword, .hljs-doctag, .hljs-template-tag, .hljs-template-variable, .hljs-type, .hljs-variable.language_, .hljs-meta .hljs-keyword) {
+	color: var(--syn-keyword);
+}
+:is(.hljs-title, .hljs-title.class_, .hljs-title.function_) {
+	color: var(--syn-title);
+}
+:is(.hljs-attr, .hljs-attribute, .hljs-literal, .hljs-meta, .hljs-number, .hljs-operator, .hljs-variable, .hljs-selector-attr, .hljs-selector-class, .hljs-selector-id, .hljs-section) {
+	color: var(--syn-number);
+}
+:is(.hljs-string, .hljs-regexp, .hljs-meta .hljs-string) {
+	color: var(--syn-string);
+}
+:is(.hljs-built_in, .hljs-symbol) {
+	color: var(--syn-builtin);
+}
+:is(.hljs-comment, .hljs-code, .hljs-formula) {
+	color: var(--syn-comment);
+}
+:is(.hljs-name, .hljs-quote, .hljs-selector-tag, .hljs-selector-pseudo, .hljs-addition) {
+	color: var(--syn-name);
+}
+:is(.hljs-bullet, .hljs-link) {
+	color: var(--syn-bullet);
+}
+.hljs-deletion {
+	color: var(--syn-keyword);
+}
+
 /* One group of related settings (a section label and its rows) on its own hairline tinted card, so groups read apart at a glance. */
 .set-group {
 	padding: var(--dlg-gap);

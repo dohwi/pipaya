@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { peerTargetOf, peerTargetsOf, scheduleIdOf, splitCd, toolIcon, toolSummary } from "../src/lib/tools";
+import { peerTargetOf, peerTargetsOf, scheduleIdOf, splitCd, summarizeGenericArgs, toolIcon, toolSummary } from "../src/lib/tools";
 
 describe("toolSummary for ask_user", () => {
 	test("shows the question text, not its JSON", () => {
@@ -111,5 +111,31 @@ describe("splitCd", () => {
 
 	test("the bash summary is the work after the cd", () => {
 		expect(toolSummary("bash", { command: "cd ../app && git fetch" })).toBe("git fetch");
+	});
+});
+
+describe("toolSummary for custom / MCP tools", () => {
+	test("formats action and primary keys without raw JSON braces", () => {
+		expect(toolSummary("custom_rules", { action: "inspect" })).toBe("inspect");
+		expect(
+			toolSummary("custom_rules", {
+				action: "set",
+				scope: "workspace",
+				content: "# ignore rules (.gitignore syntax)\n# One pattern per line",
+			}),
+		).toBe("set · workspace · # ignore rules (.gitignore syntax)");
+		expect(toolSummary("custom_rules", { content: "# rules\nline 2" })).toBe("# rules");
+		expect(toolSummary("mcp_search_web_search", { query: "svelte 5 transitions", categories: "it" })).toBe("svelte 5 transitions · categories=it");
+		expect(toolSummary("mcp_search_web_fetch", { url: "https://svelte.dev/docs" })).toBe("https://svelte.dev/docs");
+	});
+
+	test("handles arrays, falsy primitives, empty values and clipping", () => {
+		expect(summarizeGenericArgs({})).toBe("");
+		expect(summarizeGenericArgs({ a: "", b: null, c: undefined, d: [] })).toBe("");
+		expect(summarizeGenericArgs({ offset: 0, enabled: false })).toBe("offset=0 · enabled=false");
+		expect(summarizeGenericArgs({ action: "add", patterns: ["skills/a", "skills/b"] })).toBe("add · skills/a, skills/b");
+		expect(summarizeGenericArgs({ patterns: ["a", "b", "c", "d"] })).toBe("a, b (+2)");
+		expect(summarizeGenericArgs({ items: [{ x: 1 }, { x: 2 }] })).toBe("items=2 items");
+		expect(summarizeGenericArgs({ query: "x".repeat(200) }).length).toBeLessThanOrEqual(91);
 	});
 });
