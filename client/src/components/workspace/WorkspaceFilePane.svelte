@@ -662,10 +662,10 @@
 		requestAnimationFrame(() => {
 			requestAnimationFrame(() => {
 				const pane = document.querySelector(`[data-pane="${CSS.escape(sessionId)}"]`);
-				const el = pane?.querySelector<HTMLTextAreaElement>("textarea[data-composer]");
+				const el = pane?.querySelector<HTMLElement>("[data-composer]");
 				if (el) {
 					el.focus();
-					el.setSelectionRange(el.value.length, el.value.length);
+					if (el instanceof HTMLTextAreaElement) el.setSelectionRange(el.value.length, el.value.length);
 				}
 			});
 		});

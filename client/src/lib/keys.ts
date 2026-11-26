@@ -648,10 +648,10 @@ export function escapeShouldUnzoom(o: { overlayOpen: boolean; target: { tagName?
   if (o.overlayOpen) return false;
   const t = o.target;
   if (!t) return true;
+  if (t.dataset?.composer !== undefined) return true;
   if (t.isContentEditable) return false;
   const tag = t.tagName ?? "";
-  if (tag === "INPUT" || tag === "SELECT") return false;
-  if (tag === "TEXTAREA") return t.dataset?.composer !== undefined;
+  if (tag === "INPUT" || tag === "SELECT" || tag === "TEXTAREA") return false;
   return true;
 }
 
@@ -670,10 +670,10 @@ export function escapeShouldStop(o: {
   if (!o.busy || o.overlayOpen) return false;
   const t = o.target;
   if (!t) return true;
+  if (t.dataset?.composer !== undefined) return true;
   if (t.isContentEditable) return false;
   const tag = t.tagName ?? "";
-  if (tag === "INPUT" || tag === "SELECT") return false;
-  if (tag === "TEXTAREA") return t.dataset?.composer !== undefined;
+  if (tag === "INPUT" || tag === "SELECT" || tag === "TEXTAREA") return false;
   return true;
 }
 
@@ -697,11 +697,11 @@ export function renameShouldFallThrough(o: {
   if (o.recording || o.renaming || o.overlayOpen || o.inTerminal) return false;
   const t = o.target;
   if (!t) return true;
+  // Opening a conversation moves focus into its composer, and F2 types nothing there: it must still rename right after a switch
+  if (t.dataset?.composer !== undefined) return true;
   if (t.isContentEditable) return false;
   const tag = t.tagName ?? "";
-  // Opening a conversation moves focus into its composer, and F2 types nothing there: it must still rename right after a switch
-  if (tag === "TEXTAREA") return t.dataset?.composer !== undefined;
-  return tag !== "INPUT" && tag !== "SELECT";
+  return tag !== "INPUT" && tag !== "SELECT" && tag !== "TEXTAREA";
 }
 
 /**
@@ -715,7 +715,7 @@ export function tabComboYieldsFocus(combo: string, target: { tagName?: string; i
   if (!target) return false;
   const tag = target.tagName ?? "";
   if (tag === "BODY" || tag === "HTML") return false;
-  return !(tag === "TEXTAREA" && target.dataset?.composer !== undefined);
+  return target.dataset?.composer === undefined;
 }
 
 /** True when the combo fires on keys alone, so it must not trigger while typing in a text field. */

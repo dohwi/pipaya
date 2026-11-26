@@ -162,42 +162,107 @@ export interface Known {
 	paths: readonly string[];
 }
 
+/** A run of composer text: plain, or a token drawn as an inline chip matching TokenText. */
+export type ComposerPart = {
+	kind: "text" | "mention" | "image" | "file" | "skill" | "prompt";
+	text: string;
+	name?: string;
+};
+
 const MIRROR_TOKEN = /(^|\s)(#image(\d+)(?=\s|$)|#[^\s#]+|@[^\s@]+|\/skill:[^\s]+|\/[a-z][a-z0-9-]*:[A-Za-z0-9_.-]+)(?=\s|$)/g;
 const MIRROR_SKILL = /^\/skill:([a-z0-9]+(?:-[a-z0-9]+)*)(?![A-Za-z0-9_/-])(.*)$/;
 
 /**
- * The text as HTML for the layer under the textarea: escaped, with tokens that refer to something real wrapped in a
- * `<mark>` of their kind. A trailing newline keeps the layer's height in step with a textarea that ends in a newline.
+ * Cut composer draft text into plain runs and known inline tokens (`#imageN`, `#path`, `@name`, `/skill:name`,
+ * `/prompt:name`, `/prefix:name`). Adjacent plain runs are merged so the DOM renderer sees minimal text nodes.
  */
-export function mirrorHtml(text: string, known: Known): string {
-	const escaped = esc(text);
-	if (!escaped.includes("#") && !escaped.includes("@") && !escaped.includes("/")) return `${escaped}\n`;
+export function tokenizeComposer(text: string, known: Known): ComposerPart[] {
+	if (!text) return [];
+	if (!text.includes("#") && !text.includes("@") && !text.includes("/")) return [{ kind: "text", text }];
 	let commandSet: Set<string> | undefined;
 	let skillSet: Set<string> | undefined;
-	let escapedMentions: string[] | undefined;
 	let pathSet: Set<string> | undefined;
-	return (
-		escaped.replace(MIRROR_TOKEN, (m, lead: string, tok: string, n?: string) => {
-			if (tok.startsWith("/") && !tok.startsWith("/skill:")) {
-				commandSet ??= new Set(known.commands);
-				return commandSet.has(tok.slice(1)) ? `${lead}<mark class="skill">${tok}</mark>` : m;
+
+	const out: ComposerPart[] = [];
+	const pushText = (s: string) => {
+		if (!s) return;
+		const prev = out[out.length - 1];
+		if (prev?.kind === "text") prev.text += s;
+		else out.push({ kind: "text", text: s });
+	};
+
+	let last = 0;
+	for (const m of text.matchAll(MIRROR_TOKEN)) {
+		const index = m.index ?? 0;
+		const full = m[0]!;
+		const lead = m[1]!;
+		const tok = m[2]!;
+		const n = m[3];
+
+		let matched: ComposerPart | null = null;
+		let tail = "";
+
+		if (tok.startsWith("/") && !tok.startsWith("/skill:")) {
+			commandSet ??= new Set(known.commands);
+			const body = tok.slice(1);
+			if (commandSet.has(body)) {
+				matched = body.startsWith("prompt:")
+					? { kind: "prompt", text: tok, name: body.slice("prompt:".length) }
+					: { kind: "skill", text: tok, name: body };
 			}
-			if (tok.startsWith("/skill:")) {
-				const sm = MIRROR_SKILL.exec(tok);
-				if (!sm) return m;
+		} else if (tok.startsWith("/skill:")) {
+			const sm = MIRROR_SKILL.exec(tok);
+			if (sm) {
 				skillSet ??= new Set(known.skills.map((k) => k.name));
-				return skillSet.has(sm[1]!) ? `${lead}<mark class="skill">/skill:${sm[1]}</mark>${sm[2]}` : m;
+				if (skillSet.has(sm[1]!)) {
+					matched = { kind: "skill", text: `/skill:${sm[1]}`, name: sm[1] };
+					tail = sm[2] ?? "";
+				}
 			}
-			if (tok.startsWith("@")) {
-				const rest = tok.slice(1);
-				escapedMentions ??= known.mentions.map(esc);
-				const hit = knownMention(rest, escapedMentions);
-				return hit ? `${lead}<mark class="mention">@${hit}</mark>${rest.slice(hit.length)}` : m;
+		} else if (tok.startsWith("@")) {
+			const rest = tok.slice(1);
+			const hit = knownMention(rest, known.mentions);
+			if (hit) {
+				matched = { kind: "mention", text: `@${rest.slice(0, hit.length)}`, name: hit };
+				tail = rest.slice(hit.length);
 			}
-			if (n !== undefined && Number(n) >= 1 && Number(n) <= known.images) return `${lead}<mark class="img">${tok}</mark>`;
-			pathSet ??= new Set(known.paths.map((p) => esc(`#${p}`)));
-			return pathSet.has(tok) ? `${lead}<mark class="file">${tok}</mark>` : m;
-		}) + "\n"
+		} else if (n !== undefined && Number(n) >= 1 && Number(n) <= known.images) {
+			matched = { kind: "image", text: tok, name: n };
+		} else if (tok.startsWith("#")) {
+			pathSet ??= new Set(known.paths.map((p) => `#${p}`));
+			const rawPath = tok.slice(1);
+			if (pathSet.has(tok) || FILE_TOKEN.test(rawPath)) {
+				matched = { kind: "file", text: tok, name: rawPath };
+			}
+		}
+
+		if (matched) {
+			pushText(text.slice(last, index) + lead);
+			out.push(matched);
+			if (tail) pushText(tail);
+			last = index + full.length;
+		}
+	}
+	pushText(text.slice(last));
+	return out;
+}
+
+/**
+ * The text as HTML for a highlight mirror: escaped, with tokens that refer to something real wrapped in a
+ * `<mark>` of their kind. Kept for compatibility with tests and callers expecting plain HTML.
+ */
+export function mirrorHtml(text: string, known: Known): string {
+	const parts = tokenizeComposer(text, known);
+	if (!parts.length) return "\n";
+	return (
+		parts
+			.map((p) => {
+				const body = esc(p.text);
+				if (p.kind === "text") return body;
+				const cls = p.kind === "image" ? "img" : p.kind === "prompt" ? "skill" : p.kind;
+				return `<mark class="${cls}">${body}</mark>`;
+			})
+			.join("") + "\n"
 	);
 }
 

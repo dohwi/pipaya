@@ -13,7 +13,6 @@
 	import { abortable } from "../../lib/abortable";
 	import { DebouncedList } from "../../lib/debounced-list.svelte";
 	import { newHistory, stepHistory } from "../../lib/prompt-history";
-	import { caretOnFirstVisualLine, caretOnLastVisualLine } from "../../lib/caret-line";
 	import { enterPlan, historyKey, lastPromptOf, menuAria, sentPrompts as sentPromptsOf } from "../../lib/composer/input-keys";
 	import { Ime } from "../../lib/composer/ime";
 	import { fileRows, folderRows, mentionRows, menuKey, menuKindOf, menuOpen, optionRows, PROMPT_PREFIX, slashRows, slashScopeOf } from "../../lib/slash-menu";
@@ -21,7 +20,8 @@
 	import type { ImageBlock } from "../../lib/types";
 	import { baseName, MAX_IMAGES, previewKind } from "../../lib/files";
 	import { WORKSPACE_FILE_MIME } from "../../lib/workspace-edits";
-	import { dropImageToken, extractSkillNames, insertToken, mentionAt, mergeReturned, mirrorHtml, replaceMention, slashAt, type Mention } from "../../lib/composer-text";
+	import { dropImageToken, extractSkillNames, insertToken, mentionAt, mergeReturned, replaceMention, slashAt, tokenizeComposer, type Mention } from "../../lib/composer-text";
+	import ComposerEditor from "./ComposerEditor.svelte";
 	import IconButton from "../ui/IconButton.svelte";
 	import ModelPicker from "../models/ModelPicker.svelte";
 	import RetryNotice from "./RetryNotice.svelte";
@@ -70,8 +70,7 @@
 	// Unsent input survives switching to another session and back (kept per session; "" = new chat), and a restart.
 	let text = $state("");
 	let caret = $state(0);
-	let ta: HTMLTextAreaElement | undefined = $state();
-	let mirror: HTMLDivElement | undefined = $state();
+	let editor: ComposerEditor | undefined = $state();
 	let fileInput: HTMLInputElement | undefined = $state();
 	const attached = new Attachments({
 		vision: () => vision,
@@ -100,13 +99,13 @@
 	const canSend = $derived((text.trim().length > 0 || attached.any) && (app.net === "online" || parseSlash(text) !== null) && !Boolean(sendingState) && !submitBusy);
 
 	export function focus() {
-		ta?.focus();
+		editor?.focus();
 	}
 	export function setText(t: string) {
 		text = t;
 		caret = t.length;
-		ta?.focus();
-		queueMicrotask(() => ta?.setSelectionRange(t.length, t.length));
+		editor?.focus();
+		queueMicrotask(() => editor?.setSelection(t.length, t.length));
 	}
 
 	// The textarea's height is not measured in JS: the mirror layer shares its grid cell and sizes it (see .field-wrap).
@@ -195,7 +194,7 @@
 					} else saveAttachmentsNow();
 				});
 		});
-		if (pane.focused && !isTouch()) queueMicrotask(() => { if (shouldTakeFocus(document.activeElement)) ta?.focus(); });
+		if (pane.focused && !isTouch()) queueMicrotask(() => { if (shouldTakeFocus(document.activeElement)) editor?.focus(); });
 		return () => untrack(stash);
 	});
 
@@ -249,12 +248,12 @@
 		if (!incoming || incoming.paneId !== (pane.id ?? "")) return;
 		app.insertText = null;
 		const current = untrack(() => text);
-		const focused = !!ta && document.activeElement === ta;
-		const at = focused ? (ta?.selectionStart ?? current.length) : current.length;
+		const focused = !!editor?.isFocused();
+		const at = focused ? (editor?.getSelection().start ?? current.length) : current.length;
 		const next = insertToken(current, at, incoming.text);
 		text = next.text;
 		caret = next.caret;
-		if (focused) queueMicrotask(() => { ta?.setSelectionRange(next.caret, next.caret); syncCaret(); });
+		if (focused) queueMicrotask(() => { editor?.setSelection(next.caret, next.caret); syncCaret(); });
 		voiceEnter = !focused;
 	});
 
@@ -270,7 +269,7 @@
 		}
 		if (!liveBase) {
 			const current = untrack(() => text);
-			const at = untrack(() => (ta && document.activeElement === ta ? (ta.selectionStart ?? current.length) : current.length));
+			const at = untrack(() => (editor?.isFocused() ? editor.getSelection().start : current.length));
 			liveBase = { before: current.slice(0, at), after: current.slice(at) };
 		}
 		const said = live!.text;
@@ -303,7 +302,7 @@
 		if (r === null || !pane.focused) return;
 		app.replyTo = null;
 		reply = r;
-		ta?.focus();
+		editor?.focus();
 	});
 
 	// ── commands, skills, /cd paths and finite arguments share the recommendation menu above the input ──
@@ -465,7 +464,7 @@
 	));
 
 	function syncCaret() {
-		caret = ta?.selectionStart ?? text.length;
+		caret = editor?.getSelection().start ?? text.length;
 	}
 
 	/** Put `insert` in place of the mention at the caret, and keep typing after it. */
@@ -474,8 +473,8 @@
 		text = next.text;
 		caret = next.caret;
 		queueMicrotask(() => {
-			ta?.focus();
-			ta?.setSelectionRange(next.caret, next.caret);
+			editor?.focus();
+			editor?.setSelection(next.caret, next.caret);
 		});
 	}
 	/** Replace the #token with the chosen image or path. Folders keep the menu open so the user can keep drilling down. */
@@ -699,14 +698,16 @@
 	const history = newHistory();
 	/** Returns true when the key was used to move through the history. */
 	function browseHistory(e: KeyboardEvent): boolean {
-		if (!ta || !historyKey(e, ime.composing, ta.selectionStart === ta.selectionEnd)) return false;
+		if (!editor) return false;
+		const sel = editor.getSelection();
+		if (!historyKey(e, ime.composing, sel.start === sel.end)) return false;
 		// soft-wrapped text: the caret may be below/above the first/last visual line even without a "\n"
-		if (e.key === "ArrowUp" ? !caretOnFirstVisualLine(ta) : !caretOnLastVisualLine(ta)) return false;
-		const step = stepHistory(history, e.key, text, text.slice(0, ta.selectionStart), text.slice(ta.selectionEnd), sentPrompts);
+		if (e.key === "ArrowUp" ? !editor.isOnFirstVisualLine() : !editor.isOnLastVisualLine()) return false;
+		const step = stepHistory(history, e.key, text, text.slice(0, sel.start), text.slice(sel.end), sentPrompts);
 		if (step.used && step.text !== undefined) {
 			const value = step.text;
 			text = value;
-			queueMicrotask(() => { ta?.setSelectionRange(value.length, value.length); syncCaret(); });
+			queueMicrotask(() => { editor?.setSelection(value.length, value.length); syncCaret(); });
 		}
 		return step.used;
 	}
@@ -778,51 +779,19 @@
 		else void submit();
 	}
 
-	/** Paths picked from the # menu; only these (exact) tokens get highlighted. */
+	/** Paths picked from the # menu; extensionless root names like `#LICENSE` are marked when picked or dropped. */
 	let pickedPaths = $state<string[]>([]);
-	const highlighted = $derived(mirrorHtml(text, { commands: [...templateList.map((x) => `${PROMPT_PREFIX}${x.name}`), ...familyList.map((f) => `${f.prefix}:${f.name}`)], skills: skillList, mentions: mentionItems.map((m) => m.insert.slice(1)), images: attached.images.length, paths: pickedPaths }));
-
-	function syncMirror() {
-		if (!mirror || !ta) return;
-		// Keep text wrapping width identical even when a browser reserves different scrollbar widths for <textarea> vs <div>.
-		const padRight = parseFloat(getComputedStyle(ta).paddingRight) || 0;
-		const gutterDelta = mirror.clientWidth - ta.clientWidth;
-		if (gutterDelta > 0) {
-			mirror.style.paddingRight = `${padRight + gutterDelta}px`;
-		} else if (mirror.style.paddingRight) {
-			mirror.style.paddingRight = "";
-		}
-		if (mirror.scrollTop !== ta.scrollTop) mirror.scrollTop = ta.scrollTop;
-		if (mirror.scrollLeft !== ta.scrollLeft) mirror.scrollLeft = ta.scrollLeft;
-	}
-
-	// Re-sync mirror scroll after Svelte flushes `{@html highlighted}` to DOM (prevents scrollTop clamping when text grows at max-height).
-	$effect(() => {
-		void highlighted;
-		syncMirror();
-		const raf = requestAnimationFrame(syncMirror);
-		return () => cancelAnimationFrame(raf);
-	});
-
-	// Re-sync on textarea width/height changes (sidebar toggle, split resize, zoom, attachment strip changes).
-	$effect(() => {
-		const el = ta;
-		if (!el || typeof ResizeObserver === "undefined") return;
-		const ro = new ResizeObserver(syncMirror);
-		ro.observe(el);
-		return () => ro.disconnect();
-	});
+	const parts = $derived(tokenizeComposer(text, { commands: [...templateList.map((x) => `${PROMPT_PREFIX}${x.name}`), ...familyList.map((f) => `${f.prefix}:${f.name}`)], skills: skillList, mentions: mentionItems.map((m) => m.insert.slice(1)), images: attached.images.length, paths: pickedPaths }));
 
 	function insertImageToken(n: number) {
-		const pos = document.activeElement === ta && ta ? ta.selectionStart : caret;
+		const pos = editor?.isFocused() ? editor.getSelection().start : caret;
 		const next = insertToken(text, Math.min(pos, text.length), `#image${n}`);
 		text = next.text;
 		caret = next.caret;
 		void tick().then(() => {
-			if (ta) {
-				ta.setSelectionRange(next.caret, next.caret);
+			if (editor) {
+				editor.setSelection(next.caret, next.caret);
 				syncCaret();
-				syncMirror();
 			}
 		});
 	}
@@ -877,12 +846,13 @@
 			[...attached.images, ...taken.map((b) => ({ id: uid(), name: "image", preview: `data:${b.mimeType};base64,${b.data}`, data: b.data, mimeType: b.mimeType }))],
 			attached.files,
 		);
-		const at = ta?.selectionStart ?? text.length;
-		const end = ta?.selectionEnd ?? at;
+		const sel = editor?.getSelection() ?? { start: text.length, end: text.length };
+		const at = sel.start;
+		const end = sel.end;
 		const piece = shiftImageTokens(body, before, taken.length);
 		text = text.slice(0, at) + piece + text.slice(end);
 		const caretAt = at + piece.length;
-		queueMicrotask(() => { ta?.setSelectionRange(caretAt, caretAt); syncCaret(); });
+		queueMicrotask(() => { editor?.setSelection(caretAt, caretAt); syncCaret(); });
 	}
 
 	/** This pane's input is the recording surface (recording or transcribing). */
@@ -891,13 +861,13 @@
 	function attachWorkspacePath(path: string, dir: boolean) {
 		const tokenPath = dir ? `${path.replace(/\/+$/, "")}/` : path;
 		if (!pickedPaths.includes(tokenPath)) pickedPaths.push(tokenPath);
-		const pos = ta && document.activeElement === ta ? (ta.selectionStart ?? text.length) : text.length;
+		const pos = editor?.isFocused() ? editor.getSelection().start : text.length;
 		const next = insertToken(text, Math.min(pos, text.length), `#${tokenPath}`);
 		text = next.text;
 		caret = next.caret;
 		queueMicrotask(() => {
-			ta?.focus();
-			ta?.setSelectionRange(next.caret, next.caret);
+			editor?.focus();
+			editor?.setSelection(next.caret, next.caret);
 			syncCaret();
 		});
 	}
@@ -918,7 +888,7 @@
 				const blob = await app.api.fetchFile(pane.id, path);
 				const file = new File([blob], baseName(path), { type: blob.type || "image/png" });
 				await attached.add([file]);
-				queueMicrotask(() => ta?.focus());
+				queueMicrotask(() => editor?.focus());
 				return;
 			} catch {
 				// Fall back to `#path` mention if the file could not be fetched as an image.
@@ -995,29 +965,23 @@
 		{#if promptHint && !voiceActive}
 			<div class="prompt-hint" aria-hidden="true" title={promptHint}>↑ {promptHint}</div>
 		{/if}
-		<div class="mirror" bind:this={mirror} aria-hidden="true">{@html highlighted}</div>
-		<textarea
-			bind:this={ta}
-			onscroll={syncMirror}
-			data-composer
-			{...menuAria(slashOpen, menuListId, menuOptionId, slashIndex, menuItems.length)}
-			bind:value={text}
+		<ComposerEditor
+			bind:this={editor}
+			bind:text
+			{parts}
+			readonly={voiceActive || uploadActive}
+			placeholder={promptHint ? "" : voice.recording && voiceActive ? (voice.realtime ? t("말씀하세요… 말하는 대로 글이 들어갑니다") : t("말씀하세요… 끝나면 ✓를 누르세요")) : voiceActive ? t("글로 바꾸는 중…") : running ? runningHint : t("에이전트에게 메시지 보내기 · / 명령")}
+			ariaLabel={running ? runningHint : t("에이전트에게 메시지 보내기 · / 명령")}
+			ariaAttrs={menuAria(slashOpen, menuListId, menuOptionId, slashIndex, menuItems.length)}
 			onkeydown={onKey}
-			oninput={() => { voiceEnter = false; syncCaret(); syncMirror(); }}
+			oninput={() => { voiceEnter = false; syncCaret(); }}
 			onkeyup={(e) => { if (!["ArrowDown", "ArrowUp", "Enter", "Tab", "Escape"].includes(e.key)) syncCaret(); }}
 			onclick={syncCaret}
 			onfocus={() => { voiceEnter = false; syncCaret(); }}
 			onpaste={onPaste}
 			oncompositionstart={() => ime.start()}
 			oncompositionend={onCompositionEnd}
-			rows="1"
-			readonly={voiceActive || uploadActive}
-			placeholder={promptHint ? "" : voice.recording && voiceActive ? (voice.realtime ? t("말씀하세요… 말하는 대로 글이 들어갑니다") : t("말씀하세요… 끝나면 ✓를 누르세요")) : voiceActive ? t("글로 바꾸는 중…") : running ? runningHint : t("에이전트에게 메시지 보내기 · / 명령")}
-			aria-label={running ? runningHint : t("에이전트에게 메시지 보내기 · / 명령")}
-			enterkeyhint="enter"
-			autocapitalize="sentences"
-			spellcheck="false"
-		></textarea>
+		/>
 </div>
 
 		{#if voiceActive}
@@ -1096,104 +1060,27 @@
 		border-color: var(--disabled-border);
 		color: var(--disabled-fg);
 	}
-	textarea {
-		display: block;
-		width: 100%;
-		resize: none;
-		border: 0;
-		outline: 0;
-		background: transparent;
-		padding: 12px 16px 4px;
-		font-family: var(--font-input); /* Manrope with a shorter caret (app.css); the mirror and hint share it */
-		font-size: var(--fs-lg);
-		line-height: 1.5;
-		max-height: 220px;
-		min-height: 28px;
-		overflow-x: hidden;
-		overflow-y: auto;
-	}
-	textarea {
-		grid-area: 1 / 1;
-		min-width: 0;
-		align-self: stretch;
-		height: 100%;
-		position: relative;
-		z-index: 1;
-	}
-	/* highlight layer behind the transparent textarea: same metrics, only `#imageN` tokens are tinted */
-	.mirror {
-		grid-area: 1 / 1;
-		min-width: 0;
-		max-height: 220px;
-		padding: 12px 16px 4px;
-		font-family: var(--font-input);
-		font-size: var(--fs-lg);
-		line-height: 1.5;
-		white-space: pre-wrap;
-		overflow-wrap: break-word;
-		overflow-x: hidden;
-		overflow-y: auto;
-		scrollbar-width: none; /* the textarea in front draws the only scrollbar; syncMirror pads for its width */
-		color: transparent;
-		pointer-events: none;
-	}
-	.mirror::-webkit-scrollbar { display: none; }
-	/* mention tags: #imageN and #files grey, @mentions amber; the hues come from the theme (app.css) */
-	.mirror :global(mark) {
-		color: transparent;
-		-webkit-box-decoration-break: clone;
-		box-decoration-break: clone;
-		/* compensates for Manrope Input's descent-override (app.css @font-face) so descenders clear the bottom ring without shifting line-height or caret */
-		padding: 1px 0 2px;
-		border-radius: var(--radius-xs); /* 4px inline mark, matching the sent message's chips (TokenText) */
-	}
-	.mirror :global(mark.img) {
-		background: color-mix(in srgb, var(--mark-img) 32%, transparent);
-		box-shadow: 0 0 0 1px color-mix(in srgb, var(--mark-img) 55%, transparent);
-	}
-	.mirror :global(mark.file) {
-		background: color-mix(in srgb, var(--mark-file) 30%, transparent);
-		box-shadow: 0 0 0 1px color-mix(in srgb, var(--mark-file) 55%, transparent);
-	}
-	.mirror :global(mark.skill) {
-		background: color-mix(in srgb, var(--accent) 22%, transparent);
-		box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 50%, transparent);
-	}
-	.mirror :global(mark.mention) {
-		background: color-mix(in srgb, var(--mark-mention) 30%, transparent);
-		box-shadow: 0 0 0 1px color-mix(in srgb, var(--mark-mention) 55%, transparent);
-	}
-	textarea::placeholder {
-		color: var(--text-faint);
-	}
-	/* mirror and textarea share one cell; the mirror (same metrics, trailing newline) is in flow and sets the height */
 	/* recording or transcribing: a draft above is only context, so it steps back; an empty line says what is happening instead */
 	.field-wrap {
+		position: relative;
 		transition: opacity var(--motion-fast) var(--ease-std);
 	}
 	.field-wrap.calm {
 		opacity: 0.5;
 	}
-	.field-wrap {
-		position: relative;
-		display: grid;
-		grid-template-columns: minmax(0, 1fr);
-	}
-	/* mirrors the textarea's first line so it reads as a placeholder */
+	/* mirrors the editor's first line so it reads as a placeholder */
 	.prompt-hint {
 		position: absolute;
-		top: 14px;
-		left: 16px; /* the box has a 1px border, so the hint text lands on the textarea's own 16px (x 17) */
+		top: 12px;
+		left: 16px; /* the box has a 1px border, so the hint text lands on the editor's own 16px (x 17) */
 		right: 16px;
 		font-family: var(--font-input);
 		font-size: var(--fs-lg);
-		line-height: 1.5;
+		line-height: 24px;
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
 		pointer-events: none;
-	}
-	.prompt-hint {
 		color: var(--text-faint);
 	}
 	/* working: the hint stays plain grey; the box takes the shared .glow-working outline (app.css) */
@@ -1225,22 +1112,17 @@
 		.box {
 			border-radius: calc(var(--radius-panel) * 1.125); /* 18 at the default 16, a narrow pane's smaller box */
 		}
-		textarea,
-		.mirror {
-			padding: 8px 12px 4px;
-		}
 		.prompt-hint {
-			top: 10px;
+			top: 8px;
 			left: 12px;
 			right: 12px;
 		}
 	}
 	@container (max-width: 420px) {
 		@media (pointer: fine) {
-			textarea,
-			.mirror,
 			.prompt-hint {
 				font-size: var(--fs-md);
+				line-height: 20px;
 			}
 		}
 	}

@@ -142,7 +142,7 @@
 			document,
 			() => {
 				const pane = (app.activeId && document.querySelector(`[data-pane="${CSS.escape(app.activeId)}"]`)) || document.querySelector("[data-part=pane]");
-				return pane?.querySelector<HTMLElement>("textarea[data-composer], .xterm-helper-textarea") ?? null;
+				return pane?.querySelector<HTMLElement>("[data-composer], .xterm-helper-textarea") ?? null;
 			},
 			() => !isTouch(),
 		)
