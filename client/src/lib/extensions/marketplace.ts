@@ -138,29 +138,69 @@ export function localizedDescription(entry: MarketEntry, lang: string): string {
 
 const STAR_KEY = "pipaya.marketplace.stars";
 const STAR_TTL = 60 * 60 * 1000;
-const starCache = new Map<string, Promise<number | undefined>>();
+/** Short cooldown for failed lookups (e.g. GitHub 403 rate limit) so re-opening the marketplace does not hammer the API. */
+export const STAR_FAIL_TTL = 5 * 60 * 1000;
+/** Keep stale star counts in localStorage for offline/rate-limited fallback up to 7 days, capped at 200 repos. */
+const STAR_MAX_AGE = 7 * 24 * 60 * 60 * 1000;
+const MAX_STAR_ENTRIES = 200;
+const starCache = new Map<string, { promise: Promise<number | undefined>; at: number; ttl: number }>();
+
+function pruneStarStore(store: Record<string, { n: number; at: number }>, now: number): Record<string, { n: number; at: number }> {
+  const kept = Object.entries(store)
+    .filter(([, v]) => v && typeof v.n === "number" && typeof v.at === "number" && now - v.at < STAR_MAX_AGE)
+    .sort((a, b) => b[1].at - a[1].at)
+    .slice(0, MAX_STAR_ENTRIES);
+  return Object.fromEntries(kept);
+}
+
 /** GitHub star count of a repository, cached for an hour (the unauthenticated API allows 60 calls an hour). */
 export function fetchStars(repo: string): Promise<number | undefined> {
-  let hit = starCache.get(repo);
-  if (!hit) {
-    hit = (async () => {
-      let store: Record<string, { n: number; at: number }> = {};
-      try { store = JSON.parse(localStorage.getItem(STAR_KEY) || "{}"); } catch { /* ignore */ }
-      const cached = store[repo];
-      if (cached && Date.now() - cached.at < STAR_TTL) return cached.n;
-      try {
-        const res = await fetch(`https://api.github.com/repos/${repo}`, { headers: { Accept: "application/vnd.github+json" }, credentials: "omit", referrerPolicy: "no-referrer" });
-        if (!res.ok) return cached?.n;
-        const n = ((await res.json()) as { stargazers_count?: unknown }).stargazers_count;
-        if (typeof n !== "number") return cached?.n;
-        store[repo] = { n, at: Date.now() };
-        try { localStorage.setItem(STAR_KEY, JSON.stringify(store)); } catch { /* ignore */ }
-        return n;
-      } catch { return cached?.n; }
-    })();
-    starCache.set(repo, hit);
+  const now = Date.now();
+  const hit = starCache.get(repo);
+  if (hit && now - hit.at < hit.ttl) return hit.promise;
+  const promise = (async () => {
+    let store: Record<string, { n: number; at: number }> = {};
+    try {
+      const parsed = JSON.parse(localStorage.getItem(STAR_KEY) || "{}");
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) store = parsed as Record<string, { n: number; at: number }>;
+    } catch { /* ignore */ }
+    const cached = store[repo];
+    if (cached && typeof cached.n === "number" && typeof cached.at === "number" && Date.now() - cached.at < STAR_TTL) return cached.n;
+    try {
+      const res = await fetch(`https://api.github.com/repos/${repo}`, { headers: { Accept: "application/vnd.github+json" }, credentials: "omit", referrerPolicy: "no-referrer" });
+      if (!res.ok) return cached?.n;
+      const n = ((await res.json()) as { stargazers_count?: unknown }).stargazers_count;
+      if (typeof n !== "number") return cached?.n;
+      const tNow = Date.now();
+      store[repo] = { n, at: tNow };
+      try { localStorage.setItem(STAR_KEY, JSON.stringify(pruneStarStore(store, tNow))); } catch { /* ignore */ }
+      return n;
+    } catch { return cached?.n; }
+  })();
+  const entry = { promise, at: now, ttl: STAR_TTL };
+  starCache.delete(repo);
+  starCache.set(repo, entry);
+  if (starCache.size > MAX_STAR_ENTRIES) {
+    for (const [k, v] of starCache) {
+      if (now - v.at >= v.ttl) starCache.delete(k);
+    }
+    while (starCache.size > MAX_STAR_ENTRIES) {
+      const oldest = starCache.keys().next().value;
+      if (oldest === undefined || oldest === repo) break;
+      starCache.delete(oldest);
+    }
   }
-  return hit;
+  void promise.then((v) => {
+    if (v === undefined && starCache.get(repo) === entry) {
+      entry.ttl = STAR_FAIL_TTL;
+    }
+  });
+  return promise;
+}
+
+/** Clear in-memory star cache (tests). */
+export function clearStarCache(): void {
+  starCache.clear();
 }
 
 export const formatStars = (n: number): string => n >= 1000 ? `${(n / 1000).toFixed(n >= 10000 ? 0 : 1).replace(/\.0$/, "")}k` : String(n);

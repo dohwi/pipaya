@@ -60,6 +60,8 @@ const FALLBACK_MAX_BYTES = 256 * 1024;
  * Reactive store for the read-only workspace file viewer & live agent modification tracker.
  * Tracks only recent / in-flight edits from the active session's latest editing turn (not unrelated dirty git files).
  */
+import { forgetServerWorkspaceTabs, MAX_STORED_WORKSPACE_DIRS, readStoredWorkspaceTabs, writeStoredWorkspaceTabs } from "./workspace-tabs";
+
 export class WorkspaceViewerStore {
 	supported = $state(true);
 	sessionId = $state<string | null>(null);
@@ -133,33 +135,46 @@ export class WorkspaceViewerStore {
 	}
 
 	private readStoredTabs(key: string): string[] {
-		if (!key || typeof localStorage === "undefined") return [];
-		try {
-			const raw = localStorage.getItem("pipaya.workspace.tabs");
-			if (!raw) return [];
-			const map = JSON.parse(raw) as Record<string, string[]>;
-			const list = map[key];
-			return Array.isArray(list) ? list.filter((x): x is string => typeof x === "string" && x.length > 0) : [];
-		} catch {
-			return [];
-		}
+		return readStoredWorkspaceTabs(key);
 	}
 
 	private persistCurrentDirState() {
 		const key = this.dirKey(this.api, this.workDir);
 		if (!key) return;
+		this.dirStates.delete(key);
 		this.dirStates.set(key, {
 			openFiles: [...this.openFiles],
 			expandedDirs: { ...this.expandedDirs },
 		});
-		if (typeof localStorage === "undefined") return;
-		try {
-			const raw = localStorage.getItem("pipaya.workspace.tabs");
-			const map: Record<string, string[]> = raw ? (JSON.parse(raw) as Record<string, string[]>) : {};
-			if (this.openFiles.length > 0) map[key] = [...this.openFiles];
-			else delete map[key];
-			localStorage.setItem("pipaya.workspace.tabs", JSON.stringify(map));
-		} catch { /* ignore storage errors */ }
+		while (this.dirStates.size > MAX_STORED_WORKSPACE_DIRS) {
+			const oldest = this.dirStates.keys().next().value;
+			if (oldest === undefined) break;
+			this.dirStates.delete(oldest);
+		}
+		writeStoredWorkspaceTabs(key, this.openFiles);
+	}
+
+	/** Drop in-memory and stored workspace tab state for a removed server so a subsequent `bind()` cannot write it back. */
+	forgetServer(baseUrl: string) {
+		if (!baseUrl) return;
+		const prefix = `${baseUrl}\0`;
+		for (const key of this.dirStates.keys()) {
+			if (key.startsWith(prefix)) this.dirStates.delete(key);
+		}
+		if (this.api?.baseUrl === baseUrl) {
+			if (this.refreshTimer) {
+				clearTimeout(this.refreshTimer);
+				this.refreshTimer = null;
+			}
+			this.api = null;
+			this.sessionId = null;
+			this.workDir = "";
+			this.openFiles = [];
+			this.activeFile = null;
+			this.selectedPath = null;
+			this.expandedDirs = {};
+		}
+		forgetServerWorkspaceTabs(baseUrl);
 	}
 
 	bind(

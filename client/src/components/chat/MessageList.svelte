@@ -1,5 +1,5 @@
 <script lang="ts" module>
-	import { messageScroll as leftAt } from "../../lib/chat-scroll";
+	import { messageScroll as leftAt, setMessageScroll } from "../../lib/chat-scroll";
 </script>
 
 <script lang="ts">
@@ -100,7 +100,7 @@
 		// Remember the reader's place for when this session comes back. Before the first restore the map still holds it.
 		if (!firstOpen && !held) {
 			if (stuck) leftAt.delete(chat.id);
-			else leftAt.set(chat.id, scroller.scrollHeight - scroller.scrollTop);
+			else setMessageScroll(chat.id, scroller.scrollHeight - scroller.scrollTop);
 		}
 		// The older page (already fetched ahead) goes in front only while the view is at rest or has reached the top:
 		// writing scrollTop in the middle of a fling cuts its momentum and makes the view jump. A fling that reaches the
@@ -228,7 +228,7 @@
 		showJump = gap() >= NEAR;
 		if (!firstOpen && !held) {
 			if (stuck) leftAt.delete(chat.id);
-			else leftAt.set(chat.id, scroller.scrollHeight - scroller.scrollTop);
+			else setMessageScroll(chat.id, scroller.scrollHeight - scroller.scrollTop);
 		}
 	}
 	$effect(() => {

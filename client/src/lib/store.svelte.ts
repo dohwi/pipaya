@@ -47,7 +47,7 @@ import { buildMentionIndex, planMentionAction, type MentionIndex, type MentionTa
 import { activityOf, mostUrgent, type Activity } from "./activity";
 import { parseConfiguration, type ConfigurationDocument } from "./extensions/configuration";
 import { rehydrateSettingsFromDurable } from "./durable-storage";
-import { K, read, write } from "./persist";
+import { K, read, remove, write } from "./persist";
 import { Preferences } from "./prefs.svelte";
 import { ServerPrefs, serverPrefKeys } from "./server-prefs.svelte";
 import { Feedback, type Toast } from "./feedback.svelte";
@@ -99,7 +99,9 @@ import { forgetDraft } from "./composer/saved-drafts";
 import { forgetMemoryDraft } from "./composer/memory-drafts";
 import { forgetAttachments } from "./composer/saved-attachments";
 import { forgetMessageScroll } from "./chat-scroll";
-import { forgetGraphPin } from "./graph-pins";
+import { forgetGraphPin, forgetServerGraphPins } from "./graph-pins";
+import { revokeServerIconImages } from "./model-icon-image";
+import { workspaceViewer } from "./workspace-viewer.svelte";
 
 const NO_DIRS: DirBlock[] = [];
 
@@ -1181,17 +1183,31 @@ class AppStore {
 
   /** Forget a server. The desktop app's own server cannot be removed: the app starts it and lists it itself. */
   removeServer(id: string) {
-    if (this.servers.find((s) => s.id === id)?.local) return;
+    const removed = this.servers.find((s) => s.id === id);
+    if (!removed || removed.local) return;
     this.sessionClosing.cancelServer(id);
+    // Discard any idle extension editor before syncLinks() so it does not flush settings-sync back into localStorage.
+    this.idleExtensions.discard(id);
     const wasOpen = id === this.serverId;
     this.servers = this.servers.filter((s) => s.id !== id);
     this.saveServers();
     this.syncLinks();
     try {
-      localStorage.removeItem(`${K.active}.${id}`);
-      for (const key of serverPrefKeys(id)) localStorage.removeItem(key);
-      localStorage.removeItem(`pipaya.settings-sync.${id}`);
+      remove(`${K.active}.${id}`);
+      remove(`${K.workdir}.${id}`);
+      for (const key of serverPrefKeys(id)) remove(key);
+      remove(`pipaya.settings-sync.${id}`);
+      remove(`pipaya.extensions.v1.${id}`);
+      remove(`pipaya.extensions.pending.${id}`);
+      remove(`pipaya.extensions.local-ids.${id}`);
       dropListCache(id);
+      this.sidebar.forgetServer(id);
+      forgetServerGraphPins(id);
+      const sameUrlRemaining = this.servers.some((s) => s.baseUrl === removed.baseUrl);
+      if (!sameUrlRemaining) {
+        workspaceViewer.forgetServer(removed.baseUrl);
+        revokeServerIconImages(removed.baseUrl);
+      }
     } catch {
       /* ignore */
     }
