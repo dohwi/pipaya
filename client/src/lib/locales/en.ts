@@ -788,6 +788,7 @@ export const en: Record<string, string> = {
 	"MCP 서버 연결": "MCP server connections",
 	"일회성 서브에이전트에게 작업 위임 (delegate)": "Hand a task to a one-off subagent (delegate)",
 	"예약 작업 만들기·변경·삭제 (schedule)": "Create, change and remove scheduled tasks (schedule)",
+	"MCP 서버 조회·추가·변경·삭제 (mcp)": "List, add, change and remove MCP servers (mcp)",
 	"설정": "Settings",
 
 	/* ---- server form ---- */

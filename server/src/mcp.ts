@@ -4,7 +4,7 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import Type, { type Static } from "typebox";
-import { badRequest } from "./errors.ts";
+import { badRequest, conflict, notFound } from "./errors.ts";
 import { DEFAULT_LIMITS } from "./image-resize-core.ts";
 import { resizeImage } from "./image-resize.ts";
 import { buildChildEnv, type ToolDef } from "./tools.ts";
@@ -20,8 +20,15 @@ const MAX_SERVERS = 50;
 const MAX_TOOLS_PER_SERVER = 200;
 export const MAX_TOTAL_MCP_TOOLS = 128;
 export const MAX_MCP_IMAGE_RAW_BYTES = 10 * 1024 * 1024;
+const MAX_STDERR_CHARS = 2000;
+const MAX_ERROR_CHARS = 1000;
 
 const Strings = Type.Record(Type.String({ minLength: 1, maxLength: 200 }), Type.String({ maxLength: 4000 }), { maxProperties: 50 });
+const PatchStrings = Type.Record(
+	Type.String({ minLength: 1, maxLength: 200 }),
+	Type.Union([Type.String({ maxLength: 4000 }), Type.Null()]),
+	{ maxProperties: 50 },
+);
 const ToolFilterList = Type.Array(Type.String({ minLength: 1, maxLength: 200 }), { maxItems: 200 });
 
 export const McpServerBody = Type.Object({
@@ -38,6 +45,20 @@ export const McpServerBody = Type.Object({
 	denyTools: Type.Optional(ToolFilterList),
 }, { additionalProperties: false });
 export type McpServerConfig = Static<typeof McpServerBody>;
+
+export const McpServerPatchBody = Type.Object({
+	enabled: Type.Optional(Type.Boolean()),
+	transport: Type.Optional(Type.Union([Type.Literal("stdio"), Type.Literal("http")])),
+	command: Type.Optional(Type.String({ maxLength: 1000 })),
+	args: Type.Optional(Type.Array(Type.String({ maxLength: 2000 }), { maxItems: 50 })),
+	env: Type.Optional(Type.Union([PatchStrings, Type.Null()])),
+	inheritEnv: Type.Optional(Type.Boolean()),
+	url: Type.Optional(Type.String({ maxLength: 2000 })),
+	headers: Type.Optional(Type.Union([PatchStrings, Type.Null()])),
+	allowTools: Type.Optional(Type.Union([ToolFilterList, Type.Null()])),
+	denyTools: Type.Optional(Type.Union([ToolFilterList, Type.Null()])),
+}, { additionalProperties: false });
+export type McpServerPatch = Static<typeof McpServerPatchBody>;
 
 export const McpBody = Type.Object({ servers: Type.Array(McpServerBody, { maxItems: MAX_SERVERS }) }, { additionalProperties: false });
 
@@ -70,10 +91,69 @@ export function buildMcpStdioEnv(
 
 type Status = "off" | "connecting" | "ready" | "error";
 interface RemoteTool { name: string; tool: string; description: string; schema: Record<string, unknown> }
-interface Conn { status: Status; error?: string; client?: Client; tools: RemoteTool[]; gen: number }
+interface Conn {
+	status: Status;
+	error?: string;
+	stderrTail: string;
+	client?: Client;
+	tools: RemoteTool[];
+	gen: number;
+	ready: Promise<void>;
+	resolveReady: () => void;
+}
 
 const clean = (s: string) => s.replace(/[^a-zA-Z0-9_-]/g, "_");
 const mask = (r?: Record<string, string>) => (r ? Object.fromEntries(Object.keys(r).map((k) => [k, MASK])) : undefined);
+
+function mergePatchRecord(
+	existing: Record<string, string> | undefined,
+	patch: Record<string, string | null> | null | undefined,
+	field: string,
+): Record<string, string> | undefined {
+	if (patch === undefined) return existing;
+	if (patch === null) return undefined;
+	const merged: Record<string, string> = { ...(existing ?? {}) };
+	for (const [k, v] of Object.entries(patch)) {
+		if (v === null) delete merged[k];
+		else if (v === MASK) {
+			if (existing && k in existing) merged[k] = existing[k]!;
+		} else merged[k] = v;
+	}
+	if (Object.keys(merged).length > 50) throw badRequest(`${field}: at most 50 entries are allowed`);
+	return Object.keys(merged).length ? merged : undefined;
+}
+
+function redactSecrets(text: string, config: McpServerConfig): string {
+	const raw = [
+		...Object.values(config.env ?? {}),
+		...Object.values(config.headers ?? {}),
+	];
+	const secrets = new Set<string>();
+	for (const v of raw) {
+		if (v.length >= 4) secrets.add(v);
+		// Also redact the credential part after a scheme prefix (e.g. "Bearer <token>").
+		const scheme = /^\S+\s+(.{4,})$/.exec(v.trim());
+		if (scheme?.[1]) secrets.add(scheme[1]);
+	}
+	if (!secrets.size) return text;
+	// Longest first so a shorter secret substring cannot split a longer secret mid-replacement.
+	const ordered = [...secrets].sort((a, b) => b.length - a.length);
+	let out = text;
+	for (const s of ordered) out = out.replaceAll(s, MASK);
+	return out;
+}
+
+function formatConnectError(base: string, stderrTail: string, config: McpServerConfig): string {
+	const safeBase = redactSecrets(base.trim(), config);
+	const safeStderr = redactSecrets(stderrTail.trim(), config);
+	if (!safeStderr || safeBase.includes(safeStderr)) return safeBase.slice(0, MAX_ERROR_CHARS);
+	const basePart = safeBase.slice(0, Math.min(safeBase.length, 300));
+	const budget = MAX_ERROR_CHARS - basePart.length - 1;
+	if (budget <= 0) return basePart.slice(0, MAX_ERROR_CHARS);
+	// Keep the tail of stderr, where the actual failure cause usually appears.
+	const tail = safeStderr.length > budget ? `…${safeStderr.slice(-(budget - 1))}` : safeStderr;
+	return `${basePart}\n${tail}`;
+}
 
 /** Servers that speak the Model Context Protocol; their tools reach every session as `mcp_<server>_<tool>`. */
 export class McpManager {
@@ -133,6 +213,7 @@ export class McpManager {
 	}
 
 	set(input: McpServerConfig[]): Static<typeof McpInfo> {
+		if (input.length > MAX_SERVERS) throw badRequest(`at most ${MAX_SERVERS} MCP servers are allowed`);
 		const old = new Map(this.config().map((c) => [c.name, c]));
 		const seen = new Set<string>();
 		const next = input.map((raw) => {
@@ -170,11 +251,93 @@ export class McpManager {
 		return this.info();
 	}
 
+	/** Add a single MCP server without touching existing servers. */
+	add(raw: McpServerConfig): Static<typeof McpInfo> {
+		const name = raw.name.trim();
+		const cfg = this.config();
+		if (cfg.some((c) => c.name.toLowerCase() === name.toLowerCase())) throw conflict(`MCP server "${name}" already exists`);
+		if (cfg.length >= MAX_SERVERS) throw badRequest(`at most ${MAX_SERVERS} MCP servers are allowed`);
+		return this.set([...cfg, { ...raw, name }]);
+	}
+
+	/** Update one MCP server in place, merging env/headers and preserving untouched fields and secrets. */
+	patch(name: string, patch: McpServerPatch): Static<typeof McpInfo> {
+		const target = name.trim();
+		const cfg = this.config();
+		const idx = cfg.findIndex((c) => c.name.toLowerCase() === target.toLowerCase());
+		if (idx < 0) throw notFound(`MCP server "${target}"`);
+		const cur = cfg[idx]!;
+		const merged: McpServerConfig = {
+			...cur,
+			...(patch.enabled !== undefined ? { enabled: patch.enabled } : {}),
+			...(patch.transport !== undefined ? { transport: patch.transport } : {}),
+			...(patch.command !== undefined ? { command: patch.command } : {}),
+			...(patch.args !== undefined ? { args: patch.args } : {}),
+			...(patch.inheritEnv !== undefined ? { inheritEnv: patch.inheritEnv } : {}),
+			...(patch.url !== undefined ? { url: patch.url } : {}),
+		};
+		const env = mergePatchRecord(cur.env, patch.env, "env");
+		if (env) merged.env = env;
+		else delete merged.env;
+		const headers = mergePatchRecord(cur.headers, patch.headers, "headers");
+		if (headers) merged.headers = headers;
+		else delete merged.headers;
+		if (patch.allowTools === null) delete merged.allowTools;
+		else if (patch.allowTools !== undefined) merged.allowTools = patch.allowTools;
+		if (patch.denyTools === null) delete merged.denyTools;
+		else if (patch.denyTools !== undefined) merged.denyTools = patch.denyTools;
+		const next = cfg.slice();
+		next[idx] = merged;
+		return this.set(next);
+	}
+
+	/** Remove a single MCP server by name. */
+	remove(name: string): Static<typeof McpInfo> {
+		const target = name.trim();
+		const cfg = this.config();
+		const idx = cfg.findIndex((c) => c.name.toLowerCase() === target.toLowerCase());
+		if (idx < 0) throw notFound(`MCP server "${target}"`);
+		const next = cfg.slice();
+		next.splice(idx, 1);
+		return this.set(next);
+	}
+
 	/** Reconnect one server (or all). */
 	reload(name?: string): Static<typeof McpInfo> {
 		const cfg = this.config();
-		if (name && !cfg.some((c) => c.name === name)) throw badRequest(`unknown server "${name}"`);
-		this.sync(cfg, undefined, name ?? "");
+		const resolved = name ? cfg.find((c) => c.name.toLowerCase() === name.trim().toLowerCase())?.name : undefined;
+		if (name && !resolved) throw badRequest(`unknown server "${name}"`);
+		this.sync(cfg, undefined, resolved ?? "");
+		return this.info();
+	}
+
+	/** Wait for one server (or all currently connecting servers) to finish their connection attempt, up to `timeoutMs`. */
+	async waitFor(name?: string, timeoutMs = 25_000, signal?: AbortSignal): Promise<Static<typeof McpInfo>> {
+		if (signal?.aborted) return this.info();
+		const targetKey = name
+			? [...this.conns.keys()].find((k) => k.toLowerCase() === name.trim().toLowerCase())
+			: undefined;
+		const pending = name
+			? [targetKey ? this.conns.get(targetKey)?.ready : undefined].filter((p): p is Promise<void> => !!p)
+			: [...this.conns.values()].map((c) => c.ready);
+		if (!pending.length) return this.info();
+		let timer: ReturnType<typeof setTimeout> | undefined;
+		let onAbort: (() => void) | undefined;
+		try {
+			await Promise.race([
+				Promise.all(pending),
+				new Promise<void>((resolve) => {
+					timer = setTimeout(resolve, Math.max(0, timeoutMs));
+					if (signal) {
+						onAbort = () => resolve();
+						signal.addEventListener("abort", onAbort, { once: true });
+					}
+				}),
+			]);
+		} finally {
+			if (timer !== undefined) clearTimeout(timer);
+			if (signal && onAbort) signal.removeEventListener("abort", onAbort);
+		}
 		return this.info();
 	}
 
@@ -194,23 +357,33 @@ export class McpManager {
 	private drop(name: string): void {
 		const conn = this.conns.get(name);
 		this.conns.delete(name);
+		conn?.resolveReady();
 		if (conn?.client) void conn.client.close().catch(() => {});
 	}
 
 	private async connect(c: McpServerConfig): Promise<void> {
-		const conn: Conn = { status: "connecting", tools: [], gen: ++this.gen };
+		let resolveReady!: () => void;
+		const ready = new Promise<void>((resolve) => { resolveReady = resolve; });
+		const conn: Conn = { status: "connecting", stderrTail: "", tools: [], gen: ++this.gen, ready, resolveReady };
 		this.conns.set(c.name, conn);
 		const current = () => this.conns.get(c.name) === conn;
 		const client = new Client({ name: "pipaya", version: "1.0.0" });
 		try {
 			const transport = c.transport === "stdio"
-				? new StdioClientTransport({ command: c.command!, args: c.args ?? [], env: buildMcpStdioEnv(c), stderr: "ignore" })
+				? new StdioClientTransport({ command: c.command!, args: c.args ?? [], env: buildMcpStdioEnv(c), stderr: "pipe" })
 				: new StreamableHTTPClientTransport(new URL(c.url!), { requestInit: { headers: c.headers ?? {} } });
+			if (transport instanceof StdioClientTransport && transport.stderr) {
+				transport.stderr.on("data", (chunk: Buffer | string) => {
+					const piece = typeof chunk === "string" ? chunk : chunk.toString("utf8");
+					const next = redactSecrets(conn.stderrTail + piece, c);
+					conn.stderrTail = next.length > MAX_STDERR_CHARS ? next.slice(-MAX_STDERR_CHARS) : next;
+				});
+			}
 			conn.client = client;
 			client.onclose = () => {
 				if (current() && conn.status === "ready") {
 					conn.status = "error";
-					conn.error = "Connection closed";
+					conn.error = formatConnectError("Connection closed", conn.stderrTail, c);
 					conn.tools = [];
 					this.onChange();
 				}
@@ -242,9 +415,11 @@ export class McpManager {
 		} catch (e) {
 			if (!current()) return;
 			conn.status = "error";
-			conn.error = (e instanceof Error ? e.message : String(e)).slice(0, 500);
+			conn.error = formatConnectError(e instanceof Error ? e.message : String(e), conn.stderrTail, c);
 			conn.tools = [];
 			void client.close().catch(() => {});
+		} finally {
+			conn.resolveReady();
 		}
 		this.onChange();
 	}

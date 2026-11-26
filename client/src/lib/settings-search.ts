@@ -131,6 +131,7 @@ export function toolLabel(name: string): string {
 		case "delegate": return t("일회성 서브에이전트에게 작업 위임 (delegate)");
 		case "schedule": return t("예약 작업 만들기·변경·삭제 (schedule)");
 		case "goal": return t("세션 목표 조회·설정·완료 판정 (goal)");
+		case "mcp": return t("MCP 서버 조회·추가·변경·삭제 (mcp)");
 		case "generate_image": return t("이미지 생성 (generate_image)");
 		case "workdir": return t("작업 폴더 확인·이동 (workdir)");
 		default: return name;

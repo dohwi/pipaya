@@ -221,6 +221,8 @@ export function toolSummary(name: string, args: Record<string, unknown>): string
 			return clip([str(args.action), str(args.id), firstLine(str(args.title || args.prompt))].filter(Boolean).join(" · "), 90);
 		case "goal":
 			return clip([str(args.action), str(args.status), firstLine(str(args.objective))].filter(Boolean).join(" · "), 90);
+		case "mcp":
+			return clip([str(args.action), str(args.name), str(args.command || args.url)].filter(Boolean).join(" · "), 90);
 		case "ask_user": {
 			// the question itself, not its JSON; several questions say how many
 			const qs = Array.isArray(args.questions) ? args.questions : [];

@@ -154,3 +154,71 @@ describe("MCP over HTTP", () => {
 		}
 	}, 30_000);
 });
+
+describe("MCP single-server REST routes", () => {
+	test("POST /mcp, PATCH /mcp/:name, DELETE /mcp/:name preserve other servers and stored secrets", async () => {
+		const root = realpathSync(mkdtempSync(join(tmpdir(), "pipaya-mcp-crud-")));
+		const cfg: Config = { host: "0.0.0.0", port: 0, dataDir: root, dbPath: join(root, "app.db"), token: "mcp-crud", workspaceRoot: root, logLevel: "silent" };
+		const app = await buildApp(cfg, { strictResponses: true, home: root, builtinSkills: false, extensionDirs: [] });
+		const api = async (method: "GET" | "POST" | "PATCH" | "DELETE", url: string, payload?: object) => {
+			const res = await app.server.inject({ method, url, payload, headers: { authorization: `Bearer ${cfg.token}` } });
+			return { status: res.statusCode, json: res.body ? res.json() : undefined };
+		};
+		const echo = { name: "echo", enabled: true, transport: "stdio", command: process.execPath, args: [SERVER], env: { PREFIX: "crud:" } };
+		const other = { name: "other", enabled: false, transport: "stdio", command: process.execPath, args: [SERVER] };
+		try {
+			const created = await api("POST", "/mcp", echo);
+			expect(created.status).toBe(201);
+			expect(created.json.servers).toHaveLength(1);
+			expect(created.json.servers[0].env).toEqual({ PREFIX: MASK });
+
+			// Duplicate name returns 409
+			expect((await api("POST", "/mcp", { ...echo, name: "ECHO" })).status).toBe(409);
+
+			// Add a second server without touching the first
+			expect((await api("POST", "/mcp", other)).status).toBe(201);
+			await until(async () => (await api("GET", "/mcp")).json, (j) => j.ready === 1);
+
+			// PATCH merges env and preserves untouched PREFIX secret
+			const patched = await api("PATCH", "/mcp/echo", { env: { EXTRA: "1" } });
+			expect(patched.status).toBe(200);
+			expect(patched.json.servers.find((s: any) => s.name === "echo").env).toEqual({ PREFIX: MASK, EXTRA: MASK });
+			await until(async () => (await api("GET", "/mcp")).json, (j) => j.ready === 1);
+			const tool = (app.sessions as any).toolDefs().mcp_echo_echo.create("/", [], {});
+			expect((await tool.execute("c1", { text: "ok" }, undefined)).content[0].text).toBe("crud:ok");
+
+			// PATCH unknown returns 404; invalid transport switch without url returns 400
+			expect((await api("PATCH", "/mcp/missing", { enabled: false })).status).toBe(404);
+			expect((await api("PATCH", "/mcp/other", { transport: "http" })).status).toBe(400);
+
+			// PATCH switching transport stdio -> http strips stdio fields and merges headers; http -> stdio strips http fields
+			const toHttp = await api("PATCH", "/mcp/other", { transport: "http", url: "https://example.com/mcp", headers: { authorization: "Bearer s1" } });
+			expect(toHttp.status).toBe(200);
+			const httpSrv = toHttp.json.servers.find((s: any) => s.name === "other");
+			expect(httpSrv).toMatchObject({ transport: "http", url: "https://example.com/mcp", headers: { authorization: MASK } });
+			expect(httpSrv.command).toBeUndefined();
+			const mergedHdr = await api("PATCH", "/mcp/other", { headers: { "x-extra": "2" } });
+			expect(mergedHdr.json.servers.find((s: any) => s.name === "other").headers).toEqual({ authorization: MASK, "x-extra": MASK });
+			const backStdio = await api("PATCH", "/mcp/other", { transport: "stdio", command: process.execPath, args: [SERVER] });
+			expect(backStdio.status).toBe(200);
+			const stdioSrv = backStdio.json.servers.find((s: any) => s.name === "other");
+			expect(stdioSrv.url).toBeUndefined();
+			expect(stdioSrv.headers).toBeUndefined();
+
+			// DELETE removes only the named server (case-insensitive); second DELETE returns 404
+			const del = await api("DELETE", "/mcp/ECHO");
+			expect(del.status).toBe(200);
+			expect(del.json.servers.map((s: any) => s.name)).toEqual(["other"]);
+			expect((await api("DELETE", "/mcp/echo")).status).toBe(404);
+
+			// MAX_SERVERS (50) cap enforced on POST /mcp
+			for (let i = 0; i < 49; i++) {
+				expect((await api("POST", "/mcp", { name: `s_${i}`, enabled: false, transport: "stdio", command: "echo" })).status).toBe(201);
+			}
+			expect((await api("POST", "/mcp", { name: "s_overflow", enabled: false, transport: "stdio", command: "echo" })).status).toBe(400);
+		} finally {
+			await app.close();
+			rmSync(root, { recursive: true, force: true });
+		}
+	}, 30_000);
+});

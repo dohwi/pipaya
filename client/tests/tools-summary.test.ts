@@ -82,6 +82,13 @@ describe("toolSummary for schedule", () => {
 		expect(toolSummary("workdir", { action: "move", path: "../app-feat" })).toBe("move · ../app-feat");
 		expect(toolSummary("workdir", { action: "back" })).toBe("back");
 	});
+
+	test("mcp shows action, server name and endpoint cleanly", () => {
+		expect(toolSummary("mcp", { action: "list" })).toBe("list");
+		expect(toolSummary("mcp", { action: "add", name: "blender", transport: "stdio", command: "uvx" })).toBe("add · blender · uvx");
+		expect(toolSummary("mcp", { action: "add", name: "docs", transport: "http", url: "https://example.com/mcp" })).toBe("add · docs · https://example.com/mcp");
+		expect(toolSummary("mcp", { action: "remove", name: "blender" })).toBe("remove · blender");
+	});
 });
 
 describe("splitCd", () => {

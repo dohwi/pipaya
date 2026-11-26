@@ -26,6 +26,7 @@ import { SessionWorkdirs } from "./session-workdirs.ts";
 import { SessionDescriber } from "./session-describer.ts";
 import { GOAL_TOOL } from "./goal-tool.ts";
 import type { GoalManager } from "./goals.ts";
+import { MCP_TOOL } from "./mcp-tool.ts";
 import { SCHEDULE_TOOL } from "./schedule-tool.ts";
 import type { Scheduler } from "./scheduler.ts";
 import { sameName } from "./member-names.ts";
@@ -218,6 +219,24 @@ export class SessionManager {
 			create: (objective, tokenBudget) => g.agentCreate(selfId, objective, tokenBudget),
 			update: (status) => g.agentUpdate(selfId, status),
 		};
+	}
+
+	private mcpOps(): ToolContext["mcp"] {
+		const m = this.mcp;
+		if (!m) return undefined;
+		return {
+			info: () => m.info(),
+			add: (server) => m.add(server),
+			patch: (name, patch) => m.patch(name, patch),
+			remove: (name) => m.remove(name),
+			reload: (name) => m.reload(name),
+			waitFor: (name, timeoutMs, signal) => m.waitFor(name, timeoutMs, signal),
+		};
+	}
+
+	/** Called when the server's MCP tool set changes so active runs pick up added/removed MCP tools on their next turn. */
+	notifyMcpToolsChanged(): void {
+		for (const live of this.live.values()) live.toolsDirty = true;
 	}
 
 	/** What `schedule` may do, on behalf of session `selfId`. */
@@ -1489,6 +1508,7 @@ export class SessionManager {
 				const snap = this.store.context(record.id);
 				if (snap) {
 					existing.toolsDir = workDirOf(record);
+					existing.toolsDirty = false;
 					existing.agent.state.tools = this.sessionTools(record.id, snap.tools, existing.toolsDir, existing.readTracker);
 				}
 			}
@@ -1585,7 +1605,7 @@ export class SessionManager {
 	}
 
 	private toolPlan(names: string[]) {
-		return planTools({ chosen: names, always: [...PEER_TOOLS, DELEGATE_TOOL, ...ALWAYS_TOOLS, ...(this.scheduler ? [SCHEDULE_TOOL] : []), ...(this.goals ? [GOAL_TOOL] : []), ...(this.ext?.alwaysTools() ?? []), ...(this.mcp?.toolNames() ?? [])], disabled: this.disabledTools(), image: this.imageModel?.resolve() ? IMAGE_TOOL : undefined });
+		return planTools({ chosen: names, always: [...PEER_TOOLS, DELEGATE_TOOL, ...ALWAYS_TOOLS, ...(this.scheduler ? [SCHEDULE_TOOL] : []), ...(this.goals ? [GOAL_TOOL] : []), ...(this.mcp ? [MCP_TOOL] : []), ...(this.ext?.alwaysTools() ?? []), ...(this.mcp?.toolNames() ?? [])], disabled: this.disabledTools(), image: this.imageModel?.resolve() ? IMAGE_TOOL : undefined });
 	}
 
 	/** The text the system adds beyond the session prompt, tools and AGENTS.md, for the context view. */
@@ -1657,6 +1677,7 @@ export class SessionManager {
 			},
 			schedules: this.scheduleOps(sessionId),
 			goals: this.goalOps(sessionId),
+			mcp: this.mcpOps(),
 			workdir: {
 				show: () => this.workdirOps.show(sessionId),
 				move: (path) => this.moveWorkdir(sessionId, path, "agent").note,
@@ -2122,8 +2143,8 @@ export class SessionManager {
 	}
 
 	/**
-	 * Sends a session home if its active worktree disappeared and tracks `live.toolsDir`. Tools resolve cwd dynamically
-	 * through `ToolContext.getCwd`, so `live.agent.state.tools` does not need to be rebuilt mid-run.
+	 * Sends a session home if its active worktree disappeared, tracks `live.toolsDir`, and rebuilds
+	 * `live.agent.state.tools` mid-run only when `live.toolsDirty` was set and the effective tool names changed.
 	 */
 	private retargetTools(sessionId: string): AgentTool<any>[] | undefined {
 		const live = this.live.get(sessionId);
@@ -2131,7 +2152,18 @@ export class SessionManager {
 		const rec = this.store.get(sessionId);
 		if (!live || !rec) return undefined;
 		live.toolsDir = workDirOf(rec);
-		return undefined;
+		if (!live.toolsDirty) return undefined;
+		live.toolsDirty = false;
+		const snap = this.store.context(sessionId);
+		if (!snap) return undefined;
+		const defs = this.toolDefs();
+		const prevNames = live.agent.state.tools.map((t) => t.name);
+		// Compare defined tool names only (parameter-only schema changes take effect on the next idle rebuild).
+		const nextNames = enabledTools(this.toolPlan(snap.tools)).filter((n) => Boolean(defs[n]));
+		if (prevNames.length === nextNames.length && prevNames.every((n, i) => n === nextNames[i])) return undefined;
+		const tools = this.sessionTools(sessionId, snap.tools, live.toolsDir, live.readTracker);
+		live.agent.state.tools = tools;
+		return tools;
 	}
 
 	private forwardToExtensions(sessionId: string, event: AgentEvent): void {

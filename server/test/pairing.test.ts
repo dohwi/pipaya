@@ -121,6 +121,9 @@ describe("per-device tokens over HTTP", () => {
 		expect((await as(token, "DELETE", "/server-extensions/x")).status).toBe(403);
 		expect((await as(token, "POST", "/server-extensions/install", { id: "x", repo: "a/b", ref: "v1", commit: "a".repeat(40) })).status).toBe(403);
 		expect((await as(token, "PUT", "/mcp", { servers: [] })).status).toBe(403);
+		expect((await as(token, "POST", "/mcp", { name: "x", enabled: false, transport: "stdio", command: "echo" })).status).toBe(403);
+		expect((await as(token, "PATCH", "/mcp/x", { enabled: false })).status).toBe(403);
+		expect((await as(token, "DELETE", "/mcp/x")).status).toBe(403);
 		expect((await as(token, "POST", "/mcp/reload", {})).status).toBe(403);
 		expect((await as(token, "GET", "/mcp")).status).toBe(200);
 	});
@@ -132,7 +135,8 @@ describe("per-device tokens over HTTP", () => {
 			["GET", "/devices/token%73"], ["GET", "/%64evices/tokens"], ["DELETE", "/devices/tokens/%61ny"], ["DELETE", "/devices/token%73/any"],
 			["POST", "/pairin%67"], ["DELETE", "/pairin%67"],
 			["POST", "/server-extensions/reloa%64"], ["POST", "/server-extensions/instal%6c", install], ["DELETE", "/server-extension%73/x"],
-			["PUT", "/mc%70", { servers: [] }], ["POST", "/mcp/reloa%64", {}],
+			["PUT", "/mc%70", { servers: [] }], ["POST", "/mc%70", { name: "x", enabled: false, transport: "stdio", command: "echo" }],
+			["PATCH", "/mc%70/x", { enabled: false }], ["DELETE", "/mc%70/x"], ["POST", "/mcp/reloa%64", {}],
 			["POST", "/server/updat%65", {}], ["GET", "/server/updat%65"],
 		];
 		for (const [method, url, body] of cases) expect([method, url, (await as(token, method, url, body)).status]).toEqual([method, url, 403]);
