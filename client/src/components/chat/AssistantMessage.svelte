@@ -1,7 +1,6 @@
 <script lang="ts">
 	import IconButton from "../ui/IconButton.svelte";
 	import { localeTag, t } from "../../lib/i18n";
-	import Icon from "../ui/Icon.svelte";
 	import Markdown from "./Markdown.svelte";
 	import WorkBox from "./WorkBox.svelte";
 	import ModelLogo from "../models/ModelLogo.svelte";
@@ -17,14 +16,12 @@
 	import { canContinueRun, plainTextOf, replyActions, segmentsOf, type Segment } from "../../lib/reply-blocks";
 	import { modelDisplayName } from "../../lib/model-name";
 	import { replySpeed, tierLabel } from "../../lib/service-tier";
-	import { SWIPE_BLOCKERS, SWIPE_TRIGGER, SwipeReply } from "../../lib/swipe-reply";
 	import type { AssistantItem, Session } from "../../lib/types";
 	import { tapTitle } from "../../lib/touch-hints";
 
 	/**
 	 * An answer: its text and work boxes in order, then (when it is done) copy / reply / branch / retry buttons and a
-	 * line of stats. Several consecutive assistant messages answering one prompt (`turn`) read as one answer. On a phone
-	 * the answer can be dragged right to left to reply to it.
+	 * line of stats. Several consecutive assistant messages answering one prompt (`turn`) read as one answer.
 	 *
 	 *  live  the agent is still writing it
 	 *  last  the newest answer (the only one that can be retried or continued)
@@ -43,54 +40,6 @@
 	const tail = $derived(parts[parts.length - 1]);
 	const plainText = $derived(plainTextOf(parts.flatMap((p) => p.blocks)));
 	const reply = () => onreply(plainText);
-
-	/**
-	 * Mobile: drag an answer right -> left to reply to it. The gesture is lib/swipe-reply (plain TS); the two numbers the
-	 * template needs are mirrored into runes after every touch event.
-	 */
-	const gesture = new SwipeReply();
-	let swipeX = $state(0);
-	let swiping = $state(false);
-	const sync = () => {
-		swipeX = gesture.x;
-		swiping = gesture.swiping;
-	};
-
-	function swipeable(node: HTMLElement) {
-		const canReply = () => !live && !!plainText;
-		const start = (e: TouchEvent) => {
-			// Horizontally scrollable content (code, tables, formulas) and form fields keep their own gestures.
-			const blocked = (e.target as Element | null)?.closest(SWIPE_BLOCKERS);
-			gesture.start(e.touches.length, e.touches[0]?.clientX ?? 0, e.touches[0]?.clientY ?? 0, canReply() && !blocked);
-		};
-		const move = (e: TouchEvent) => {
-			const m = gesture.move(e.touches[0]!.clientX, e.touches[0]!.clientY);
-			if (!m.handled) return;
-			e.preventDefault();
-			if (m.justArmed) navigator.vibrate?.(10);
-			sync();
-		};
-		const end = () => {
-			if (gesture.end()) reply();
-			sync();
-		};
-		const cancel = () => {
-			gesture.reset();
-			sync();
-		};
-		node.addEventListener("touchstart", start, { passive: true });
-		node.addEventListener("touchmove", move, { passive: false });
-		node.addEventListener("touchend", end);
-		node.addEventListener("touchcancel", cancel);
-		return {
-			destroy() {
-				node.removeEventListener("touchstart", start);
-				node.removeEventListener("touchmove", move);
-				node.removeEventListener("touchend", end);
-				node.removeEventListener("touchcancel", cancel);
-			},
-		};
-	}
 
 	const copied = new CopyFlag();
 	onDestroy(() => copied.dispose());
@@ -152,9 +101,8 @@
 
 <!-- a tap shows this answer's buttons on a touch screen (reveal.svelte.ts); the buttons themselves are reachable on their own -->
 <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
-<div class="row assistant" data-part="message.assistant" class:fresh={parts[0]?.fresh} class:shown={last || reveal.key === item.key} onclick={(e) => reveal.tap(e, item.key)} use:swipeable>
-	<div class="swipehint" class:armed={-swipeX >= SWIPE_TRIGGER} style:opacity={Math.min(1, -swipeX / SWIPE_TRIGGER)} aria-hidden="true"><Icon name="reply" /></div>
-	<div class="content reply-card" class:swiping style:transform={swipeX ? `translateX(${swipeX}px)` : undefined}>
+<div class="row assistant" data-part="message.assistant" class:fresh={parts[0]?.fresh} class:shown={last || reveal.key === item.key} onclick={(e) => reveal.tap(e, item.key)}>
+	<div class="content reply-card">
 		{#each segments as seg, n (seg.i)}
 			{#if seg.kind === "work"}
 				<WorkBox steps={seg.steps} live={n === liveSeg} />
@@ -267,33 +215,6 @@
 	/* one prompt -> one answer: the turn's steps and text flow as plain content, no box */
 	.reply-card {
 		padding: 4px 0 0;
-		transition: transform var(--motion-fast) var(--ease-std);
-	}
-	.reply-card.swiping {
-		transition: none;
-	}
-	.swipehint {
-		position: absolute;
-		right: 4px;
-		top: 50%;
-		translate: 0 -50%;
-		display: none;
-		opacity: 0;
-		color: var(--text-faint);
-		pointer-events: none;
-	}
-	.swipehint.armed {
-		color: var(--accent, currentColor);
-	}
-	.swipehint :global(svg) {
-		width: 20px;
-		height: 20px;
-	}
-	@media (pointer: coarse) {
-
-		.swipehint {
-			display: block;
-		}
 	}
 
 	/* interrupted / cut-off notice closing the answer */

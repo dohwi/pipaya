@@ -327,40 +327,211 @@ describe("shell/sidebar-resize", () => {
 });
 
 describe("shell/drawer-swipe", () => {
-  test("opens on horizontal drag past threshold and cancels on drag-item or vertical scroll", () => {
-    let open = false;
-    let draggingItem = false;
+  const mkTouch = (x: number, y: number, timeStamp: number, target: unknown = null, count = 1) =>
+    ({
+      touches: Array.from({ length: count }, () => ({ clientX: x, clientY: y })),
+      timeStamp,
+      target,
+    }) as unknown as TouchEvent;
+
+  const setup = (overrides: {
+    narrow?: boolean;
+    canOpenLeft?: boolean;
+    canOpenRight?: boolean;
+    blocked?: boolean;
+    leftW?: number;
+    rightW?: number;
+  } = {}) => {
+    const state = {
+      narrow: overrides.narrow ?? true,
+      left: false,
+      right: false,
+      canOpenLeft: overrides.canOpenLeft ?? true,
+      canOpenRight: overrides.canOpenRight ?? true,
+      blocked: overrides.blocked ?? false,
+      draggingItem: false,
+      leftW: overrides.leftW ?? 300,
+      rightW: overrides.rightW ?? 260,
+    };
     const ctrl = new DrawerSwipeController({
-      isNarrow: () => true,
-      isOpen: () => open,
-      setOpen: (v) => {
-        open = v;
+      isNarrow: () => state.narrow,
+      isOpen: (side) => (side === "left" ? state.left : state.right),
+      setOpen: (side, v) => {
+        if (side === "left") state.left = v;
+        else state.right = v;
       },
-      isDraggingItem: () => draggingItem,
-      getDrawerWidth: () => 300,
+      canOpen: (side) => (side === "left" ? state.canOpenLeft : state.canOpenRight),
+      isBlocked: () => state.blocked,
+      isDraggingItem: () => state.draggingItem,
+      getDrawerWidth: (side) => (side === "left" ? state.leftW : state.rightW),
     });
+    return { state, ctrl };
+  };
 
-    const mkTouch = (x: number, y: number, timeStamp: number) =>
-      ({ touches: [{ clientX: x, clientY: y }], timeStamp, target: null }) as unknown as TouchEvent;
+  test("opens and closes both left and right drawers symmetrically", () => {
+    const { state, ctrl } = setup();
 
-    // Vertical scroll cancels swipe
-    ctrl.start(mkTouch(10, 100, 0));
-    ctrl.move(mkTouch(12, 130, 16));
+    // Vertical scroll activates momentum cooldown (150ms); subsequent touch inside cooldown is ignored
+    ctrl.start(mkTouch(100, 100, 0));
+    ctrl.move(mkTouch(102, 130, 16));
     expect(ctrl.swipe).toBeNull();
+    expect(ctrl.side).toBeNull();
 
-    // Horizontal swipe past 35% opens drawer
-    ctrl.start(mkTouch(10, 100, 100));
-    ctrl.move(mkTouch(40, 102, 116));
-    ctrl.move(mkTouch(160, 104, 132));
-    expect(ctrl.swipe).toBeGreaterThan(100);
+    // Left->right drag after cooldown opens left drawer and never touches rightSwipe
+    ctrl.start(mkTouch(100, 100, 200));
+    ctrl.move(mkTouch(130, 102, 216));
+    ctrl.move(mkTouch(250, 104, 232));
+    expect(ctrl.side).toBe("left");
+    expect(ctrl.leftSwipe).toBe(150);
+    expect(ctrl.rightSwipe).toBeNull();
     ctrl.end();
-    expect(open).toBe(true);
+    expect(state.left).toBe(true);
+    expect(state.right).toBe(false);
     expect(ctrl.swipe).toBeNull();
+
+    // Left drawer open: rightward drag is ignored, leftward drag closes it
+    ctrl.start(mkTouch(100, 100, 300));
+    ctrl.move(mkTouch(140, 100, 316));
+    expect(ctrl.swipe).toBeNull();
+    ctrl.end();
+    expect(state.left).toBe(true);
+
+    ctrl.start(mkTouch(250, 100, 400));
+    ctrl.move(mkTouch(200, 100, 450));
+    ctrl.move(mkTouch(100, 100, 500));
+    expect(ctrl.leftSwipe).toBe(150);
+    ctrl.end();
+    expect(state.left).toBe(false);
+
+    // Right->left drag opens right drawer using rightW (260) and never touches leftSwipe
+    ctrl.start(mkTouch(300, 100, 600));
+    ctrl.move(mkTouch(270, 102, 650));
+    ctrl.move(mkTouch(180, 104, 700));
+    expect(ctrl.side).toBe("right");
+    expect(ctrl.rightSwipe).toBe(120);
+    expect(ctrl.leftSwipe).toBeNull();
+    expect(ctrl.drawerW).toBe(260);
+    ctrl.end();
+    expect(state.right).toBe(true);
+    expect(state.left).toBe(false);
+
+    // Right drawer open: leftward drag is ignored; rightward drag closes right without opening left
+    ctrl.start(mkTouch(250, 100, 800));
+    ctrl.move(mkTouch(200, 100, 820));
+    expect(ctrl.swipe).toBeNull();
+    ctrl.end();
+    expect(state.right).toBe(true);
+
+    ctrl.start(mkTouch(120, 100, 900));
+    ctrl.move(mkTouch(170, 100, 950));
+    ctrl.move(mkTouch(250, 100, 1000));
+    expect(ctrl.side).toBe("right");
+    expect(ctrl.rightSwipe).toBe(130);
+    expect(ctrl.leftSwipe).toBeNull();
+    ctrl.end();
+    expect(state.right).toBe(false);
+    expect(state.left).toBe(false);
+  });
+
+  test("enforces opening angle guard, flick min distance, and scroll cooldown", () => {
+    const { state, ctrl } = setup();
+
+    // Diagonal thumb arc (dx=15, dy=9 -> |dx| < |dy| * 2) does not lock when opening
+    ctrl.start(mkTouch(150, 100, 0));
+    ctrl.move(mkTouch(165, 109, 16));
+    expect(ctrl.swipe).toBeNull();
+    ctrl.cancel();
+
+    // Short fast jitter (< 40px) does not flick open
+    ctrl.start(mkTouch(100, 100, 100));
+    ctrl.move(mkTouch(130, 100, 110)); // dx=30 (< 40), high velocity
+    expect(ctrl.leftSwipe).toBe(30);
+    ctrl.end();
+    expect(state.left).toBe(false);
+
+    // Fast flick >= 40px opens even below 35% width
+    ctrl.start(mkTouch(300, 100, 200));
+    ctrl.move(mkTouch(250, 100, 220)); // dx=-50 (>= 40), vx > 0.35
+    expect(ctrl.rightSwipe).toBe(50);
+    ctrl.end();
+    expect(state.right).toBe(true);
+
+    // Programmatic scroll (e.g. streaming auto-follow) without a user vertical swipe does NOT block opening
+    ctrl.noteScroll({ timeStamp: 900 });
+    ctrl.start(mkTouch(100, 100, 950));
+    ctrl.move(mkTouch(250, 100, 980));
+    ctrl.end();
+    expect(state.right).toBe(false); // closed open drawer
+
+    ctrl.noteScroll({ timeStamp: 1500 });
+    ctrl.start(mkTouch(300, 100, 1540)); // 40ms after programmatic scroll -> still opens
+    ctrl.move(mkTouch(140, 100, 1600));
+    ctrl.end();
+    expect(state.right).toBe(true);
+    state.right = false;
+
+    // User vertical swipe + momentum scroll blocks opening within 150ms, then allows opening after 150ms
+    ctrl.start(mkTouch(200, 100, 2000));
+    ctrl.move(mkTouch(202, 130, 2016)); // user vertical scroll detected
+    ctrl.noteScroll({ timeStamp: 2100 }); // momentum extends cooldown
+    ctrl.start(mkTouch(300, 100, 2180)); // 80ms after momentum scroll -> ignored
+    ctrl.move(mkTouch(120, 100, 2220));
+    expect(ctrl.swipe).toBeNull();
+    ctrl.end();
+    expect(state.right).toBe(false);
+
+    ctrl.start(mkTouch(300, 100, 2300)); // 200ms after last scroll -> allowed
+    ctrl.move(mkTouch(140, 100, 2360));
+    ctrl.end();
+    expect(state.right).toBe(true);
+  });
+
+  test("respects canOpen, isBlocked, narrow, multi-touch, item drag, and zero drawer width fallback", () => {
+    const { state, ctrl } = setup({ canOpenRight: false, leftW: 0 });
+
+    // Right disabled (e.g. graph view or no workspace) -> right swipe ignored, left swipe still works with 320 fallback
+    ctrl.start(mkTouch(300, 100, 0));
+    ctrl.move(mkTouch(150, 100, 50));
+    expect(ctrl.swipe).toBeNull();
+    ctrl.end();
+    expect(state.right).toBe(false);
+
+    ctrl.start(mkTouch(100, 100, 100));
+    ctrl.move(mkTouch(260, 100, 150));
+    expect(ctrl.drawerW).toBe(320);
+    ctrl.end();
+    expect(state.left).toBe(true);
 
     // Item drag mid-flight cancels swipe
     ctrl.start(mkTouch(200, 100, 200));
-    draggingItem = true;
+    state.draggingItem = true;
     ctrl.move(mkTouch(100, 100, 216));
+    expect(ctrl.swipe).toBeNull();
+    state.draggingItem = false;
+    state.left = false;
+
+    // Blocked overlay (e.g. narrow extension dock) blocks opening, but still permits closing an open drawer
+    state.canOpenRight = true;
+    state.blocked = true;
+    ctrl.start(mkTouch(300, 100, 300));
+    ctrl.move(mkTouch(120, 100, 350));
+    expect(ctrl.swipe).toBeNull();
+    state.left = true;
+    ctrl.start(mkTouch(240, 100, 360));
+    ctrl.move(mkTouch(80, 100, 390));
+    ctrl.end();
+    expect(state.left).toBe(false);
+    state.blocked = false;
+
+    // Multi-touch cancels / ignores swipe
+    ctrl.start(mkTouch(100, 100, 400, null, 2));
+    ctrl.move(mkTouch(250, 100, 450, null, 1));
+    expect(ctrl.swipe).toBeNull();
+
+    // Non-narrow viewport ignores swipe
+    state.narrow = false;
+    ctrl.start(mkTouch(100, 100, 500));
+    ctrl.move(mkTouch(250, 100, 550));
     expect(ctrl.swipe).toBeNull();
   });
 });

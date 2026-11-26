@@ -2,7 +2,7 @@
 	import { tick } from "svelte";
 	import { splitFilePath } from "../../lib/files";
 	import { t } from "../../lib/i18n";
-	import { formatCombo } from "../../lib/keys";
+	import { formatCombo, OVERLAY_SELECTOR } from "../../lib/keys";
 	import { workDir } from "../../lib/nav";
 	import { app } from "../../lib/store.svelte";
 	import { EdgeResizeController, RAIL_W } from "../../lib/shell/sidebar-resize.svelte";
@@ -16,7 +16,18 @@
 	import Segmented from "../ui/Segmented.svelte";
 	import FileIcon from "./FileIcon.svelte";
 
-	let { open = false }: { open?: boolean } = $props();
+	let {
+		open = false,
+		swipe = null,
+		drawerWidth = 320,
+		drawerEl = $bindable<HTMLElement | undefined>(),
+	}: {
+		open?: boolean;
+		/** Visible drawer width in px while dragged by `DrawerSwipeController`, or null when idle. */
+		swipe?: number | null;
+		drawerWidth?: number;
+		drawerEl?: HTMLElement | undefined;
+	} = $props();
 
 	const session = $derived(app.current);
 	const sessionId = $derived(session?.id ?? workspaceViewer.sessionId);
@@ -67,11 +78,6 @@
 	);
 	let searchTimer: ReturnType<typeof setTimeout> | null = null;
 
-	// Mobile right-drawer touch swipe-to-dismiss state (follows the finger 1:1, closes past 25% or on quick flick).
-	let drawerEl = $state<HTMLElement>();
-	let swipeX = $state<number | null>(null);
-	let touchStart: { x: number; y: number; t: number; locked: "h" | "v" | null } | null = null;
-
 	const filterOptions = $derived([
 		{ id: "all", label: t("전체") },
 		{
@@ -89,57 +95,19 @@
 		void workspaceViewer.refreshTree({ preserveOpenDirs: true });
 	});
 
-	// Avoid stacking left sidebar drawer and right file drawer on narrow viewports.
+	// Close mobile drawer on Escape (matching the left sidebar's Escape guard so modals/IME keep Escape).
 	$effect(() => {
-		if (app.sidebar.open && open && typeof window !== "undefined" && window.innerWidth <= 860) {
-			app.filesOpen = false;
-		}
-	});
-
-	// Close mobile drawer on Escape.
-	$effect(() => {
-		if (!open) return;
+		if (!viewport.narrow || !open) return;
 		const onKey = (e: KeyboardEvent) => {
-			if (e.key === "Escape" && typeof window !== "undefined" && window.innerWidth <= 860) {
-				e.preventDefault();
-				app.filesOpen = false;
-			}
+			if (e.key !== "Escape" || e.defaultPrevented || e.isComposing || document.querySelector(OVERLAY_SELECTOR)) return;
+			e.preventDefault();
+			const inside = drawerEl?.contains(document.activeElement);
+			app.filesOpen = false;
+			if (inside) document.querySelector<HTMLElement>("[data-part=header] .files-toggle")?.focus({ preventScroll: true });
 		};
 		window.addEventListener("keydown", onKey);
 		return () => window.removeEventListener("keydown", onKey);
 	});
-
-	function onDrawerTouchStart(e: TouchEvent) {
-		if (!open || e.touches.length !== 1 || typeof window === "undefined" || window.innerWidth > 860) return;
-		const pt = e.touches[0]!;
-		touchStart = { x: pt.clientX, y: pt.clientY, t: Date.now(), locked: null };
-	}
-
-	function onDrawerTouchMove(e: TouchEvent) {
-		if (!touchStart || e.touches.length !== 1) return;
-		const pt = e.touches[0]!;
-		const dx = pt.clientX - touchStart.x;
-		const dy = pt.clientY - touchStart.y;
-		if (!touchStart.locked) {
-			if (Math.hypot(dx, dy) < 10) return;
-			touchStart.locked = Math.abs(dx) > Math.abs(dy) && dx > 0 ? "h" : "v";
-		}
-		if (touchStart.locked !== "h") return;
-		swipeX = Math.max(0, dx);
-	}
-
-	function onDrawerTouchEnd() {
-		if (!touchStart) return;
-		const moved = swipeX ?? 0;
-		const dt = Math.max(1, Date.now() - touchStart.t);
-		const w = drawerEl?.offsetWidth || 300;
-		const fastFlick = moved > 40 && moved / dt > 0.35;
-		touchStart = null;
-		swipeX = null;
-		if (moved > w * 0.25 || fastFlick) {
-			app.filesOpen = false;
-		}
-	}
 
 	function onSearchInput(e: Event) {
 		const val = (e.currentTarget as HTMLInputElement).value;
@@ -172,11 +140,7 @@
 		e.dataTransfer.effectAllowed = "copy";
 	}
 
-	const scrimOpacity = $derived.by(() => {
-		if (swipeX === null) return undefined;
-		const w = drawerEl?.offsetWidth || 300;
-		return Math.max(0, 1 - swipeX / w);
-	});
+	const scrimOpacity = $derived(swipe !== null ? swipe / drawerWidth : undefined);
 </script>
 
 {#snippet treeNodes(entries: WorkspaceEntry[], depth: number)}
@@ -231,7 +195,7 @@
 <div
 	class="fscrim"
 	class:show={open}
-	class:swiping={swipeX !== null}
+	class:swiping={swipe !== null}
 	style:opacity={scrimOpacity}
 	onclick={() => (app.filesOpen = false)}
 ></div>
@@ -242,16 +206,12 @@
 	class:open
 	class:dragging={fileResize.resizing}
 	class:folding={fileResize.resizing && fileResize.foldingPreview}
-	class:swiping={swipeX !== null}
-	inert={viewport.narrow && !open && swipeX === null}
+	class:swiping={swipe !== null}
+	inert={viewport.narrow && !open && swipe === null}
 	data-part="workspace-tree"
 	style:--wv-w="{panelWidth}px"
-	style:translate={swipeX !== null ? `${swipeX}px 0` : undefined}
+	style:translate={swipe !== null ? `${drawerWidth - swipe}px 0` : undefined}
 	aria-label={t("파일 뷰어")}
-	ontouchstart={onDrawerTouchStart}
-	ontouchmove={onDrawerTouchMove}
-	ontouchend={onDrawerTouchEnd}
-	ontouchcancel={onDrawerTouchEnd}
 >
 	{#if !viewport.narrow}
 		<!-- A window splitter (WAI-ARIA): stays mounted in both open and rail states so dragging or clicking the edge folds and unfolds. -->
