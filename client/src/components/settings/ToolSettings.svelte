@@ -149,9 +149,17 @@
 			error = errorText(e);
 		}
 	}
-	const toggleableTools = $derived(
-		shown?.tools ? sortActiveFirst(shown.tools.toggleable, (name) => !shown.tools!.disabled.includes(name)) : [],
-	);
+	type ToolRow = { name: string; on: boolean; locked: boolean };
+	const toolRows = $derived.by((): ToolRow[] => {
+		const info = shown?.tools;
+		if (!info) return [];
+		const lockedSet = new Set(info.locked);
+		const rows: ToolRow[] = [
+			...info.toggleable.filter((name) => !lockedSet.has(name)).map((name) => ({ name, on: !info.disabled.includes(name), locked: false })),
+			...info.locked.map((name) => ({ name, on: true, locked: true })),
+		];
+		return sortActiveFirst(rows, (r) => (!r.on ? 2 : r.locked ? 1 : 0));
+	});
 	type AllowlistRow = { key: string; label: string; switchLabel: string; hint: string; on: boolean; missing: boolean };
 	const allowlistRows = $derived.by((): AllowlistRow[] => {
 		const d = shown?.tools?.delegate;
@@ -171,18 +179,12 @@
 <section class="set-group">
 	<div class="section-label">{t("에이전트 도구")}</div>
 	{#if shown?.tools}
-		{@const info = shown.tools}
-		{#each toggleableTools as name (name)}
+		{#each toolRows as row (row.name)}
 			<div animate:reflow>
-				<SettingRow label={toolLabel(name)}>
-					<Switch checked={!info.disabled.includes(name)} label={name} onchange={(on) => save(name, on)} />
+				<SettingRow label={toolLabel(row.name)} dim={row.locked}>
+					<Switch checked={row.on} disabled={row.locked} label={row.name} onchange={(on) => { if (!row.locked) void save(row.name, on); }} />
 				</SettingRow>
 			</div>
-		{/each}
-		{#each info.locked as name (name)}
-			<SettingRow label={toolLabel(name)} dim>
-				<Switch checked disabled label={name} onchange={() => {}} />
-			</SettingRow>
 		{/each}
 	{/if}
 	{#if error}<span class="hint danger">{error}</span>{/if}
