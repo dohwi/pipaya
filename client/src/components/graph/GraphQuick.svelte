@@ -2,6 +2,7 @@
 	import { app } from "../../lib/store.svelte";
 	import { t } from "../../lib/i18n";
 	import { sessionTitle } from "../../lib/session-title";
+	import { workDir } from "../../lib/nav";
 	import { activityOf, ACTIVITY_LABEL } from "../../lib/activity";
 	import Modal from "../ui/Modal.svelte";
 	import Icon from "../ui/Icon.svelte";
@@ -22,7 +23,7 @@
 	/** The pane appears once the chat's server is the open one and the chat is its active one. */
 	const ready = $derived(app.serverId === server && app.activeId === session);
 	const sub = $derived(
-		[app.servers.find((x) => x.id === server)?.name ?? server, s?.name ? `@${s.name}` : "", s?.cwd.split("/").slice(-2).join("/") ?? ""].filter(Boolean).join(" · "),
+		[app.servers.find((x) => x.id === server)?.name ?? server, s?.name ? `@${s.name}` : "", s ? workDir(s).split(/[\\/]/).slice(-2).join("/") : ""].filter(Boolean).join(" · "),
 	);
 
 	let closing = false;

@@ -192,6 +192,12 @@ export class ServerLink {
 		return [...new Set([...this.data.sessions.map(workDir), ...this.data.terminals.map((x) => x.cwd)])];
 	}
 
+	/** Re-read git repo/branch metadata for specific paths (or every listed folder). */
+	refreshRepos(paths?: string[]): void {
+		const target = (paths && paths.length > 0 ? paths : this.listedPaths()).filter(Boolean);
+		if (target.length > 0) void this.lookUpRepos(target, true);
+	}
+
 	/**
 	 * Look up the repository of the folders not known yet (`all`: every listed folder again, as after a (re)connect, since
 	 * a branch may have been switched meanwhile). A failure leaves them as they were until the next change.
@@ -199,13 +205,23 @@ export class ServerLink {
 	private async lookUpRepos(paths: string[], all = false): Promise<void> {
 		if (this.reposUnsupported || this.stopped) return;
 		const known = this.repos;
-		const ask = paths.filter((p) => (all || !(p in known)) && !this.reposAsked.has(p));
+		const ask = [...new Set(paths)].filter((p) => Boolean(p) && (all || !(p in known)) && !this.reposAsked.has(p));
 		if (!ask.length) return;
 		for (const p of ask) this.reposAsked.add(p);
 		try {
 			const r = await this.boundedApi(10_000).repos(ask);
 			if (this.stopped) return;
-			this.repos = { ...this.repos, ...Object.fromEntries(ask.map((p) => [p, r.repos[p] ?? null])) };
+			const next = { ...this.repos };
+			let changed = false;
+			for (const p of ask) {
+				const val = r.repos[p] ?? null;
+				const prev = next[p];
+				if (!(p in next) || prev?.root !== val?.root || prev?.top !== val?.top || prev?.branch !== val?.branch || (prev === null) !== (val === null)) {
+					next[p] = val;
+					changed = true;
+				}
+			}
+			if (changed) this.repos = next;
 		} catch (e) {
 			if (isUnsupportedRoute(e)) this.reposUnsupported = true;
 		} finally {
@@ -393,6 +409,7 @@ export class ServerLink {
 			if (activity) this.applyActivity(activity);
 			if (terminals && !sameTerminals(this.data.terminals, terminals)) this.data.terminals = terminals;
 			if (support) this.terminalSupport = support;
+			void this.lookUpRepos(this.listedPaths(), true);
 		} catch {
 			/* the lists stay as they were; the next wake tries again */
 		}

@@ -271,14 +271,40 @@
 		lastActivePaneId = id;
 	});
 
+	let lastRepoSyncKey = "";
 	$effect(() => {
 		const api = app.api;
 		const s = app.current;
-		const fallbackSession = !s && app.tabDir ? app.sessions.find((x) => workDir(x) === app.tabDir?.path) ?? null : null;
+		const term = !s ? app.terminal(app.activeId) : undefined;
+		const targetDir = term?.cwd ?? app.tabDir?.path ?? "";
+		const fallbackSession = !s && targetDir ? app.sessions.find((x) => workDir(x) === targetDir) ?? null : null;
 		const boundSession = s ?? fallbackSession;
-		const dir = boundSession ? workDir(boundSession) : (app.tabDir?.path ?? "");
+		const dir = boundSession ? workDir(boundSession) : targetDir;
 		const online = app.net === "online";
-		workspaceViewer.bind(api, boundSession?.id ?? null, dir, (id) => app.chatOf(id));
+		const initialRepo = untrack(() => (dir ? app.link?.repos[dir] ?? null : null));
+		workspaceViewer.bind(api, boundSession?.id ?? null, dir, (id) => app.chatOf(id), {
+			initialRepo,
+			getSessionDir: (id) => {
+				const found = app.sessions.find((x) => x.id === id);
+				return found ? workDir(found) : null;
+			},
+			onMeta: (meta) => {
+				const link = app.link;
+				if (!link || !meta.workDir) return;
+				const known = link.repos[meta.workDir];
+				const knownIsRepo = Boolean(known);
+				const knownBranch = known?.branch ?? null;
+				if (!(meta.workDir in link.repos) || knownIsRepo !== meta.isRepo || knownBranch !== meta.branch) {
+					// Dedupe repeated discrepancies (e.g. home-dir dotfiles repos omitted by repoOf(), or servers without a git binary).
+					const syncKey = `${link.id}\0${meta.workDir}\0${meta.isRepo}\0${meta.branch ?? ""}`;
+					if (syncKey === lastRepoSyncKey) return;
+					lastRepoSyncKey = syncKey;
+					link.refreshRepos([meta.workDir]);
+				} else {
+					lastRepoSyncKey = "";
+				}
+			},
+		});
 		if (api && online && boundSession) {
 			void workspaceViewer.refreshTree({ preserveOpenDirs: true });
 		}

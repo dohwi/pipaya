@@ -295,23 +295,40 @@ function searchFiles(root: string, query: string): WorkspaceEntry[] {
 	return results;
 }
 
-async function inspectGitChanges(workDir: string): Promise<{ isRepo: boolean; repoRoot: string | null; branch: string | null; changes: WorkspaceChange[] }> {
+async function resolveRepoTop(workDir: string): Promise<{ repoRoot: string; realRoot: string } | null> {
 	const top = await runGit(workDir, ["rev-parse", "--show-toplevel"]);
-	if (top.code !== 0 || !top.stdout.trim()) {
-		return { isRepo: false, repoRoot: null, branch: null, changes: [] };
-	}
+	if (top.code !== 0 || !top.stdout.trim()) return null;
 	const repoRoot = top.stdout.trim();
+	return { repoRoot, realRoot: realpathSafe(repoRoot) ?? resolve(repoRoot) };
+}
+
+async function inspectGitHead(workDir: string): Promise<{ isRepo: boolean; repoRoot: string | null; branch: string | null; head: string | null }> {
+	const top = await resolveRepoTop(workDir);
+	if (!top) return { isRepo: false, repoRoot: null, branch: null, head: null };
+	const [branchRes, headRes] = await Promise.all([
+		runGit(top.repoRoot, ["symbolic-ref", "--short", "HEAD"]),
+		runGit(top.repoRoot, ["rev-parse", "--short", "--verify", "HEAD"]),
+	]);
+	const branch = branchRes.code === 0 ? branchRes.stdout.trim() || null : null;
+	const head = headRes.code === 0 ? headRes.stdout.trim() || null : null;
+	return { isRepo: true, repoRoot: top.realRoot, branch, head };
+}
+
+async function inspectGitChanges(workDir: string): Promise<{ isRepo: boolean; repoRoot: string | null; branch: string | null; head: string | null; changes: WorkspaceChange[] }> {
+	const top = await resolveRepoTop(workDir);
+	if (!top) return { isRepo: false, repoRoot: null, branch: null, head: null, changes: [] };
+	const { repoRoot, realRoot } = top;
 	const realWork = realpathSafe(workDir) ?? resolve(workDir);
-	const realRoot = realpathSafe(repoRoot) ?? resolve(repoRoot);
 	const subPrefix = relative(realRoot, realWork).replace(/\\/g, "/");
 
 	const [branchRes, statusRes, headRes] = await Promise.all([
 		runGit(repoRoot, ["symbolic-ref", "--short", "HEAD"]),
 		runGit(repoRoot, ["status", "--porcelain=v1", "-z", "-uall"]),
-		runGit(repoRoot, ["rev-parse", "--verify", "HEAD"]),
+		runGit(repoRoot, ["rev-parse", "--short", "--verify", "HEAD"]),
 	]);
 	const branch = branchRes.code === 0 ? branchRes.stdout.trim() || null : null;
-	const hasHead = headRes.code === 0;
+	const head = headRes.code === 0 ? headRes.stdout.trim() || null : null;
+	const hasHead = head !== null;
 
 	const numstatMap = new Map<string, { additions: number; deletions: number }>();
 	const numRes = await runGit(
@@ -377,7 +394,7 @@ async function inspectGitChanges(workDir: string): Promise<{ isRepo: boolean; re
 		});
 	}
 
-	return { isRepo: true, repoRoot: realRoot, branch, changes };
+	return { isRepo: true, repoRoot: realRoot, branch, head, changes };
 }
 
 export function registerWorkspaceViewerRoutes(server: FastifyInstance, deps: { store: SessionStore }): void {
@@ -403,21 +420,27 @@ export function registerWorkspaceViewerRoutes(server: FastifyInstance, deps: { s
 		const { id } = req.params as { id: string };
 		const { dir, q } = req.query as { dir?: string; q?: string };
 		const root = workDirFor(id);
+		const normalizedDir = (dir ?? "").replace(/^\/+|\/+$/g, "");
+		const query = q?.trim() ?? "";
+		const isRootQuery = !normalizedDir && !query;
 
 		const [git, listing] = await Promise.all([
-			inspectGitChanges(root),
+			isRootQuery
+				? inspectGitChanges(root)
+				: inspectGitHead(root).then((meta) => ({ ...meta, changes: [] as WorkspaceChange[] })),
 			Promise.resolve(
-				q?.trim()
-					? { entries: searchFiles(root, q), truncated: false }
-					: listDirEntries(root, dir ?? ""),
+				query
+					? { entries: searchFiles(root, query), truncated: false }
+					: listDirEntries(root, normalizedDir),
 			),
 		]);
 
 		return {
 			workDir: root,
-			dir: (dir ?? "").replace(/^\/+|\/+$/g, ""),
+			dir: normalizedDir,
 			isRepo: git.isRepo,
 			branch: git.branch,
+			head: git.head,
 			entries: listing.entries,
 			truncated: listing.truncated,
 			changes: git.changes,

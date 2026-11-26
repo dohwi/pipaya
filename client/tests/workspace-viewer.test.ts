@@ -1,6 +1,12 @@
-import { describe, expect, it } from "bun:test";
+import { afterAll, beforeAll, describe, expect, it } from "bun:test";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
+import { compileModule } from "svelte/compiler";
+import ts from "typescript";
 import { buildEditHunk, buildFullFileDiff, deriveLatestTurnEdits, formatCompactCount, formatLineSpec, splitHighlightedHtml } from "../src/lib/workspace-edits";
 import type { ChatState } from "../src/lib/chat.svelte";
+import type { WorkspaceViewerStore as WorkspaceViewerStoreType } from "../src/lib/workspace-viewer.svelte";
 
 function fakeChat(items: ChatState["items"], tools: ChatState["tools"] = {}): ChatState {
 	return { items, tools } as unknown as ChatState;
@@ -193,5 +199,166 @@ describe("workspace-viewer recent edits", () => {
 		expect(res.diffs.get("big.txt")?.truncated).toBe(true);
 		expect(res.diffs.get("big.txt")?.hunks[0]?.lines.length).toBe(400);
 		expect(ms).toBeLessThan(200);
+	});
+});
+
+describe("WorkspaceViewerStore repo & branch metadata", () => {
+	let WorkspaceViewerStore: typeof WorkspaceViewerStoreType;
+	let tmpDir: string;
+
+	beforeAll(async () => {
+		tmpDir = await mkdtemp(join(tmpdir(), "pipaya-wv-store-"));
+		const srcPath = resolve("src/lib/workspace-viewer.svelte.ts");
+		const build = await Bun.build({
+			entrypoints: [srcPath],
+			target: "bun",
+			plugins: [
+				{
+					name: "runes",
+					setup(builder) {
+						builder.onLoad({ filter: /workspace-viewer\.svelte\.ts$/ }, async ({ path }) => {
+							const raw = await Bun.file(path).text();
+							const rewritten = raw.replace(/from "(\.\/[^"]+)"/g, (_, rel) => `from ${JSON.stringify(resolve("src/lib", rel))}`);
+							const source = ts.transpileModule(rewritten, {
+								compilerOptions: { target: ts.ScriptTarget.ESNext, module: ts.ModuleKind.ESNext },
+							}).outputText;
+							return { contents: compileModule(source, { filename: path, generate: "client" }).js.code, loader: "js" };
+						});
+					},
+				},
+			],
+		});
+		if (!build.success) throw new Error(build.logs.join("\n"));
+		const out = join(tmpDir, "workspace-viewer.mjs");
+		await writeFile(out, await build.outputs[0]!.text());
+		WorkspaceViewerStore = (await import(out)).WorkspaceViewerStore;
+	});
+
+	afterAll(async () => {
+		if (tmpDir) await rm(tmpDir, { recursive: true, force: true });
+	});
+
+	it("hydrates initialRepo hint on bind, updates detached HEAD, notifies onMeta, and clears stale state on dir switch or initial error", async () => {
+		const store = new WorkspaceViewerStore();
+		const metas: { workDir: string; isRepo: boolean; branch: string | null }[] = [];
+		let treeReply: () => Promise<unknown> = async () => ({
+			workDir: "/repo-a",
+			dir: "",
+			isRepo: true,
+			branch: null,
+			head: "abc1234",
+			entries: [{ name: "README.md", path: "README.md", dir: false }],
+			truncated: false,
+			changes: [],
+		});
+		const fakeApi = {
+			baseUrl: "http://example.test",
+			workspaceTree: () => treeReply(),
+		} as never;
+
+		store.bind(fakeApi, "s1", "/repo-a", undefined, {
+			initialRepo: { branch: "main" },
+			onMeta: (m) => metas.push(m),
+		});
+		expect(store.isRepo).toBe(true);
+		expect(store.branch).toBe("main");
+		expect(store.head).toBeNull();
+
+		await store.refreshTree();
+		expect(store.isRepo).toBe(true);
+		expect(store.branch).toBeNull();
+		expect(store.head).toBe("abc1234");
+		expect(metas).toEqual([{ workDir: "/repo-a", isRepo: true, branch: null }]);
+
+		// Switching to another folder resets repo/branch/head cleanly
+		store.bind(fakeApi, "s2", "/plain-dir", undefined, {
+			initialRepo: null,
+			onMeta: (m) => metas.push(m),
+		});
+		expect(store.isRepo).toBe(false);
+		expect(store.branch).toBeNull();
+		expect(store.head).toBeNull();
+
+		// Initial refresh failure clears hinted repo info instead of keeping stale metadata
+		store.bind(fakeApi, "s3", "/missing-dir", undefined, {
+			initialRepo: { branch: "stale-branch" },
+			onMeta: (m) => metas.push(m),
+		});
+		expect(store.branch).toBe("stale-branch");
+		treeReply = async () => {
+			throw new Error("working directory not found");
+		};
+		await store.refreshTree();
+		expect(store.treeError).toBeTruthy();
+		expect(store.isRepo).toBe(false);
+		expect(store.branch).toBeNull();
+		expect(store.head).toBeNull();
+	});
+
+	it("refreshes branch metadata when a sibling session in the same workDir triggers workspace_changed", async () => {
+		const store = new WorkspaceViewerStore();
+		let currentBranch = "main";
+		let calls = 0;
+		let resolveSecond!: () => void;
+		const secondDone = new Promise<void>((r) => {
+			resolveSecond = r;
+		});
+		const fakeApi = {
+			baseUrl: "http://example.test",
+			workspaceTree: async () => {
+				calls++;
+				const res = {
+					workDir: "/repo-shared",
+					dir: "",
+					isRepo: true,
+					branch: currentBranch,
+					head: "1112223",
+					entries: [],
+					truncated: false,
+					changes: [],
+				};
+				if (calls >= 2) queueMicrotask(resolveSecond);
+				return res;
+			},
+		} as never;
+
+		store.bind(fakeApi, "s1", "/repo-shared", undefined, {
+			getSessionDir: (id) => (id === "s1" || id === "s2" ? "/repo-shared" : "/other"),
+		});
+		await store.refreshTree();
+		expect(store.branch).toBe("main");
+
+		// Sibling session s2 switches branch via bash in the same directory
+		currentBranch = "feat/switched";
+		store.onEvent({ id: 1, sessionId: "s2", type: "workspace_changed", data: { tool: "bash", path: null }, ts: Date.now() });
+		await Promise.race([
+			secondDone,
+			new Promise<never>((_, reject) => setTimeout(() => reject(new Error("timed out waiting for sibling refresh")), 2000)),
+		]);
+		expect(store.branch).toBe("feat/switched");
+		expect(store.changes).toEqual([]);
+	});
+
+	it("ignores stale workspaceTree responses whose workDir mismatches the currently bound folder", async () => {
+		const store = new WorkspaceViewerStore();
+		const fakeApi = {
+			baseUrl: "http://example.test",
+			workspaceTree: async () => ({
+				workDir: "/old-worktree",
+				dir: "",
+				isRepo: true,
+				branch: "old-branch",
+				head: "0000000",
+				entries: [{ name: "stale.txt", path: "stale.txt", dir: false }],
+				truncated: false,
+				changes: [],
+			}),
+		} as never;
+
+		store.bind(fakeApi, "s1", "/new-worktree", undefined, { initialRepo: { branch: "feat/new" } });
+		await store.refreshTree();
+		expect(store.workDir).toBe("/new-worktree");
+		expect(store.branch).toBe("feat/new");
+		expect(store.rootEntries).toEqual([]);
 	});
 });

@@ -135,13 +135,13 @@
 					<span class="gname">{group.name}</span>
 					{#if crumb}<span class="sep" aria-hidden="true"><Icon name="chevron-right" /></span><span class="cur">{crumbTitle}</span>{/if}
 				</span>
-				<span class="sub mono">{crumb ? crumb.cwd.split(/[\\/]/).slice(-2).join("/") : t("대화 {n}개", { n: panesOf(group.layout).length })}</span>
+				<span class="sub mono">{crumb ? workDir(crumb).split(/[\\/]/).slice(-2).join("/") : t("대화 {n}개", { n: panesOf(group.layout).length })}</span>
 			{:else if term}
 				<span class="t">{term.title}</span>
 				<span class="sub mono">{t("터미널")} · {term.cwd.split(/[\\/]/).slice(-2).join("/")}</span>
 			{:else}
 				<span class="t">{sessionTitle(s?.title)}</span>
-				{#if s}<span class="sub mono">{workDir(s).split("/").slice(-2).join("/")}</span>{/if}
+				{#if s}<span class="sub mono">{workDir(s).split(/[\\/]/).slice(-2).join("/")}</span>{/if}
 			{/if}
 		</div>
 

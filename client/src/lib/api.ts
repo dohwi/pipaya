@@ -802,6 +802,7 @@ export class Api {
 			dir: string;
 			isRepo: boolean;
 			branch: string | null;
+			head?: string | null;
 			entries: { name: string; path: string; dir: boolean }[];
 			truncated: boolean;
 			changes: { path: string; oldPath?: string; status: "M" | "A" | "D" | "R" | "?" | "U"; additions: number; deletions: number }[];

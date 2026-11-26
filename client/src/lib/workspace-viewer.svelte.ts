@@ -66,6 +66,8 @@ export class WorkspaceViewerStore {
 	workDir = $state<string>("");
 	isRepo = $state(false);
 	branch = $state<string | null>(null);
+	head = $state<string | null>(null);
+	metaLoaded = $state(false);
 
 	filter = $state<"all" | "changed">("all");
 	viewMode = $state<"file" | "diff">("file");
@@ -98,6 +100,8 @@ export class WorkspaceViewerStore {
 
 	private api: Api | null = null;
 	private getChat: ((id: string) => ChatState | null | undefined) | null = null;
+	private getSessionDir: ((id: string) => string | null) | null = null;
+	private onMeta: ((meta: { workDir: string; isRepo: boolean; branch: string | null }) => void) | null = null;
 	private recentDiffs = new Map<string, WorkspaceDiffData>();
 	private liveTurnPaths = new Set<string>();
 	private latestTurnKey: string | null = null;
@@ -158,7 +162,17 @@ export class WorkspaceViewerStore {
 		} catch { /* ignore storage errors */ }
 	}
 
-	bind(api: Api | null, sessionId: string | null, workDir: string, getChat?: (id: string) => ChatState | null | undefined) {
+	bind(
+		api: Api | null,
+		sessionId: string | null,
+		workDir: string,
+		getChat?: (id: string) => ChatState | null | undefined,
+		opts?: {
+			initialRepo?: { branch: string | null } | null;
+			getSessionDir?: (id: string) => string | null;
+			onMeta?: (meta: { workDir: string; isRepo: boolean; branch: string | null }) => void;
+		},
+	) {
 		const serverChanged = this.api !== api;
 		const dirChanged = this.workDir !== workDir;
 		const sessionChanged = this.sessionId !== sessionId;
@@ -167,15 +181,24 @@ export class WorkspaceViewerStore {
 		}
 		this.api = api;
 		this.getChat = getChat ?? this.getChat;
+		if (opts?.getSessionDir !== undefined) this.getSessionDir = opts.getSessionDir;
+		if (opts?.onMeta !== undefined) this.onMeta = opts.onMeta;
 		if (serverChanged) this.supported = true;
 		if (serverChanged || dirChanged) {
+			if (this.refreshTimer) {
+				clearTimeout(this.refreshTimer);
+				this.refreshTimer = null;
+			}
 			this.sessionId = sessionId;
 			this.workDir = workDir;
 			const nextKey = this.dirKey(api, workDir);
 			const saved = nextKey ? this.dirStates.get(nextKey) : undefined;
 			const restoredFiles = saved ? [...saved.openFiles] : this.readStoredTabs(nextKey);
-			this.isRepo = false;
-			this.branch = null;
+			const hint = opts?.initialRepo;
+			this.isRepo = Boolean(hint);
+			this.branch = hint?.branch ?? null;
+			this.head = null;
+			this.metaLoaded = false;
 			this.rootEntries = [];
 			this.dirEntries = {};
 			this.expandedDirs = saved ? { ...saved.expandedDirs } : {};
@@ -324,6 +347,20 @@ export class WorkspaceViewerStore {
 		}, RECENT_HIGHLIGHT_MS + 100);
 	}
 
+	private applyTreeMeta(
+		res: { workDir?: string; isRepo: boolean; branch: string | null; head?: string | null },
+		notify = false,
+	): boolean {
+		// Never mutate `this.workDir` here (it is owned by `bind()`): a mismatch means the session moved folders mid-flight.
+		if (res.workDir && this.workDir && res.workDir !== this.workDir) return false;
+		this.isRepo = res.isRepo;
+		this.branch = res.branch;
+		this.head = res.head ?? null;
+		this.metaLoaded = true;
+		if (notify) this.onMeta?.({ workDir: this.workDir, isRepo: res.isRepo, branch: res.branch });
+		return true;
+	}
+
 	async refreshTree(opts: { preserveOpenDirs?: boolean } = {}) {
 		const api = this.api;
 		const sid = this.sessionId;
@@ -336,9 +373,8 @@ export class WorkspaceViewerStore {
 		try {
 			if (this.supported) {
 				const res = await api.workspaceTree(sid);
-				if (this.api !== api || this.sessionId !== sid || this.seq.tree !== ticket) return;
-				this.isRepo = res.isRepo;
-				this.branch = res.branch;
+				if (this.api !== api || this.sessionId !== sid || this.workDir !== dir || this.seq.tree !== ticket) return;
+				if (!this.applyTreeMeta(res, true)) return;
 				this.rootEntries = res.entries;
 				this.syncRecentChanges();
 				if (opts.preserveOpenDirs) {
@@ -353,19 +389,26 @@ export class WorkspaceViewerStore {
 				this.supported = false;
 			} else {
 				this.treeError = errorText(e);
+				if (this.rootEntries.length === 0) {
+					this.isRepo = false;
+					this.branch = null;
+					this.head = null;
+				}
 				return;
 			}
 		} finally {
 			if (this.seq.tree === ticket && this.supported) this.treeLoading = false;
 		}
 
-		// Graceful fallback for older servers without `/sessions/:id/workspace/tree`.
+		// Graceful fallback for older servers without `/sessions/:id/workspace/tree`: keep any `initialRepo` hint from `link.repos`.
 		try {
 			const [filesRes, dirsRes] = await Promise.all([
 				api.listFiles(dir, "").catch(() => ({ entries: [] })),
 				api.listDirs(dir, false).catch(() => ({ entries: [] })),
 			]);
-			if (this.api !== api || this.sessionId !== sid || this.seq.tree !== ticket) return;
+			if (this.api !== api || this.sessionId !== sid || this.workDir !== dir || this.seq.tree !== ticket) return;
+			this.head = null;
+			this.metaLoaded = true;
 			const topMap = new Map<string, WorkspaceEntry>();
 			for (const d of dirsRes.entries) {
 				if (d.name === ".git") continue;
@@ -396,11 +439,12 @@ export class WorkspaceViewerStore {
 		try {
 			if (this.supported) {
 				const res = await api.workspaceTree(sid, { dir: relDir });
-				if (this.api !== api || this.sessionId !== sid) return;
+				if (this.api !== api || this.sessionId !== sid || this.workDir !== root) return;
+				if (!this.applyTreeMeta(res)) return;
 				this.dirEntries = { ...this.dirEntries, [relDir]: res.entries };
 			} else {
 				const res = await api.listFiles(root, `${relDir}/`);
-				if (this.api !== api || this.sessionId !== sid) return;
+				if (this.api !== api || this.sessionId !== sid || this.workDir !== root) return;
 				const prefix = `${relDir}/`;
 				const childMap = new Map<string, WorkspaceEntry>();
 				for (const e of res.entries) {
@@ -443,11 +487,12 @@ export class WorkspaceViewerStore {
 		try {
 			if (this.supported) {
 				const res = await api.workspaceTree(sid, { q });
-				if (this.seq.search !== ticket || this.sessionId !== sid) return;
+				if (this.seq.search !== ticket || this.sessionId !== sid || this.workDir !== root) return;
+				if (!this.applyTreeMeta(res)) return;
 				this.searchEntries = res.entries;
 			} else {
 				const res = await api.listFiles(root, q);
-				if (this.seq.search !== ticket || this.sessionId !== sid) return;
+				if (this.seq.search !== ticket || this.sessionId !== sid || this.workDir !== root) return;
 				this.searchEntries = res.entries.map((e) => {
 					const clean = e.path.replace(/\/$/, "");
 					return { name: clean.split("/").pop() ?? clean, path: clean, dir: e.dir };
@@ -571,10 +616,21 @@ export class WorkspaceViewerStore {
 		}
 	}
 
-	/** Live updates whenever the agent edits/writes files or starts/finishes a run. */
+	/** Live updates whenever the agent (or a sibling session in the same folder) edits files or switches branches. */
 	onEvent(e: PipayaEvent) {
 		const sid = e.sessionId;
-		if (!sid || sid !== this.sessionId) return;
+		if (!sid) return;
+		if (sid !== this.sessionId) {
+			// Another session working in the exact same directory may run `git checkout` or edit files: refresh tree & branch only.
+			if (
+				this.workDir &&
+				this.getSessionDir?.(sid) === this.workDir &&
+				(e.type === "workspace_changed" || e.type === "run_finished")
+			) {
+				this.scheduleLiveRefresh();
+			}
+			return;
+		}
 
 		if (e.type === "run_started") {
 			this.liveTurnPaths.clear();
