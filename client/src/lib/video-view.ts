@@ -521,6 +521,7 @@ export function videoPlayer(src: string, opts?: VideoPlayerOptions): HTMLDivElem
 		else toggle();
 	});
 	if (!lightbox) video.addEventListener("dblclick", expandOrClose);
+	else if (opts?.onExpand) video.addEventListener("dblclick", () => opts.onExpand?.());
 	wrap.addEventListener("pointermove", wake);
 	wrap.addEventListener("pointerdown", (e) => {
 		const target = e.target as Element | null;

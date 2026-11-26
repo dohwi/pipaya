@@ -14,6 +14,7 @@
 	import { onDestroy } from "svelte";
 	import type { ViewerImage } from "../../lib/store/ui-overlay.svelte";
 	import { released } from "../../lib/pointer";
+	import { isDesktopTauri } from "../../lib/tauri";
 
 	/** Full-screen media viewer: zoom, pan, step through the images and videos of one message, copy, save. */
 	let { onclose }: { onclose: () => void } = $props();
@@ -27,6 +28,155 @@
 	let chromeIdle = $state(false);
 	let videoStage = $state<HTMLElement | undefined>();
 	let activeVideoWrap = $state<HTMLDivElement | null>(null);
+	/** Full-screen (true OS fullscreen where available + edge-to-edge immersive layout). */
+	let fullscreen = $state(false);
+	/** Only OS fullscreen entered by this viewer is released on exit/close; an app window already in F11 stays untouched. */
+	let enteredOsFs: "dom" | "tauri" | null = null;
+	let fsRelease: Promise<void> = Promise.resolve();
+	let fsExitedAt = 0;
+	let fsSeq = 0;
+	let destroyed = false;
+	/** In image fullscreen, fade chrome after idle just like playing video. */
+	const IMAGE_IDLE_MS = 2200;
+	let imageIdle = $state(false);
+	let imageIdleTimer: ReturnType<typeof setTimeout> | undefined;
+	const hideChrome = $derived((isVideo && chromeIdle) || (!isVideo && fullscreen && imageIdle));
+
+	async function releaseOsFullscreen(which: "dom" | "tauri" | null) {
+		if (which === "dom") {
+			if (document.fullscreenElement) await document.exitFullscreen().catch(() => {});
+		} else if (which === "tauri") {
+			try {
+				const win = (await import("@tauri-apps/api/window")).getCurrentWindow();
+				await win.setFullscreen(false);
+			} catch {
+				/* ignore */
+			}
+		}
+	}
+
+	function scheduleImageIdle() {
+		clearTimeout(imageIdleTimer);
+		imageIdle = false;
+		if (!fullscreen || isVideo || destroyed) return;
+		imageIdleTimer = setTimeout(() => {
+			if (fullscreen && !isVideo && !destroyed) imageIdle = true;
+		}, IMAGE_IDLE_MS);
+	}
+
+	async function enterFullscreen() {
+		if (fullscreen) return;
+		const seq = ++fsSeq;
+		fullscreen = true;
+		scheduleImageIdle();
+		await fsRelease;
+		if (seq !== fsSeq || destroyed || !app.viewer) return;
+		try {
+			if (isDesktopTauri()) {
+				const win = (await import("@tauri-apps/api/window")).getCurrentWindow();
+				if (seq !== fsSeq || destroyed || !app.viewer) return;
+				if (!(await win.isFullscreen())) {
+					await win.setFullscreen(true);
+					if (seq === fsSeq && !destroyed && app.viewer) enteredOsFs = "tauri";
+					else await win.setFullscreen(false).catch(() => {});
+				}
+			} else if (lb && !document.fullscreenElement && typeof lb.requestFullscreen === "function") {
+				await lb.requestFullscreen();
+				if (seq === fsSeq && !destroyed && app.viewer) enteredOsFs = "dom";
+				else if (document.fullscreenElement) await document.exitFullscreen().catch(() => {});
+			}
+		} catch {
+			/* Fullscreen API denied or unsupported (e.g. iOS WebView): keep edge-to-edge `.lb.fs` view */
+		}
+	}
+
+	function exitFullscreen() {
+		const which = enteredOsFs;
+		enteredOsFs = null;
+		fullscreen = false;
+		imageIdle = false;
+		clearTimeout(imageIdleTimer);
+		fsSeq++;
+		if (which) fsRelease = fsRelease.then(() => releaseOsFullscreen(which));
+		return fsRelease;
+	}
+
+	function toggleFullscreen() {
+		void (fullscreen ? exitFullscreen() : enterFullscreen());
+	}
+
+	function closeViewer() {
+		void exitFullscreen();
+		onclose();
+	}
+
+	function onEscape() {
+		// If the browser's own Esc just exited DOM fullscreen, don't let the same keypress also close the viewer
+		if (performance.now() - fsExitedAt < 120) return;
+		// Esc mirrors native fullscreen: exit fullscreen first, then close the viewer on the second Esc
+		if (fullscreen) {
+			void exitFullscreen();
+			return;
+		}
+		closeViewer();
+	}
+
+	$effect(() => {
+		if (!set) return;
+		const onFsChange = () => {
+			if (!document.fullscreenElement && enteredOsFs === "dom") {
+				enteredOsFs = null;
+				fullscreen = false;
+				imageIdle = false;
+				clearTimeout(imageIdleTimer);
+				fsExitedAt = performance.now();
+			}
+		};
+		document.addEventListener("fullscreenchange", onFsChange);
+		let stopTauriResize: (() => void) | undefined;
+		let active = true;
+		if (isDesktopTauri()) {
+			void import("@tauri-apps/api/window")
+				.then(async ({ getCurrentWindow }) => {
+					if (!active) return;
+					const win = getCurrentWindow();
+					const unlisten = await win.onResized(async () => {
+						if (!active || enteredOsFs !== "tauri") return;
+						try {
+							if (!(await win.isFullscreen()) && active && enteredOsFs === "tauri") {
+								enteredOsFs = null;
+								fullscreen = false;
+								imageIdle = false;
+								clearTimeout(imageIdleTimer);
+							}
+						} catch {
+							/* ignore */
+						}
+					});
+					if (active) stopTauriResize = unlisten;
+					else unlisten();
+				})
+				.catch(() => {});
+		}
+		return () => {
+			active = false;
+			document.removeEventListener("fullscreenchange", onFsChange);
+			stopTauriResize?.();
+		};
+	});
+
+	$effect(() => {
+		// Reset image idle timer when entering/leaving fullscreen or stepping to another slide
+		void img;
+		void isVideo;
+		void fullscreen;
+		if (fullscreen && !isVideo) scheduleImageIdle();
+		else {
+			clearTimeout(imageIdleTimer);
+			imageIdle = false;
+		}
+	});
+
 	$effect(() => {
 		const cur = img;
 		const host = videoStage;
@@ -36,6 +186,7 @@
 			mode: "lightbox",
 			filename: cur.name,
 			initialState,
+			onExpand: () => toggleFullscreen(),
 			onIdleChange: (v) => {
 				if (activeVideoWrap === player) chromeIdle = v;
 			},
@@ -250,10 +401,16 @@
 
 	/** Where the last press started: a click only closes when it started and ended on the empty backdrop. */
 	let downOnBackdrop = false;
+	let wokeOnDown = false;
 
 	function onbackdrop(e: MouseEvent) {
+		if (wokeOnDown) {
+			wokeOnDown = false;
+			downOnBackdrop = false;
+			return;
+		}
 		// the pointer is captured by the stage, so e.target is always the stage: look at what was actually hit
-		if (downOnBackdrop && !moved && (isVideo ? !onVideoWrap(e) : !overPicture(e))) onclose();
+		if (downOnBackdrop && !moved && (isVideo ? !onVideoWrap(e) : !overPicture(e))) closeViewer();
 		downOnBackdrop = false;
 	}
 
@@ -324,8 +481,11 @@
 		noteTimer = setTimeout(() => (note = null), ok ? 2000 : 3000);
 	}
 	onDestroy(() => {
+		destroyed = true;
 		clearTimeout(noteTimer);
+		clearTimeout(imageIdleTimer);
 		cancelHold();
+		void exitFullscreen();
 	});
 
 	let copyingTarget = $state<ViewerImage | null>(null);
@@ -360,8 +520,19 @@
 		}
 	}
 
-	function wakeVideoChrome() {
+	function wakeChrome() {
 		if (isVideo && activeVideoWrap) activeVideoWrap.dispatchEvent(new Event("wd-video-wake"));
+		else if (fullscreen && !isVideo) scheduleImageIdle();
+	}
+
+	function onViewerPointerDown() {
+		if (fullscreen && hideChrome) {
+			wokeOnDown = true;
+			wakeChrome();
+		} else {
+			wokeOnDown = false;
+			if (fullscreen && !isVideo) scheduleImageIdle();
+		}
 	}
 
 	function onkey(e: KeyboardEvent) {
@@ -381,6 +552,12 @@
 		const textInput = (tag === "INPUT" && !range) || tag === "TEXTAREA" || tag === "SELECT" || Boolean(target?.isContentEditable);
 		if (textInput) return;
 		const plain = !e.ctrlKey && !e.metaKey && !e.altKey;
+		if (plain && e.code === "KeyF") {
+			if (!e.repeat) toggleFullscreen();
+			e.preventDefault();
+			e.stopPropagation();
+			return;
+		}
 		const wrap = activeVideoWrap;
 		if (isVideo && wrap && plain) {
 			let handled = true;
@@ -388,8 +565,6 @@
 				if (!e.repeat) controlVideoPlayer(wrap, "toggle");
 			} else if (e.code === "KeyM") {
 				if (!e.repeat) controlVideoPlayer(wrap, "mute");
-			} else if (e.code === "KeyF") {
-				if (!e.repeat) onclose();
 			} else if (e.code === "KeyJ") controlVideoPlayer(wrap, { seekBy: -10 });
 			else if (e.code === "KeyL") controlVideoPlayer(wrap, { seekBy: 10 });
 			else if (!range && (e.key === "ArrowLeft" || e.key === "ArrowRight")) {
@@ -410,6 +585,7 @@
 		else if (!isVideo && e.key === "-") zoomTo(scale / 1.4);
 		else if (!isVideo && e.key === "0") reset();
 		else return;
+		wakeChrome();
 		e.stopPropagation();
 	}
 
@@ -424,7 +600,7 @@
 {#if img && set}
 	<!-- Keys (arrows, +/-, Esc) are handled on the window in capture phase (onkey); pointer gestures live on the stage. -->
 	<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
-	<div class="lb" class:chrome-idle={isVideo && chromeIdle} bind:this={lb} role="dialog" aria-modal="true" aria-label={mixed ? t("미디어 보기") : t("이미지 보기")} tabindex="-1" onpointermove={wakeVideoChrome} onfocusin={wakeVideoChrome} use:focus use:modalLayer={{ onclose, opener }} in:fadeIn|global out:fadeOut|global>
+	<div class="lb" class:fs={fullscreen} class:is-video={isVideo} class:chrome-idle={hideChrome} bind:this={lb} role="dialog" aria-modal="true" aria-label={mixed ? t("미디어 보기") : t("이미지 보기")} tabindex="-1" onpointermove={wakeChrome} onpointerdown={onViewerPointerDown} onfocusin={wakeChrome} use:focus use:modalLayer={{ onclose: onEscape, opener }} in:fadeIn|global out:fadeOut|global>
 		<div
 			class="stage"
 			class:pan={scale > 1}
@@ -480,7 +656,15 @@
 			<button class="ctl tap" onclick={save} disabled={savingTarget === img} aria-label={t("저장")} title={t("저장")}>
 				<Icon name="download" />
 			</button>
-			<button class="ctl tap" onclick={onclose} aria-label={t("닫기")} title={t("닫기") + " (Esc)"}><Icon name="x" /></button>
+			<button
+				class="ctl tap"
+				onclick={toggleFullscreen}
+				aria-label={fullscreen ? t("전체 화면 닫기") : t("전체 화면")}
+				title={(fullscreen ? t("전체 화면 닫기") : t("전체 화면")) + " (F)"}
+			>
+				<Icon name={fullscreen ? "shrink" : "expand"} />
+			</button>
+			<button class="ctl tap" onclick={closeViewer} aria-label={t("닫기")} title={t("닫기") + " (Esc)"}><Icon name="x" /></button>
 		</div>
 
 		{#if many && set.images.length <= 12}
@@ -505,6 +689,25 @@
 		-webkit-backdrop-filter: blur(10px);
 		backdrop-filter: blur(10px);
 		outline: none;
+	}
+	.lb.fs {
+		background: #000;
+		-webkit-backdrop-filter: none;
+		backdrop-filter: none;
+	}
+	.lb.fs .video-stage {
+		padding: 0;
+		width: 100%;
+		height: 100%;
+	}
+	.lb.fs .stage > img {
+		max-width: 100%;
+		max-height: 100%;
+		border-radius: 0;
+	}
+	/* video playback bar sits along the bottom edge in fullscreen, so hide dots there (top bar still shows N / M) */
+	.lb.fs.is-video .dots {
+		display: none;
 	}
 	.stage {
 		position: absolute;
