@@ -1944,6 +1944,24 @@ html.dnd {
 	max-height: min(calc(var(--dvh) * 0.80), calc(var(--dvh) - 112px - var(--sat) - var(--sab)));
 	object-fit: contain;
 }
+/* true full screen inside the Lightbox (`.lb.fs`): fill the screen edge to edge */
+.lb.fs .wd-video-wrap.lightbox-mode {
+	width: 100%;
+	height: 100%;
+	max-width: 100%;
+	max-height: 100%;
+	border-radius: 0;
+	background: #000;
+}
+.lb.fs .wd-video-wrap.lightbox-mode .wd-video {
+	width: 100%;
+	height: 100%;
+	max-width: 100%;
+	max-height: 100%;
+}
+.lb.fs .wd-video-wrap.lightbox-mode .wd-video-bar {
+	padding: 24px calc(16px + var(--sar)) calc(12px + var(--sab)) calc(16px + var(--sal));
+}
 
 /* Save buttons on inline media (Markdown.svelte, UserMessage.svelte). Pictures: a translucent button over the top right
    corner, shown on hover / focus where there is a pointer and always on touch. Audio: a hairline button beside the player. */

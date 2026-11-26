@@ -342,6 +342,15 @@ describe("videoPlayer unified viewer", () => {
 		disposeVideoPlayer(w);
 	}, 6000);
 
+	test("lightbox mode: dblclick invokes onExpand when provided", () => {
+		let toggles = 0;
+		const { w, v } = make({ mode: "lightbox", onExpand: () => toggles++ });
+		v.dispatchEvent(new win.Event("dblclick") as unknown as Event);
+		expect(toggles).toBe(1);
+		expect(isVideoFullscreen()).toBe(false);
+		disposeVideoPlayer(w);
+	});
+
 	test("controlVideoPlayer wakes a hidden bar", () => {
 		const { w } = make();
 		w.classList.add("idle");
