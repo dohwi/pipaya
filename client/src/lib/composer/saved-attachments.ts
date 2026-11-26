@@ -1,5 +1,5 @@
 import type { Attachment } from "../images";
-import { previewKind, type FileDraft } from "../files";
+import { uploadFileToDraft, type FileDraft } from "../files";
 
 /**
  * Pictures and files attached to the composer's unsent message, kept on this device so they survive a restart. They are
@@ -45,26 +45,12 @@ const isStored = (v: unknown): v is StoredAttachments => {
 	return typeof s.at === "number" && Array.isArray(s.images) && Array.isArray(s.files) && s.images.every(ok) && s.files.every(ok);
 };
 
-const blobUrl = (data: string, mimeType: string): string | undefined => {
-	try {
-		const bin = atob(data);
-		const bytes = new Uint8Array(bin.length);
-		for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-		return URL.createObjectURL(new Blob([bytes], { type: mimeType }));
-	} catch {
-		return undefined;
-	}
-};
-
 /** Back to what the composer holds, previews rebuilt. Null for a broken or empty entry. */
 export function fromStored(v: unknown): { images: Attachment[]; files: FileDraft[] } | null {
 	if (!isStored(v) || (!v.images.length && !v.files.length)) return null;
 	return {
 		images: v.images.map((x) => ({ ...x, preview: `data:${x.mimeType};base64,${x.data}` })),
-		files: v.files.map((f) => ({
-			...f,
-			preview: previewKind(f.name, f.mimeType) === "image" && f.mimeType !== "image/svg+xml" ? blobUrl(f.data, f.mimeType) : undefined,
-		})),
+		files: v.files.map((f) => uploadFileToDraft(f, f.id)),
 	};
 }
 
