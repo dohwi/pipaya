@@ -69,7 +69,7 @@ const COLOR_TOKENS = [
 	"--accent", "--accent-hover", "--accent-fg", "--accent-soft",
 	"--info", "--ok", "--ok-fg", "--warn", "--danger", "--info-soft", "--ok-soft", "--warn-soft", "--danger-soft", "--scrim",
 	"--lv-minimal", "--lv-low", "--lv-medium", "--lv-high", "--lv-xhigh", "--lv-max",
-	"--mark-img", "--mark-file", "--mark-header", "--mark-mention",
+	"--mark-img", "--mark-file", "--mark-header", "--mark-mention", "--mark-mention-self",
 ] as const;
 /** Size tokens: integer px within [min, max]. */
 export const SIZE_TOKENS: Readonly<Record<string, readonly [number, number]>> = Object.freeze({

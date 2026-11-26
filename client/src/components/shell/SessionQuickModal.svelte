@@ -6,45 +6,67 @@
 	import { activityOf, ACTIVITY_LABEL } from "../../lib/activity";
 	import Modal from "../ui/Modal.svelte";
 	import Icon from "../ui/Icon.svelte";
-	import AgentBadge from "../shell/AgentBadge.svelte";
-	import Pane from "../shell/Pane.svelte";
+	import AgentBadge from "./AgentBadge.svelte";
+	import Pane from "./Pane.svelte";
 
 	/**
-	 * A chat looked at from the graph view without leaving it: the conversation itself (the same pane as the main view,
-	 * with its transcript, input and status line) in a large dialog, a bottom sheet on a phone. The chat is opened on its
-	 * server the usual way (`app.peekChat`) while the graph stays up; closing the graph goes back to where the user came
-	 * from. "대화 열기" leaves the graph for the chat.
+	 * A conversation peeked in a large dialog (90% bottom sheet on a phone) without leaving the current screen:
+	 *  - `mode="chat"`: opened from a `@session` mention chip over the current chat/group pane without mutating `activeId`.
+	 *  - `mode="graph"`: opened from a session card in the graph view while the graph stays up underneath (`app.peekChat`).
+	 * Clicking "대화 열기" navigates to the full session view.
 	 */
-	let { server, session, onclose }: { server: string; session: string; onclose: () => void } = $props();
+	let {
+		server,
+		session,
+		mode = "chat",
+		onclose,
+	}: { server: string; session: string; mode?: "chat" | "graph"; onclose: () => void } = $props();
 
 	const link = $derived(app.links[server]);
 	const s = $derived(link?.sessionById.get(session));
 	const activity = $derived(link ? activityOf(link.data, session) : "idle");
-	/** The pane appears once the chat's server is the open one and the chat is its active one. */
-	const ready = $derived(app.serverId === server && app.activeId === session);
+	/** In graph mode the pane waits until `peekChat` activates its server/session; in chat mode the session is already on the open server. */
+	const ready = $derived(
+		mode === "graph"
+			? app.serverId === server && app.activeId === session
+			: app.serverId === server && !!app.session(session),
+	);
 	const sub = $derived(
-		[app.servers.find((x) => x.id === server)?.name ?? server, s?.name ? `@${s.name}` : "", s ? workDir(s).split(/[\\/]/).slice(-2).join("/") : ""].filter(Boolean).join(" · "),
+		[
+			mode === "graph" || app.servers.length > 1 ? (app.servers.find((x) => x.id === server)?.name ?? server) : "",
+			s?.name ? `@${s.name}` : "",
+			s ? workDir(s).split(/[\\/]/).slice(-2).join("/") : "",
+		]
+			.filter(Boolean)
+			.join(" · "),
 	);
 
-	let closing = false;
+	let closingId: string | null = null;
 	/** Close this conversation (same as Ctrl+D in the main view); the store closes the modal when it succeeds. */
 	async function closeChat() {
-		if (closing) return;
-		closing = true;
+		const target = session;
+		const targetServer = server;
+		if (closingId === target) return;
+		closingId = target;
 		try {
-			await app.close(session, false, server);
+			await app.close(target, false, targetServer);
 		} finally {
-			closing = false;
+			if (closingId === target) closingId = null;
 		}
 	}
 
-	/** Leave the graph for this chat (not back to where the graph was opened from). */
+	/** Leave the modal (and graph, if open) and navigate straight to this conversation. */
 	function openChat() {
-		// read the props first: closing clears the store's peek, and the props are read through it (`quick.server`)
+		// read props first: closing clears the store's peek state, and props may derive from it
 		const to = { server, session };
-		app.graphFrom = null;
-		onclose();
-		app.openIn(to.server, { session: to.session });
+		if (mode === "graph") {
+			app.graphFrom = null;
+			onclose();
+			app.openIn(to.server, { session: to.session });
+		} else {
+			onclose();
+			void app.openAny(to.session);
+		}
 	}
 </script>
 
@@ -58,7 +80,9 @@
 	{/snippet}
 	<div class="quick">
 		{#if ready}
-			<Pane id={session} />
+			{#key `${server}/${session}`}
+				<Pane id={session} peek />
+			{/key}
 		{:else}
 			<p class="note">{t("불러오는 중…")}</p>
 		{/if}

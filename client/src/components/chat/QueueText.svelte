@@ -22,8 +22,8 @@
 		if (!full || !head || server || !head.from.startsWith("@")) return undefined;
 		return app.mentionIndex.resolve(head.from);
 	});
-	const openHeadTarget = () => {
-		if (headTarget) app.openMention(headTarget);
+	const openHeadTarget = (e: MouseEvent) => {
+		if (headTarget) app.openMention(headTarget, { direct: e.ctrlKey || e.metaKey });
 	};
 </script>
 
@@ -35,7 +35,7 @@
 				<button
 					type="button"
 					class="from-link"
-					title={headTarget.kind === "group" ? t("{name} 그룹 열기", { name: head.from }) : t("{name} 대화 열기", { name: head.from })}
+					title={headTarget.kind === "group" ? t("{name} 그룹 열기", { name: head.from }) : t("{name} 대화 미리 보기", { name: head.from })}
 					onclick={openHeadTarget}
 				>{head.from}</button>
 			{:else}

@@ -40,8 +40,8 @@
 		if (!header || ("server" in header && header.server) || !header.from.startsWith("@")) return undefined;
 		return app.mentionIndex.resolve(header.from);
 	});
-	const openHeaderTarget = () => {
-		if (headerTarget) app.openMention(headerTarget);
+	const openHeaderTarget = (e: MouseEvent) => {
+		if (headerTarget) app.openMention(headerTarget, { direct: e.ctrlKey || e.metaKey });
 	};
 	/** A prompt a scheduled task sent: the bubble is labelled "예약" like a message from another session is labelled with its sender. */
 	const scheduled = $derived(!!item.scheduled && !header);
@@ -79,7 +79,7 @@
 					<button
 						type="button"
 						class="header-link"
-						title={headerTarget.kind === "group" ? t("{name} 그룹 열기", { name: header.from }) : t("{name} 대화 열기", { name: header.from })}
+						title={headerTarget.kind === "group" ? t("{name} 그룹 열기", { name: header.from }) : t("{name} 대화 미리 보기", { name: header.from })}
 						onclick={openHeaderTarget}
 					>{header.from}</button>
 				{:else}

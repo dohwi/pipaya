@@ -38,10 +38,11 @@
 	/**
 	 * One conversation with its own input. `id` null = a new chat that has no session yet.
 	 * `grouped`: shown as one of several panes, so it gets a title bar (to drag it around) and can be focused by a click.
+	 * `peek`: mounted inside `SessionQuickModal` over the main screen; holds focus while the background pane yields it.
 	 */
-	let { id, grouped = false }: { id: string | null; grouped?: boolean } = $props();
+	let { id, grouped = false, peek = false }: { id: string | null; grouped?: boolean; peek?: boolean } = $props();
 
-	const focused = $derived(!grouped || id === app.activeId);
+	const focused = $derived(peek ? true : (!app.chatPeek && (!grouped || id === app.activeId)));
 	setPane(() => ({ id, focused }));
 
 	const group = $derived(grouped && id ? app.groupOf(id) : undefined);
@@ -179,7 +180,7 @@
 			<div class="gone">{t("터미널이 닫혔습니다")}</div>
 		{/if}
 	</div>
-	<DropLayer target={id!} />
+	{#if !peek}<DropLayer target={id!} />{/if}
 	{:else}
 
 	<ExtensionMount slot="pane.top" props={{ paneId: id }} />
@@ -207,7 +208,7 @@
 	<ExtensionMount slot="pane.bottom" props={{ paneId: id }} />
 	<Composer />
 	<!-- covers the input and the stats line too, so a drop zone reaches the bottom edge of the pane -->
-	{#if id}<DropLayer target={id} />{/if}
+	{#if id && !peek}<DropLayer target={id} />{/if}
 	{/if}
 </section>
 

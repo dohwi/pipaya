@@ -252,6 +252,45 @@ describe("decorateMarkdownTokens + patchHtml", () => {
 		expect(host.querySelector("p")).toBe(firstPara);
 		expect(host.querySelector("button.wd-mention")?.textContent).toBe("@서아");
 	});
+
+	test("renders self-session @mentions as non-clickable self chips in both prose and inline code", () => {
+		const html = renderMarkdown("현재 세션 @서아 (`@서아`)와 다른 세션 @민수 그리고 @front-team", { cache: false });
+		const host = dom.document.createElement("div");
+		const labelsWithSelf = { ...labels, selfSession: "현재 대화" };
+		const action = patchHtml(host, {
+			html,
+			decorate: (frag) => decorateMarkdownTokens(frag, { index, selfId: "s1", skills: false, labels: labelsWithSelf }),
+		});
+
+		const selfChips = [...host.querySelectorAll<HTMLSpanElement>("span.wd-mention.wd-self")];
+		expect(selfChips.map((s) => [s.textContent, s.dataset.mentionSelf, s.title])).toEqual([
+			["@서아", "1", "현재 대화"],
+			["@서아", "1", "현재 대화"],
+		]);
+		const clickable = [...host.querySelectorAll<HTMLButtonElement>("button.wd-mention")];
+		expect(clickable.map((b) => [b.textContent, b.dataset.mentionKind, b.dataset.mentionId])).toEqual([
+			["@민수", "session", "s2"],
+			["@front-team", "group", "g1"],
+		]);
+
+		// Switching selfId updates the DOM cleanly via patchHtml
+		action.update({
+			html,
+			decorate: (frag) => decorateMarkdownTokens(frag, { index, selfId: "s2", skills: false, labels: labelsWithSelf }),
+		});
+		expect([...host.querySelectorAll("span.wd-mention.wd-self")].map((s) => s.textContent)).toEqual(["@민수"]);
+		expect([...host.querySelectorAll("button.wd-mention")].map((b) => b.textContent)).toEqual(["@서아", "@서아", "@front-team"]);
+	});
+
+	test("strips spoofed data-mention-self attributes from raw HTML", () => {
+		const html = renderMarkdown('<span data-mention-self="1" class="wd-mention wd-self">fake</span>', { cache: false });
+		const host = dom.document.createElement("div");
+		patchHtml(host, {
+			html,
+			decorate: (frag) => decorateMarkdownTokens(frag, { index, selfId: "s1", skills: false, labels }),
+		});
+		expect(host.querySelectorAll("[data-mention-self]")).toHaveLength(0);
+	});
 });
 
 describe("mentionSignature", () => {
@@ -277,5 +316,19 @@ describe("mentionSignature", () => {
 		const idx = buildMentionIndex([{ id: "s1", name: "서아", closed: false }], [{ id: "g1", name: "R&D" }]);
 		expect(mentionSignature("<p>&lt;@서아&gt; and @R&amp;D</p>", idx)).toBe("서아:session:s1;r&d:group:g1;");
 		expect(mentionSignature("<p>워커(<code>@서아</code>)</p>", idx)).toBe("서아:session:s1;");
+	});
+
+	test("distinguishes selfId in mentionSignature for sessions but not groups", () => {
+		const idx = buildMentionIndex(
+			[
+				{ id: "s1", name: "서아", closed: false },
+				{ id: "s2", name: "민수", closed: false },
+			],
+			[{ id: "s1", name: "팀" }],
+		);
+		const html = "<p>@서아 @민수 @팀</p>";
+		expect(mentionSignature(html, idx, "s1")).toBe("서아:session:s1:self;민수:session:s2;팀:group:s1;");
+		expect(mentionSignature(html, idx, "s2")).toBe("서아:session:s1;민수:session:s2:self;팀:group:s1;");
+		expect(mentionSignature(html, idx, null)).toBe("서아:session:s1;민수:session:s2;팀:group:s1;");
 	});
 });

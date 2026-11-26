@@ -73,6 +73,8 @@ export class UiOverlayState {
   graphOpen = $state(false);
   graphFrom = $state<{ server: string; session: string } | null>(null);
   graphPeek = $state<{ server: string; session: string } | null>(null);
+  /** Chat quick-look modal: session id on the current server opened from a `@mention` chip without leaving the current pane. */
+  chatPeek = $state<string | null>(null);
 
   /** Read-only workspace file viewer side panel. */
   filesOpen = $state(false);
@@ -95,6 +97,10 @@ export class UiOverlayState {
 
   closePeek() {
     this.graphPeek = null;
+  }
+
+  closeChatPeek() {
+    this.chatPeek = null;
   }
 
   openSettings(
