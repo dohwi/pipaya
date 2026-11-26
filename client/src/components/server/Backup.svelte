@@ -274,10 +274,10 @@
 		stroke-width: 1.9;
 	}
 	.note :global(svg) {
-		width: 15px;
-		height: 15px;
-		/* 15px icon centred on the 16px first line: (16 - 15) / 2 = 0.5px */
-		margin-top: 0.5px;
+		width: 14px;
+		height: 14px;
+		/* 14px icon centred on the 16px first line: (16 - 14) / 2 = 1px */
+		margin-top: 1px;
 	}
 
 	.drop {

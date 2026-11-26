@@ -292,7 +292,6 @@
 	/* an even 16px box like the dot (8) and the arrow (16): the 11px text's own 17.05px height is odd */
 	.dur {
 		flex: none;
-		font-family: var(--mono);
 		font-size: var(--fs-2xs);
 		line-height: 16px;
 		font-variant-numeric: tabular-nums;

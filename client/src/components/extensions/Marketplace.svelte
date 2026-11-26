@@ -287,7 +287,7 @@
 	.foot .facts { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; margin: 0; min-width: 0; }
 	.star { display: inline-flex; align-items: center; gap: 4px; }
 	.star :global(svg) { width: 12px; height: 12px; fill: currentColor; stroke: none; }
-	.list :global(.btn svg) { width: 13px; height: 13px; flex: none; stroke-width: 2; }
+	.list :global(.btn svg) { width: 14px; height: 14px; flex: none; stroke-width: 2; }
 	.desc { margin: 0; flex: 1; color: var(--text-dim); overflow-wrap: anywhere; }
 	.foot :global(.btn) { flex: none; }
 	.acts { display: flex; align-items: center; gap: 4px; flex: none; }

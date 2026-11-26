@@ -256,8 +256,8 @@
 		opacity: 0.85;
 	}
 	.nav .upmark :global(svg) {
-		width: 13px;
-		height: 13px;
+		width: 14px;
+		height: 14px;
 		stroke-width: 2.4;
 	}
 	.nav .row {
@@ -276,7 +276,7 @@
 	}
 	/* the row's right end holds [count][arrow]. The arrow is the only control: a 24x24 box around its 14px chevron (5px each side), so the
 	   focus ring (the global 2px + 2px offset, as on every other control) is a small square around the glyph and stops 12px short of the
-	   count. It sits 7px from the row's edge, which puts the chevron's centre 19px from it (12px of padding, the mirror of the 19px icon's
+	   count. It sits 7px from the row's edge, which puts the chevron's centre 19px from it (12px of padding, the mirror of the icon's
 	   12px on the left) whatever the badge does. `.tap` widens only the touch hit area (an invisible ::after), never the ring. */
 	.nav button.fold {
 		position: absolute;
@@ -482,13 +482,9 @@
 	}
 	.nav button :global(svg) {
 		flex: none;
-		width: 19px;
-		height: 19px;
-		stroke-width: 1.8;
-	}
-	.nav button.srvtab :global(svg) {
 		width: 18px;
 		height: 18px;
+		stroke-width: 1.8;
 	}
 	.nt {
 		display: flex;
