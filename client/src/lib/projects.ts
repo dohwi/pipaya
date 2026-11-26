@@ -5,6 +5,7 @@
  * (`POST /fs/repos`, read from `.git` without starting git); a server from before that lists every folder on its own.
  */
 import type { DirBlock } from "./nav";
+import { tilde } from "./format";
 import { SEP, shortName } from "./sidebar-model";
 
 export interface RepoInfo {
@@ -146,53 +147,54 @@ export function branchLabel(path: string, repo: RepoInfo): { name: string; sub: 
 	return below ? { name: below, sub: branch } : { name: branch, sub: "" };
 }
 
+/** The icon-only marker before a folder's run of tabs; `title` is its hover tooltip. */
 export interface TabLead {
 	icon: "fork" | "folder";
-	label: string;
 	title: string;
 }
 
+export interface TabLeadOpts {
+	manual: boolean;
+	customName?: string | null;
+	repo?: RepoInfo | null;
+	home?: string;
+}
+
 /**
- * The tab ids that start a new folder run after an earlier non-empty folder in a hand-made project's tab strip.
- * Used to draw a quiet vertical divider between folder runs without repeating folder names already shown in the sidebar.
+ * The marker before a folder's run of tabs in a project's tab strip: a fork icon for a folder of a git project, a folder
+ * icon for a hand-made project's folder (always, even when it sits in a repository). Icon only; the name is the tooltip.
  */
-export function manualDirDividers(dirs: readonly DirBlock[]): Set<string> {
-	const out = new Set<string>();
+export function tabLead(path: string, opts: TabLeadOpts): TabLead {
+	const fallback = shortName(path, opts.home);
+	const custom = opts.customName || null;
+	if (opts.manual) {
+		const full = tilde(path, opts.home);
+		return { icon: "folder", title: custom && full && custom !== full ? `${custom} · ${full}` : full || fallback };
+	}
+	const repo = opts.repo ?? null;
+	const br = repo ? branchLabel(path, repo) : null;
+	const name = custom ?? (br ? br.name : fallback);
+	return { icon: repo ? "fork" : "folder", title: br?.sub ? `${name} (${br.sub})` : name };
+}
+
+/**
+ * Markers for a multi-folder strip, keyed by the id of each folder's first tab. `sep` is false for the first non-empty
+ * folder and true for the rest (a hairline sits between runs, never before the first). Empty folders are skipped; one
+ * folder or none gives `{}`.
+ */
+export function tabLeads(
+	dirs: readonly DirBlock[],
+	leadOf: (d: DirBlock) => TabLead,
+): Record<string, TabLead & { sep: boolean }> {
+	const out: Record<string, TabLead & { sep: boolean }> = {};
+	if (dirs.length <= 1) return out;
 	let seen = false;
 	for (const d of dirs) {
 		const first = d.tabs[0];
 		if (!first) continue;
-		if (seen) out.add(first.id);
+		out[first.id] = { ...leadOf(d), sep: seen };
 		seen = true;
 	}
 	return out;
-}
-
-/**
- * The marker before a folder's run of tabs in a project's tab strip.
- * A git project names each folder by its checked-out branch with a fork icon; a hand-made project omits text labels
- * (returning null) so the strip stays quiet and separates folders with a hairline divider instead.
- */
-export function tabLead(
-	path: string,
-	opts: {
-		manual: boolean;
-		customName?: string | null;
-		repo?: RepoInfo | null;
-		home?: string;
-	},
-): TabLead | null {
-	if (opts.manual) return null;
-	const fallback = shortName(path, opts.home);
-	const custom = opts.customName || null;
-	const repo = opts.repo ?? null;
-	const br = repo ? branchLabel(path, repo) : null;
-	const label = custom ?? (br ? br.name : fallback);
-	const title = br?.sub ? `${label} (${br.sub})` : label;
-	return {
-		icon: repo ? "fork" : "folder",
-		label,
-		title,
-	};
 }
 

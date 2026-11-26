@@ -27,7 +27,7 @@
 	import { formatCombo } from "../../lib/keys";
 	import { slidingIndicator } from "../../lib/sliding-indicator";
 	import { tabPanes, type Tab } from "../../lib/nav";
-	import { isManualRoot, manualDirDividers, tabLead, type TabLead } from "../../lib/projects";
+	import { isManualRoot, tabLead, tabLeads } from "../../lib/projects";
 	import { app } from "../../lib/store.svelte";
 	import { WORKSPACE_FILE_MIME } from "../../lib/workspace-edits";
 	import { workspaceViewer } from "../../lib/workspace-viewer.svelte";
@@ -37,7 +37,7 @@
 	 * or a group of panes. Click to switch, drag to reorder; drag a tab onto a pane to split it with that pane, or a
 	 * pane's title bar onto the strip to take it out of its group as a tab of its own.
 	 */
-	/** The open folder's tabs, or every folder's of the project picked in the sidebar (each folder's run after a branch label) */
+	/** The open folder's tabs, or every folder's of the project picked in the sidebar (each folder's run after an icon marker) */
 	const dirs = $derived(app.stripDirs);
 	const multi = $derived(dirs.length > 1);
 	const tabs = $derived(dirs.flatMap((d) => d.tabs));
@@ -48,27 +48,20 @@
 	/** The folder a tab (or a pane of one of its groups) is listed in */
 	const dirOf = (id: string) => dirs.find((d) => d.tabs.some((x) => x.id === id || tabPanes(x).includes(id)))?.path ?? null;
 	const manualProject = $derived(!!app.tabProject && app.tabProject.serverId === app.serverId && isManualRoot(app.tabProject.root));
-	/** Where a folder's run starts in a git project (branch label); hand-made projects use a quiet divider (`seps`) instead */
+	/** Where a folder's run starts in a multi-folder project: an icon-only marker (tooltip names the folder), a hairline between runs */
 	const leads = $derived.by(() => {
-		const out: Record<string, TabLead> = {};
 		const sid = app.serverId;
-		if (!multi || !sid || manualProject) return out;
+		if (!multi || !sid) return {};
 		const repos = app.links[sid]?.repos ?? {};
-		for (const d of dirs) {
-			const first = d.tabs[0];
-			if (!first) continue;
-			const lead = tabLead(d.path, {
-				manual: false,
+		return tabLeads(dirs, (d) =>
+			tabLead(d.path, {
+				manual: manualProject,
 				customName: app.sidebar.dirName(sid, d.path),
 				repo: repos[d.path],
 				home: app.workspace?.home,
-			});
-			if (lead) out[first.id] = lead;
-		}
-		return out;
+			}),
+		);
 	});
-	/** Tab ids preceded by a vertical hairline between folders in a hand-made project's strip */
-	const seps = $derived(multi && manualProject ? manualDirDividers(dirs) : new Set<string>());
 
 	const titleOf = (x: Tab) => (x.kind === "group" ? x.group.name : x.kind === "session" ? sessionTitle(x.session.title) : x.terminal.title);
 	/** The `@name` other sessions call this conversation by, as the sidebar row and the split tab's title bar show it. */
@@ -239,7 +232,7 @@
 	/** A double click on the strip's empty part (not a tab, chip, label or button): a new chat where "+" would start one */
 	function blankDouble(e: MouseEvent) {
 		const el = e.target as HTMLElement;
-		if (!app.serverId || el.closest(".tab, .gbox, .lead, .dirsep, button, input")) return;
+		if (!app.serverId || el.closest(".tab, .gbox, .lead, button, input")) return;
 		const p = app.tabDir?.path ?? app.workdirAbs;
 		void app.openIn(app.serverId, { workdir: p === app.workspace?.root ? "." : p });
 	}
@@ -322,9 +315,8 @@
 			{#each tabs as x (x.id)}
 				{@const on = x.id === activeTab}
 				{@const st = stateOf(x)}
-				{#if seps.has(x.id)}<span class="dirsep" aria-hidden="true"></span>{/if}
 				{@const lead = leads[x.id]}
-				{#if lead}<span class="lead mono" title={lead.title}><Icon name={lead.icon} /><span class="ln">{lead.label}</span></span>{/if}
+				{#if lead}<span class="lead" class:sep={lead.sep} title={lead.title}><Icon name={lead.icon} /></span>{/if}
 				<!-- a group is a tray of its sessions' chips, laid out inline with the other tabs (its name is in the page
 				     header's "group › session" and the sidebar) -->
 				{#if x.kind === "group"}
@@ -484,44 +476,37 @@
 		border-radius: var(--radius-sm);
 	}
 
-	/* a hand-made project's strip: folders are already named in the sidebar and header, so a quiet hairline parts their runs */
-	.dirsep {
-		flex: none;
-		width: 1px;
-		height: 16px;
-		margin: 0 4px;
-		background: var(--tabbar-line);
-	}
-
-	/* a project's strip: each folder's run of tabs starts with its branch, dim and small, the run before it kept 8px off */
+	/* a project's strip: each folder's run of tabs starts with an icon-only marker (fork: git folder, folder: hand-made), the name in its tooltip */
 	.lead {
+		position: relative;
 		flex: none;
-		display: flex;
+		display: inline-flex;
 		align-items: center;
-		gap: 4px;
-		max-width: 160px;
+		justify-content: center;
 		height: 28px;
-		padding: 0 4px 0 8px;
+		padding: 0 4px 0 8px; /* the first marker's icon lands on 16 with the strip's 8px */
 		color: var(--text-faint);
-		font-size: var(--fs-2xs);
-		line-height: 20px; /* whole-pixel line box */
 		user-select: none;
 		-webkit-user-select: none;
 	}
-	.lead:not(:first-child) {
-		margin-left: 8px;
-		box-shadow: inset 1px 0 var(--tabbar-line); /* the hairline between two folders' runs */
+	/* a hairline between two folders' runs, never before the first (the sliding indicator is the strip's :first-child) */
+	.lead.sep {
+		margin-left: 4px; /* with the 4px gap, the hairline stands 8px after the previous pill */
+	}
+	.lead.sep::before {
+		content: "";
+		position: absolute;
+		left: 0;
+		top: calc(50% - 8px);
+		width: 1px;
+		height: 16px;
+		background: var(--tabbar-line);
 	}
 	.lead > :global(svg) {
 		flex: none;
-		width: 12px;
-		height: 12px;
-	}
-	.ln {
-		min-width: 0;
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
+		width: 14px;
+		height: 14px;
+		stroke-width: 1.9;
 	}
 
 	.tab {

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { branchLabel, dissolveProject, flattenBlocks, joinProject, leaveProject, manualDirDividers, projectBlocks, subPath, tabLead, type RepoMap } from "../src/lib/projects";
+import { branchLabel, dissolveProject, flattenBlocks, joinProject, leaveProject, projectBlocks, subPath, tabLead, tabLeads, type RepoMap } from "../src/lib/projects";
 import { withoutDirKeys } from "../src/lib/sidebar.svelte";
 import type { DirBlock } from "../src/lib/nav";
 
@@ -88,50 +88,47 @@ describe("hand-made projects", () => {
 	});
 });
 
-describe("manualDirDividers", () => {
-	test("marks the first tab of each non-empty folder after the first", () => {
-		expect([...manualDirDividers([dir("/a", "a1", "a2"), dir("/b", "b1"), dir("/c", "c1")])]).toEqual(["b1", "c1"]);
+describe("tabLead", () => {
+	const home = "/home/u";
+	test("a hand-made project always gets the folder icon, even for a folder in a repository", () => {
+		const r = repo("/home/u/w/billing", "/home/u/w/billing", "main");
+		expect(tabLead("/home/u/w/billing", { manual: true, repo: r, home })).toEqual({ icon: "folder", title: "~/w/billing" });
 	});
-	test("skips empty folders so no leading or duplicate divider is drawn", () => {
-		expect([...manualDirDividers([dir("/empty"), dir("/a", "a1"), dir("/mid"), dir("/b", "b1")])]).toEqual(["b1"]);
-		expect([...manualDirDividers([dir("/a", "a1")])]).toEqual([]);
-		expect([...manualDirDividers([])]).toEqual([]);
+	test("a hand-made project's title: custom name · full path; empty name or missing home fall back to the path", () => {
+		expect(tabLead("/home/u/w/api", { manual: true, customName: "프록시", home })).toEqual({ icon: "folder", title: "프록시 · ~/w/api" });
+		expect(tabLead("/home/u/w/api", { manual: true, customName: "", home }).title).toBe("~/w/api");
+		expect(tabLead("/home/u/w/api", { manual: true, customName: "프록시" }).title).toBe("프록시 · /home/u/w/api");
+		expect(tabLead("/w/api", { manual: true, customName: "/w/api" }).title).toBe("/w/api");
+	});
+	test("git project: fork icon and branch; a subfolder shows its path with the branch after; detached HEAD uses the folder name", () => {
+		expect(tabLead("/w/app-x", { manual: false, repo: repo("/w/app", "/w/app-x", "feat/x") })).toEqual({ icon: "fork", title: "feat/x" });
+		expect(tabLead("/w/app/client/src", { manual: false, repo: repo("/w/app", "/w/app", "main") })).toEqual({ icon: "fork", title: "client/src (main)" });
+		expect(tabLead("/w/app-x", { manual: false, repo: repo("/w/app", "/w/app-x", null) })).toEqual({ icon: "fork", title: "app-x" });
+	});
+	test("git project: a custom name wins; without repo info it is a folder with its short name", () => {
+		expect(tabLead("/w/app-x", { manual: false, customName: "백엔드", repo: repo("/w/app", "/w/app-x", "feat/x") })).toEqual({ icon: "fork", title: "백엔드" });
+		expect(tabLead("/w/notes", { manual: false, repo: null })).toEqual({ icon: "folder", title: "w/notes" });
 	});
 });
 
-describe("tabLead", () => {
-	test("manual project returns null so the tab bar uses a divider instead of text labels", () => {
-		const r = repo("/home/u/w/backend/billing", "/home/u/w/backend/billing", "main");
-		expect(tabLead("/home/u/w/backend/billing", { manual: true, repo: r, home: "/home/u" })).toBeNull();
-		expect(tabLead("/home/u/w/api", { manual: true, customName: "프록시", home: "/home/u" })).toBeNull();
-	});
-	test("git project uses fork icon and branch name, with subfolder and detached HEAD handling", () => {
-		expect(tabLead("/w/app-x", { manual: false, repo: repo("/w/app", "/w/app-x", "feat/x") })).toEqual({
-			icon: "fork",
-			label: "feat/x",
-			title: "feat/x",
-		});
-		expect(tabLead("/w/app/client/src", { manual: false, repo: repo("/w/app", "/w/app", "main") })).toEqual({
-			icon: "fork",
-			label: "client/src",
-			title: "client/src (main)",
-		});
-		expect(tabLead("/w/app-x", { manual: false, repo: repo("/w/app", "/w/app-x", null) })).toEqual({
-			icon: "fork",
-			label: "app-x",
-			title: "app-x",
-		});
-		expect(tabLead("/w/app-x", { manual: false, customName: "백엔드", repo: repo("/w/app", "/w/app-x", "feat/x") })).toEqual({
-			icon: "fork",
-			label: "백엔드",
-			title: "백엔드",
+describe("tabLeads", () => {
+	const lead = (d: DirBlock) => ({ icon: "folder" as const, title: d.path });
+	test("the first non-empty folder has no separator, every later one has", () => {
+		const out = tabLeads([dir("/a", "a1", "a2"), dir("/b", "b1"), dir("/c", "c1")], lead);
+		expect(out).toEqual({
+			a1: { icon: "folder", title: "/a", sep: false },
+			b1: { icon: "folder", title: "/b", sep: true },
+			c1: { icon: "folder", title: "/c", sep: true },
 		});
 	});
-	test("git project falls back to folder icon and short name when repo info is absent", () => {
-		expect(tabLead("/w/notes", { manual: false, repo: null })).toEqual({
-			icon: "folder",
-			label: "w/notes",
-			title: "w/notes",
-		});
+	test("empty folders are skipped at the start, middle and end", () => {
+		const out = tabLeads([dir("/e1"), dir("/a", "a1"), dir("/e2"), dir("/b", "b1"), dir("/e3")], lead);
+		expect(Object.keys(out)).toEqual(["a1", "b1"]);
+		expect(out.a1!.sep).toBe(false);
+		expect(out.b1!.sep).toBe(true);
+	});
+	test("one folder or none gives nothing", () => {
+		expect(tabLeads([dir("/a", "a1")], lead)).toEqual({});
+		expect(tabLeads([], lead)).toEqual({});
 	});
 });
