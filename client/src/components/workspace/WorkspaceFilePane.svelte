@@ -8,6 +8,7 @@
 	import { t } from "../../lib/i18n";
 	import { surfaceIn, surfaceOut } from "../../lib/motion";
 	import { saveFile } from "../../lib/save-file";
+	import { sharedMedia } from "../../lib/media-urls";
 	import { app } from "../../lib/store.svelte";
 	import { disposeVideoPlayer, videoPlayer } from "../../lib/video-view";
 	import { buildFullFileDiff, formatLineSpec, splitHighlightedHtml, type FullDiffRow } from "../../lib/workspace-edits";
@@ -144,7 +145,7 @@
 	// Mount Pipaya's video player (includes mobile fullscreen support).
 	$effect(() => {
 		if (kind !== "video" || !mediaUrl || mediaFailed || !videoHost) return;
-		const player = videoPlayer(mediaUrl, { filename: fileName || undefined });
+		const player = videoPlayer(mediaUrl, { filename: fileName || undefined, download: "fullscreen" });
 		player.querySelector("video")?.addEventListener("error", () => (mediaFailed = true));
 		videoHost.replaceChildren(player);
 		return () => disposeVideoPlayer(player);
@@ -768,6 +769,29 @@
 		}
 	}
 
+	/** the viewer opens on the preview and swaps in the full-resolution file; its save writes the original under the file's name */
+	function openViewer() {
+		const path = selectedPath;
+		const sid = sessionId;
+		const api = app.api;
+		if (!mediaUrl) return;
+		const fullKey = path && sid && api ? `${api.baseUrl}\0${sid}\0image-full\0${path}` : "";
+		const cachedFull = fullKey ? sharedMedia.peek(fullKey) : null;
+		app.openImage([
+			{
+				src: cachedFull ?? mediaUrl,
+				mimeType: mediaMime || "image/png",
+				name: fileName || undefined,
+				...(path && sid && api && !cachedFull
+					? {
+							loadFull: (signal?: AbortSignal) =>
+								sharedMedia.get(fullKey, (s) => api.fetchFile(sid, path, s), signal),
+						}
+					: {}),
+			},
+		]);
+	}
+
 	async function downloadCurrentFile() {
 		const path = selectedPath;
 		const sid = sessionId;
@@ -975,7 +999,7 @@
 							<button
 								type="button"
 								class="pic"
-								onclick={() => app.openImage([{ src: mediaUrl!, mimeType: mediaMime || "image/png" }])}
+								onclick={openViewer}
 								aria-label={t("이미지 크게 보기")}
 							>
 								<img

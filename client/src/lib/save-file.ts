@@ -30,11 +30,16 @@ export async function saveFile(source: Blob | string, filename: string): Promise
 export async function sourceBlob(source: Blob | string): Promise<Blob> {
 	if (typeof source !== "string") return source;
 	if (source.startsWith("data:")) return dataUrlToBlob(source);
-	return await (await fetch(source)).blob();
+	const init: RequestInit | undefined = /^https?:/i.test(source)
+		? { referrerPolicy: "no-referrer", credentials: "omit" }
+		: undefined;
+	const res = await fetch(source, init);
+	if (!res.ok) throw new Error(`HTTP ${res.status}`);
+	return await res.blob();
 }
 
 /** Decodes a `data:` URL by hand: the app's CSP does not allow `fetch` on it. */
-function dataUrlToBlob(src: string): Blob {
+export function dataUrlToBlob(src: string): Blob {
 	const m = /^data:([^;,]*)((?:;[^;,]*)*),(.*)$/s.exec(src);
 	if (!m) throw new Error("not a data URL");
 	const bin = m[2].includes(";base64") ? atob(m[3]) : decodeURIComponent(m[3]);

@@ -21,18 +21,27 @@
 	const many = $derived((set?.images.length ?? 0) > 1);
 	/** Full-resolution blob URL loaded on demand while the inline preview is already on screen. */
 	let fullSrc = $state<string | null>(null);
+	/** In-flight full-resolution load shared between the effect and Save so clicking Save never triggers a duplicate fetch. */
+	let fullPending: Promise<string | null> | null = null;
 	const displaySrc = $derived(fullSrc ?? img?.src ?? "");
 	$effect(() => {
 		const cur = img;
 		fullSrc = null;
+		fullPending = null;
 		if (!cur?.loadFull) return;
 		const ctl = new AbortController();
-		void cur.loadFull(ctl.signal).then((url) => {
-			if (!ctl.signal.aborted && url) fullSrc = url;
-		}).catch(() => {
-			/* keep the already-loaded preview */
-		});
-		return () => ctl.abort();
+		const req = cur
+			.loadFull(ctl.signal)
+			.then((url) => {
+				if (!ctl.signal.aborted && url) fullSrc = url;
+				return !ctl.signal.aborted && url ? url : null;
+			})
+			.catch(() => null);
+		fullPending = req;
+		return () => {
+			ctl.abort();
+			if (fullPending === req) fullPending = null;
+		};
 	});
 
 	const MIN = 1;
@@ -195,16 +204,32 @@
 		reset();
 	}
 
+	let saving = $state(false);
 	async function save() {
-		if (!img || !displaySrc) return;
+		const target = img;
+		const idx = set?.index ?? 0;
+		const initialSrc = displaySrc;
+		const pending = fullPending;
+		if (!target || !initialSrc || saving) return;
+		saving = true;
 		try {
-			const blob = await sourceBlob(displaySrc);
+			// the full-resolution picture is still loading: wait for the in-flight request so the saved file is the original
+			let src = initialSrc;
+			if (!fullSrc && pending) {
+				const loaded = await pending;
+				if (loaded) src = loaded;
+			}
+			const blob = await sourceBlob(src);
 			// the message's mime type can be a wildcard (images in Markdown): the real one is on the bytes
-			const type = blob.type.startsWith("image/") ? blob.type : img.mimeType;
+			const type = blob.type.startsWith("image/") ? blob.type : target.mimeType;
 			const ext = type.split("/")[1]?.replace("jpeg", "jpg").replace(/[^a-z0-9].*$/i, "") || "png";
-			await saveFile(blob, `image-${(set?.index ?? 0) + 1}.${ext}`);
+			if (await saveFile(blob, target.name || `image-${idx + 1}.${ext}`)) {
+				if (img === target) notify(t("저장했습니다"), true);
+			}
 		} catch (e) {
-			notify(`${t("저장하지 못했습니다")}: ${errorText(e)}`, false);
+			if (img === target) notify(`${t("저장하지 못했습니다")}: ${errorText(e)}`, false);
+		} finally {
+			saving = false;
 		}
 	}
 
@@ -306,7 +331,7 @@
 			<button class="ctl tap" onclick={copy} aria-label={t("이미지 복사")} title={t("이미지 복사") + " (Ctrl+C)"}>
 				<Icon name="copy" />
 			</button>
-			<button class="ctl tap" onclick={save} aria-label={t("저장")} title={t("저장")}>
+			<button class="ctl tap" onclick={save} disabled={saving} aria-label={t("저장")} title={t("저장")}>
 				<Icon name="download" />
 			</button>
 			<button class="ctl tap" onclick={onclose} aria-label={t("닫기")} title={t("닫기") + " (Esc)"}><Icon name="x" /></button>
