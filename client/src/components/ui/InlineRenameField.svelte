@@ -54,6 +54,7 @@
 	onpointerdown={stopPointer ? (e) => e.stopPropagation() : undefined}
 	onkeydown={(e) => {
 		if (stopKeys) e.stopPropagation();
+		if (e.isComposing || e.keyCode === 229) return;
 		if (e.key === "Enter") oncommit();
 		if (e.key === "Escape") {
 			e.preventDefault();
@@ -71,6 +72,7 @@
 		color: var(--text);
 		outline: 0;
 		font-size: var(--fs-sm);
+		line-height: 20px; /* whole-pixel line box on every variant: prevents inheriting line-height: 1 from .dir/.proj or fractional 1.55 from body */
 	}
 	/* in a sidebar row, in the title's place: a 24px field in the 32px row (4px above and below), so nothing moves */
 	.inline-rename.inline {
@@ -80,7 +82,6 @@
 		padding: 0 4px;
 		border-radius: var(--radius-xs); /* 8px on a 24px field reads as a pill; a row's name field is a quiet text box */
 		border-color: color-mix(in srgb, var(--accent) 45%, transparent); /* softer than the full accent: it is the only field on screen, focus is obvious */
-		line-height: 20px;
 	}
 	.inline-rename.heading {
 		flex: 1;
@@ -89,9 +90,10 @@
 		border-radius: var(--radius-xs);
 		font-weight: 600;
 	}
+	/* a tab is flex: none (sized to its content up to max-width: 200px), so width: 0 collapsed the field to 10px on desktop */
 	.inline-rename.tab {
-		flex: 1 1 auto;
-		width: 0;
+		flex: 0 1 140px;
+		width: 140px;
 		height: 22px;
 		padding: 0 4px;
 		border-radius: var(--radius-xs);

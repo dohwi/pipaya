@@ -84,12 +84,92 @@
 	font-weight: 700;
 	font-display: swap;
 }
+/* SUIT covers 2,668 common Hangul syllables (KS X 1001 + ~300); intermediate IME syllables typed in Korean
+   (e.g. 숮 for 수정, 슽 for 테스트, 쳌 for 체크) fall back to the OS CJK font, whose taller ascent/descent
+   bounced the whole line down and back up on every keystroke. Matching SUIT's exact metrics (988/-260/0)
+   on the Hangul + CJK ranges keeps line boxes and baselines still across Chromium, WebKit, and Gecko. */
+@font-face {
+	font-family: "SUIT Fallback";
+	src:
+		local("AppleSDGothicNeo-Regular"),
+		local("Apple SD Gothic Neo Regular"),
+		local("MalgunGothic"),
+		local("Malgun Gothic"),
+		local("NotoSansCJKkr-Regular"),
+		local("Noto Sans CJK KR Regular"),
+		local("Noto Sans CJK KR"),
+		local("NotoSansKR-Regular"),
+		local("Noto Sans KR Regular"),
+		local("NanumGothic");
+	font-weight: 400;
+	ascent-override: 98.8%;
+	descent-override: 26%;
+	line-gap-override: 0%;
+	unicode-range: U+1100-11FF, U+3000-303F, U+3130-318F, U+4E00-9FFF, U+A960-A97F, U+AC00-D7AF, U+D7B0-D7FF;
+}
+@font-face {
+	font-family: "SUIT Fallback";
+	src:
+		local("AppleSDGothicNeo-Medium"),
+		local("Apple SD Gothic Neo Medium"),
+		local("MalgunGothic"),
+		local("Malgun Gothic"),
+		local("NotoSansCJKkr-Medium"),
+		local("Noto Sans CJK KR Medium"),
+		local("NotoSansKR-Medium"),
+		local("Noto Sans KR Medium"),
+		local("NanumGothic");
+	font-weight: 500;
+	ascent-override: 98.8%;
+	descent-override: 26%;
+	line-gap-override: 0%;
+	unicode-range: U+1100-11FF, U+3000-303F, U+3130-318F, U+4E00-9FFF, U+A960-A97F, U+AC00-D7AF, U+D7B0-D7FF;
+}
+@font-face {
+	font-family: "SUIT Fallback";
+	src:
+		local("AppleSDGothicNeo-SemiBold"),
+		local("Apple SD Gothic Neo SemiBold"),
+		local("AppleSDGothicNeo-Bold"),
+		local("MalgunGothicBold"),
+		local("Malgun Gothic Bold"),
+		local("NotoSansCJKkr-Bold"),
+		local("Noto Sans CJK KR Bold"),
+		local("NotoSansCJKkr-Medium"),
+		local("NotoSansKR-SemiBold"),
+		local("Noto Sans KR SemiBold"),
+		local("NotoSansKR-Bold"),
+		local("NanumGothicBold");
+	font-weight: 600;
+	ascent-override: 98.8%;
+	descent-override: 26%;
+	line-gap-override: 0%;
+	unicode-range: U+1100-11FF, U+3000-303F, U+3130-318F, U+4E00-9FFF, U+A960-A97F, U+AC00-D7AF, U+D7B0-D7FF;
+}
+@font-face {
+	font-family: "SUIT Fallback";
+	src:
+		local("AppleSDGothicNeo-Bold"),
+		local("Apple SD Gothic Neo Bold"),
+		local("MalgunGothicBold"),
+		local("Malgun Gothic Bold"),
+		local("NotoSansCJKkr-Bold"),
+		local("Noto Sans CJK KR Bold"),
+		local("NotoSansKR-Bold"),
+		local("Noto Sans KR Bold"),
+		local("NanumGothicBold");
+	font-weight: 700;
+	ascent-override: 98.8%;
+	descent-override: 26%;
+	line-gap-override: 0%;
+	unicode-range: U+1100-11FF, U+3000-303F, U+3130-318F, U+4E00-9FFF, U+A960-A97F, U+AC00-D7AF, U+D7B0-D7FF;
+}
 
 /* ---------- design tokens (design tokens: monochrome, accent by contrast, not hue) ---------- */
 :root {
-	--font: "Manrope", "SUIT", -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", "Segoe UI", Roboto, sans-serif;
-	--font-input: "Manrope Input", "SUIT", -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", "Segoe UI", Roboto, sans-serif; /* composer text: a shorter caret, see @font-face */
-	--mono: "JetBrains Mono", "SUIT", "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+	--font: "Manrope", "SUIT", "SUIT Fallback", -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", "Segoe UI", Roboto, sans-serif;
+	--font-input: "Manrope Input", "SUIT", "SUIT Fallback", -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", "Segoe UI", Roboto, sans-serif; /* composer text: a shorter caret, see @font-face */
+	--mono: "JetBrains Mono", "SUIT", "SUIT Fallback", "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 
 	/* Shape: actions and fields share one radius and height; tags and badges use --radius-xs, circles icon-only buttons.
 	   Containers step up (control 10 → card 12 → panel 16) so nested corners stay concentric. */
@@ -702,6 +782,7 @@ input[type="range"]:focus-visible {
 	transition:
 		border-color var(--motion-fast) var(--ease-std);
 	font-size: var(--fs-lg); /* >=16px stops iOS zooming on focus */
+	line-height: 24px; /* whole-pixel line box (DESIGN rule 3), not body's fractional 1.55 (24.8px) */
 }
 .field:focus-visible {
 	border-color: var(--accent);

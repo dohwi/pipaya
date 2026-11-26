@@ -57,10 +57,10 @@
 		<button class="projfold" onclick={() => app.sidebar.toggleFolded(key)} aria-expanded={!folded} aria-label={folded ? t("프로젝트 펼치기") : t("프로젝트 접기")} title={folded ? t("프로젝트 펼치기") : t("프로젝트 접기")}>
 			<span class="chev" class:folded><Icon name="chevron-down" /></span>
 		</button>
-		<button class="dirtoggle projtoggle" onclick={() => (total ? app.openProject(n.server.id, root) : app.sidebar.toggleFolded(key))} aria-current={shown ? "true" : undefined} title={manual ? (total ? t("{name}의 탭 모두 보기", { name }) : name) : total ? `${sb.pretty(n, root)} · ${t("탭 모두 보기")}` : sb.pretty(n, root)}>
-			<span class="dicon"><Icon name="repo" /></span>
-			<span class="dlabel">
-				{#if sb.projectRename.is(key)}
+		{#if sb.projectRename.is(key)}
+			<div class="dirtoggle projtoggle">
+				<span class="dicon"><Icon name="repo" /></span>
+				<span class="dlabel">
 					<InlineRenameField
 						variant="heading"
 						value={sb.projectRename.draft}
@@ -71,7 +71,12 @@
 						stopClick
 						stopKeys
 					/>
-				{:else}
+				</span>
+			</div>
+		{:else}
+			<button class="dirtoggle projtoggle wide" onclick={() => (total ? app.openProject(n.server.id, root) : app.sidebar.toggleFolded(key))} aria-current={shown ? "true" : undefined} title={manual ? (total ? t("{name}의 탭 모두 보기", { name }) : name) : total ? `${sb.pretty(n, root)} · ${t("탭 모두 보기")}` : sb.pretty(n, root)}>
+				<span class="dicon"><Icon name="repo" /></span>
+				<span class="dlabel">
 					<span class="dname">{name}</span>
 					{#if above}
 						{#if twin}
@@ -80,10 +85,10 @@
 							<span class="dparent mono" use:tail={above}></span>
 						{/if}
 					{/if}
-				{/if}
-			</span>
-			{#if folded && total}<span class="cbadge tint {ACTIVITY_TONE[pstate]}" title={t("{n}개", { n: total }) + (pstate !== "idle" ? ` · ${ACTIVITY_LABEL[pstate]}` : "")}>{total}</span>{/if}
-		</button>
+				</span>
+				{#if folded && total}<span class="cbadge tint {ACTIVITY_TONE[pstate]}" title={t("{n}개", { n: total }) + (pstate !== "idle" ? ` · ${ACTIVITY_LABEL[pstate]}` : "")}>{total}</span>{/if}
+			</button>
+		{/if}
 		<NewButton {n} {workdir} key={key} name={name} tip={t("이 프로젝트에서 새 대화 또는 터미널")} />
 	</div>
 	{#if !folded}

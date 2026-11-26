@@ -398,6 +398,7 @@
 		display: inline-block;
 		width: 14px;
 		height: 14px;
+		line-height: 0;
 		margin-right: 4px;
 		vertical-align: -2px;
 		color: var(--warn);
