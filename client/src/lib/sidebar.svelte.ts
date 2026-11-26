@@ -314,7 +314,11 @@ export class SidebarState {
   /** Put directory `path` before/after `target` within `visible` (the directories as listed now) and remember it. */
   moveDir(serverId: string, visible: string[], path: string, target: string, after: boolean) {
     const list = reorder(visible, path, target, after);
-    if (!list) return;
+    if (list) this.setDirOrder(serverId, list);
+  }
+
+  /** Remember a new order for the currently visible directories, keeping hidden/closed ones behind them. */
+  setDirOrder(serverId: string, list: string[]) {
     // keep the rank of folders not listed now (filtered out, or without tabs) so they don't fall back to the age rule
     const rest = (this.dirOrder[serverId] ?? []).filter((x) => !list.includes(x));
     this.dirOrder = { ...this.dirOrder, [serverId]: [...list, ...rest] };

@@ -57,19 +57,29 @@ describe("tab drop line", () => {
 describe("carried blocks", () => {
 	test("the carried block fades and the block it would land beside shows a line", () => {
 		const m = new DragMarks();
-		m.setBlock("dir:/a", { id: "dir:/b", after: true });
-		expect(m.blockMark("dir:/a")).toEqual({ carried: true, before: false, after: false });
-		expect(m.blockMark("dir:/b")).toEqual({ carried: false, before: false, after: true });
-		expect(m.blockMark("dir:/c")).toEqual({ carried: false, before: false, after: false });
+		m.setBlock("dir:/a", { id: "dir:/b", place: "after" });
+		expect(m.blockMark("dir:/a")).toEqual({ carried: true, before: false, after: false, over: false });
+		expect(m.blockMark("dir:/b")).toEqual({ carried: false, before: false, after: true, over: false });
+		expect(m.blockMark("dir:/c")).toEqual({ carried: false, before: false, after: false, over: false });
 	});
-	test("a block never draws a line beside itself", () => {
+	test("hovering the middle of a block marks it as a merge target (`over`)", () => {
 		const m = new DragMarks();
-		m.setBlock("dir:/a", { id: "dir:/a", after: false });
-		expect(m.blockMark("dir:/a")).toEqual({ carried: true, before: false, after: false });
+		m.setBlock("dir:/a", { id: "dir:/b", place: "over" });
+		expect(m.blockMark("dir:/b")).toEqual({ carried: false, before: false, after: false, over: true });
+		m.setBlock("dir:/a", { id: "project:manual:p1", place: "over" });
+		expect(m.blockMark("dir:/b").over).toBe(false);
+		expect(m.blockMark("project:manual:p1")).toEqual({ carried: false, before: false, after: false, over: true });
+	});
+	test("a block never draws a line or merge mark on itself", () => {
+		const m = new DragMarks();
+		m.setBlock("dir:/a", { id: "dir:/a", place: "before" });
+		expect(m.blockMark("dir:/a")).toEqual({ carried: true, before: false, after: false, over: false });
+		m.setBlock("dir:/a", { id: "dir:/a", place: "over" });
+		expect(m.blockMark("dir:/a")).toEqual({ carried: true, before: false, after: false, over: false });
 	});
 	test("dropping clears everything", () => {
 		const m = new DragMarks();
-		m.setBlock("server:s", { id: "server:t", after: false });
+		m.setBlock("server:s", { id: "server:t", place: "before" });
 		expect(m.blockMark("server:t").before).toBe(true);
 		m.setBlock(null, null);
 		expect(m.blockMark("server:s").carried).toBe(false);

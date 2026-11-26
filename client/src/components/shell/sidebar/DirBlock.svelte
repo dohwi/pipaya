@@ -114,7 +114,7 @@
 		class:folded
 		class:empty
 		class:cur
-		class:over={sb.marks.over(key)}
+		class:over={sb.marks.over(key) || mark.over}
 		use:dropTarget={{ accepts: sb.acceptsOnDir(n, d.path), hover: sb.hover(key), drop: sb.dropOnDir(n, d.path) }}
 		use:sb.dirSource={{ kind: "dir", serverId: n.server.id, path: d.path, paths: n.dirs.map((x) => x.path), disabled: n.dirs.length < 2, menu: (pt) => sb.headMenuAt(pt, n, d.path, key) }}
 	>
@@ -214,6 +214,10 @@
 	.dirblock.after::after {
 		left: 0;
 		right: 0;
+	}
+	.dirblock.inproj.before::before,
+	.dirblock.inproj.after::after {
+		left: 20px; /* aligns with the indented folder row (.dirblock.inproj > .dir margin-left: 20px) */
 	}
 	.dirblock.before::before {
 		top: -1px;

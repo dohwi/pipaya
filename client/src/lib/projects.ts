@@ -89,25 +89,94 @@ export function projectBlocks(dirs: readonly DirBlock[], repos: RepoMap, over: P
 /** A hand-made project's id: short, unique enough within one server's list. */
 export const newProjectId = (now = Date.now(), rnd = Math.random()) => `${now.toString(36)}${Math.floor(rnd * 1296).toString(36)}`;
 
+export type JoinTarget =
+	| {
+			root: string;
+			/**
+			 * When adding an unrelated folder to a git project, promote its currently visible members into a hand-made
+			 * project (intentional: future worktrees of that repository will not auto-join the hand-made project).
+			 */
+			members?: readonly string[];
+			name?: string;
+			id?: string;
+			/** Repository root of `path`, when known: matching `root` rejoins the git project instead of promoting it. */
+			gitRoot?: string | null;
+			/** Optional insertion slot inside the project's folder list. */
+			at?: { path: string; after: boolean };
+	  }
+	| {
+			with: string;
+			name: string;
+			id: string;
+			at?: { path: string; after: boolean };
+	  };
+
+function insertDir(dirs: readonly string[], path: string, at?: { path: string; after: boolean }): string[] {
+	const next = dirs.filter((d) => d !== path);
+	if (at) {
+		const i = next.indexOf(at.path);
+		if (i >= 0) {
+			next.splice(i + (at.after ? 1 : 0), 0, path);
+			return next;
+		}
+	}
+	next.push(path);
+	return next;
+}
+
 /**
- * Put folder `path` into the project `target` (a hand-made one's root, or a repository root when the folder is dropped
- * on a git project it was taken out of), or into a new hand-made project with `with` (another folder). Returns the
- * overrides to keep; `name` names a new project.
+ * Put folder `path` into the project `target` (a hand-made one's root, or a repository root — rejoining if `path` belongs
+ * to that repository, or promoting the git project into a hand-made one when `members`/`id`/`name` are supplied), or into
+ * a new hand-made project with `with` (another folder). Returns the overrides to keep; `name` names a new project.
  */
-export function joinProject(over: ProjectOverrides, path: string, target: { root: string } | { with: string; name: string; id: string }): Required<ProjectOverrides> {
+export function joinProject(over: ProjectOverrides, path: string, target: JoinTarget): Required<ProjectOverrides> {
+	const ungrouped0 = [...(over.ungrouped ?? [])];
+	const cloneProjects = () => (over.projects ?? []).map((p) => ({ ...p, dirs: [...p.dirs] }));
+	if ("with" in target && target.with === path) return { projects: cloneProjects().filter((p) => p.dirs.length), ungrouped: ungrouped0 };
+	if ("root" in target && isManualRoot(target.root) && !target.at) {
+		const id = target.root.slice("manual:".length);
+		if ((over.projects ?? []).some((p) => p.id === id && p.dirs.includes(path))) {
+			return { projects: cloneProjects().filter((p) => p.dirs.length), ungrouped: ungrouped0 };
+		}
+	}
 	const projects = (over.projects ?? []).map((p) => ({ ...p, dirs: p.dirs.filter((d) => d !== path) }));
-	let ungrouped = [...(over.ungrouped ?? [])];
+	let ungrouped = ungrouped0;
 	if ("root" in target) {
 		if (isManualRoot(target.root)) {
 			const id = target.root.slice("manual:".length);
-			for (const p of projects) if (p.id === id) p.dirs.push(path);
-		} else ungrouped = ungrouped.filter((d) => d !== path); // back into its repository's project
+			for (const p of projects) if (p.id === id) p.dirs = insertDir(p.dirs, path, target.at);
+		} else if (target.members?.length && target.id && target.name && target.gitRoot !== target.root) {
+			const members = target.members.filter((d, i, a) => d !== path && a.indexOf(d) === i);
+			const memberSet = new Set(members);
+			for (const p of projects) p.dirs = p.dirs.filter((d) => !memberSet.has(d));
+			projects.push({ id: target.id, name: target.name, dirs: insertDir(members, path, target.at) });
+		} else {
+			ungrouped = ungrouped.filter((d) => d !== path); // back into its repository's project
+		}
 	} else {
 		const host = projects.find((p) => p.dirs.includes(target.with));
-		if (host) host.dirs.push(path);
-		else projects.push({ id: target.id, name: target.name, dirs: [target.with, path] });
+		if (host) host.dirs = insertDir(host.dirs, path, target.at);
+		else {
+			const dirs = target.at && !target.at.after && target.at.path === target.with ? [path, target.with] : [target.with, path];
+			projects.push({ id: target.id, name: target.name, dirs });
+		}
 	}
 	return { projects: projects.filter((p) => p.dirs.length), ungrouped };
+}
+
+/** Reorder `path` before or after `target` within a hand-made project's folder list. Null when nothing changes. */
+export function reorderProjectDir(over: ProjectOverrides, projectId: string, path: string, target: string, after: boolean): Required<ProjectOverrides> | null {
+	if (path === target) return null;
+	const src = over.projects ?? [];
+	const idx = src.findIndex((p) => p.id === projectId);
+	if (idx < 0) return null;
+	const cur = src[idx]!.dirs;
+	const from = cur.indexOf(path);
+	if (from < 0 || !cur.includes(target)) return null;
+	const nextDirs = insertDir(cur, path, { path: target, after });
+	if (nextDirs.length === cur.length && nextDirs.every((d, i) => d === cur[i])) return null;
+	const projects = src.map((p, i) => (i === idx ? { ...p, dirs: nextDirs } : { ...p, dirs: [...p.dirs] }));
+	return { projects, ungrouped: [...(over.ungrouped ?? [])] };
 }
 
 /** Take folder `path` out of whatever project holds it: out of a hand-made one, or marked to stand apart from its repository. */

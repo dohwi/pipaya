@@ -32,11 +32,12 @@
 	import type { Point } from "../../lib/press-menu";
 	import { drag } from "../../lib/dnd.svelte";
 	import { blockDrag } from "../../lib/block-drag";
+	import { applyDirDrop, resolveDirDrop } from "../../lib/dir-drop";
 	import { InlineRename } from "../../lib/inline-rename.svelte";
 	import { registerRenamePlace } from "../../lib/rename-places";
 	import { DragMarks } from "../../lib/drag-marks.svelte";
 	import { dirPaneCount, workDir, type DirBlock, type Tab } from "../../lib/nav";
-	import { dissolveProject, flattenBlocks, isManualRoot, joinProject, leaveProject, newProjectId, projectKey, type SidebarBlock } from "../../lib/projects";
+	import { dissolveProject, flattenBlocks, isManualRoot, leaveProject, projectKey, type SidebarBlock } from "../../lib/projects";
 	import { dirKey, connectionState, edgeOf, headMenuEntries, leafName, newKey, newMenuEntries, orderServers, projectMenuEntries, rowMenuEntries, shortName, targetId, type RowActions } from "../../lib/sidebar-model";
 	import type { Group, Session } from "../../lib/types";
 	import { isTerminalId, platformName } from "../../lib/terminal";
@@ -285,14 +286,79 @@
 		hover: hover(m.id),
 		drop: (id: string) => void app.groupWith(id, m.id),
 	});
-	/* ---- reordering directories by dragging their header ---- */
+	/* ---- reordering & merging directories by dragging their header ---- */
 	const bid = (kind: "dir" | "group" | "server", key: string) => `${kind}:${key}`;
-	/** `use:dirSource`: drag a directory header to reorder it (lib/block-drag.ts), drawn through `marks`. */
+	function runDirDrop(n: Node, dragPath: string, drop: { id: string; place: "before" | "after" | "over" }) {
+		const sid = n.server.id;
+		const res = applyDirDrop(
+			{
+				blocks: n.blocks,
+				dirOrder: n.dirs.map((d) => d.path),
+				repos: n.repos,
+				overrides: app.sidebar.overrides(sid),
+				labelOf: (p) => shortLabel(n, p),
+				projectNameOf: (r) => projectName(n, r),
+			},
+			dragPath,
+			drop,
+		);
+		if (!res) return;
+		if (res.dirOrder) app.sidebar.setDirOrder(sid, res.dirOrder);
+		if (res.overrides) app.sidebar.setOverrides(sid, res.overrides);
+		if (res.revealRoot) app.sidebar.reveal(projectKey(sid, res.revealRoot));
+	}
+	/** Find the folder or project block at `(x, y)` on `serverId`, bridging the 8px margin between expanded blocks. */
+	function blockElAt(serverId: string, x: number, y: number): { el: HTMLElement; probeY: number } | null {
+		const hitAt = (py: number) => {
+			const el = document.elementFromPoint(x, py)?.closest<HTMLElement>('[data-block^="dir:"], [data-block^="project:"]');
+			return el && el.dataset.server === serverId ? el : null;
+		};
+		const direct = hitAt(y);
+		if (direct) return { el: direct, probeY: y };
+		// Only bridge inter-block margins inside this server's list; outside the server stays null.
+		const srv = document.elementFromPoint(x, y)?.closest<HTMLElement>(".srv > .fold")?.closest<HTMLElement>('[data-block^="server:"]');
+		if (!srv || srv.dataset.block !== `server:${serverId}`) return null;
+		for (const dy of [-6, 6]) {
+			const near = hitAt(y + dy);
+			if (near) return { el: near, probeY: y + dy };
+		}
+		return null;
+	}
+	/** `use:dirSource`: drag a directory header to reorder or merge into a project (lib/block-drag.ts), drawn through `marks`. */
 	const dirSource = blockDrag({
 		set: (drag, drop) => marks.setBlock(drag, drop),
 		get: () => marks.block,
 		key: bid,
-		move: (o, target, after) => (o.kind === "server" ? app.moveServer(o.path, target, after) : app.sidebar.moveDir(o.serverId, o.paths, o.path, target, after)),
+		resolve: (o, x, y) => {
+			if (o.kind !== "dir") return undefined; // servers/groups keep the default 50/50 fallback
+			const found = blockElAt(o.serverId, x, y);
+			if (!found) return null;
+			const n = nodes.find((item) => item.server.id === o.serverId);
+			if (!n) return null;
+			const raw = found.el.dataset.block!;
+			const hit = raw.startsWith("project:")
+				? { kind: "project" as const, root: raw.slice("project:".length), folded: found.el.dataset.folded === "1" }
+				: { kind: "dir" as const, path: raw.slice("dir:".length) };
+			const header = found.el.querySelector<HTMLElement>(hit.kind === "project" ? ":scope > .proj" : ":scope > .dir") ?? found.el;
+			return resolveDirDrop({
+				blocks: n.blocks,
+				repos: n.repos,
+				dragPath: o.path,
+				hit,
+				y: found.probeY,
+				headerRect: header.getBoundingClientRect(),
+			});
+		},
+		move: (o, drop) => {
+			if (o.kind === "server") {
+				if (drop.place === "over" || !drop.id.startsWith("server:")) return;
+				app.moveServer(o.path, drop.id.slice("server:".length), drop.place === "after");
+				return;
+			}
+			if (o.kind !== "dir") return;
+			const n = nodes.find((item) => item.server.id === o.serverId);
+			if (n) runDirDrop(n, o.path, drop);
+		},
 	});
 	/**
 	 * A lone conversation let go on another working tree (main checkout or worktree) of the repository it works in moves
@@ -416,7 +482,6 @@
 	 * under. A picker rather than dragging, so it works the same on touch.
 	 */
 	function pickProject(n: Node, path: string) {
-		const sid = n.server.id;
 		const own = projectOf(n, path);
 		const projects = n.blocks.filter((b) => b.kind === "project" && b !== own) as Extract<SidebarBlock, { kind: "project" }>[];
 		const folders = n.dirs.filter((d) => d.path !== path && !projectOf(n, d.path));
@@ -428,12 +493,8 @@
 				...folders.map((d) => ({ id: `d:${d.path}`, title: shortLabel(n, d.path), sub: t("새 프로젝트 · {path}", { path: pretty(n, d.path) }) })),
 			],
 			onpick: (it) => {
-				const over = app.sidebar.overrides(sid);
-				if (it.id.startsWith("p:")) return app.sidebar.setOverrides(sid, joinProject(over, path, { root: it.id.slice(2) }));
-				const other = it.id.slice(2);
-				const id = newProjectId();
-				app.sidebar.setOverrides(sid, joinProject(over, path, { with: other, id, name: shortLabel(n, other) }));
-				app.sidebar.reveal(projectKey(sid, `manual:${id}`));
+				if (it.id.startsWith("p:")) runDirDrop(n, path, { id: `project:${it.id.slice(2)}`, place: "over" });
+				else runDirDrop(n, path, { id: `dir:${it.id.slice(2)}`, place: "over" });
 			},
 		};
 	}
@@ -633,11 +694,13 @@
 		scroll-padding-block: 8px;
 		overscroll-behavior: contain;
 	}
-	/* the line where a carried server, folder or tab would land: its own rules below only place it */
+	/* the line where a carried server, folder, project or tab would land: its own rules below only place it */
 	:global(:where(.side) .srv.before::before),
 	:global(:where(.side) .srv.after::after),
 	:global(:where(.side) .dirblock.before::before),
 	:global(:where(.side) .dirblock.after::after),
+	:global(:where(.side) .projblock.before::before),
+	:global(:where(.side) .projblock.after::after),
 	:global(:where(.side) .item.before::before),
 	:global(:where(.side) .item.after::after) {
 		content: "";
