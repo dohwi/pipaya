@@ -18,7 +18,7 @@
 	import { fileRows, folderRows, mentionRows, menuKey, menuKindOf, menuOpen, optionRows, PROMPT_PREFIX, slashRows, slashScopeOf } from "../../lib/slash-menu";
 	import { htmlImages, pastedMessage, shiftImageTokens } from "../../lib/rich-copy";
 	import type { ImageBlock } from "../../lib/types";
-	import { baseName, MAX_IMAGES, previewKind } from "../../lib/files";
+	import { baseName, MAX_IMAGES, previewKind, uploadFileToDraft } from "../../lib/files";
 	import { WORKSPACE_FILE_MIME } from "../../lib/workspace-edits";
 	import { dropImageToken, extractSkillNames, insertToken, mentionAt, mergeReturned, replaceMention, slashAt, tokenizeComposer, type Mention } from "../../lib/composer-text";
 	import ComposerEditor from "./ComposerEditor.svelte";
@@ -239,7 +239,7 @@
 			}
 			attached.load(
 				[...attached.images, ...list.flatMap((m) => m.images).map((b) => ({ id: uid(), name: "image", preview: `data:${b.mimeType};base64,${b.data}`, data: b.data, mimeType: b.mimeType }))],
-				[...attached.files, ...list.flatMap((m) => m.files).map((f) => ({ ...f, id: uid() }))],
+				[...attached.files, ...list.flatMap((m) => m.files).map((f) => uploadFileToDraft(f))],
 			);
 			if (list.some((m) => !m.byHand)) app.toast(t("중지해서 보내지 않은 메시지를 입력창에 돌려놓았습니다"), "info", pane.id);
 		});
@@ -635,7 +635,7 @@
 			sentText: raw,
 			body: (reply ? makeQuote(reply.text, reply.who) : "") + filtered.text,
 			images: attached.images.map((a) => ({ type: "image" as const, data: a.data, mimeType: a.mimeType })),
-			files: [...attached.files],
+			files: attached.files.map(({ name, data, size, mimeType }) => ({ name, data, size, mimeType })),
 		};
 	}
 

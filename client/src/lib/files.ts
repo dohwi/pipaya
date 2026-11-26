@@ -47,16 +47,43 @@ const toBase64 = (buf: ArrayBuffer): string => {
 	return btoa(out);
 };
 
+const isPreviewableImage = (name: string, mimeType: string): boolean => previewKind(name, mimeType) === "image" && mimeType !== "image/svg+xml";
+
+const base64BlobUrl = (data: string, mimeType: string): string | undefined => {
+	if (!data) return undefined;
+	try {
+		const bin = atob(data);
+		const bytes = new Uint8Array(bin.length);
+		for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+		return URL.createObjectURL(new Blob([bytes], { type: mimeType }));
+	} catch {
+		return undefined;
+	}
+};
+
 /** Read any file as-is (no resizing: the agent gets the original bytes). */
 export async function fileToDraft(file: File): Promise<FileDraft> {
 	const mimeType = file.type || "application/octet-stream";
+	const name = file.name || "file";
 	return {
 		id: uid(),
-		name: file.name || "file",
+		name,
 		size: file.size,
 		mimeType,
 		data: toBase64(await file.arrayBuffer()),
-		preview: previewKind(file.name, mimeType) === "image" && mimeType !== "image/svg+xml" ? URL.createObjectURL(file) : undefined,
+		preview: isPreviewableImage(name, mimeType) ? URL.createObjectURL(file) : undefined,
+	};
+}
+
+/** Rebuild a composer `FileDraft` from an `UploadFile`, minting a fresh `blob:` preview URL for raster images. */
+export function uploadFileToDraft(file: UploadFile, id = uid()): FileDraft {
+	return {
+		id,
+		name: file.name,
+		size: file.size,
+		mimeType: file.mimeType,
+		data: file.data,
+		preview: isPreviewableImage(file.name, file.mimeType) ? base64BlobUrl(file.data, file.mimeType) : undefined,
 	};
 }
 
