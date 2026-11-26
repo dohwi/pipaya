@@ -118,7 +118,7 @@
 	.proj {
 		display: flex;
 		align-items: center;
-		margin-top: 4px; /* like a folded folder row; open blocks get 8 around them (DirBlock) */
+		margin-top: 4px; /* every project header stays 4px below the block above so toggling never shifts the clicked row */
 		margin-right: -8px; /* the highlight runs 8px past the content, like .dir and tab rows */
 		padding-right: 8px;
 		border-radius: var(--radius-sm);
@@ -126,9 +126,9 @@
 	.projblock:first-child > .proj {
 		margin-top: 4px;
 	}
-	:global(:where(.side) .projblock:has(> .fold):not(:first-child) > .proj),
-	:global(:where(.side) :is(.dirblock, .projblock):has(> .fold) + .projblock > .proj) {
-		margin-top: 8px;
+	/* an open project keeps 8px before the next block (this 4px + the next header's 4px), animated with .fold */
+	.projblock:not(:last-child) > .fold {
+		padding-bottom: 4px;
 	}
 	/* the chevron is its own button (it folds the project); the rest of the row lists the whole project in the tab bar.
 	   Together they keep the old columns, as in a folder row: chevron x 28, repo icon x 48 */
