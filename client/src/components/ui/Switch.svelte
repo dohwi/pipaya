@@ -43,7 +43,8 @@
 		background: var(--bg-active);
 		transition:
 			background var(--motion-fast) var(--ease-std),
-			border-color var(--motion-fast) var(--ease-std);
+			border-color var(--motion-fast) var(--ease-std),
+			opacity var(--motion-fast) var(--ease-std);
 	}
 	.knob {
 		position: absolute;
@@ -66,12 +67,18 @@
 		background: var(--bg);
 	}
 	.sw:disabled {
-		background: var(--disabled-bg);
-		border-color: var(--disabled-border);
 		cursor: default;
 	}
-	.sw:disabled .knob {
+	.sw[aria-checked="false"]:disabled {
+		background: var(--disabled-bg);
+		border-color: var(--disabled-border);
+	}
+	.sw[aria-checked="false"]:disabled .knob {
 		background: var(--disabled-fg);
+	}
+	/* Locked/busy while ON: keep the lit ON fill and contrasting knob at lower opacity so it reads as "on, cannot change" rather than "off". */
+	.sw[aria-checked="true"]:disabled {
+		opacity: 0.48;
 	}
 	.sw:focus-visible {
 		outline: 2px solid var(--accent);

@@ -781,8 +781,14 @@ input[type="checkbox"]:focus-visible {
 }
 input[type="checkbox"]:disabled {
 	cursor: default;
+}
+input[type="checkbox"]:disabled:not(:checked) {
 	background-color: var(--disabled-bg);
 	border-color: var(--disabled-border);
+}
+/* Keep the checked accent fill and checkmark readable at muted opacity instead of turning blank/dark when disabled. */
+input[type="checkbox"]:checked:disabled {
+	opacity: 0.48;
 }
 
 /* A key cap in running text ("Esc 취소"): bordered key shape on --radius-xs. */
