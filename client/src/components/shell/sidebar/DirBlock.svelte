@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { collapseIn, collapseOut } from "../../../lib/motion";
-	import { tail, tailKeepLast } from "../../../lib/fit-text";
+	import { tail, tailKeepLast, twinParentCandidates } from "../../../lib/fit-text";
 	import { t } from "../../../lib/i18n";
 	import { ACTIVITY_LABEL, ACTIVITY_TONE, mostUrgent } from "../../../lib/activity";
 	import { dirPaneCount, tabPanes } from "../../../lib/nav";
@@ -44,10 +44,61 @@
 	const pinned = $derived(app.sidebar.isPinned(n.server.id, d.path));
 	const label = $derived(sb.shortLabel(n, d.path));
 	const parent = $derived(sb.pretty(n, d.path));
+	const usesBranch = $derived(Boolean(branch && !app.sidebar.dirName(n.server.id, d.path)));
 	/** What shows dim after the name: the path above it, without the part the name already says */
-	const above = $derived(parentPath(d.path, n.home, label));
-	/** Another folder of this server has the same name: the path after it stays in view to tell them apart (otherwise it shows on hover) */
-	const twin = $derived(n.dirs.some((x) => x.path !== d.path && sb.shortLabel(n, x.path) === label));
+	const above = $derived(parentPath(d.path, n.home, usesBranch ? branch!.name : label));
+	/**
+	 * Parent paths of other folders that display the exact same label, so twins keep a distinguishing path segment
+	 * visible (including inside manual projects and across shared parent suffixes like `/a/sub/app` vs `/b/sub/app`).
+	 * Branch-labelled rows only compare within their own git project — different repos sharing a `main` branch are
+	 * already distinguished by their project headers.
+	 */
+	const gitSiblings = $derived.by(() => {
+		if (!usesBranch) return [];
+		const block = n.blocks.find((b) => b.kind === "project" && !b.manual && b.dirs.some((x) => x.path === d.path));
+		return block && block.kind === "project" ? block.dirs : [];
+	});
+	const peerAboves = $derived.by(() => {
+		const out: string[] = [];
+		if (usesBranch && branch) {
+			if (branch.sub) return out;
+			for (const x of gitSiblings) {
+				if (x.path === d.path) continue;
+				const xRepo = n.repos[x.path] ?? null;
+				const xBr = xRepo && !app.sidebar.dirName(n.server.id, x.path) ? branchLabel(x.path, xRepo) : null;
+				if (xBr && !xBr.sub && xBr.name === branch.name) out.push(parentPath(x.path, n.home, xBr.name));
+			}
+			return out;
+		}
+		for (const b of n.blocks) {
+			const list = b.kind === "dir" ? [b.dir] : b.dirs;
+			const isGit = b.kind === "project" && !b.manual;
+			for (const x of list) {
+				if (x.path === d.path) continue;
+				const xRepo = isGit ? (n.repos[x.path] ?? null) : null;
+				const xBr = xRepo && !app.sidebar.dirName(n.server.id, x.path) ? branchLabel(x.path, xRepo) : null;
+				if (!xBr && sb.shortLabel(n, x.path) === label) out.push(parentPath(x.path, n.home, label));
+			}
+		}
+		return out;
+	});
+	/** Other branch/subpath names inside the same git project, so `tailKeepLast` never collapses sibling subpaths to `…/app`. */
+	const peerBranchNames = $derived.by(() => {
+		if (!usesBranch || !branch) return [];
+		const out: string[] = [];
+		for (const x of gitSiblings) {
+			if (x.path === d.path) continue;
+			const xRepo = n.repos[x.path] ?? null;
+			const xBr = xRepo && !app.sidebar.dirName(n.server.id, x.path) ? branchLabel(x.path, xRepo) : null;
+			if (xBr && xBr.name !== branch.name) out.push(xBr.name);
+		}
+		return out;
+	});
+	const branchNameHints = $derived(
+		usesBranch && branch ? twinParentCandidates(branch.name, peerBranchNames, { compact: false }) : [],
+	);
+	const twin = $derived(peerAboves.length > 0);
+	const twinHints = $derived(twin && above ? twinParentCandidates(above, peerAboves) : []);
 	/** The most urgent state among the folder's tabs: tints the count while folded */
 	const dstate = $derived(mostUrgent(d.tabs.flatMap((x) => tabPanes(x)).map((id) => sb.stateOfId(n, id))));
 	const dcount = $derived(dirPaneCount(d));
@@ -88,15 +139,19 @@
 						stopClick
 						stopKeys
 					/>
-				{:else if branch && !app.sidebar.dirName(n.server.id, d.path)}
-					<!-- a path inside the worktree keeps its last folder (`…/alpha`): the end is what tells sibling folders apart -->
-					<span class="dname mono" title={branch.name} use:tailKeepLast={branch.name}></span>
-					{#if branch.sub}<span class="dparent mono" use:tail={branch.sub}></span>{/if}
+				{:else if usesBranch && branch}
+					<!-- a path inside the worktree keeps its distinguishing folder (`…/alpha/app` instead of collapsing twins to `…/app`) -->
+					<span class="dname mono" title={branch.name} use:tailKeepLast={branchNameHints}></span>
+					{#if branch.sub}
+						<span class="dparent mono" use:tail={branch.sub}></span>
+					{:else if twin && above}
+						<span class="dparent mono twin" use:tailKeepLast={twinHints}></span>
+					{/if}
 				{:else}
-					<span class="dname" title={label}>{label}</span>
-					{#if above && !inProject}
+					<span class="dname">{label}</span>
+					{#if above && (inProject !== "git" || twin)}
 						{#if twin}
-							<span class="dparent mono twin" use:tailKeepLast={above}></span>
+							<span class="dparent mono twin" use:tailKeepLast={twinHints}></span>
 						{:else}
 							<span class="dparent mono" use:tail={above}></span>
 						{/if}
@@ -239,6 +294,7 @@
 		transition: opacity var(--motion-fast) var(--ease-std);
 	}
 	.dparent.twin {
+		min-width: 32px; /* keep twin disambiguation visible even beside a long folder name */
 		text-overflow: ellipsis;
 	}
 	/* the path after the name shows on hover (the tooltip has it too); a folder that shares its name with another keeps it */

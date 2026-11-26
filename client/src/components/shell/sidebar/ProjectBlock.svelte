@@ -1,11 +1,12 @@
 <script lang="ts">
 	import { collapseIn, collapseOut } from "../../../lib/motion";
+	import { tail, tailKeepLast, twinParentCandidates } from "../../../lib/fit-text";
 	import { t } from "../../../lib/i18n";
 	import { ACTIVITY_LABEL, ACTIVITY_TONE, mostUrgent } from "../../../lib/activity";
 	import { dirPaneCount, tabPanes, type DirBlock as Dir } from "../../../lib/nav";
 	import { app } from "../../../lib/store.svelte";
 	import { isManualRoot, projectKey } from "../../../lib/projects";
-	import { asWorkdir } from "../../../lib/sidebar-model";
+	import { asWorkdir, parentPath } from "../../../lib/sidebar-model";
 	import { getSidebarCtx, type SidebarNode } from "../../../lib/sidebar-ctx";
 	import Icon from "../../ui/Icon.svelte";
 	import InlineRenameField from "../../ui/InlineRenameField.svelte";
@@ -25,6 +26,20 @@
 	const folded = $derived(sb.isFolded(key));
 	const manual = $derived(isManualRoot(root));
 	const name = $derived(sb.projectName(n, root));
+	const above = $derived(manual ? "" : parentPath(root, n.home, name));
+	/** Another git project on this server shares the same header name (`shortName`): keep a distinguishing parent visible */
+	const peerAboves = $derived.by(() => {
+		if (manual) return [];
+		const out: string[] = [];
+		for (const b of n.blocks) {
+			if (b.kind === "project" && !b.manual && b.root !== root && sb.projectName(n, b.root) === name) {
+				out.push(parentPath(b.root, n.home, name));
+			}
+		}
+		return out;
+	});
+	const twin = $derived(peerAboves.length > 0);
+	const twinHints = $derived(twin && above ? twinParentCandidates(above, peerAboves) : []);
 	/** Where "+" starts: the repository's main checkout, or a hand-made project's first folder */
 	const home = $derived(manual ? (dirs[0]?.path ?? n.root ?? ".") : root);
 	const workdir = $derived(asWorkdir(home, n.root));
@@ -41,22 +56,31 @@
 		<button class="projfold" onclick={() => app.sidebar.toggleFolded(key)} aria-expanded={!folded} aria-label={folded ? t("프로젝트 펼치기") : t("프로젝트 접기")} title={folded ? t("프로젝트 펼치기") : t("프로젝트 접기")}>
 			<span class="chev" class:folded><Icon name="chevron-down" /></span>
 		</button>
-		<button class="dirtoggle projtoggle" onclick={() => (total ? app.openProject(n.server.id, root) : app.sidebar.toggleFolded(key))} aria-current={shown ? "true" : undefined} title={total ? t("{name}의 탭 모두 보기", { name }) : manual ? name : sb.pretty(n, root)}>
+		<button class="dirtoggle projtoggle" onclick={() => (total ? app.openProject(n.server.id, root) : app.sidebar.toggleFolded(key))} aria-current={shown ? "true" : undefined} title={manual ? (total ? t("{name}의 탭 모두 보기", { name }) : name) : total ? `${sb.pretty(n, root)} · ${t("탭 모두 보기")}` : sb.pretty(n, root)}>
 			<span class="dicon"><Icon name="repo" /></span>
-			{#if sb.projectRename.is(key)}
-				<InlineRenameField
-					variant="heading"
-					value={sb.projectRename.draft}
-					maxlength={60}
-					oninput={(v) => (sb.projectRename.draft = v)}
-					oncommit={() => sb.commitProjectRename(n, root)}
-					oncancel={() => sb.projectRename.cancel()}
-					stopClick
-					stopKeys
-				/>
-			{:else}
-				<span class="dname">{name}</span>
-			{/if}
+			<span class="dlabel">
+				{#if sb.projectRename.is(key)}
+					<InlineRenameField
+						variant="heading"
+						value={sb.projectRename.draft}
+						maxlength={60}
+						oninput={(v) => (sb.projectRename.draft = v)}
+						oncommit={() => sb.commitProjectRename(n, root)}
+						oncancel={() => sb.projectRename.cancel()}
+						stopClick
+						stopKeys
+					/>
+				{:else}
+					<span class="dname">{name}</span>
+					{#if above}
+						{#if twin}
+							<span class="dparent mono twin" use:tailKeepLast={twinHints}></span>
+						{:else}
+							<span class="dparent mono" use:tail={above}></span>
+						{/if}
+					{/if}
+				{/if}
+			</span>
 			{#if folded && total}<span class="cbadge tint {ACTIVITY_TONE[pstate]}" title={t("{n}개", { n: total }) + (pstate !== "idle" ? ` · ${ACTIVITY_LABEL[pstate]}` : "")}>{total}</span>{/if}
 		</button>
 		<NewButton {n} {workdir} key={key} name={name} tip={t("이 프로젝트에서 새 대화 또는 터미널")} />
@@ -141,6 +165,37 @@
 		width: 14px;
 		height: 14px;
 		stroke-width: 1.9;
+	}
+	.dlabel {
+		flex: 1;
+		min-width: 0;
+		display: flex;
+		align-items: center;
+		gap: 4px;
+		line-height: 1;
+	}
+	.dparent {
+		flex: 1;
+		min-width: 0;
+		overflow: hidden;
+		white-space: nowrap;
+		font-size: var(--fs-2xs);
+		line-height: 16px; /* whole-pixel line box centred against the 20px project name */
+		color: var(--text-faint);
+		transition: opacity var(--motion-fast) var(--ease-std);
+	}
+	.dparent.twin {
+		min-width: 32px; /* keep twin disambiguation visible even beside a long project name */
+		text-overflow: ellipsis;
+	}
+	@media (hover: hover) {
+		.dparent:not(.twin) {
+			opacity: 0;
+		}
+		.dir:global([data-hovered]) .dparent,
+		.dir:has(:focus-visible) .dparent {
+			opacity: 1;
+		}
 	}
 	.dname {
 		flex: 0 1 auto;
