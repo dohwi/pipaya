@@ -97,6 +97,9 @@
 		}
 		return null;
 	});
+	const peerIsSelf = $derived(
+		!!peerResolved && peerResolved.target.kind === "session" && !!pane.id && peerResolved.target.id === pane.id,
+	);
 	const skillName = $derived(skillOf(name, args));
 	const fileTarget = $derived.by(() => {
 		if (skillName || !pane.id || (name !== "read" && name !== "write" && name !== "edit")) return null;
@@ -285,12 +288,16 @@
 				</div>
 			{:else if peerResolved && !genericView}
 				<div class="jump">
-					<button
-						type="button"
-						class="jump-tok mention"
-						title={peerResolved.target.kind === "group" ? t("{name} 그룹 열기", { name: `@${peerResolved.handle}` }) : t("{name} 대화 열기", { name: `@${peerResolved.handle}` })}
-						onclick={() => app.openMention(peerResolved.target)}
-					><span class="jlabel">@{peerResolved.handle}</span></button>
+					{#if peerIsSelf}
+						<span class="jump-tok mention self" title={t("현재 대화")}><span class="jlabel">@{peerResolved.handle}</span></span>
+					{:else}
+						<button
+							type="button"
+							class="jump-tok mention"
+							title={peerResolved.target.kind === "group" ? t("{name} 그룹 열기", { name: `@${peerResolved.handle}` }) : t("{name} 대화 미리 보기", { name: `@${peerResolved.handle}` })}
+							onclick={(e) => app.openMention(peerResolved.target, { direct: e.ctrlKey || e.metaKey })}
+						><span class="jlabel">@{peerResolved.handle}</span></button>
+					{/if}
 				</div>
 			{:else if delegateRole && !delegateView}
 				<div class="jump">
@@ -517,12 +524,16 @@
 				<div class="codeframe">
 					{#if peerResolved}
 						<div class="codebar">
-							<button
-								type="button"
-								class="codebar-file mention mono"
-								title={peerResolved.target.kind === "group" ? t("{name} 그룹 열기", { name: `@${peerResolved.handle}` }) : t("{name} 대화 열기", { name: `@${peerResolved.handle}` })}
-								onclick={() => app.openMention(peerResolved.target)}
-							><Icon name="chat" /><span class="jlabel">@{peerResolved.handle}</span></button>
+							{#if peerIsSelf}
+								<span class="codebar-file mention self mono" title={t("현재 대화")}><Icon name="chat" /><span class="jlabel">@{peerResolved.handle}</span></span>
+							{:else}
+								<button
+									type="button"
+									class="codebar-file mention mono"
+									title={peerResolved.target.kind === "group" ? t("{name} 그룹 열기", { name: `@${peerResolved.handle}` }) : t("{name} 대화 미리 보기", { name: `@${peerResolved.handle}` })}
+									onclick={(e) => app.openMention(peerResolved.target, { direct: e.ctrlKey || e.metaKey })}
+								><Icon name="chat" /><span class="jlabel">@{peerResolved.handle}</span></button>
+							{/if}
 						</div>
 					{:else if name === "schedule" && pane.id}
 						<div class="codebar">
@@ -777,6 +788,10 @@
 	.jump-tok.mention {
 		color: var(--hue);
 	}
+	.jump-tok.mention.self {
+		--hue: var(--mark-mention-self);
+		cursor: default;
+	}
 	.jump-tok.skill {
 		--hue: var(--accent);
 	}
@@ -1023,6 +1038,13 @@
 	}
 	.codebar-file.mention :global(svg) {
 		color: var(--mark-mention);
+	}
+	.codebar-file.mention.self {
+		color: var(--mark-mention-self);
+		cursor: default;
+	}
+	.codebar-file.mention.self :global(svg) {
+		color: var(--mark-mention-self);
 	}
 	.codeempty {
 		padding: 12px;

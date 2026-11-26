@@ -91,7 +91,7 @@ const decodeBasicEntities = (s: string) =>
  * Messages without `@` (or whose resolved targets did not change when an unrelated session opened/closed) keep the
  * exact same signature, avoiding unnecessary DOM re-patching and keeping loaded inline media untouched.
  */
-export function mentionSignature(html: string, index: MentionIndex): string {
+export function mentionSignature(html: string, index: MentionIndex, selfId?: string | null): string {
 	if (!index.names.length || !html.includes("@")) return "";
 	let sig = "";
 	const re = /(?<![\p{L}\p{N}_.%+\-@/])@([^\s@<>]+)/gu;
@@ -101,7 +101,10 @@ export function mentionSignature(html: string, index: MentionIndex): string {
 		const hit = knownMention(candidate, index.names);
 		if (hit) {
 			const target = index.resolve(hit);
-			if (target) sig += `${hit}:${target.kind}:${target.id};`;
+			if (target) {
+				const self = target.kind === "session" && selfId && target.id === selfId ? ":self" : "";
+				sig += `${hit}:${target.kind}:${target.id}${self};`;
+			}
 			re.lastIndex = hasEntity ? m.index + 1 : m.index + 1 + hit.length;
 		} else {
 			re.lastIndex = m.index + 1;
@@ -113,6 +116,7 @@ export function mentionSignature(html: string, index: MentionIndex): string {
 export interface DecorateLabels {
 	openSession: (name: string) => string;
 	openGroup: (name: string) => string;
+	selfSession?: string;
 	openSkill: (name: string) => string;
 	openPrompt: (name: string) => string;
 	openFile: (name: string) => string;
@@ -149,33 +153,51 @@ function buildFileButton(doc: Document, ref: ParsedFileRef, label: (name: string
 	return btn;
 }
 
-function buildMentionButton(doc: Document, text: string, target: MentionTarget, labels: DecorateLabels): HTMLButtonElement {
-	const btn = doc.createElement("button");
-	btn.type = "button";
-	btn.className = "wd-mention";
-	btn.dataset.mentionKind = target.kind;
-	btn.dataset.mentionId = target.id;
-	btn.title = target.kind === "group" ? labels.openGroup(text) : labels.openSession(text);
+function buildMentionNode(
+	doc: Document,
+	text: string,
+	target: MentionTarget,
+	labels: DecorateLabels,
+	selfId?: string | null,
+): HTMLElement {
+	const isSelf = target.kind === "session" && Boolean(selfId) && target.id === selfId;
+	let el: HTMLElement;
+	if (isSelf) {
+		el = doc.createElement("span");
+		el.className = "wd-mention wd-self";
+		el.dataset.mentionSelf = "1";
+		el.title = labels.selfSession ?? text;
+	} else {
+		const btn = doc.createElement("button");
+		btn.type = "button";
+		btn.className = "wd-mention";
+		btn.dataset.mentionKind = target.kind;
+		btn.dataset.mentionId = target.id;
+		btn.title = target.kind === "group" ? labels.openGroup(text) : labels.openSession(text);
+		el = btn;
+	}
 	const span = doc.createElement("span");
 	span.className = "wd-lbl";
 	span.textContent = text;
-	btn.appendChild(span);
-	return btn;
+	el.appendChild(span);
+	return el;
 }
 
 /**
  * Walk `root` in place and replace known `@session` / `@group`, `/skill:name`, `/prompt:name`, `#path` prose tokens,
  * and sole known `@mention` or repo-relative file paths inside inline `<code>` with interactive `<button type="button">`
- * chips. Never enters `<pre>`, `<a>`, `<button>`, or other `<code>`.
+ * chips (or a calm non-clickable `<span>` chip when a `@session` names the current session itself).
+ * Never enters `<pre>`, `<a>`, `<button>`, or other `<code>`.
  */
 export function decorateMarkdownTokens(
 	root: ParentNode,
-	opts: { index: MentionIndex; skills: boolean; prompts?: boolean; files?: boolean; labels: DecorateLabels },
+	opts: { index: MentionIndex; selfId?: string | null; skills: boolean; prompts?: boolean; files?: boolean; labels: DecorateLabels },
 ): void {
 	// Strip any pre-existing chip attributes before creating genuine chips (defense in depth).
-	for (const el of root.querySelectorAll("[data-mention-id], [data-mention-kind], [data-skill], [data-prompt], button[data-file]")) {
+	for (const el of root.querySelectorAll("[data-mention-id], [data-mention-kind], [data-mention-self], [data-skill], [data-prompt], button[data-file]")) {
 		el.removeAttribute("data-mention-id");
 		el.removeAttribute("data-mention-kind");
+		el.removeAttribute("data-mention-self");
 		el.removeAttribute("data-skill");
 		el.removeAttribute("data-prompt");
 		el.removeAttribute("data-file");
@@ -198,7 +220,7 @@ export function decorateMarkdownTokens(
 						if (/^@[^\s@]+$/.test(trimmed)) {
 							const target = opts.index.resolve(trimmed.slice(1));
 							if (target) {
-								parent.replaceChild(buildMentionButton(doc, trimmed, target, opts.labels), el);
+								parent.replaceChild(buildMentionNode(doc, trimmed, target, opts.labels, opts.selfId), el);
 								continue;
 							}
 						}
@@ -230,7 +252,7 @@ export function decorateMarkdownTokens(
 				if (p.kind === "mention" && p.name) {
 					const target = opts.index.resolve(p.name);
 					if (target) {
-						frag.appendChild(buildMentionButton(doc, p.text, target, opts.labels));
+						frag.appendChild(buildMentionNode(doc, p.text, target, opts.labels, opts.selfId));
 						continue;
 					}
 				} else if (p.kind === "skill" && p.name) {

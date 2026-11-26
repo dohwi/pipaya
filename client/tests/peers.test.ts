@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { buildMentionIndex, groupHandle, parentLabel, parsePeer, peerLabel, peerMentions } from "../src/lib/peers";
+import { buildMentionIndex, groupHandle, parentLabel, parsePeer, peerLabel, peerMentions, planMentionAction } from "../src/lib/peers";
 import type { Group, Session } from "../src/lib/types";
 
 const s = (id: string, name: string, extra: Partial<Session> = {}) => ({ id, name, title: `t-${id}`, purpose: "", cwd: "/home/u/proj/app", closed: false, ...extra }) as Session;
@@ -67,5 +67,66 @@ describe("parentLabel", () => {
 		expect(parentLabel({ parentId: "p" }, by({ p: { name: "", title: "Fork source" } }))?.text).toBe("Fork source");
 		expect(parentLabel({ parentId: null }, by({}))).toBeUndefined();
 		expect(parentLabel({ parentId: "gone" }, by({}))).toBeUndefined();
+	});
+});
+
+describe("planMentionAction", () => {
+	const base = {
+		graphOpen: false,
+		serverId: "srv1",
+		graphPeek: null,
+		chatPeek: null,
+		activeId: "s1",
+		baseVisibleIds: ["s1"],
+		hasSession: true,
+		hasGroup: true,
+	};
+
+	test("opens another session in the chat quick-look modal on normal click, and navigates directly on Ctrl/Cmd+click", () => {
+		expect(planMentionAction({ kind: "session", id: "s2" }, base)).toEqual({ type: "chatPeek", id: "s2" });
+		expect(planMentionAction({ kind: "session", id: "s2" }, { ...base, direct: true })).toEqual({
+			type: "openSession",
+			id: "s2",
+			leaveGraph: false,
+		});
+	});
+
+	test("switches modal target in place and closes peek when clicking a session already visible behind the modal", () => {
+		expect(planMentionAction({ kind: "session", id: "s3" }, { ...base, chatPeek: "s2" })).toEqual({ type: "chatPeek", id: "s3" });
+		expect(planMentionAction({ kind: "session", id: "s2" }, { ...base, chatPeek: "s2" })).toEqual({ type: "noop" });
+		expect(planMentionAction({ kind: "session", id: "s1" }, { ...base, chatPeek: "s2" })).toEqual({ type: "closeChatPeek" });
+		// Clicking a sibling pane in a split group focuses it instead of opening a duplicate modal
+		expect(planMentionAction({ kind: "session", id: "s2" }, { ...base, baseVisibleIds: ["s1", "s2"] })).toEqual({
+			type: "closeChatPeek",
+			focusId: "s2",
+		});
+		expect(planMentionAction({ kind: "session", id: "s2" }, { ...base, chatPeek: "s3", baseVisibleIds: ["s1", "s2"] })).toEqual({
+			type: "closeChatPeek",
+			focusId: "s2",
+		});
+		// Clicking the currently active pane itself without peek is a no-op
+		expect(planMentionAction({ kind: "session", id: "s1" }, base)).toEqual({ type: "noop" });
+	});
+
+	test("switches graph quick-look without closing graph, and leaves graph on direct click", () => {
+		expect(planMentionAction({ kind: "session", id: "s2" }, { ...base, graphOpen: true, graphPeek: { server: "srv1", session: "s1" } })).toEqual({
+			type: "graphPeek",
+			id: "s2",
+		});
+		expect(planMentionAction({ kind: "session", id: "s1" }, { ...base, graphOpen: true, graphPeek: { server: "srv1", session: "s1" } })).toEqual({
+			type: "noop",
+		});
+		expect(planMentionAction({ kind: "session", id: "s2" }, { ...base, graphOpen: true, direct: true })).toEqual({
+			type: "openSession",
+			id: "s2",
+			leaveGraph: true,
+		});
+		expect(planMentionAction({ kind: "session", id: "s2" }, { ...base, graphOpen: true, serverId: null })).toEqual({ type: "noop" });
+	});
+
+	test("opens groups directly and ignores missing sessions or groups", () => {
+		expect(planMentionAction({ kind: "group", id: "g1" }, base)).toEqual({ type: "openGroup", id: "g1" });
+		expect(planMentionAction({ kind: "group", id: "g1" }, { ...base, hasGroup: false })).toEqual({ type: "noop" });
+		expect(planMentionAction({ kind: "session", id: "s2" }, { ...base, hasSession: false })).toEqual({ type: "noop" });
 	});
 });

@@ -20,7 +20,7 @@
 	import IconButton from "../ui/IconButton.svelte";
 	import ModelLogo from "../models/ModelLogo.svelte";
 	import AgentBadge from "../shell/AgentBadge.svelte";
-	import GraphQuick from "./GraphQuick.svelte";
+	import SessionQuickModal from "../shell/SessionQuickModal.svelte";
 	import GraphDetail from "./GraphDetail.svelte";
 	import NavbarItems from "../extensions/NavbarItems.svelte";
 	import ExtensionMount from "../extensions/ExtensionMount.svelte";
@@ -1028,7 +1028,7 @@
 	/>
 {/if}
 {#if quick}
-	{#key `${quick.server}/${quick.session}`}<GraphQuick server={quick.server} session={quick.session} onclose={() => app.closePeek()} />{/key}
+	<SessionQuickModal server={quick.server} session={quick.session} mode="graph" onclose={() => app.closePeek()} />
 {/if}
 
 

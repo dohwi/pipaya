@@ -97,6 +97,9 @@ export async function findChat() {
 	};
 }
 
+/** Session targeted by slash commands: the chat peek modal when open, otherwise `activeId`. */
+const focusedId = (): string | null => app.focusedSessionId ?? app.activeId;
+
 /** Parent/child forks as an indented tree, across active and closed sessions. */
 async function tree() {
 	const all = await app.listAll();
@@ -110,14 +113,15 @@ async function tree() {
 		} else roots.push(s);
 	}
 	// Show only the family of the open chat when there is one, otherwise everything grouped by working directory.
+	const targetId = focusedId();
 	const familyRoot = (() => {
-		let cur = app.current;
+		let cur = app.session(targetId);
 		while (cur?.parentId && byId.has(cur.parentId)) cur = byId.get(cur.parentId);
 		return cur;
 	})();
 	const out: ReturnType<typeof sessionRows> = [];
 	const walk = (s: Session, depth: number) => {
-		out.push({ ...sessionRows([s], { current: app.activeId ?? undefined, showClosed: true })[0]!, depth } as never);
+		out.push({ ...sessionRows([s], { current: targetId ?? undefined, showClosed: true })[0]!, depth } as never);
 		for (const c of (kids.get(s.id) ?? []).sort((a, b) => a.createdAt - b.createdAt)) walk(c, depth + 1);
 	};
 	for (const r of familyRoot ? [familyRoot] : roots) walk(r, 0);
@@ -131,9 +135,10 @@ async function tree() {
 
 /** Fork from a chosen message of the open chat (default: everything so far). */
 async function fork(arg: string) {
-	const chat = app.chat;
-	const s = app.current;
-	if (!chat || !s) return void app.toast(t("분기할 대화가 없습니다. 먼저 대화를 시작하세요"), "error", app.activeId);
+	const id = focusedId();
+	const chat = app.chatOf(id);
+	const s = app.session(id);
+	if (!chat || !s) return void app.toast(t("분기할 대화가 없습니다. 먼저 대화를 시작하세요"), "error", id);
 	type Msg = UserItem | AssistantItem;
 	const done = (i: Msg) => i.kind === "user" || i.stopReason === "stop" || i.stopReason === "length";
 	// Only finished turns are valid branch points (a cut inside a tool call would leave it without a result).
@@ -172,7 +177,10 @@ const DEFINITIONS: SlashCommand[] = [
 		name: "close",
 		desc: msg("대화 닫기 · 기록 유지"),
 		needsChat: true,
-		run: () => void app.closeActive(),
+		run: () => {
+			const id = focusedId();
+			return void (id && id !== app.activeId ? app.close(id) : app.closeActive());
+		},
 	},
 	{
 		name: "new",
@@ -190,7 +198,7 @@ const DEFINITIONS: SlashCommand[] = [
 		desc: msg("모델 선택"),
 		argumentOptions: () => {
 			const usable = app.models.filter((m) => m.configured && m.available !== false && !m.imageGeneration);
-			const cur = app.effectiveModel;
+			const cur = app.effectiveModelOf(focusedId());
 			return usable.map((m) => ({
 				value: usable.some((o) => o !== m && o.id === m.id) ? `${m.provider}/${m.id}` : m.id,
 				desc: m.name,
@@ -199,17 +207,18 @@ const DEFINITIONS: SlashCommand[] = [
 		},
 		argumentEmpty: msg("사용할 수 있는 모델이 없습니다"),
 		run: async (a) => {
+			const id = focusedId();
 			const q = a.trim().toLowerCase();
 			if (!q) return void app.modelPickerTick++;
 			const usable = app.models.filter((m) => m.configured && m.available !== false && !m.imageGeneration);
 			const hit =
 				usable.find((m) => `${m.provider}/${m.id}`.toLowerCase() === q) ??
 				usable.filter((m) => m.id.toLowerCase() === q || m.name.toLowerCase() === q)[0];
-			if (!hit) return void app.toast(t("모델을 찾을 수 없습니다: {name}", { name: a.trim() }), "error", app.activeId);
+			if (!hit) return void app.toast(t("모델을 찾을 수 없습니다: {name}", { name: a.trim() }), "error", id);
 			// A model and its starting strength travel together (like the model picker): the target's own default, else "medium".
 			const lvl = hit.reasoning ? (hit.defaultThinkingLevel ?? "medium") : undefined;
-			if (await app.configure({ provider: hit.provider, model: hit.id, ...(lvl ? { thinkingLevel: lvl } : {}) }))
-				app.toast(t("모델을 {name}(으)로 바꿨습니다", { name: hit.name }), "ok", app.activeId);
+			if (await app.configure({ provider: hit.provider, model: hit.id, ...(lvl ? { thinkingLevel: lvl } : {}) }, id))
+				app.toast(t("모델을 {name}(으)로 바꿨습니다", { name: hit.name }), "ok", id);
 		},
 	},
 	{
@@ -238,8 +247,9 @@ const DEFINITIONS: SlashCommand[] = [
 		desc: msg("대화 이름 바꾸기"),
 		needsChat: true,
 		run: (a) => {
-			if (!a.trim()) return void app.toast(t("새 제목을 입력하세요. 예: /rename 로그인 버그"), "error", app.activeId);
-			if (app.activeId) void app.rename(app.activeId, a);
+			const id = focusedId();
+			if (!a.trim()) return void app.toast(t("새 제목을 입력하세요. 예: /rename 로그인 버그"), "error", id);
+			if (id) void app.rename(id, a);
 		},
 	},
 	{
@@ -248,9 +258,9 @@ const DEFINITIONS: SlashCommand[] = [
 		args: "[instructions]",
 		desc: msg("컨텍스트 압축 · 요약 호출 비용 발생"),
 		needsChat: true,
-		run: async (a) => { await app.compact(a); },
+		run: async (a) => { await app.compact(a, focusedId()); },
 	},
-	{ name: "retry", aliases: ["regenerate"], desc: msg("응답 재시도"), needsChat: true, run: () => void app.retry() },
+	{ name: "retry", aliases: ["regenerate"], desc: msg("응답 재시도"), needsChat: true, run: () => void app.retry(focusedId()) },
 	{
 		name: "goal",
 		args: "[objective|edit|pause|resume|clear]",
@@ -258,7 +268,7 @@ const DEFINITIONS: SlashCommand[] = [
 		needsChat: true,
 		argumentFree: true,
 		argumentOptions: () => {
-			const g = app.goals.of(app.serverId, app.activeId);
+			const g = app.goals.of(app.serverId, focusedId());
 			if (!g) return [];
 			return [
 				{ value: "edit", desc: t("목표와 토큰 예산 고치기") },
@@ -268,7 +278,7 @@ const DEFINITIONS: SlashCommand[] = [
 			];
 		},
 		run: async (a) => {
-			const id = app.activeId;
+			const id = focusedId();
 			const serverId = app.serverId;
 			const api = app.api;
 			if (!id || !serverId || !api) return;
@@ -299,20 +309,21 @@ const DEFINITIONS: SlashCommand[] = [
 			}
 		},
 	},
-	{ name: "stop", aliases: ["abort"], desc: msg("진행 중인 작업 중지"), needsChat: true, run: () => void app.abort() },
-	{ name: "cancel", desc: msg("대기열 / 끼워 넣기 취소"), needsChat: true, run: () => app.openQueue() },
+	{ name: "stop", aliases: ["abort"], desc: msg("진행 중인 작업 중지"), needsChat: true, run: () => void app.abort(focusedId()) },
+	{ name: "cancel", desc: msg("대기열 / 끼워 넣기 취소"), needsChat: true, run: () => app.openQueue(focusedId()) },
 	{
 		name: "copy",
 		desc: msg("마지막 답변 복사"),
 		needsChat: true,
 		run: async () => {
-			const last = app.chat?.lastAssistant;
+			const id = focusedId();
+			const last = app.chatOf(id)?.lastAssistant;
 			const text = last?.blocks
 				.filter((b): b is { type: "text"; text: string } => b.type === "text")
 				.map((b) => b.text)
 				.join("\n\n");
-			if (!text) return void app.toast(t("복사할 답변이 없습니다"), "error", app.activeId);
-			app.toast((await copyText(text)) ? t("마지막 답변을 복사했습니다") : t("복사하지 못했습니다"), "ok", app.activeId);
+			if (!text) return void app.toast(t("복사할 답변이 없습니다"), "error", id);
+			app.toast((await copyText(text)) ? t("마지막 답변을 복사했습니다") : t("복사하지 못했습니다"), "ok", id);
 		},
 	},
 	{
@@ -321,7 +332,7 @@ const DEFINITIONS: SlashCommand[] = [
 		desc: msg("대화 영구 삭제 · 복구 불가"),
 		needsChat: true,
 		run: () => {
-			const s = app.current;
+			const s = app.session(focusedId());
 			if (!s) return;
 			pickList(t("정말 삭제할까요? 복구할 수 없습니다"), [{ id: "no", title: t("취소") }, { id: "yes", title: t("삭제: {title}", { title: s.title }), sub: dirLabel(s.cwd) }], (id) => {
 				if (id === "yes") void app.remove(s.id).then((ok) => ok && app.toast(t("대화를 삭제했습니다")));
@@ -338,7 +349,7 @@ export const COMMANDS: SlashCommand[] = DEFAULT_ORDER.map((name) => DEFINITIONS.
 export function runCommand(name: string, arg = ""): void | Promise<void> {
 	const cmd = COMMANDS.find((c) => c.name === name);
 	if (!cmd) return;
-	if (cmd.needsChat && !app.activeId) return void app.toast(t("열려 있는 대화가 없습니다"), "error");
+	if (cmd.needsChat && !focusedId()) return void app.toast(t("열려 있는 대화가 없습니다"), "error");
 	return cmd.run(arg);
 }
 
@@ -353,7 +364,7 @@ export function serverCommands(taken: Set<string>): SlashCommand[] {
 			name: c.name,
 			args: c.args ?? "[args]",
 			desc: c.description || c.extension,
-			run: async (arg: string) => { await app.send(`${COMMAND_PREFIX}${c.name}${arg.trim() ? ` ${arg.trim()}` : ""}`); },
+			run: async (arg: string) => { await app.send(`${COMMAND_PREFIX}${c.name}${arg.trim() ? ` ${arg.trim()}` : ""}`, [], focusedId()); },
 		}));
 }
 
@@ -365,7 +376,7 @@ export function allCommands(): SlashCommand[] {
 /** Match English names and aliases only: exact, prefix, then substring. */
 export function matchCommands(query: string): SlashCommand[] {
 	const q = query.trim().toLowerCase();
-	const hasChat = !!app.activeId;
+	const hasChat = !!focusedId();
 	// A command is as good as its best-matching name, so an alias (`/reopen`) brings its command (`/resume`) to the top.
 	const scoreOf = (n: string): number => (n === q ? 0 : n.startsWith(q) ? 1 : n.includes(q) ? 2 : 9);
 	const score = (c: SlashCommand): number => (q ? Math.min(scoreOf(c.name), ...(c.aliases ?? []).map(scoreOf)) : 3);

@@ -50,7 +50,7 @@
 	// Assistant replies highlight known @session / @group mentions, /skill:name, /prompt:name, #path, and repo-relative
 	// file paths in inline `<code>` into clickable chips, matching TokenText. `mentionSig` narrows reactivity to targets
 	// that actually appear in this message so unrelated session changes never re-patch the DOM or reset loaded media.
-	const mentionSig = $derived(mentions ? mentionSignature(html, app.mentionIndex) : "");
+	const mentionSig = $derived(mentions ? mentionSignature(html, app.mentionIndex, sessionId) : "");
 	const patchInput = $derived.by((): PatchInput => {
 		const raw = html;
 		if (!mentions) return raw;
@@ -61,16 +61,18 @@
 		if (!sig && !hasSkill && !hasPrompt && !hasFiles) return raw;
 		void getLang(); // re-apply tooltips when the UI language switches
 		const index = untrack(() => app.mentionIndex);
+		const selfId = sessionId;
 		const labels = {
-			openSession: (name: string) => t("{name} 대화 열기", { name }),
+			openSession: (name: string) => t("{name} 대화 미리 보기", { name }),
 			openGroup: (name: string) => t("{name} 그룹 열기", { name }),
+			selfSession: t("현재 대화"),
 			openSkill: (name: string) => t("스킬 {name} 보기", { name }),
 			openPrompt: (name: string) => t("프롬프트 {name} 보기", { name }),
 			openFile: (name: string) => t("{name} 미리 보기", { name }),
 		};
 		return {
 			html: raw,
-			decorate: (frag) => decorateMarkdownTokens(frag, { index, skills: hasSkill, prompts: hasPrompt, files: hasFiles, labels }),
+			decorate: (frag) => decorateMarkdownTokens(frag, { index, selfId, skills: hasSkill, prompts: hasPrompt, files: hasFiles, labels }),
 		};
 	});
 
@@ -204,10 +206,13 @@
 		if (mentions) {
 			const mention = el.closest<HTMLButtonElement>("button[data-mention-id]");
 			if (mention) {
-				app.openMention({
-					kind: mention.dataset.mentionKind === "group" ? "group" : "session",
-					id: mention.dataset.mentionId!,
-				});
+				app.openMention(
+					{
+						kind: mention.dataset.mentionKind === "group" ? "group" : "session",
+						id: mention.dataset.mentionId!,
+					},
+					{ direct: e.ctrlKey || e.metaKey },
+				);
 				return;
 			}
 			const skill = el.closest<HTMLButtonElement>("button[data-skill]");
@@ -529,8 +534,8 @@
 			background: color-mix(in srgb, var(--mark-file) 22%, transparent);
 		}
 	}
-	/* Matches TokenText's `.tok.mention` and `.tok.skill` chips: amber @session / @group and accent /skill: & /prompt: marks. */
-	.md :global(button.wd-mention),
+	/* Matches TokenText's `.tok.mention` and `.tok.skill` chips: amber @session / @group, sky self @session, and accent /skill: & /prompt: marks. */
+	.md :global(.wd-mention),
 	.md :global(button.wd-skill),
 	.md :global(button.wd-prompt) {
 		--hue: var(--mark-mention);
@@ -550,11 +555,19 @@
 		vertical-align: middle; /* box-centred so icon-bearing chips and text-only @mentions share one y-axis */
 		position: relative;
 		top: -1px; /* measured: lifts middle (x-height/2) onto the 24px line and Hangul ink centre */
-		cursor: pointer;
 		transition: none; /* instant hover tint avoids GPU background-color layer promotion snapping inline chips by 1px */
 	}
-	.md :global(button.wd-mention) {
+	.md :global(button.wd-mention),
+	.md :global(button.wd-skill),
+	.md :global(button.wd-prompt) {
+		cursor: pointer;
+	}
+	.md :global(.wd-mention) {
 		color: var(--hue);
+	}
+	.md :global(.wd-mention.wd-self) {
+		--hue: var(--mark-mention-self);
+		cursor: default;
 	}
 	.md :global(button.wd-skill),
 	.md :global(button.wd-prompt) {
@@ -577,7 +590,7 @@
 		-webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 8l5 4-5 4M12 17h7'/%3E%3C/svg%3E") center / contain no-repeat;
 		mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 8l5 4-5 4M12 17h7'/%3E%3C/svg%3E") center / contain no-repeat;
 	}
-	.md :global(button.wd-mention .wd-lbl),
+	.md :global(.wd-mention .wd-lbl),
 	.md :global(button.wd-skill .wd-lbl),
 	.md :global(button.wd-prompt .wd-lbl) {
 		min-width: 0;

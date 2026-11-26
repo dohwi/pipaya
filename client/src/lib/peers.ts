@@ -9,6 +9,54 @@ export const groupHandle = (name: string): string => name.trim().replace(/\s+/g,
 
 export type MentionTarget = { kind: "session"; id: string } | { kind: "group"; id: string };
 
+export type MentionAction =
+	| { type: "noop" }
+	| { type: "openGroup"; id: string }
+	| { type: "openSession"; id: string; leaveGraph: boolean }
+	| { type: "graphPeek"; id: string }
+	| { type: "closeChatPeek"; focusId?: string }
+	| { type: "chatPeek"; id: string };
+
+/**
+ * Decide what clicking a `@mention` chip should do given the current view state:
+ *  - group mentions open their group tab
+ *  - `direct` (`Ctrl`/`⌘`+click) navigates straight to the session (leaving graph/peek)
+ *  - in graph view, normal clicks switch the graph quick-look modal without closing the graph
+ *  - in chat/group view, clicking a session already visible behind the modal closes peek and focuses it (never mounting
+ *    a duplicate live Pane); clicking any other session opens/switches the chat quick-look modal.
+ */
+export function planMentionAction(
+	target: MentionTarget,
+	state: {
+		direct?: boolean;
+		graphOpen: boolean;
+		serverId: string | null;
+		graphPeek: { server: string; session: string } | null;
+		chatPeek: string | null;
+		activeId: string | null;
+		baseVisibleIds: readonly string[];
+		hasSession: boolean;
+		hasGroup: boolean;
+	},
+): MentionAction {
+	if (target.kind === "group") {
+		return state.hasGroup ? { type: "openGroup", id: target.id } : { type: "noop" };
+	}
+	if (!state.hasSession) return { type: "noop" };
+	if (state.direct) return { type: "openSession", id: target.id, leaveGraph: state.graphOpen };
+	if (state.graphOpen) {
+		if (!state.serverId) return { type: "noop" };
+		if (state.graphPeek?.server === state.serverId && state.graphPeek.session === target.id) return { type: "noop" };
+		return { type: "graphPeek", id: target.id };
+	}
+	if (state.chatPeek === target.id) return { type: "noop" };
+	if (state.baseVisibleIds.includes(target.id)) {
+		if (!state.chatPeek && target.id === state.activeId) return { type: "noop" };
+		return { type: "closeChatPeek", ...(target.id !== state.activeId ? { focusId: target.id } : {}) };
+	}
+	return { type: "chatPeek", id: target.id };
+}
+
 export interface MentionIndex {
 	/** All known lowercase handle forms (stored session name, localized romanized form, and group handles). */
 	names: string[];

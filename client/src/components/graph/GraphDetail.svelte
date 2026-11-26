@@ -27,7 +27,7 @@
 	 * The graph view's look at a server, provider, model or subagent card: what it is (address and version, sign-in,
 	 * the model's limits, a role's definition and how its calls went) and what hangs under it. A row opens what it names:
 	 * a chat its quick look, a provider, model or role this dialog for that card. It reads the live graph, so its counts
-	 * move with the view; a card that leaves the graph closes it. (A chat card opens the chat itself: `GraphQuick`.)
+	 * move with the view; a card that leaves the graph closes it. (A chat card opens the chat itself: `SessionQuickModal`.)
 	 */
 	let { graph, id, onpick, onpeek, onclose }: {
 		graph: Graph;
