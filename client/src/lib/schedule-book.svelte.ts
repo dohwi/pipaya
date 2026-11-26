@@ -18,6 +18,8 @@ export class ScheduleBook {
 
 	/** Servers read at least once. Plain (not a rune): `follow` runs in an effect and must not depend on it. */
 	private readonly read = new Set<string>();
+	/** Servers whose cached list is waiting for a debounced refetch after `schedules_updated`. */
+	private readonly stale = new Set<string>();
 
 	private readonly summaries = $derived.by(() => Object.fromEntries(Object.entries(this.lists).map(([id, list]) => [id, summarizeSchedules(list)] as const)));
 
@@ -44,6 +46,17 @@ export class ScheduleBook {
 	supported(serverId: string | null): boolean {
 		return !serverId || !this.unsupported[serverId];
 	}
+	/** Record that a server lacks `/schedules` (e.g. learned from an on-demand close check on a non-active server). */
+	markUnsupported(serverId: string): void {
+		this.read.add(serverId);
+		this.stale.delete(serverId);
+		this.lists[serverId] = [];
+		this.unsupported[serverId] = true;
+	}
+	/** True once the server's list has been read and is not waiting for a pending refetch. */
+	isFresh(serverId: string | null): boolean {
+		return !!serverId && this.read.has(serverId) && !this.stale.has(serverId);
+	}
 
 	/**
 	 * Read the server's list. The first read is at once; later ones wait for the events to pause, and a newer call
@@ -51,19 +64,21 @@ export class ScheduleBook {
 	 */
 	follow(serverId: string | null, api: Api | null): (() => void) | void {
 		if (!serverId || !api) return;
+		const delay = this.read.has(serverId) ? PAUSE_MS : 0;
+		if (delay > 0) this.stale.add(serverId);
 		return abortable((signal) => api.schedules(undefined, signal), {
 			ok: (r) => {
 				this.read.add(serverId);
+				this.stale.delete(serverId);
 				this.lists[serverId] = r.schedules;
 				delete this.unsupported[serverId];
 			},
 			fail: (e) => {
+				this.stale.delete(serverId);
 				if (!isUnsupportedRoute(e)) return;
-				this.read.add(serverId);
-				this.lists[serverId] = [];
-				this.unsupported[serverId] = true;
+				this.markUnsupported(serverId);
 			},
-			delay: this.read.has(serverId) ? PAUSE_MS : 0,
+			delay,
 		});
 	}
 }
