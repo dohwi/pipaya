@@ -56,12 +56,14 @@
 	   by half that (measured at 8x on Hangul, Latin and digits: ink centre within 0.2px of the box centre). */
 	.md {
 		height: 22px;
+		line-height: 16px; /* whole-pixel line box, not 1.55 (17.05px) */
 		padding: 0 8px 1px;
 		font-size: var(--fs-2xs);
 		letter-spacing: 0.01em;
 	}
 	.sm {
 		height: 18px;
+		line-height: 16px; /* whole-pixel line box, not 1.55 (17.05px) */
 		/* 6px horizontal inset keeps the 18px badge tighter than md without crowding the text */
 		padding: 0 6px 1px;
 		font-size: var(--fs-2xs);

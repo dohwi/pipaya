@@ -109,6 +109,7 @@
 <style>
 	.trigger {
 		display: flex;
+		line-height: 20px; /* whole-pixel line box, not the body's 1.55 (20.15px) */
 		align-items: center;
 		min-width: 0;
 		max-width: 100%;
@@ -163,6 +164,7 @@
 		color: var(--text-dim);
 		font-size: var(--fs-2xs);
 		font-weight: 600;
+		line-height: 16px; /* whole-pixel line box, not 1.55 (17.05px) */
 		white-space: nowrap;
 	}
 	.tag.think {
@@ -223,8 +225,8 @@
 		rotate: 180deg;
 	}
 	.chev :global(svg) {
-		width: 15px;
-		height: 15px;
+		width: 14px;
+		height: 14px;
 		stroke-width: 2;
 	}
 	.field .chev {

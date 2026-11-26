@@ -1087,7 +1087,11 @@ button:is(.wide, [aria-expanded], [role="option"], [role="tab"]):active:not(:dis
 .seg > button {
 	position: relative;
 	z-index: 1;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
 	height: 34px;
+	line-height: 20px; /* whole-pixel line box, not the body's 1.55 (20.15px) */
 	padding: 0 12px;
 	border-radius: calc(var(--radius) - 3px);
 	color: var(--text-dim);

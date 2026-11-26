@@ -82,14 +82,32 @@ def seed_chat():
         "INSERT OR REPLACE INTO messages (session_id, seq, role, data, created_at) VALUES (?, ?, ?, ?, ?)",
         [
             (sid, 1, "user", json.dumps({"role": "user", "content": "정렬 확인해줘", "timestamp": now - 180_000}), now - 180_000),
+            # a delegate call with a 62s result: the WorkBox row `[bot] 위임 1회 1분 2초 >` (trailing icon, Korean duration) is audited too
             (sid, 2, "assistant", json.dumps({
+                "role": "assistant",
+                "content": [{"type": "toolCall", "id": "pairs-delegate-1", "name": "delegate", "arguments": {"role": "explore", "task": "정렬 확인"}}],
+                "provider": "pairs-stub",
+                "model": "gemini-4-neon",
+                "stopReason": "toolUse",
+                "timestamp": now - 150_000,
+            }), now - 150_000),
+            (sid, 3, "toolResult", json.dumps({
+                "role": "toolResult",
+                "toolCallId": "pairs-delegate-1",
+                "toolName": "delegate",
+                "content": [{"type": "text", "text": "확인 완료"}],
+                "isError": False,
+                "durationMs": 62_000,
+                "timestamp": now - 88_000,
+            }), now - 88_000),
+            (sid, 4, "assistant", json.dumps({
                 "role": "assistant",
                 "content": [{"type": "text", "text": "골라 주시면, `@동훈` 완료 후 바로 이어서 진행하겠습니다."}],
                 "provider": "pairs-stub",
                 "model": "gemini-4-neon",
                 "stopReason": "stop",
-                "timestamp": now - 120_000,
-            }), now - 120_000),
+                "timestamp": now - 60_000,
+            }), now - 60_000),
         ],
     )
     db.commit()
