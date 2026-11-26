@@ -17,7 +17,8 @@ export const isAdminOnlyRoute = (method: string, path: string): boolean =>
 	path.startsWith("/devices/tokens/") ||
 	((path === "/server-extensions/reload" || path === "/server-extensions/install") && method === "POST") ||
 	(path.startsWith("/server-extensions/") && method === "DELETE") ||
-	(path === "/mcp" && method === "PUT") ||
+	(path === "/mcp" && (method === "PUT" || method === "POST")) ||
+	(path === "/mcp/:name" && (method === "PATCH" || method === "DELETE")) ||
 	(path === "/mcp/reload" && method === "POST") ||
 	path === "/server/update";
 

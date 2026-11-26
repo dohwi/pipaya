@@ -70,6 +70,7 @@ describe("tabs and tool labels", () => {
 	test("known tools are described; others show their name", () => {
 		expect(toolLabel("bash")).toBe("셸 명령 실행 (bash)");
 		expect(toolLabel("glob")).toBe("파일 경로 검색 (glob)");
+		expect(toolLabel("mcp")).toBe("MCP 서버 조회·추가·변경·삭제 (mcp)");
 		expect(toolLabel("my-ext-tool")).toBe("my-ext-tool");
 	});
 	test("the sections stay compact (3 common + 7 server) in grouped mental-model order", () => {

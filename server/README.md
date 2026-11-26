@@ -110,6 +110,11 @@ Register endpoints and models through `/configuration/providers/:id` (or the cli
 | PUT/DELETE | `/notifications/rules/:owner/:id` | Per-extension rule that replaces the default notice for `run_finished` / `question_requested` (max 5 per owner); `DELETE /notifications/rules/:owner` removes all |
 | GET | `/questions?sessionId=` | Questions the agent is waiting on (`ctx.ask`) |
 | POST | `/sessions/:id/questions/:toolCallId` | `{answer}` (or `{answers}` for several questions) |
+| GET | `/mcp` | Configured MCP servers, connection status, and exposed tools (`env`/`headers` values masked) |
+| POST | `/mcp` | Add one MCP server (`{name,enabled,transport,...}`, admin-only; `201` or `409` on duplicate) |
+| PATCH/DELETE | `/mcp/:name` | Update one MCP server in place (`env`/`headers` merge keys, `null` removes a key) or delete it (admin-only; `404` if missing) |
+| PUT | `/mcp` | Replace the entire `{servers:[...]}` MCP list (admin-only; masked values keep stored secrets) |
+| POST | `/mcp/reload` | `{name?}` reconnect one MCP server or all (admin-only) |
 | GET | `/events/history?sessionId=&after=&limit=` | Persisted events and latest cursor |
 | GET | `/events/types` | Machine-readable event payload schemas |
 

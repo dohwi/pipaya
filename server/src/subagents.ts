@@ -69,10 +69,10 @@ export async function runDelegateWithinDeadline(
 		parentSignal?.removeEventListener("abort", cancel);
 	}
 }
-/** Tools a subagent never gets, whatever its definition lists: it must not delegate again (depth 1), ask the user, reach other sessions, schedule prompts, mutate session goals/workdir, or generate images. */
+/** Tools a subagent never gets, whatever its definition lists: it must not delegate again (depth 1), ask the user, reach other sessions, schedule prompts, mutate session goals/workdir, reconfigure MCP servers, or generate images. */
 const FORBIDDEN = (n: string) =>
 	n === "delegate" || n === "ask_user" || n === "peer" || n.startsWith("peer_") || n === "schedule"
-	|| n === "goal" || n === "workdir" || n === "generate_image";
+	|| n === "goal" || n === "mcp" || n === "workdir" || n === "generate_image";
 export const DEFAULT_SUBAGENT_TOOLS = ["read", "grep", "glob", "ls"];
 
 export interface SubagentDef {

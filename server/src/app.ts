@@ -204,11 +204,16 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 		log: (m) => server.log.warn(m),
 	});
 	teardown.onClose(() => extensions.shutdown());
-	const mcp = new McpManager(db, () => bus.publish(null, "mcp_updated", {}));
+	let onMcpChanged = () => {};
+	const mcp = new McpManager(db, () => {
+		bus.publish(null, "mcp_updated", {});
+		onMcpChanged();
+	});
 	teardown.onClose(() => mcp.close());
 	// Seed once from an older copy's saved settings when the built-in setting is not yet in SQLite.
 	const guard = new GuardSettings(db, join(cfg.dataDir, "extensions", "guard", "settings.json"));
 	const sessions = new SessionManager(cfg, store, bus, registry, () => configuration.defaultWorkdir(), skills, questions, compactionSettings, extensions, () => configuration.disabledTools(), systemModel, imageModel, mcp, opts.home, () => configuration.delegatePolicy(), () => configuration.disabledSubagents(), opts.delegateTimeoutMs, guard, opts.shutdownStopMs, fallbackModel);
+	onMcpChanged = () => sessions.notifyMcpToolsChanged();
 	teardown.onClose(async () => {
 		sessions.shutdown();
 		await sessions.idle();

@@ -118,6 +118,8 @@ export interface Live {
 	limitReason?: string;
 	/** The folder the agent's tools were built for (`activeDir ?? cwd` then); they are rebuilt when it moves. */
 	toolsDir: string;
+	/** Set when the session's tool set changed mid-run (e.g. MCP servers added/reloaded) so the next turn rebuilds tools. */
+	toolsDirty?: boolean;
 	/** Hints already given this run about working in another worktree without moving there (see work-tree.ts `stayHint`). */
 	hinted?: Set<string>;
 	/** Set by `before_agent_start` extensions; applies to the current run only. */
