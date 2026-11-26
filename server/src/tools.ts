@@ -163,11 +163,6 @@ export function safePath(cwd: string, p: string): string {
 	return isAbsolute(p) ? resolve(p) : resolve(cwd, p);
 }
 
-/** Like safePath; kept as a distinct helper for read-root callers. */
-export function safeReadPath(cwd: string, p: string, _roots: string[] = []): string {
-	return safePath(cwd, p);
-}
-
 /** Per-path async mutex: serializes concurrent writes/edits to the same file while keeping different files parallel. */
 const pathLocks = new Map<string, Promise<void>>();
 
@@ -649,7 +644,7 @@ function detectBinarySample(sample: Buffer, totalSize: number): "nul" | "utf16" 
 const readTool: ToolDef = {
 	name: "read",
 	description: READ_DESCRIPTION,
-	create(cwd, readRoots = [], ctx = {}) {
+	create(cwd, _roots = [], ctx = {}) {
 		const tracker = ctx.readTracker ?? new Map<string, ReadTrackEntry>();
 		const curCwd = () => ctx.getCwd?.() ?? cwd;
 		return defineTool({
@@ -662,7 +657,7 @@ const readTool: ToolDef = {
 				limit: Type.Optional(Type.Integer({ minimum: 1, description: "Maximum number of lines" })),
 			}),
 			async execute(_id, params, signal) {
-				const file = safeReadPath(curCwd(), params.path, readRoots);
+				const file = safePath(curCwd(), params.path);
 				const image = await readPicture(file, params.path, ctx, signal);
 				if (image) return image;
 

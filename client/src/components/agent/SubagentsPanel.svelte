@@ -73,7 +73,7 @@
 	// a half-written role survives leaving the section or Settings
 	keepDraft(() => `subagent:${serverId}`, () => form, (f) => (form = f));
 
-	const DEFAULT_TOOLS = ["read", "grep", "ls"];
+	const DEFAULT_TOOLS = ["read", "grep", "glob", "ls"];
 	function add() {
 		error = "";
 		form = { original: null, name: "", scope: "global", description: "", model: "", thinking: null, tools: DEFAULT_TOOLS, maxTurns: 12, prompt: "" };

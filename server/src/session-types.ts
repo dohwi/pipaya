@@ -85,8 +85,6 @@ export interface Live {
 	unsubscribe: () => void;
 	/** Fingerprint of the skills and AGENTS.md files currently written into the system prompt. */
 	promptKey: string;
-	/** Directories the read tool may open besides the cwd; mutated in place when skills change. */
-	readRoots: string[];
 	/** Per-session read staleness tracker shared across turns and tool calls. */
 	readTracker: Map<string, ReadTrackEntry>;
 	/** Cache-safe rare batched pruning state for old oversized tool results; reset on compaction. */

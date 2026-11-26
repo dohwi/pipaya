@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { buildChildEnv, safePath, safeReadPath } from "../src/tools.ts";
+import { buildChildEnv, safePath } from "../src/tools.ts";
 
 let root: string;
 let cwd: string;
@@ -39,16 +39,14 @@ describe("safePath", () => {
 		expect(safePath(cwd, "link-dir/secret.txt")).toBe(join(cwd, "link-dir/secret.txt"));
 		expect(safePath(cwd, "link-dir/not-yet/created.txt")).toBe(join(cwd, "link-dir/not-yet/created.txt"));
 	});
-});
 
-describe("safeReadPath with skill roots", () => {
-	test("a symlink inside a skill folder is no longer blocked (restriction disabled)", () => {
+	test("allows skill folders and symlinks inside them (restriction disabled)", () => {
 		const skill = join(cwd, "..", "skill");
 		mkdirSync(skill, { recursive: true });
 		writeFileSync(join(skill, "SKILL.md"), "ok");
 		symlinkSync(outside, join(skill, "escape"));
-		expect(safeReadPath(cwd, join(skill, "SKILL.md"), [skill])).toBe(join(skill, "SKILL.md"));
-		expect(safeReadPath(cwd, join(skill, "escape", "secret.txt"), [skill])).toBe(join(skill, "escape", "secret.txt"));
+		expect(safePath(cwd, join(skill, "SKILL.md"))).toBe(join(skill, "SKILL.md"));
+		expect(safePath(cwd, join(skill, "escape", "secret.txt"))).toBe(join(skill, "escape", "secret.txt"));
 	});
 });
 

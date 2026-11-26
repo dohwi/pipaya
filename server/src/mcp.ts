@@ -99,16 +99,28 @@ export class McpManager {
 	}
 
 	info(): Static<typeof McpInfo> {
+		const usedNames = new Set<string>();
 		const servers = this.config().map((c) => {
 			const conn = this.conns.get(c.name);
 			const status: Status = !c.enabled ? "off" : (conn?.status ?? "connecting");
+			const tools = status === "ready"
+				? (conn?.tools ?? []).map(({ name, tool, description }) => {
+					let unique = name;
+					for (let i = 2; usedNames.has(unique); i++) {
+						const suffix = `_${i}`;
+						unique = `${name.slice(0, 64 - suffix.length)}${suffix}`;
+					}
+					usedNames.add(unique);
+					return { name: unique, tool, description };
+				})
+				: [];
 			return {
 				...c,
 				env: mask(c.env),
 				headers: mask(c.headers),
 				status,
 				...(conn?.error && status === "error" ? { error: conn.error } : {}),
-				tools: status === "ready" ? (conn?.tools ?? []).map(({ name, tool, description }) => ({ name, tool, description })) : [],
+				tools,
 			};
 		});
 		const totalTools = servers.reduce((n, s) => n + s.tools.length, 0);
@@ -252,18 +264,25 @@ export class McpManager {
 			if (!seen.has(name)) orderedNames.push(name);
 		}
 		let total = 0;
+		const usedNames = new Set<string>();
 		for (const server of orderedNames) {
 			const conn = this.conns.get(server);
 			if (!conn || conn.status !== "ready") continue;
 			for (const t of conn.tools) {
 				if (total >= MAX_TOTAL_MCP_TOOLS) return defs;
 				total++;
+				let exposedName = t.name;
+				for (let i = 2; usedNames.has(exposedName); i++) {
+					const suffix = `_${i}`;
+					exposedName = `${t.name.slice(0, 64 - suffix.length)}${suffix}`;
+				}
+				usedNames.add(exposedName);
 				const description = `[MCP: ${server}] ${t.description || t.tool}`.slice(0, 2000);
-				defs[t.name] = {
-					name: t.name,
+				defs[exposedName] = {
+					name: exposedName,
 					description,
 					create: () => ({
-						name: t.name,
+						name: exposedName,
 						label: `${server}: ${t.tool}`,
 						description,
 						parameters: t.schema as any,

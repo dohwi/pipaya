@@ -76,6 +76,12 @@ describe("toolSummary for schedule", () => {
 		expect(scheduleIdOf({ action: "delete", id: "a1b2c3d4" }, { action: "delete", id: "a1b2c3d4" })).toBeNull();
 		expect(scheduleIdOf({ action: "list" }, { action: "list", count: 2 })).toBeNull();
 	});
+
+	test("workdir shows action and optional path cleanly", () => {
+		expect(toolSummary("workdir", { action: "show" })).toBe("show");
+		expect(toolSummary("workdir", { action: "move", path: "../app-feat" })).toBe("move · ../app-feat");
+		expect(toolSummary("workdir", { action: "back" })).toBe("back");
+	});
 });
 
 describe("splitCd", () => {

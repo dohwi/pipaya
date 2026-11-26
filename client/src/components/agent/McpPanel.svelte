@@ -87,7 +87,7 @@
 	}
 
 	/* ---------- form ---------- */
-	type Form = { original: string | null; name: string; transport: "stdio" | "http"; command: string; args: string; env: string; url: string; headers: string };
+	type Form = { original: string | null; name: string; transport: "stdio" | "http"; command: string; args: string; env: string; inheritEnv: boolean; url: string; headers: string; denyTools: string };
 	let form = $state<Form | null>(null);
 	// a half-filled add or edit form survives leaving the section or Settings (per server: the panel's own api)
 	keepDraft(() => `mcp:${api.baseUrl}`, () => form, (f) => (form = f));
@@ -104,10 +104,21 @@
 	const show = (r: Record<string, string> | undefined, sep: string) => Object.entries(r ?? {}).map(([k, v]) => `${k}${sep}${v}`).join("\n");
 
 	function add() {
-		form = { original: null, name: "", transport: "stdio", command: "", args: "", env: "", url: "", headers: "" };
+		form = { original: null, name: "", transport: "stdio", command: "", args: "", env: "", inheritEnv: false, url: "", headers: "", denyTools: "" };
 	}
 	function edit(s: McpServerInfo) {
-		form = { original: s.name, name: s.name, transport: s.transport, command: s.command ?? "", args: (s.args ?? []).join("\n"), env: show(s.env, "="), url: s.url ?? "", headers: show(s.headers, ": ") };
+		form = {
+			original: s.name,
+			name: s.name,
+			transport: s.transport,
+			command: s.command ?? "",
+			args: (s.args ?? []).join("\n"),
+			env: show(s.env, "="),
+			inheritEnv: !!s.inheritEnv,
+			url: s.url ?? "",
+			headers: show(s.headers, ": "),
+			denyTools: (s.denyTools ?? []).join("\n"),
+		};
 		onselect?.(s.name);
 	}
 	function closeForm() {
@@ -128,15 +139,16 @@
 		const f = form;
 		if (!f) return;
 		const old = all().find(x => x.name === f.original);
+		const denyTools = lines(f.denyTools ?? "");
 		const next: McpServer = {
 			name: f.name.trim(),
 			enabled: old?.enabled ?? true,
 			transport: f.transport,
 			...(f.transport === "stdio"
-				? { command: f.command.trim(), args: lines(f.args), env: pairs(f.env, "="), ...(old?.inheritEnv !== undefined ? { inheritEnv: old.inheritEnv } : {}) }
+				? { command: f.command.trim(), args: lines(f.args), env: pairs(f.env, "="), ...(f.inheritEnv ? { inheritEnv: true } : {}) }
 				: { url: f.url.trim(), headers: pairs(f.headers, ":") }),
 			...(old?.allowTools !== undefined ? { allowTools: old.allowTools } : {}),
-			...(old?.denyTools !== undefined ? { denyTools: old.denyTools } : {}),
+			...(denyTools.length ? { denyTools } : {}),
 		};
 		const rest = all().filter(x => x.name !== f.original);
 		const list = f.original ? all().map(x => (x.name === f.original ? next : x)) : [...rest, next];
@@ -192,6 +204,9 @@
 				<FormField label={t("환경 변수 (KEY=값, 한 줄에 하나)")}>
 					<textarea class="field mono area" onfocus={(e) => e.currentTarget.scrollIntoView({ block: "nearest", inline: "nearest" })} bind:value={form.env} rows="2" placeholder="API_TOKEN=..." spellcheck="false"></textarea>
 				</FormField>
+				<FormField label={t("서버 환경 변수 물려받기")} group hint={t("끄면 안전한 기본 값과 위에서 적은 값만 넘깁니다. 켜도 PIPAYA_*는 넘기지 않습니다.")}>
+					<Switch checked={!!form.inheritEnv} disabled={busy} onchange={(on) => { if (form) form.inheritEnv = on; }} label={t("서버 환경 변수 물려받기")} />
+				</FormField>
 			{:else}
 				<FormField label="URL">
 					<input class="field mono" bind:value={form.url} placeholder="https://example.com/mcp" autocomplete="off" autocapitalize="off" spellcheck="false" required />
@@ -200,6 +215,9 @@
 					<textarea class="field mono area" onfocus={(e) => e.currentTarget.scrollIntoView({ block: "nearest", inline: "nearest" })} bind:value={form.headers} rows="2" placeholder="Authorization: Bearer ..." spellcheck="false"></textarea>
 				</FormField>
 			{/if}
+			<FormField label={t("제외할 도구 (한 줄에 하나)")} hint={t("비워 두면 이 서버의 모든 도구를 에이전트에 보여 줍니다.")}>
+				<textarea class="field mono area" onfocus={(e) => e.currentTarget.scrollIntoView({ block: "nearest", inline: "nearest" })} bind:value={form.denyTools} rows="2" placeholder="delete_file" spellcheck="false"></textarea>
+			</FormField>
 			<p class="hint">{t("저장된 비밀 값은 ••••••••로 가려 보입니다. 그대로 두면 기존 값이 유지됩니다.")}</p>
 			<div class="actions form-actions">
 				<Button onclick={closeForm} disabled={busy}>{t("취소")}</Button>
@@ -216,6 +234,9 @@
 					<span>{t("MCP 서버 목록")}</span>
 				</button>
 			</div>
+		{/if}
+		{#if data.truncatedTools}
+			<Notice tone="warn">{t("도구 상한(128개)을 넘어 {n}개 도구가 빠졌습니다. 서버에서 제외할 도구를 지정하거나 안 쓰는 서버를 끄세요.", { n: data.truncatedTools })}</Notice>
 		{/if}
 		<ListGroup title={t("MCP 서버")} count={t("{on}/{total}개 연결", { on: data.ready, total: data.servers.length })}>
 		<ul class="list">

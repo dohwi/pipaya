@@ -1489,7 +1489,7 @@ export class SessionManager {
 				const snap = this.store.context(record.id);
 				if (snap) {
 					existing.toolsDir = workDirOf(record);
-					existing.agent.state.tools = this.sessionTools(record.id, snap.tools, existing.toolsDir, existing.readRoots, existing.readTracker);
+					existing.agent.state.tools = this.sessionTools(record.id, snap.tools, existing.toolsDir, existing.readTracker);
 				}
 			}
 			return existing;
@@ -1504,14 +1504,13 @@ export class SessionManager {
 		});
 		const skills = this.currentSkills(record.id, snapshot);
 		const { instructions } = this.currentInstructions(snapshot);
-		const readRoots = skills.map((k) => k.baseDir);
 		const readTracker = new Map<string, ReadTrackEntry>();
 		const agent = new Agent({
 			initialState: {
 				systemPrompt: buildSystemPrompt(snapshot.systemPrompt, instructions, skills, buildEnvContext(snapshot.cwd)),
 				model,
 				thinkingLevel: record.thinkingLevel,
-				tools: this.sessionTools(record.id, snapshot.tools, workDirOf(record), readRoots, readTracker),
+				tools: this.sessionTools(record.id, snapshot.tools, workDirOf(record), readTracker),
 				messages: history,
 			},
 			// A gateway that drops for a moment (502 …) is waited out instead of ending the run
@@ -1543,7 +1542,6 @@ export class SessionManager {
 			lastActive: Date.now(),
 			unsubscribe: () => {},
 			promptKey: promptKey(skills, instructions),
-			readRoots,
 			readTracker,
 			pruneState: createContextPruneState(),
 			cacheStats: { turns: 0, cacheRead: 0, cacheWrite: 0, input: 0, hitRate: 0 },
@@ -1559,9 +1557,9 @@ export class SessionManager {
 	}
 
 	/**
-	 * Applies skill on/off and AGENTS.md changes to an idle session before its next run: rewrites the system prompt
-	 * (both `agent.state.systemPrompt` and any leading system message) and the read allow-list. Nothing happens (and
-	 * the provider's prompt cache is untouched) unless the enabled skills or the instruction files actually changed.
+	 * Applies skill on/off and AGENTS.md changes to an idle session before its next run: rewrites the leading system
+	 * message (which backs `agent.state.systemPrompt`). Nothing happens (and the provider's prompt cache is untouched)
+	 * unless the enabled skills or the instruction files actually changed.
 	 */
 	private syncSkills(id: string, live: Live): void {
 		const snapshot = this.store.context(id);
@@ -1578,13 +1576,12 @@ export class SessionManager {
 			const sys = createInitialSystemMessage(prompt, live.agent.state.tools.map(toToolDeclaration));
 			if (sys) live.agent.state.messages = [sys, ...live.agent.state.messages];
 		}
-		live.readRoots.splice(0, live.readRoots.length, ...skills.map((k) => k.baseDir));
 		live.promptKey = key;
 	}
 
 	/** The tools a session's agent gets; tools the user switched off in the settings are left out. */
-	private sessionTools(id: string, names: string[], cwd: string, readRoots: string[], readTracker?: Map<string, ReadTrackEntry>) {
-		return buildTools(enabledTools(this.toolPlan(names)), cwd, readRoots, this.toolContext(id, readTracker, cwd), this.toolDefs());
+	private sessionTools(id: string, names: string[], cwd: string, readTracker?: Map<string, ReadTrackEntry>) {
+		return buildTools(enabledTools(this.toolPlan(names)), cwd, [], this.toolContext(id, readTracker, cwd), this.toolDefs());
 	}
 
 	private toolPlan(names: string[]) {
@@ -1739,7 +1736,7 @@ export class SessionManager {
 		const defs2 = this.toolDefs();
 		const off = this.disabledTools();
 		const names = def.tools.filter((n) => defs2[n] && !off.includes(n));
-		const tools = buildTools(names, workDirOf(rec), this.live.get(sessionId)?.readRoots ?? [], {
+		const tools = buildTools(names, workDirOf(rec), [], {
 			sessionId,
 			canSeeImages: () => model.input.includes("image"),
 			imageLimits: () => model.inputLimits?.images?.resize,

@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { buildApp, type App } from "../src/app.ts";
 import type { Config } from "../src/config.ts";
 import { BUILTIN_SKILLS_DIR, discoverSkills, mentionedSkills, parseFrontmatter, skillsPrompt } from "../src/skills.ts";
-import { safeReadPath } from "../src/tools.ts";
+import { safePath } from "../src/tools.ts";
 import { ECHO_MODEL, echoProviderBody, startEchoUpstream } from "./support/openai-upstream.ts";
 
 function fixture() {
@@ -99,13 +99,13 @@ describe("skill discovery", () => {
 	});
 });
 
-describe("read tool allow-list", () => {
-	test("reads inside skill roots (and, with the restriction disabled, anywhere else)", () => {
-		expect(safeReadPath("/w", "a.txt", [])).toBe("/w/a.txt");
-		expect(safeReadPath("/w", "/s/a/SKILL.md", ["/s/a"])).toBe("/s/a/SKILL.md");
-		expect(safeReadPath("/w", "/s/a/ref/x.md", ["/s/a"])).toBe("/s/a/ref/x.md");
-		expect(safeReadPath("/w", "/s/b/SKILL.md", ["/s/a"])).toBe("/s/b/SKILL.md");
-		expect(safeReadPath("/w", "/s/a/../b/x", ["/s/a"])).toBe("/s/b/x");
+describe("read path resolution", () => {
+	test("resolves relative and absolute skill paths without confinement", () => {
+		expect(safePath("/w", "a.txt")).toBe("/w/a.txt");
+		expect(safePath("/w", "/s/a/SKILL.md")).toBe("/s/a/SKILL.md");
+		expect(safePath("/w", "/s/a/ref/x.md")).toBe("/s/a/ref/x.md");
+		expect(safePath("/w", "/s/b/SKILL.md")).toBe("/s/b/SKILL.md");
+		expect(safePath("/w", "/s/a/../b/x")).toBe("/s/b/x");
 	});
 });
 
