@@ -1,5 +1,6 @@
 import { Database } from "bun:sqlite";
-import { chmodSync, existsSync, mkdirSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, readFileSync, statfsSync, statSync, unlinkSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname } from "node:path";
 import { groupHandle, koreanName, nameKey, nextMemberName } from "./member-names.ts";
 
@@ -331,14 +332,68 @@ export const MIGRATIONS: (string | ((db: Database) => void))[] = [
 	 CREATE INDEX IF NOT EXISTS idx_extension_entries_session_id ON extension_entries(session_id, id);`,
 ];
 
+/** Cap WAL file size after checkpointing (64 MiB) so a burst delete never leaves a multi-hundred-MB -wal behind. */
+export const WAL_JOURNAL_SIZE_LIMIT = 64 * 1024 * 1024;
+/** Max pages reclaimed per `maintainDb` pass (~256 MiB at 4 KiB pages); bounded further by `budgetMs`. */
+export const DEFAULT_INCREMENTAL_VACUUM_PAGES = 65536;
+/** Pages reclaimed per individual `PRAGMA incremental_vacuum` call (~8 MiB at 4 KiB pages). */
+const INCREMENTAL_VACUUM_CHUNK_PAGES = 2048;
+/** Wall-clock budget for incremental page reclamation inside `maintainDb` so the event loop stays responsive. */
+export const DEFAULT_MAINTAIN_BUDGET_MS = 250;
+/** Only auto-convert legacy `auto_vacuum = NONE` DBs when live data is at or below this threshold (256 MiB). */
+export const MAX_AUTO_VACUUM_LIVE_BYTES = 256 * 1024 * 1024;
+/** Cooldown after an interrupted or failed VACUUM attempt so a crash/kill never triggers a retry loop. */
+export const VACUUM_RETRY_COOLDOWN_MS = 7 * 24 * 3600_000;
+/** Require at least 2.5x the DB+WAL size in free space on both the DB and SQLite temp filesystems before VACUUM. */
+const VACUUM_FREE_SPACE_FACTOR = 2.5;
+
+function pragmaInt(db: Database, name: string): number {
+	const row = db.query(`PRAGMA ${name}`).get() as Record<string, unknown> | null;
+	const value = row ? Object.values(row)[0] : 0;
+	return typeof value === "number" ? value : 0;
+}
+
+function freeBytesAt(dir: string): number | null {
+	try {
+		const fs = statfsSync(dir);
+		const free = Number(fs.bavail) * Number(fs.bsize);
+		return Number.isFinite(free) ? free : null;
+	} catch {
+		return null;
+	}
+}
+
+export function hasRoomForVacuum(path: string): boolean {
+	try {
+		let size = statSync(path).size;
+		try { size += statSync(`${path}-wal`).size; } catch { /* no wal */ }
+		const required = size * VACUUM_FREE_SPACE_FACTOR;
+		const dbDirFree = freeBytesAt(dirname(path));
+		if (dbDirFree === null || dbDirFree < required) return false;
+		// SQLite VACUUM writes a temporary copy into its temp directory (SQLITE_TMPDIR / TMPDIR / os.tmpdir()),
+		// which may sit on a smaller filesystem (e.g. tmpfs) than the DB directory.
+		const sqliteTmp = process.env.SQLITE_TMPDIR || process.env.TMPDIR || tmpdir();
+		const tmpFree = freeBytesAt(sqliteTmp);
+		if (tmpFree === null || tmpFree < required) return false;
+		return true;
+	} catch {
+		return false;
+	}
+}
+
 export function openDb(path: string): Database {
 	const fileDb = path !== ":memory:";
 	if (fileDb) mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
 	const db = new Database(path, { create: true, strict: true });
+	// New file DBs can opt into INCREMENTAL auto_vacuum for free before any table is created.
+	if (fileDb && pragmaInt(db, "page_count") === 0) {
+		db.exec("PRAGMA auto_vacuum = INCREMENTAL");
+	}
 	db.exec("PRAGMA journal_mode = WAL");
 	db.exec("PRAGMA synchronous = NORMAL");
 	db.exec("PRAGMA foreign_keys = ON");
 	db.exec("PRAGMA busy_timeout = 5000");
+	db.exec(`PRAGMA journal_size_limit = ${WAL_JOURNAL_SIZE_LIMIT}`);
 	migrate(db);
 	if (fileDb) {
 		for (const file of [path, `${path}-wal`, `${path}-shm`]) {
@@ -346,6 +401,127 @@ export function openDb(path: string): Database {
 		}
 	}
 	return db;
+}
+
+export type AutoVacuumConversionResult = {
+	status:
+		| "already_incremental"
+		| "converted"
+		| "skipped_memory"
+		| "skipped_empty"
+		| "skipped_large"
+		| "skipped_cooldown"
+		| "skipped_no_space"
+		| "failed";
+	liveBytes?: number;
+	freelistBytes?: number;
+};
+
+/**
+ * One-time conversion of a legacy `auto_vacuum = NONE` SQLite file to `INCREMENTAL` via `VACUUM`.
+ * Intended to run AFTER startup event pruning and AFTER the HTTP server is listening (when idle),
+ * never synchronously inside `openDb()`, so large DBs cannot block server startup or trigger sidecar timeouts.
+ */
+export function convertToIncrementalAutoVacuum(
+	db: Database,
+	path: string,
+	opts: {
+		maxLiveBytes?: number;
+		force?: boolean;
+		retryCooldownMs?: number;
+		hasRoom?: (path: string) => boolean;
+		onLog?: (msg: string) => void;
+		now?: () => number;
+	} = {},
+): AutoVacuumConversionResult {
+	if (path === ":memory:") return { status: "skipped_memory" };
+	const mode = pragmaInt(db, "auto_vacuum");
+	if (mode === 2) return { status: "already_incremental" };
+	const pageCount = pragmaInt(db, "page_count");
+	if (pageCount === 0) return { status: "skipped_empty" };
+
+	const pageSize = pragmaInt(db, "page_size") || 4096;
+	const freelistCount = pragmaInt(db, "freelist_count");
+	const liveBytes = Math.max(0, pageCount - freelistCount) * pageSize;
+	const freelistBytes = freelistCount * pageSize;
+	const now = opts.now ?? Date.now;
+	const force = opts.force ?? false;
+	const maxLiveBytes = opts.maxLiveBytes ?? MAX_AUTO_VACUUM_LIVE_BYTES;
+
+	if (!force && liveBytes > maxLiveBytes) {
+		const liveMb = Math.round(liveBytes / (1024 * 1024));
+		const freeMb = Math.round(freelistBytes / (1024 * 1024));
+		opts.onLog?.(
+			`db: skipping automatic incremental auto_vacuum conversion (live data ${liveMb} MiB > ${Math.round(maxLiveBytes / (1024 * 1024))} MiB); ` +
+				`restart with PIPAYA_DB_VACUUM=1 when idle to reclaim ${freeMb} MiB of free pages`,
+		);
+		return { status: "skipped_large", liveBytes, freelistBytes };
+	}
+
+	const markerPath = `${path}.vacuum-attempted`;
+	const cooldownMs = opts.retryCooldownMs ?? VACUUM_RETRY_COOLDOWN_MS;
+	if (!force && existsSync(markerPath)) {
+		try {
+			const lastAttempt = Number(readFileSync(markerPath, "utf8").trim());
+			if (Number.isFinite(lastAttempt) && now() - lastAttempt < cooldownMs) {
+				opts.onLog?.("db: skipping incremental auto_vacuum conversion (previous attempt did not complete; cooling down)");
+				return { status: "skipped_cooldown", liveBytes, freelistBytes };
+			}
+		} catch { /* unreadable marker: proceed */ }
+	}
+
+	const checkRoom = opts.hasRoom ?? hasRoomForVacuum;
+	if (!checkRoom(path)) {
+		opts.onLog?.("db: skipping incremental auto_vacuum conversion (insufficient free disk space on DB or temp filesystem)");
+		return { status: "skipped_no_space", liveBytes, freelistBytes };
+	}
+
+	// Write the attempt marker BEFORE running VACUUM so a crash or SIGKILL mid-VACUUM cannot cause a boot retry loop.
+	try { writeFileSync(markerPath, String(now()), { mode: 0o600 }); } catch { /* best effort */ }
+
+	try {
+		db.exec("PRAGMA auto_vacuum = INCREMENTAL");
+		db.exec("VACUUM");
+		db.exec("PRAGMA wal_checkpoint(TRUNCATE)");
+		try { unlinkSync(markerPath); } catch { /* already gone */ }
+		opts.onLog?.(`db: converted to incremental auto_vacuum (reclaimed ${Math.round(freelistBytes / (1024 * 1024))} MiB of free pages)`);
+		return { status: "converted", liveBytes, freelistBytes };
+	} catch (e) {
+		opts.onLog?.(`db: incremental auto_vacuum conversion failed: ${String(e)}`);
+		return { status: "failed", liveBytes, freelistBytes };
+	}
+}
+
+/**
+ * Reclaim freed SQLite pages incrementally within a wall-clock budget, truncate the WAL when idle,
+ * and refresh planner statistics. Safe to call periodically and before closing the database.
+ */
+export function maintainDb(
+	db: Database,
+	opts: { maxIncrementalPages?: number; budgetMs?: number; chunkPages?: number } = {},
+): { reclaimedPages: number; walTruncated: boolean } {
+	const maxPages = opts.maxIncrementalPages ?? DEFAULT_INCREMENTAL_VACUUM_PAGES;
+	const budgetMs = opts.budgetMs ?? DEFAULT_MAINTAIN_BUDGET_MS;
+	const chunk = Math.max(1, Math.floor(opts.chunkPages ?? INCREMENTAL_VACUUM_CHUNK_PAGES));
+	let reclaimedPages = 0;
+	if (maxPages > 0 && pragmaInt(db, "auto_vacuum") === 2) {
+		const started = Date.now();
+		while (reclaimedPages < maxPages) {
+			const before = pragmaInt(db, "freelist_count");
+			if (before <= 0) break;
+			const step = Math.min(chunk, Math.floor(maxPages - reclaimedPages));
+			db.exec(`PRAGMA incremental_vacuum(${step})`);
+			const after = pragmaInt(db, "freelist_count");
+			const freed = Math.max(0, before - after);
+			reclaimedPages += freed;
+			if (freed === 0 || after === 0) break;
+			if (budgetMs > 0 && Date.now() - started >= budgetMs) break;
+		}
+	}
+	const cp = db.query("PRAGMA wal_checkpoint(TRUNCATE)").get() as { busy?: number } | null;
+	const walTruncated = cp !== null && cp.busy === 0;
+	db.exec("PRAGMA optimize");
+	return { reclaimedPages, walTruncated };
 }
 
 function migrate(db: Database): void {

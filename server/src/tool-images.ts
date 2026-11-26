@@ -3,8 +3,11 @@
  * clients. Generated pictures are saved to disk and loaded lazily via `/sessions/:id/files`; keeping the full base64
  * in `messages` / `events` payloads adds tens of megabytes to every session open and SSE replay.
  *
- * The database `messages` table and LLM projection keep the original blocks intact so the model still sees them.
+ * Active LLM projection keeps original image blocks; compacted history and aged closed sessions replace them with a
+ * short text placeholder via `replaceToolMessageImages` so providers never receive an empty tool result.
  */
+
+export const STORAGE_IMAGE_PLACEHOLDER = "(image removed by storage retention)";
 
 /**
  * Max base64 character length (~512 KB raw binary) for an inline toolResult image sent live over SSE/WS.
@@ -31,6 +34,21 @@ export function stripToolMessageImages<T>(message: T): T {
 	if (m.role !== "toolResult") return message;
 	const next = withoutImageBlocks(m.content);
 	if (!next) return message;
+	return { ...message, content: next };
+}
+
+/**
+ * Replaces inline base64 image blocks inside a persisted `toolResult` message with a short text placeholder so
+ * reopened or forked sessions never pass an empty `content: []` tool result to an LLM provider.
+ * Returns the original reference unchanged when no image block is present.
+ */
+export function replaceToolMessageImages<T>(message: T, placeholder = STORAGE_IMAGE_PLACEHOLDER): T {
+	if (!message || typeof message !== "object") return message;
+	const m = message as { role?: unknown; content?: unknown };
+	if (m.role !== "toolResult" || !Array.isArray(m.content)) return message;
+	const isImage = (c: unknown) => Boolean(c && typeof c === "object" && (c as { type?: unknown }).type === "image");
+	if (!m.content.some(isImage)) return message;
+	const next = m.content.map((c) => (isImage(c) ? { type: "text", text: placeholder } : c));
 	return { ...message, content: next };
 }
 
