@@ -11,7 +11,7 @@
 	import { baseName, formatFileLine, splitFilePath } from "../../lib/files";
 	import { highlightCode, highlightLines, languageFromPath, onHighlightReady } from "../../lib/code-highlight";
 	import { computeLineDiff, lineCount } from "../../lib/line-diff";
-	import { formatKvArgs, parseGrepOutput, parseLsOutput, tryPrettyJson } from "../../lib/tool-view";
+	import { formatKvArgs, parseGrepOutput, parseLsOutput, parseReadOutput, tryPrettyJson } from "../../lib/tool-view";
 	import { peerTargetsOf, scheduleIdOf, skillOf, splitCd, toolArgStr as str, toolIcon, toolLabel, toolSummary } from "../../lib/tools";
 	import type { ToolRun } from "../../lib/types";
 	import { extensions } from "../../lib/extensions/host.svelte";
@@ -113,14 +113,25 @@
 	$effect(() => onHighlightReady(() => { hlTick++; }));
 
 	const fileLang = $derived(languageFromPath(str(args.path)));
-	const editDiff = $derived(name === "edit" ? computeLineDiff(str(args.oldText), str(args.newText)) : null);
-	const editOldHl = $derived.by(() => {
-		void hlTick;
-		return open && name === "edit" ? highlightLines(str(args.oldText), fileLang) : null;
+	const editDiffs = $derived(
+		name === "edit" ? editItems.map((item) => ({ item, diff: computeLineDiff(item.oldText, item.newText) })) : [],
+	);
+	const editTotals = $derived.by(() => {
+		let added = 0;
+		let removed = 0;
+		for (const e of editDiffs) {
+			added += e.diff.added;
+			removed += e.diff.removed;
+		}
+		return { added, removed };
 	});
-	const editNewHl = $derived.by(() => {
+	const editHls = $derived.by(() => {
 		void hlTick;
-		return open && name === "edit" ? highlightLines(str(args.newText), fileLang) : null;
+		if (!open || name !== "edit") return [];
+		return editItems.map((item) => ({
+			oldHl: highlightLines(item.oldText, fileLang),
+			newHl: highlightLines(item.newText, fileLang),
+		}));
 	});
 
 	const writeText = $derived(name === "write" ? clip(body ?? "", 6000) : "");
@@ -151,11 +162,16 @@
 	});
 	const readParsed = $derived.by(() => {
 		if (name !== "read" || isImageRead || failed || !run.output) return null;
-		const m = /\n\[(\d+ more lines;[^\]]+)\]\s*$/.exec(run.output);
-		const raw = m ? run.output.slice(0, m.index) : run.output;
-		const moreNote = m ? m[1]! : "";
-		const code = clip(raw, 12000);
-		return { code, lines: code.replace(/\r\n?/g, "\n").split("\n"), moreNote };
+		const parsed = parseReadOutput(run.output, readFrom);
+		if (!parsed) return null;
+		if (parsed.code.length <= 12000) return parsed;
+		const clipped = clip(parsed.code, 12000);
+		const clippedLines = clipped.split("\n");
+		return {
+			code: clipped,
+			lines: clippedLines.map((text, i) => ({ lineNo: parsed.lines[i]?.lineNo ?? readFrom + i, text })),
+			moreNote: parsed.moreNote,
+		};
 	});
 	const readHl = $derived.by(() => {
 		void hlTick;
@@ -211,10 +227,10 @@
 		<span class="name mono" class:shimmer={working}>{toolLabel(name, args)}</span>
 		{#if summary}<span class="sum mono" title={fullLine}>{summary}</span>{/if}
 		<span class="meta">
-			{#if editDiff && (editDiff.added || editDiff.removed)}
-				<span class="stat mono" aria-label={`+${editDiff.added} -${editDiff.removed}`}>
-					{#if editDiff.added}<span class="stat-add">+{editDiff.added}</span>{/if}
-					{#if editDiff.removed}<span class="stat-del">-{editDiff.removed}</span>{/if}
+			{#if editDiffs.length > 0 && (editTotals.added || editTotals.removed)}
+				<span class="stat mono" aria-label={`+${editTotals.added} -${editTotals.removed}`}>
+					{#if editTotals.added}<span class="stat-add">+{editTotals.added}</span>{/if}
+					{#if editTotals.removed}<span class="stat-del">-{editTotals.removed}</span>{/if}
 				</span>
 			{:else if name === "write" && writeLinesCount > 0}
 				<span class="stat mono"><span class="stat-add">+{writeLinesCount}</span></span>
@@ -304,22 +320,27 @@
 					><Icon name="target" /><span class="jlabel">{t("목표")}</span></button>
 				</div>
 			{/if}
-			{#if name === "edit" && editDiff}
+			{#if name === "edit" && editDiffs.length > 0}
 				<div class="codeframe">
-					{@render fileHeader(editDiff.added, editDiff.removed, "")}
+					{@render fileHeader(editTotals.added, editTotals.removed, "")}
 					<div class="codescroll mono">
-						{#each editDiff.rows as r, i (i)}
-							{#if r.kind === "skip"}
-								<div class="diff-skip">⋯ {r.count}</div>
-							{:else}
-								{@const hl = r.kind === "del" ? editOldHl?.[r.oldLine - 1] : editNewHl?.[r.newLine - 1]}
-								<div class="cline diff-{r.kind}">
-									<span class="lno">{r.oldLine ?? ""}</span>
-									<span class="lno">{r.newLine ?? ""}</span>
-									<span class="sig" aria-hidden="true">{r.kind === "del" ? "−" : r.kind === "add" ? "+" : " "}</span>
-									<span class="code">{#if hl != null}{@html hl}{:else}{r.text || " "}{/if}</span>
-								</div>
+						{#each editDiffs as entry, ei (ei)}
+							{#if ei > 0}
+								<div class="diff-skip">⋯</div>
 							{/if}
+							{#each entry.diff.rows as r, i (`${ei}-${i}`)}
+								{#if r.kind === "skip"}
+									<div class="diff-skip">⋯ {r.count}</div>
+								{:else}
+									{@const hl = r.kind === "del" ? editHls[ei]?.oldHl?.[r.oldLine - 1] : editHls[ei]?.newHl?.[r.newLine - 1]}
+									<div class="cline diff-{r.kind}">
+										<span class="lno">{r.oldLine ?? ""}</span>
+										<span class="lno">{r.newLine ?? ""}</span>
+										<span class="sig" aria-hidden="true">{r.kind === "del" ? "−" : r.kind === "add" ? "+" : " "}</span>
+										<span class="code">{#if hl != null}{@html hl}{:else}{r.text || " "}{/if}</span>
+									</div>
+								{/if}
+							{/each}
 						{/each}
 					</div>
 				</div>
@@ -344,8 +365,8 @@
 						{#each readParsed.lines as line, i (i)}
 							{@const hl = readHl?.[i]}
 							<div class="cline">
-								<span class="lno">{readFrom + i}</span>
-								<span class="code">{#if hl != null}{@html hl}{:else}{line || " "}{/if}</span>
+								<span class="lno">{line.lineNo}</span>
+								<span class="code">{#if hl != null}{@html hl}{:else}{line.text || " "}{/if}</span>
 							</div>
 						{/each}
 					</div>
@@ -458,6 +479,9 @@
 								{/if}
 							{/each}
 						</div>
+						{#if lsParsed.moreNote}
+							<div class="codefoot mono">{lsParsed.moreNote}</div>
+						{/if}
 					{/if}
 				</div>
 			{:else if delegateView}
@@ -828,17 +852,6 @@
 		color: var(--text-faint);
 		user-select: none;
 	}
-<<<<<<< HEAD
-	.diffs {
-		display: flex;
-		flex-direction: column;
-		gap: 8px;
-	}
-	.diff {
-		border-radius: var(--radius-sm);
-		overflow: hidden;
-		font-size: var(--fs-xs);
-=======
 	.stat {
 		flex: none;
 		display: inline-flex;
@@ -847,7 +860,6 @@
 		font-size: var(--fs-2xs);
 		line-height: 16px;
 		font-variant-numeric: tabular-nums;
->>>>>>> f5285801 (feat(chat): add unified diff, syntax-highlighted code and terminal frames to tool cards)
 	}
 	.stat-add {
 		color: var(--ok);

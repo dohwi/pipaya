@@ -14,33 +14,66 @@ export interface ParsedGrep {
 	empty: boolean;
 }
 
+/** Pull trailing `[...]` notice lines (e.g. truncation or partial-result warnings) off tool output. */
+function extractTrailingNotes(lines: string[]): { body: string[]; note: string } {
+	const notes: string[] = [];
+	let end = lines.length;
+	while (end > 0) {
+		const last = lines[end - 1]!.trim();
+		if (last.startsWith("[") && last.endsWith("]") && last.length > 2) {
+			notes.unshift(last.slice(1, -1));
+			end--;
+		} else {
+			break;
+		}
+	}
+	return { body: lines.slice(0, end), note: notes.join(" · ") };
+}
+
 /**
- * Parse ripgrep/grep `path:line:text` lines into file-grouped matches, separating any trailing
- * `[N more matches]` notice. Unstructured lines fall back into a group with `path: ""`.
+ * Parse ripgrep/grep `path:line:text` (and `-C` context `path-line-text` or `-l` file-only) lines
+ * into file-grouped matches, separating any trailing `[...]` notices.
+ * Unstructured lines fall back into a group with `path: ""`.
  */
 export function parseGrepOutput(output: string): ParsedGrep {
 	const trimmed = output.trim();
-	if (!trimmed || trimmed === "No matches") {
+	if (!trimmed || trimmed === "No matches" || trimmed === "(no matches)") {
 		return { groups: [], moreNote: "", empty: true };
 	}
-	const moreMatch = /\n\[(\d+ more matches)\]\s*$/.exec(trimmed);
-	const body = moreMatch ? trimmed.slice(0, moreMatch.index) : trimmed;
-	const moreNote = moreMatch ? moreMatch[1]! : "";
+	const rawLines = trimmed.replace(/\r\n?/g, "\n").split("\n");
+	const { body, note: moreNote } = extractTrailingNotes(rawLines);
 
 	const byPath = new Map<string, GrepGroup>();
-	const lineRe = /^(.+?):(\d+):(.*)$/;
-	for (const raw of body.replace(/\r\n?/g, "\n").split("\n")) {
-		if (!raw) continue;
-		const m = lineRe.exec(raw);
-		const path = m ? m[1]! : "";
-		const line = m ? Number(m[2]) : null;
-		const text = m ? m[3]! : raw;
-		let group = byPath.get(path);
-		if (!group) {
-			group = { path, hits: [] };
-			byPath.set(path, group);
+	const matchRe = /^(.+?):(\d+):(.*)$/;
+	const ctxRe = /^(.+?)-(\d+)-(.*)$/;
+	const fileOnlyRe = /^[^\s:]+(?:\/[^\s:]*|\.[a-zA-Z0-9_-]+)$/;
+	for (const raw of body) {
+		if (!raw || raw === "--") continue;
+		const m = matchRe.exec(raw) ?? ctxRe.exec(raw);
+		if (m) {
+			const path = m[1]!;
+			const line = Number(m[2]);
+			const text = m[3]!;
+			let group = byPath.get(path);
+			if (!group) {
+				group = { path, hits: [] };
+				byPath.set(path, group);
+			}
+			group.hits.push({ line: Number.isSafeInteger(line) ? line : null, text });
+			continue;
 		}
-		group.hits.push({ line: Number.isSafeInteger(line) ? line : null, text });
+		if (fileOnlyRe.test(raw)) {
+			if (!byPath.has(raw)) {
+				byPath.set(raw, { path: raw, hits: [] });
+			}
+			continue;
+		}
+		let group = byPath.get("");
+		if (!group) {
+			group = { path: "", hits: [] };
+			byPath.set("", group);
+		}
+		group.hits.push({ line: null, text: raw });
 	}
 	const groups = [...byPath.values()];
 	return { groups, moreNote, empty: groups.length === 0 };
@@ -54,26 +87,74 @@ export interface LsEntry {
 
 export interface ParsedLs {
 	entries: LsEntry[];
+	moreNote: string;
 	empty: boolean;
 }
 
-/** Parse `ls` tool output (newline-separated names, directories ending with `/`). */
+/** Parse `ls` tool output (newline-separated names, directories ending with `/`, optional trailing `[...]` note). */
 export function parseLsOutput(output: string, basePath = ""): ParsedLs {
 	const trimmed = output.trim();
 	if (!trimmed || trimmed === "(empty)") {
-		return { entries: [], empty: true };
+		return { entries: [], moreNote: "", empty: true };
 	}
 	const cleanBase = basePath.trim().replace(/\/+$/, "");
 	const prefix = cleanBase && cleanBase !== "." ? `${cleanBase}/` : "";
+	const rawLines = trimmed.replace(/\r\n?/g, "\n").split("\n");
+	const { body, note: moreNote } = extractTrailingNotes(rawLines);
 	const entries: LsEntry[] = [];
-	for (const raw of trimmed.replace(/\r\n?/g, "\n").split("\n")) {
+	for (const raw of body) {
 		const name = raw.trim();
 		if (!name) continue;
 		const isDir = name.endsWith("/");
 		const cleanName = isDir ? name.slice(0, -1) : name;
 		entries.push({ name: cleanName, fullPath: `${prefix}${cleanName}`, isDir });
 	}
-	return { entries, empty: entries.length === 0 };
+	return { entries, moreNote, empty: entries.length === 0 };
+}
+
+export interface ParsedReadLine {
+	lineNo: number;
+	text: string;
+}
+
+export interface ParsedRead {
+	code: string;
+	lines: ParsedReadLine[];
+	moreNote: string;
+}
+
+const NUMBERED_READ_RE = /^\s*(\d+)│(.*)$/;
+
+/**
+ * Parse `read` tool output into numbered code lines, stripping the server's `  12│` prefix so line
+ * numbers are not doubled and highlight.js sees clean source. Returns null for meta messages like
+ * `(empty file)` or `(file has N lines; offset … past EOF)`.
+ */
+export function parseReadOutput(output: string, fallbackFrom = 1): ParsedRead | null {
+	const trimmed = output.trim();
+	if (!trimmed) return null;
+	if (trimmed === "(empty file)" || /^\(file has \d+ lines;/.test(trimmed)) return null;
+
+	const m = /\n\[(\d+ more lines;[^\]]+)\]\s*$/.exec(output);
+	const raw = m ? output.slice(0, m.index) : output;
+	const moreNote = m ? m[1]! : "";
+	const rawLines = raw.replace(/\r\n?/g, "\n").split("\n");
+
+	const allNumbered = rawLines.length > 0 && rawLines.every((l) => NUMBERED_READ_RE.test(l));
+	const lines: ParsedReadLine[] = [];
+	const cleanTexts: string[] = [];
+	for (let i = 0; i < rawLines.length; i++) {
+		const line = rawLines[i]!;
+		if (allNumbered) {
+			const nm = NUMBERED_READ_RE.exec(line)!;
+			lines.push({ lineNo: Number(nm[1]), text: nm[2]! });
+			cleanTexts.push(nm[2]!);
+		} else {
+			lines.push({ lineNo: fallbackFrom + i, text: line });
+			cleanTexts.push(line);
+		}
+	}
+	return { code: cleanTexts.join("\n"), lines, moreNote };
 }
 
 export interface KvRow {

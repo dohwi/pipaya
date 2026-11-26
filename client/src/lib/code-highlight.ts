@@ -186,7 +186,8 @@ export function highlightCode(code: string, label: string | undefined | null): s
 
 /** Highlight `code` and split into balanced per-line HTML strings, or null when plain/loading. */
 export function highlightLines(code: string, label: string | undefined | null): string[] | null {
-	const res = highlightCode(code, label);
+	const normalized = code.replace(/\r\n?/g, "\n");
+	const res = highlightCode(normalized, label);
 	if (!res || res === "wait") return null;
 	return splitHighlightedLines(res);
 }
