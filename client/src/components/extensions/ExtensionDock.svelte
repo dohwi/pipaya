@@ -11,6 +11,7 @@
 	import ExtensionSurface from "./ExtensionSurface.svelte";
 	import { EdgeResizeController } from "../../lib/shell/sidebar-resize.svelte";
 	import { verticalFade } from "../../lib/edge-fade";
+	import { backLayer } from "../../lib/dialog";
 
 	/**
 	 * `side` panels: a dock at the right of the conversation area, one tab per shown panel. On desktop it shares the
@@ -78,6 +79,17 @@
 	function hide(p: ExtensionPanel) {
 		try { extensions.setPanelOpen(p.owner, p.id, false); } catch { /* gone */ }
 	}
+	// Back button / swipe on narrow screens closes the full-stage extension dock before leaving the app.
+	// Depend on a boolean so tab switches or panel updates do not re-push history entries.
+	const hasCurrent = $derived(Boolean(current));
+	$effect(() => {
+		if (!viewport.narrow || !hasCurrent) return;
+		return backLayer({
+			onclose: () => {
+				if (current) hide(current);
+			},
+		});
+	});
 </script>
 
 {#if current}

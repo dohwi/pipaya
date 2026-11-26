@@ -183,10 +183,28 @@
 		setAttention(waiting);
 	});
 
-	// Back button / swipe: close the top modal, else the phone drawer, before leaving the app.
+	// Back button / swipe: close the top modal, else the phone drawer (left sessions or right files), before leaving the app.
 	$effect(() => {
 		if (!viewport.narrow || !app.sidebar.open) return;
 		return backLayer({ onclose: () => (app.sidebar.open = false) });
+	});
+	$effect(() => {
+		if (!viewport.narrow || !app.filesOpen) return;
+		return backLayer({ onclose: () => (app.filesOpen = false) });
+	});
+	// Avoid stacking the left sidebar drawer and right file drawer on narrow viewports, regardless of which opened last.
+	let prevSidebarOpen = false;
+	let prevFilesOpen = false;
+	$effect(() => {
+		const left = app.sidebar.open;
+		const right = app.filesOpen;
+		if (viewport.narrow && left && right) {
+			if (!prevSidebarOpen) app.filesOpen = false;
+			else if (!prevFilesOpen) app.sidebar.open = false;
+			else app.filesOpen = false;
+		}
+		prevSidebarOpen = app.sidebar.open;
+		prevFilesOpen = app.filesOpen;
 	});
 	// Esc closes the open drawer too (the scrim says so), unless something inside used the key first: a search field
 	// clearing itself, a rename field cancelling, a menu or dialog closing. Focus goes back to the menu button.
@@ -331,16 +349,28 @@
 		},
 	};
 
-	// Swipe sideways anywhere to drag the drawer open / shut (touch only, narrow screens only).
+	// Swipe sideways anywhere to drag either drawer open / shut (touch only, narrow screens only).
+	// Left -> right opens sessions; right -> left opens workspace files.
 	let sideEl: HTMLElement | undefined = $state();
+	let filesEl: HTMLElement | undefined = $state();
 	/** The sidebar's drawn width: the user's, or the theme's `--sidebar-w` (which can change while the app runs). */
 	let sideW = $state(0);
 	const drawerSwipe = new DrawerSwipeController({
 		isNarrow: () => viewport.narrow,
-		isOpen: () => app.sidebar.open,
-		setOpen: (open) => { app.sidebar.open = open; },
+		isOpen: (side) => (side === "left" ? app.sidebar.open : app.filesOpen),
+		setOpen: (side, open) => {
+			if (side === "left") {
+				app.sidebar.open = open;
+				if (open && viewport.narrow) app.filesOpen = false;
+			} else {
+				app.filesOpen = open;
+				if (open && viewport.narrow) app.sidebar.open = false;
+			}
+		},
+		canOpen: (side) => (side === "left" ? true : !app.graphOpen && Boolean(workspaceViewer.sessionId)),
+		isBlocked: () => typeof document !== "undefined" && Boolean(document.querySelector('[data-part="dock"].narrow')),
 		isDraggingItem: () => !!drag.id,
-		getDrawerWidth: () => sideEl?.offsetWidth || 320,
+		getDrawerWidth: (side) => (side === "left" ? sideEl?.offsetWidth : filesEl?.offsetWidth) || 320,
 	});
 	// Going to the background can swallow touchend/pointercancel: drop a half-done swipe or carried session so the
 	// next gesture starts clean (a stale `drag.id` makes every touchMove cancel the swipe).
@@ -363,6 +393,7 @@
 	ontouchmove={drawerSwipe.move}
 	ontouchend={drawerSwipe.end}
 	ontouchcancel={drawerSwipe.cancel}
+	onscrollcapture={drawerSwipe.noteScroll}
 	onpagehide={() => (endExtensionHold("hidden"), settleOnHide())}
 	onkeydowncapture={onShortcutCapture}
 	onkeydown={onShortcut}
@@ -412,7 +443,7 @@
 	<div class="app" data-part="app">
 		<!-- A closed drawer is only slid off screen: `inert` keeps Tab and screen readers out of it too (they walked 14 hidden
 		     controls before reaching the page). Not while a swipe is pulling it in, so it answers the moment it shows. -->
-		<div class="side" inert={viewport.narrow && !app.sidebar.open && drawerSwipe.swipe === null} bind:this={sideEl} bind:offsetWidth={sideW} class:dragging={drawerSwipe.swipe !== null} style:translate={drawerSwipe.swipe !== null ? `${drawerSwipe.swipe - drawerSwipe.drawerW}px 0` : undefined} class:open={app.sidebar.open} class:collapsed={app.sidebar.collapsed} class:resizing={sidebarResize.resizing} class:folding={sidebarResize.resizing && sidebarResize.foldingPreview} style:--sidebar-w={app.sidebar.width === null ? undefined : `${app.sidebar.width}px`}>
+		<div class="side" inert={viewport.narrow && !app.sidebar.open && drawerSwipe.leftSwipe === null} bind:this={sideEl} bind:offsetWidth={sideW} class:dragging={drawerSwipe.leftSwipe !== null} style:translate={drawerSwipe.leftSwipe !== null ? `${drawerSwipe.leftSwipe - drawerSwipe.drawerW}px 0` : undefined} class:open={app.sidebar.open} class:collapsed={app.sidebar.collapsed} class:resizing={sidebarResize.resizing} class:folding={sidebarResize.resizing && sidebarResize.foldingPreview} style:--sidebar-w={app.sidebar.width === null ? undefined : `${app.sidebar.width}px`}>
 			<div class="full"><Sidebar /></div>
 			<div class="rail-slot"><Rail /></div>
 			<!-- A window splitter (WAI-ARIA): stays mounted in both open and rail states so dragging or clicking the edge folds and unfolds. -->
@@ -436,7 +467,7 @@
 		</div>
 		<!-- Tapping the scrim closes the drawer; with a keyboard the drawer closes with Esc (the app shortcut layer). -->
 		<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
-		<div class="scrim" class:show={app.sidebar.open} class:dragging={drawerSwipe.swipe !== null} class:catch={canCatch} class:over={scrimOver} style:opacity={drawerSwipe.swipe !== null ? drawerSwipe.swipe / drawerSwipe.drawerW : undefined} onclick={() => (app.sidebar.open = false)} use:dropTarget={scrimDrop}>
+		<div class="scrim" class:show={app.sidebar.open} class:dragging={drawerSwipe.leftSwipe !== null} class:catch={canCatch} class:over={scrimOver} style:opacity={drawerSwipe.leftSwipe !== null ? drawerSwipe.leftSwipe / drawerSwipe.drawerW : undefined} onclick={() => (app.sidebar.open = false)} use:dropTarget={scrimDrop}>
 			{#if canCatch}<span class="catch-hint">{t("지금 보는 대화에 합치기")}</span>{/if}
 		</div>
 
@@ -480,7 +511,7 @@
 
 		<!-- Right workspace sidebar: full-height sibling of <main> just like the left sidebar (collapses to a slim rail on desktop, slide-over drawer on mobile) -->
 		{#if !app.graphOpen && workspaceViewer.sessionId}
-			<WorkspaceFileTree open={app.filesOpen} />
+			<WorkspaceFileTree open={app.filesOpen} bind:drawerEl={filesEl} swipe={drawerSwipe.rightSwipe} drawerWidth={drawerSwipe.drawerW} />
 		{/if}
 
 	</div>
