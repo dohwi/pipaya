@@ -2,7 +2,7 @@ import type { Database } from "bun:sqlite";
 import type { AgentTool, AgentToolResult } from "@earendil-works/pi-agent-core";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
-import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
+import { StreamableHTTPClientTransport, StreamableHTTPError } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import Type, { type Static } from "typebox";
 import { badRequest, conflict, notFound } from "./errors.ts";
 import { DEFAULT_LIMITS } from "./image-resize-core.ts";
@@ -100,6 +100,38 @@ interface Conn {
 	gen: number;
 	ready: Promise<void>;
 	resolveReady: () => void;
+	config: McpServerConfig;
+	replacedByReconnect?: boolean;
+}
+
+/** Returns true when a Streamable HTTP MCP error signals an unknown or expired server session (HTTP 404). */
+export function isHttpSessionExpiredError(err: unknown): boolean {
+	return err instanceof StreamableHTTPError && err.code === 404;
+}
+
+function abortError(signal: AbortSignal): Error {
+	if (signal.reason instanceof Error) return signal.reason;
+	const err = new Error(typeof signal.reason === "string" && signal.reason ? signal.reason : "Aborted");
+	err.name = "AbortError";
+	return err;
+}
+
+async function waitForReady(conn: Conn, signal?: AbortSignal): Promise<void> {
+	if (signal?.aborted) throw abortError(signal);
+	if (!signal) {
+		await conn.ready;
+		return;
+	}
+	let onAbort: (() => void) | undefined;
+	try {
+		await new Promise<void>((resolve, reject) => {
+			onAbort = () => reject(abortError(signal));
+			signal.addEventListener("abort", onAbort, { once: true });
+			conn.ready.then(resolve);
+		});
+	} finally {
+		if (onAbort) signal.removeEventListener("abort", onAbort);
+	}
 }
 
 const clean = (s: string) => s.replace(/[^a-zA-Z0-9_-]/g, "_");
@@ -349,7 +381,7 @@ export class McpManager {
 			const forced = force === "" || force === c.name;
 			if (this.conns.has(c.name) && unchanged && !forced) continue;
 			this.drop(c.name);
-			if (c.enabled) void this.connect(c);
+			if (c.enabled) this.connect(c);
 		}
 		this.onChange();
 	}
@@ -361,11 +393,16 @@ export class McpManager {
 		if (conn?.client) void conn.client.close().catch(() => {});
 	}
 
-	private async connect(c: McpServerConfig): Promise<void> {
+	private connect(c: McpServerConfig): Conn {
 		let resolveReady!: () => void;
 		const ready = new Promise<void>((resolve) => { resolveReady = resolve; });
-		const conn: Conn = { status: "connecting", stderrTail: "", tools: [], gen: ++this.gen, ready, resolveReady };
+		const conn: Conn = { status: "connecting", stderrTail: "", tools: [], gen: ++this.gen, ready, resolveReady, config: c };
 		this.conns.set(c.name, conn);
+		void this.runConnect(c, conn);
+		return conn;
+	}
+
+	private async runConnect(c: McpServerConfig, conn: Conn): Promise<void> {
 		const current = () => this.conns.get(c.name) === conn;
 		const client = new Client({ name: "pipaya", version: "1.0.0" });
 		try {
@@ -474,10 +511,49 @@ export class McpManager {
 		return Object.keys(this.toolDefs());
 	}
 
+	private async reconnectHttp(server: string, stale: Conn, originalError: unknown, signal?: AbortSignal): Promise<Conn> {
+		if (signal?.aborted) throw abortError(signal);
+		let target = this.conns.get(server);
+		if (!target) throw new Error(`MCP server "${server}" is not connected`);
+		if (target === stale) {
+			// Single-flight leader: install the replacement Conn synchronously before closing the stale client so
+			// stale.client.onclose sees current() === false and concurrent callers share `target.ready`.
+			stale.replacedByReconnect = true;
+			target = this.connect(stale.config);
+			if (stale.client) void stale.client.close().catch(() => {});
+		}
+		await waitForReady(target, signal);
+		if (signal?.aborted) throw abortError(signal);
+		if (this.conns.get(server) !== target) throw new Error(`MCP server "${server}" is not connected`);
+		if (!target.client || target.status !== "ready") {
+			throw target.error
+				? new Error(`MCP server "${server}" reconnect failed: ${target.error}`, { cause: originalError })
+				: new Error(`MCP server "${server}" is not connected`, { cause: originalError });
+		}
+		return target;
+	}
+
 	private async call(server: string, tool: string, args: Record<string, unknown>, signal?: AbortSignal): Promise<AgentToolResult<any>> {
-		const conn = this.conns.get(server);
+		if (signal?.aborted) throw abortError(signal);
+		let conn = this.conns.get(server);
+		while (conn?.status === "connecting") {
+			const cur = conn;
+			await waitForReady(cur, signal);
+			if (signal?.aborted) throw abortError(signal);
+			conn = this.conns.get(server);
+			if (conn === cur) break;
+		}
 		if (!conn?.client || conn.status !== "ready") throw new Error(`MCP server "${server}" is not connected`);
-		const res = await conn.client.callTool({ name: tool, arguments: args }, undefined, { signal, timeout: CALL_TIMEOUT_MS });
+		let res: unknown;
+		try {
+			res = await conn.client.callTool({ name: tool, arguments: args }, undefined, { signal, timeout: CALL_TIMEOUT_MS });
+		} catch (err) {
+			if (signal?.aborted || conn.config.transport !== "http" || (!isHttpSessionExpiredError(err) && !conn.replacedByReconnect)) {
+				throw err;
+			}
+			const next = await this.reconnectHttp(server, conn, err, signal);
+			res = await next.client!.callTool({ name: tool, arguments: args }, undefined, { signal, timeout: CALL_TIMEOUT_MS });
+		}
 		return formatMcpToolResult(server, tool, res as { content?: unknown; structuredContent?: unknown; isError?: unknown }, signal);
 	}
 

@@ -1,11 +1,13 @@
+import { StreamableHTTPError } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { describe, expect, test } from "bun:test";
 import { mkdtempSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { buildApp } from "../src/app.ts";
 import type { Config } from "../src/config.ts";
-import { MASK } from "../src/mcp.ts";
-import { startMcpHttp } from "./support/mcp-http-server.ts";
+import { openDb } from "../src/db.ts";
+import { isHttpSessionExpiredError, MASK, McpManager } from "../src/mcp.ts";
+import { startMcpHttp, startStatefulMcpHttp } from "./support/mcp-http-server.ts";
 
 const SERVER = join(import.meta.dir, "support", "mcp-echo-server.ts");
 
@@ -221,4 +223,237 @@ describe("MCP single-server REST routes", () => {
 			rmSync(root, { recursive: true, force: true });
 		}
 	}, 30_000);
+});
+
+describe("MCP over HTTP auto-reconnect", () => {
+	test("isHttpSessionExpiredError matches only HTTP 404 StreamableHTTPError", () => {
+		expect(isHttpSessionExpiredError(new StreamableHTTPError(404, "Unknown or expired MCP session"))).toBe(true);
+		expect(isHttpSessionExpiredError(new StreamableHTTPError(400, "Bad Request"))).toBe(false);
+		expect(isHttpSessionExpiredError(new StreamableHTTPError(401, "Unauthorized"))).toBe(false);
+		expect(isHttpSessionExpiredError(new StreamableHTTPError(500, "Internal Server Error"))).toBe(false);
+		expect(isHttpSessionExpiredError(new StreamableHTTPError(undefined, "Unknown"))).toBe(false);
+		expect(isHttpSessionExpiredError(new Error("404"))).toBe(false);
+		expect(isHttpSessionExpiredError(null)).toBe(false);
+	});
+
+	test("reconnects automatically on 404 session expiry and retries tool call once", async () => {
+		const remote = startStatefulMcpHttp();
+		const db = openDb(":memory:");
+		const mgr = new McpManager(db);
+		try {
+			mgr.add({ name: "stateful", enabled: true, transport: "http", url: remote.url });
+			const ready = await mgr.waitFor("stateful", 10_000);
+			expect(ready.ready).toBe(1);
+			expect(remote.initializeCount).toBe(1);
+
+			const tool = mgr.toolDefs().mcp_stateful_shout!.create("/", [], {});
+			expect((await tool.execute("c1", { text: "first" }, undefined)).content[0]).toEqual({ type: "text", text: "FIRST" });
+			expect(remote.initializeCount).toBe(1);
+
+			// Simulate idle session expiry or server restart on the remote MCP server.
+			remote.expireAllSessions();
+			expect((await tool.execute("c2", { text: "recovered" }, undefined)).content[0]).toEqual({ type: "text", text: "RECOVERED" });
+			expect(remote.initializeCount).toBe(2);
+			expect(mgr.info().servers[0]?.status).toBe("ready");
+
+			// Subsequent call reuses the newly established session without reconnecting again.
+			expect((await tool.execute("c3", { text: "steady" }, undefined)).content[0]).toEqual({ type: "text", text: "STEADY" });
+			expect(remote.initializeCount).toBe(2);
+		} finally {
+			await mgr.close();
+			db.close();
+			remote.stop();
+		}
+	}, 15_000);
+
+	test("single-flight reconnect shares one reconnection across concurrent 404 calls", async () => {
+		const remote = startStatefulMcpHttp();
+		const db = openDb(":memory:");
+		const mgr = new McpManager(db);
+		try {
+			mgr.add({ name: "stateful", enabled: true, transport: "http", url: remote.url });
+			await mgr.waitFor("stateful", 10_000);
+			expect(remote.initializeCount).toBe(1);
+
+			const tool = mgr.toolDefs().mcp_stateful_shout!.create("/", [], {});
+			remote.expireAllSessions();
+			const gate = remote.pauseInitialize();
+
+			const pending = Promise.all([
+				tool.execute("c1", { text: "one" }, undefined),
+				tool.execute("c2", { text: "two" }, undefined),
+				tool.execute("c3", { text: "three" }, undefined),
+				tool.execute("c4", { text: "four" }, undefined),
+				tool.execute("c5", { text: "five" }, undefined),
+			]);
+
+			await gate.waitUntilStarted;
+			// Allow all concurrent 404s / sibling aborts to reach reconnectHttp before releasing.
+			await Bun.sleep(30);
+			expect(remote.initializeCount).toBe(2);
+			gate.release();
+
+			const results = await pending;
+			expect(results.map((r) => (r.content[0] as { text: string }).text)).toEqual(["ONE", "TWO", "THREE", "FOUR", "FIVE"]);
+			expect(remote.initializeCount).toBe(2);
+		} finally {
+			await mgr.close();
+			db.close();
+			remote.stop();
+		}
+	}, 15_000);
+
+	test("limits retry to once when 404 persists after reconnect (no infinite loop)", async () => {
+		const remote = startStatefulMcpHttp();
+		const db = openDb(":memory:");
+		const mgr = new McpManager(db);
+		try {
+			mgr.add({ name: "stateful", enabled: true, transport: "http", url: remote.url });
+			await mgr.waitFor("stateful", 10_000);
+			expect(remote.initializeCount).toBe(1);
+
+			const tool = mgr.toolDefs().mcp_stateful_shout!.create("/", [], {});
+			remote.expireAllSessions();
+			remote.setAlwaysCallStatus(404);
+
+			let caught: unknown;
+			try {
+				await tool.execute("c1", { text: "loop" }, undefined);
+			} catch (err) {
+				caught = err;
+			}
+			expect(caught).toBeInstanceOf(StreamableHTTPError);
+			expect((caught as StreamableHTTPError).code).toBe(404);
+			expect(remote.initializeCount).toBe(2);
+		} finally {
+			await mgr.close();
+			db.close();
+			remote.stop();
+		}
+	}, 15_000);
+
+	test("propagates reconnect failure and marks server as error", async () => {
+		const remote = startStatefulMcpHttp();
+		const db = openDb(":memory:");
+		const mgr = new McpManager(db);
+		try {
+			mgr.add({ name: "stateful", enabled: true, transport: "http", url: remote.url });
+			await mgr.waitFor("stateful", 10_000);
+
+			const tool = mgr.toolDefs().mcp_stateful_shout!.create("/", [], {});
+			remote.expireAllSessions();
+			remote.setFailInitialize(503);
+
+			await expect(tool.execute("c1", { text: "fail" }, undefined)).rejects.toThrow(/reconnect failed/i);
+			expect(remote.initializeCount).toBe(2);
+			expect(mgr.info().servers[0]?.status).toBe("error");
+		} finally {
+			await mgr.close();
+			db.close();
+			remote.stop();
+		}
+	}, 15_000);
+
+	test("does not reconnect on non-404 HTTP errors (400, 401, 500)", async () => {
+		const remote = startStatefulMcpHttp();
+		const db = openDb(":memory:");
+		const mgr = new McpManager(db);
+		try {
+			mgr.add({ name: "stateful", enabled: true, transport: "http", url: remote.url });
+			await mgr.waitFor("stateful", 10_000);
+			expect(remote.initializeCount).toBe(1);
+
+			const tool = mgr.toolDefs().mcp_stateful_shout!.create("/", [], {});
+			for (const status of [400, 401, 500]) {
+				remote.setNextCallStatus(status);
+				let caught: unknown;
+				try {
+					await tool.execute(`c_${status}`, { text: "bad" }, undefined);
+				} catch (err) {
+					caught = err;
+				}
+				expect(caught).toBeInstanceOf(StreamableHTTPError);
+				expect((caught as StreamableHTTPError).code).toBe(status);
+				expect(remote.initializeCount).toBe(1);
+			}
+
+			// Original session is still intact.
+			expect((await tool.execute("c_ok", { text: "still-good" }, undefined)).content[0]).toEqual({ type: "text", text: "STILL-GOOD" });
+			expect(remote.initializeCount).toBe(1);
+		} finally {
+			await mgr.close();
+			db.close();
+			remote.stop();
+		}
+	}, 15_000);
+
+	test("honors AbortSignal before call and mid-reconnect without breaking other callers", async () => {
+		const remote = startStatefulMcpHttp();
+		const db = openDb(":memory:");
+		const mgr = new McpManager(db);
+		try {
+			mgr.add({ name: "stateful", enabled: true, transport: "http", url: remote.url });
+			await mgr.waitFor("stateful", 10_000);
+
+			const tool = mgr.toolDefs().mcp_stateful_shout!.create("/", [], {});
+
+			// Already aborted signal rejects immediately without hitting the server.
+			const preAborted = new AbortController();
+			preAborted.abort("cancelled-before");
+			const callsBefore = remote.callCount;
+			await expect(tool.execute("c0", { text: "skip" }, preAborted.signal)).rejects.toThrow("cancelled-before");
+			expect(remote.callCount).toBe(callsBefore);
+			expect(remote.initializeCount).toBe(1);
+
+			// Abort while waiting on an in-flight reconnect: aborted caller fails, healthy caller still succeeds.
+			remote.expireAllSessions();
+			const gate = remote.pauseInitialize();
+			const ac = new AbortController();
+			const abortedCall = tool.execute("c1", { text: "cancel-me" }, ac.signal);
+			const healthyCall = tool.execute("c2", { text: "keep-me" }, undefined);
+
+			await gate.waitUntilStarted;
+			ac.abort("cancelled-mid-reconnect");
+			await expect(abortedCall).rejects.toThrow("cancelled-mid-reconnect");
+
+			gate.release();
+			expect((await healthyCall).content[0]).toEqual({ type: "text", text: "KEEP-ME" });
+			expect(remote.initializeCount).toBe(2);
+		} finally {
+			await mgr.close();
+			db.close();
+			remote.stop();
+		}
+	}, 15_000);
+
+	test("does not overwrite disabled/dropped server if drop occurs mid-reconnect", async () => {
+		const remote = startStatefulMcpHttp();
+		const db = openDb(":memory:");
+		const mgr = new McpManager(db);
+		try {
+			mgr.add({ name: "stateful", enabled: true, transport: "http", url: remote.url });
+			await mgr.waitFor("stateful", 10_000);
+
+			const tool = mgr.toolDefs().mcp_stateful_shout!.create("/", [], {});
+			remote.expireAllSessions();
+			const gate = remote.pauseInitialize();
+
+			const pending = tool.execute("c1", { text: "race" }, undefined);
+			await gate.waitUntilStarted;
+
+			// Disable the server while auto-reconnect is in flight.
+			mgr.patch("stateful", { enabled: false });
+			await expect(pending).rejects.toThrow(/not connected/);
+
+			gate.release();
+			await Bun.sleep(50);
+
+			expect(mgr.info().servers[0]?.status).toBe("off");
+			expect(mgr.toolNames()).toEqual([]);
+		} finally {
+			await mgr.close();
+			db.close();
+			remote.stop();
+		}
+	}, 15_000);
 });
