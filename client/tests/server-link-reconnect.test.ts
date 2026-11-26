@@ -493,4 +493,71 @@ describe("ServerLink stream drop and automatic reconnect", () => {
 		expect(readyCount).toBe(1);
 		link.stop();
 	});
+
+	test("extraPaths (pinned folders without sessions) are included in repo lookups on sync and refreshRepos", async () => {
+		const repoCalls: string[][] = [];
+		let openStream: (() => void) | undefined;
+		const pinned = ["/w/app", "", "/w/app-wt"];
+		const link = new ServerLink(
+			{ id: "srv11", name: "Dev", baseUrl: "http://127.0.0.1:9999", token: "tok" },
+			{
+				event: () => {},
+				ready: () => {},
+				extraPaths: () => pinned,
+			},
+		);
+		const fakeApi: any = {
+			scoped: () => fakeApi,
+			health: async () => ({ ok: true, version: "0.10.4", protocol: 1, minClientProtocol: 1 }),
+			listSessions: async () => ({
+				sessions: [
+					{ id: "s1", title: "Worktree", cwd: "/w/app-wt", closed: false, provider: "p", model: "m", thinkingLevel: "medium", tools: [], parentId: null, createdAt: 1, updatedAt: 1 },
+				],
+				nextBefore: null,
+				nextBeforeId: null,
+			}),
+			workspace: async () => ({ root: "/w", home: "/h", workdirs: [] }),
+			groups: async () => [],
+			terminals: async () => [],
+			terminalSupport: async () => null,
+			activity: async () => ({ sessions: [], unread: [] }),
+			latestEventId: async () => 1,
+			models: async () => [],
+			providers: async () => [],
+			tools: async () => ({ tools: [], defaults: [] }),
+			configuration: async () => null,
+			compactionSettings: async () => null,
+			systemModelSettings: async () => null,
+			repos: async (paths: string[]) => {
+				repoCalls.push(paths);
+				return {
+					repos: {
+						"/w/app": { root: "/w/app", top: "/w/app", branch: "main" },
+						"/w/app-wt": { root: "/w/app", top: "/w/app-wt", branch: "fix/test" },
+					},
+				};
+			},
+			subscribe: (handlers: { onOpen?: () => void }) => {
+				openStream = handlers.onOpen;
+				return () => {};
+			},
+		};
+		(link as any).api = fakeApi;
+
+		await link.sync();
+		openStream?.();
+		await new Promise((r) => setTimeout(r, 20));
+
+		expect(repoCalls.some((batch) => batch.includes("/w/app") && batch.includes("/w/app-wt") && !batch.includes(""))).toBe(true);
+		expect(link.repos["/w/app"]).toEqual({ root: "/w/app", top: "/w/app", branch: "main" });
+		expect(link.repos["/w/app-wt"]).toEqual({ root: "/w/app", top: "/w/app-wt", branch: "fix/test" });
+
+		const before = repoCalls.length;
+		link.refreshRepos();
+		await new Promise((r) => setTimeout(r, 20));
+		expect(repoCalls.length).toBeGreaterThan(before);
+		expect(repoCalls.at(-1)?.sort()).toEqual(["/w/app", "/w/app-wt"]);
+
+		link.stop();
+	});
 });
