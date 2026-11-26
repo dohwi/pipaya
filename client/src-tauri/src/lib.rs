@@ -1,3 +1,16 @@
+#[cfg(desktop)]
+mod file_clipboard;
+#[cfg(desktop)]
+mod file_clipboard_core;
+
+#[cfg(not(desktop))]
+mod file_clipboard {
+    #[tauri::command]
+    pub async fn copy_file_to_clipboard() -> Result<(), String> {
+        Err("not available on this platform".into())
+    }
+}
+
 /// Windows toast whose click raises the window and tells the page which session to open.
 /// The notification plugin shows toasts without any activation handler, so a click did nothing.
 #[cfg(windows)]
@@ -440,13 +453,16 @@ pub fn run() {
             show_toast,
             local_server::local_server,
             local_server::local_server_bind,
-            local_server::set_local_server_bind
+            local_server::set_local_server_bind,
+            file_clipboard::copy_file_to_clipboard
         ])
         .setup(|app| {
             #[cfg(desktop)]
             {
                 use tauri::Manager;
                 app.manage(std::sync::Arc::new(local_server::State::default()));
+                app.manage(std::sync::Arc::new(file_clipboard::State::default()));
+                file_clipboard::sweep_cache(app.handle());
             }
             // A relaunch after an update (or any start) should land in front, not behind whatever the user has open.
             #[cfg(desktop)]

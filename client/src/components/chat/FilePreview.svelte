@@ -5,12 +5,13 @@
 	import { t } from "../../lib/i18n";
 	import { app } from "../../lib/store.svelte";
 	import { errorText } from "../../lib/api";
-	import { copyText } from "../../lib/clipboard";
+	import { canInterceptCopyKey, copyFile, copyImage, copyText, fileCopyMessage, supportsFileClipboard } from "../../lib/clipboard";
+	import { topLayer } from "../../lib/dialog";
 	import { formatFileLine, parseTable, previewKind, sizeLabel } from "../../lib/files";
 	import Markdown from "./Markdown.svelte";
 	import Modal from "../ui/Modal.svelte";
 	import { saveFile } from "../../lib/save-file";
-	import { closeVideoView, videoPlayer } from "../../lib/video-view";
+	import { disposeVideoPlayer, isVideoFullscreen, videoPlayer } from "../../lib/video-view";
 
 	/** Preview of a file in the session's working directory: an image, PDF, audio, video, Markdown, CSV table, text, or just a download for anything else. */
 	const open = $derived(app.filePreview);
@@ -24,8 +25,11 @@
 	let failed = $state<string | null>(null);
 	let loading = $state(true);
 	let saving = $state(false);
+	let copying = $state(false);
+	let copyGen = 0;
 	let size = $state<number | undefined>(undefined);
 	let copied = $state(false);
+	let copiedTimer: ReturnType<typeof setTimeout> | undefined;
 	/** HTML shows as a page by default; this flips it to the source */
 	let source = $state(false);
 	let htmlUrl = $state<string | null>(null);
@@ -34,13 +38,15 @@
 
 	/** where the video player (lib/video-view.ts) is drawn: it has a full-screen button of its own, which a phone WebView lacks natively */
 	let videoHost = $state<HTMLElement>();
+	let bodyEl = $state<HTMLElement>();
 	let linesHost = $state<HTMLElement>();
 	$effect(() => {
-		if (kind !== "video" || !url || mediaFailed || !videoHost) return;
-		const player = videoPlayer(url);
+		const target = open;
+		if (kind !== "video" || !url || mediaFailed || !videoHost || !target) return;
+		const player = videoPlayer(url, { filename: target.file.name });
 		player.querySelector("video")?.addEventListener("error", () => (mediaFailed = true));
 		videoHost.replaceChildren(player);
-		return () => closeVideoView(player);
+		return () => disposeVideoPlayer(player);
 	});
 
 	const MAX_NUMBERED_LINES = 2000;
@@ -74,7 +80,10 @@
 		if (htmlUrl) URL.revokeObjectURL(htmlUrl);
 		htmlUrl = null;
 	}
-	onDestroy(revoke);
+	onDestroy(() => {
+		clearTimeout(copiedTimer);
+		revoke();
+	});
 
 	$effect(() => {
 		const f = open;
@@ -87,6 +96,10 @@
 		source = false;
 		mediaFailed = false;
 		saving = false;
+		copyGen += 1;
+		copying = false;
+		copied = false;
+		clearTimeout(copiedTimer);
 		size = f.file.size;
 		loading = true;
 		const reqKind = previewKind(f.file.name, f.file.mimeType);
@@ -138,13 +151,66 @@
 		}
 	}
 
+	const canCopyFile = $derived(supportsFileClipboard() && text === null && kind !== "image");
+	const canCopyImage = $derived(text === null && kind === "image");
+
+	function flashCopied() {
+		copied = true;
+		clearTimeout(copiedTimer);
+		copiedTimer = setTimeout(() => (copied = false), 1400);
+	}
+
 	async function copy() {
-		if (text !== null && (await copyText(text))) {
-			copied = true;
-			setTimeout(() => (copied = false), 1400);
+		const target = open;
+		if (!target || copying) return;
+		if (text !== null) {
+			if (await copyText(text)) flashCopied();
+			return;
+		}
+		if (!url) return;
+		const gen = ++copyGen;
+		copying = true;
+		try {
+			if (kind === "image") {
+				let src: Blob | string = url;
+				if (app.api) {
+					try {
+						src = await app.api.fetchFile(target.sessionId, target.file.path);
+					} catch {
+						/* fall back to the loaded preview blob */
+					}
+				}
+				if (gen !== copyGen || open !== target) return;
+				if (await copyImage(src)) {
+					flashCopied();
+					app.toast(t("이미지를 복사했습니다"), "ok");
+				} else {
+					app.toast(t("복사하지 못했습니다"), "error");
+				}
+				return;
+			}
+			const res = await copyFile(url, target.file.name, { knownSize: size });
+			if (gen !== copyGen || open !== target) return;
+			const msg = fileCopyMessage(res);
+			if (res === "ok") flashCopied();
+			app.toast(msg.text, msg.ok ? "ok" : "error");
+		} finally {
+			if (gen === copyGen) copying = false;
 		}
 	}
+
+	function onkey(e: KeyboardEvent) {
+		if (!open || isVideoFullscreen() || !bodyEl || !topLayer()?.contains(bodyEl)) return;
+		if (!canInterceptCopyKey(e)) return;
+		if (!url || loading || failed || text !== null) return;
+		if (!canCopyImage && !canCopyFile) return;
+		e.preventDefault();
+		e.stopPropagation();
+		void copy();
+	}
 </script>
+
+<svelte:window onkeydowncapture={onkey} />
 
 {#if open}
 	<Modal onclose={close} title={open.file.name} sub={`${open.file.path}${formatFileLine(open.file.line, open.file.endLine)}${size !== undefined ? ` · ${sizeLabel(size)}` : ""}`} subMono divider width="xl" maxHeight="calc(var(--dvh) * 0.85)" layer={2} portal safeArea>
@@ -154,10 +220,14 @@
 			{/if}
 			{#if text !== null}
 				<IconButton icon={copied ? "check" : "copy"} label={t("복사")} tip onclick={copy} />
+			{:else if canCopyImage}
+				<IconButton icon={copied ? "check" : "copy"} label={t("이미지 복사")} tip onclick={copy} disabled={!url || copying} />
+			{:else if canCopyFile}
+				<IconButton icon={copied ? "check" : "copy"} label={t("파일 복사")} tip onclick={copy} disabled={!url || copying} />
 			{/if}
 			<IconButton icon="download" label={t("저장")} tip onclick={save} disabled={!url || saving} />
 		{/snippet}
-		<div class="body">
+		<div class="body" bind:this={bodyEl}>
 			{#if loading}
 				<div class="note"><Spinner /></div>
 			{:else if failed}

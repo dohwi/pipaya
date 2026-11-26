@@ -1562,6 +1562,42 @@ html.dnd {
 	background: #000;
 	color: #fff;
 }
+.wd-video-wrap:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: 2px;
+}
+.wd-video-note {
+	position: absolute;
+	top: 12px;
+	inset-inline: 0;
+	margin-inline: auto;
+	width: fit-content;
+	max-width: calc(100% - 24px);
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	padding: 8px 12px;
+	border-radius: var(--radius-pill);
+	background: color-mix(in srgb, #000 76%, transparent);
+	color: #fff;
+	font-size: var(--fs-sm);
+	line-height: 20px;
+	pointer-events: none;
+	opacity: 0;
+	transition: opacity var(--motion-fast) var(--ease-std);
+}
+.wd-video-note.show {
+	opacity: 1;
+}
+.wd-video-note.err {
+	background: color-mix(in srgb, var(--danger) 88%, #000);
+}
+.wd-video-note svg {
+	width: 16px;
+	height: 16px;
+	flex: none;
+	display: block;
+}
 .wd-video {
 	display: block;
 	max-width: 100%;
@@ -1572,6 +1608,7 @@ html.dnd {
 .wd-video-bar {
 	position: absolute;
 	inset: auto 0 0;
+	container-type: inline-size;
 	display: flex;
 	align-items: center;
 	gap: 8px;
@@ -1651,6 +1688,19 @@ html.dnd {
 .wd-video-volpop {
 	display: contents;
 }
+@media (pointer: fine) {
+	@container (max-width: 420px) {
+		/* narrow desktop windows / portrait videos: drop the inline volume slider so the seek bar and action buttons never clip */
+		.wd-video-vol {
+			display: none;
+		}
+	}
+}
+@container (max-width: 300px) {
+	.wd-video-time {
+		display: none;
+	}
+}
 @media (pointer: coarse) {
 	/* no hover on touch: a tap on the speaker opens a vertical popup above it */
 	.wd-video-volpop {
@@ -1709,6 +1759,10 @@ html.dnd {
 .wd-video-seek:focus-visible {
 	outline: none;
 }
+.wd-video-btn:disabled {
+	color: color-mix(in srgb, #fff 45%, transparent);
+	pointer-events: none;
+}
 .wd-video-btn:focus-visible {
 	outline: 2px solid #fff;
 	outline-offset: -2px;
@@ -1734,4 +1788,7 @@ html.dnd {
 }
 .wd-video-wrap.open .wd-video-bar {
 	padding: 24px 16px calc(8px + env(safe-area-inset-bottom, 0px));
+}
+.wd-video-wrap.open .wd-video-note {
+	top: calc(16px + env(safe-area-inset-top, 0px));
 }

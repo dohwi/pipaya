@@ -2,14 +2,14 @@
 	import DOMPurify from "dompurify";
 	import { onDestroy, onMount, untrack } from "svelte";
 	import { errorText } from "../../lib/api";
-	import { copyText } from "../../lib/clipboard";
+	import { MAX_CLIPBOARD_FILE_BYTES, copyFile, copyImage, copyText, fileCopyMessage, supportsFileClipboard } from "../../lib/clipboard";
 	import { highlightCode, onHighlightReady } from "../../lib/code-highlight";
 	import { baseName, extOf, parseTable, previewKind, sizeLabel, type PreviewKind } from "../../lib/files";
 	import { t } from "../../lib/i18n";
 	import { surfaceIn, surfaceOut } from "../../lib/motion";
 	import { saveFile } from "../../lib/save-file";
 	import { app } from "../../lib/store.svelte";
-	import { closeVideoView, videoPlayer } from "../../lib/video-view";
+	import { disposeVideoPlayer, videoPlayer } from "../../lib/video-view";
 	import { buildFullFileDiff, formatLineSpec, splitHighlightedHtml, type FullDiffRow } from "../../lib/workspace-edits";
 	import { workspaceViewer } from "../../lib/workspace-viewer.svelte";
 	import Markdown from "../chat/Markdown.svelte";
@@ -94,6 +94,10 @@
 		mediaSize = undefined;
 		mediaError = null;
 		mediaFailed = false;
+		copyGen += 1;
+		copyingFile = false;
+		copied = false;
+		clearTimeout(copiedTimer);
 		imgDims = null;
 		richPreview = k === "markdown" || k === "html" || k === "table";
 		editing = false;
@@ -140,10 +144,10 @@
 	// Mount Pipaya's video player (includes mobile fullscreen support).
 	$effect(() => {
 		if (kind !== "video" || !mediaUrl || mediaFailed || !videoHost) return;
-		const player = videoPlayer(mediaUrl);
+		const player = videoPlayer(mediaUrl, { filename: fileName || undefined });
 		player.querySelector("video")?.addEventListener("error", () => (mediaFailed = true));
 		videoHost.replaceChildren(player);
-		return () => closeVideoView(player);
+		return () => disposeVideoPlayer(player);
 	});
 
 	const table = $derived(
@@ -698,12 +702,69 @@
 		}
 	}
 
+	const canCopyText = $derived(!!currentFileData && !currentFileData.binary && !isMediaKind);
+	const canCopyCurrentFile = $derived(
+		canCopyText ||
+			(!!selectedPath && kind === "image" && !!mediaUrl && !mediaLoading && !mediaError) ||
+			(!!selectedPath && supportsFileClipboard() && (isMediaKind ? !!mediaUrl && !mediaLoading && !mediaError : !!currentFileData?.binary)),
+	);
+	let copyingFile = $state(false);
+	let copyGen = 0;
+	let copiedTimer: ReturnType<typeof setTimeout> | undefined;
+
+	function flashCopied() {
+		copied = true;
+		clearTimeout(copiedTimer);
+		copiedTimer = setTimeout(() => (copied = false), 1400);
+	}
+
 	async function copyFileText() {
-		const txt = currentFileData?.content;
-		if (!txt) return;
-		if (await copyText(txt)) {
-			copied = true;
-			setTimeout(() => (copied = false), 1400);
+		if (copyingFile) return;
+		if (canCopyText) {
+			const txt = currentFileData?.content;
+			if (!txt) return;
+			if (await copyText(txt)) flashCopied();
+			return;
+		}
+		const path = selectedPath;
+		const sid = sessionId;
+		const api = app.api;
+		if (!path || !sid || !api) return;
+		const knownSize = isMediaKind ? mediaSize : currentFileData?.size;
+		if (kind !== "image" && knownSize !== undefined && knownSize > MAX_CLIPBOARD_FILE_BYTES) {
+			app.toast(fileCopyMessage("too_large").text, "error", sid);
+			return;
+		}
+		const gen = ++copyGen;
+		copyingFile = true;
+		try {
+			if (kind === "image") {
+				let src: Blob | string | null = mediaUrl;
+				try {
+					src = await api.fetchFile(sid, path);
+				} catch {
+					/* fall back to preview blob */
+				}
+				if (gen !== copyGen || selectedPath !== path) return;
+				if (src && (await copyImage(src))) {
+					flashCopied();
+					app.toast(t("이미지를 복사했습니다"), "ok", sid);
+				} else {
+					app.toast(t("복사하지 못했습니다"), "error", sid);
+				}
+				return;
+			}
+			const source: Blob | string = isMediaKind && mediaUrl ? mediaUrl : await api.fetchFile(sid, path);
+			if (gen !== copyGen || selectedPath !== path) return;
+			const res = await copyFile(source, fileName || baseName(path), { knownSize });
+			if (gen !== copyGen || selectedPath !== path) return;
+			const msg = fileCopyMessage(res);
+			if (res === "ok") flashCopied();
+			app.toast(msg.text, msg.ok ? "ok" : "error", sid);
+		} catch {
+			if (gen === copyGen && selectedPath === path) app.toast(t("복사하지 못했습니다"), "error", sid);
+		} finally {
+			if (gen === copyGen) copyingFile = false;
 		}
 	}
 
@@ -743,7 +804,7 @@
 			editDirty,
 			editSaving,
 			canEdit: canEditText,
-			canCopy: !!currentFileData && !currentFileData.binary && !isMediaKind,
+			canCopy: canCopyCurrentFile,
 			copied,
 			saving,
 			fileCommentOpen: selection?.kind === "file",
@@ -764,6 +825,7 @@
 	});
 
 	onDestroy(() => {
+		clearTimeout(copiedTimer);
 		workspaceViewer.paneControl = null;
 	});
 </script>
@@ -821,8 +883,15 @@
 							onclick={toggleFileComment}
 						/>
 					</span>
-					{#if currentFileData && !currentFileData.binary && !isMediaKind}
-						<IconButton icon={copied ? "check" : "copy"} size="sm" label={t("복사")} tip onclick={copyFileText} />
+					{#if canCopyCurrentFile}
+						<IconButton
+							icon={copied ? "check" : "copy"}
+							size="sm"
+							label={canCopyText ? t("복사") : kind === "image" ? t("이미지 복사") : t("파일 복사")}
+							tip
+							disabled={copyingFile}
+							onclick={copyFileText}
+						/>
 					{/if}
 					<IconButton icon="download" size="sm" label={t("저장")} tip disabled={saving} onclick={downloadCurrentFile} />
 				</div>
