@@ -8,7 +8,8 @@
 	import ModelLogo from "./ModelLogo.svelte";
 	import { t } from "../../lib/i18n";
 	import { duration } from "../../lib/format";
-	import { collapseIn, collapseOut } from "../../lib/motion";
+	import { sortActiveFirst } from "../../lib/list-order";
+	import { collapseIn, collapseOut, reflow } from "../../lib/motion";
 	import type { Form, Row } from "../../lib/connection-form";
 	import type { CatalogModel, ConnectionResult } from "../../lib/types";
 
@@ -52,6 +53,12 @@
 	} = $props();
 
 	const gone = $derived(form.rows.filter((r) => r.unavailable).length);
+	const ordered = $derived(
+		sortActiveFirst(
+			form.rows.map((row, index) => ({ row, index })),
+			({ row }) => (row.disabled ? 2 : row.unavailable ? 1 : 0),
+		),
+	);
 </script>
 
 <section class="fsec">
@@ -68,10 +75,10 @@
 	</div>
 	{#if note}<p class="hint note" role="status" in:collapseIn out:collapseOut>{note}</p>{/if}
 	<div class="mpick">
-		{#each form.rows as r, i (i)}
+		{#each ordered as { row: r, index: i } (r)}
 			{@const id = r.id.trim()}
 			{@const probe = id ? tests[id] : undefined}
-			<div class="mitem" class:off={r.disabled || r.unavailable}>
+			<div class="mitem" class:off={r.disabled || r.unavailable} animate:reflow>
 				<div class="mrow">
 					<button type="button" class="mopen" onclick={() => onopen(i)}>
 						<span class="mlogo"><ModelLogo conn={connection} icon={r.icon} provider={form.id} model={r.id} size={18} /></span>

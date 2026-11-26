@@ -1,6 +1,8 @@
 <script lang="ts">
 	import { untrack } from "svelte";
 	import { t } from "../../lib/i18n";
+	import { sortActiveFirst } from "../../lib/list-order";
+	import { reflow } from "../../lib/motion";
 	import { toolLabel } from "../../lib/settings-search";
 	import { Api, errorText } from "../../lib/api";
 	import { app } from "../../lib/store.svelte";
@@ -147,16 +149,35 @@
 			error = errorText(e);
 		}
 	}
+	const toggleableTools = $derived(
+		shown?.tools ? sortActiveFirst(shown.tools.toggleable, (name) => !shown.tools!.disabled.includes(name)) : [],
+	);
+	type AllowlistRow = { key: string; label: string; switchLabel: string; hint: string; on: boolean; missing: boolean };
+	const allowlistRows = $derived.by((): AllowlistRow[] => {
+		const d = shown?.tools?.delegate;
+		if (!d || d.policy !== "allowlist") return [];
+		const present: AllowlistRow[] = modelList.map((m) => {
+			const key = `${m.provider}/${m.id}`;
+			return { key, label: m.name.trim() || m.id, switchLabel: m.name.trim() || key, hint: key, on: d.models.includes(key), missing: false };
+		});
+		const known = new Set(present.map((r) => r.key));
+		const missing: AllowlistRow[] = d.models
+			.filter((key) => !known.has(key))
+			.map((key) => ({ key, label: key, switchLabel: key, hint: t("연결에서 사라진 모델"), on: true, missing: true }));
+		return sortActiveFirst([...present, ...missing], (r) => (!r.on ? 2 : r.missing ? 1 : 0));
+	});
 </script>
 
 <section class="set-group">
 	<div class="section-label">{t("에이전트 도구")}</div>
 	{#if shown?.tools}
 		{@const info = shown.tools}
-		{#each info.toggleable as name (name)}
-			<SettingRow label={toolLabel(name)}>
-				<Switch checked={!info.disabled.includes(name)} label={name} onchange={(on) => save(name, on)} />
-			</SettingRow>
+		{#each toggleableTools as name (name)}
+			<div animate:reflow>
+				<SettingRow label={toolLabel(name)}>
+					<Switch checked={!info.disabled.includes(name)} label={name} onchange={(on) => save(name, on)} />
+				</SettingRow>
+			</div>
 		{/each}
 		{#each info.locked as name (name)}
 			<SettingRow label={toolLabel(name)} dim>
@@ -179,16 +200,12 @@
 			<Segmented size="sm" full={false} label={t("서브에이전트 모델 선택")} value={d.policy} options={modes} onchange={(id) => saveDelegate({ policy: id, ...(id === "allowlist" && !d.models.length && modelList[0] ? { models: [`${modelList[0].provider}/${modelList[0].id}`] } : {}) })} />
 		</SettingRow>
 		{#if d.policy === "allowlist"}
-			{#each modelList as m (`${m.provider}/${m.id}`)}
-				{@const key = `${m.provider}/${m.id}`}
-				<SettingRow label={m.name.trim() || m.id} hint={key}>
-					<Switch checked={d.models.includes(key)} label={m.name.trim() || key} onchange={(on) => toggleModel(key, on)} />
-				</SettingRow>
-			{/each}
-			{#each d.models.filter((k) => !modelList.some((m) => `${m.provider}/${m.id}` === k)) as key (key)}
-				<SettingRow label={key} hint={t("연결에서 사라진 모델")} dim>
-					<Switch checked label={key} onchange={(on) => toggleModel(key, on)} />
-				</SettingRow>
+			{#each allowlistRows as r (r.key)}
+				<div animate:reflow>
+					<SettingRow label={r.label} hint={r.hint} dim={r.missing}>
+						<Switch checked={r.on} label={r.switchLabel} onchange={(on) => toggleModel(r.key, on)} />
+					</SettingRow>
+				</div>
 			{/each}
 		{/if}
 		{#if delegateError}<span class="hint danger">{delegateError}</span>{/if}
