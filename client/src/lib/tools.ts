@@ -165,6 +165,8 @@ export function toolSummary(name: string, args: Record<string, unknown>): string
 			const first = qs.length ? str((qs[0] as { question?: unknown }).question) : str(args.question);
 			return clip(qs.length > 1 ? `${first} (+${qs.length - 1})` : first, 90);
 		}
+		case "workdir":
+			return clip([str(args.action), str(args.path)].filter(Boolean).join(" · "), 90);
 		default:
 			return clip(JSON.stringify(args), 90);
 	}

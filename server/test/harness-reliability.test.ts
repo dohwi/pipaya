@@ -136,6 +136,40 @@ describe("1. MCP security & guardrails", () => {
 			db.close();
 		}
 	});
+
+	test("deduplicates cross-server MCP tool name collisions without overwriting or skewing cap", () => {
+		const db = openDb(":memory:");
+		try {
+			db.query("INSERT INTO settings (key, data) VALUES ('mcp_servers', $d)").run({
+				d: JSON.stringify([
+					{ name: "gh", enabled: true, transport: "http", url: "http://127.0.0.1:1" },
+					{ name: "gh_a", enabled: true, transport: "http", url: "http://127.0.0.1:2" },
+				]),
+			});
+			const mgr = new McpManager(db);
+			// Both servers produce the same raw name `mcp_gh_a_b`
+			(mgr as any).conns.set("gh", {
+				status: "ready",
+				tools: [{ name: "mcp_gh_a_b", tool: "a_b", description: "from gh", schema: { type: "object" } }],
+				gen: 1,
+			});
+			(mgr as any).conns.set("gh_a", {
+				status: "ready",
+				tools: [{ name: "mcp_gh_a_b", tool: "b", description: "from gh_a", schema: { type: "object" } }],
+				gen: 2,
+			});
+			const defs = mgr.toolDefs();
+			expect(Object.keys(defs)).toEqual(["mcp_gh_a_b", "mcp_gh_a_b_2"]);
+			expect(defs.mcp_gh_a_b?.description).toContain("[MCP: gh]");
+			expect(defs.mcp_gh_a_b_2?.description).toContain("[MCP: gh_a]");
+			const info = mgr.info();
+			expect(info.tools).toBe(2);
+			expect(info.servers[0]?.tools[0]?.name).toBe("mcp_gh_a_b");
+			expect(info.servers[1]?.tools[0]?.name).toBe("mcp_gh_a_b_2");
+		} finally {
+			db.close();
+		}
+	});
 });
 
 describe("2. Compaction & context helpers", () => {
