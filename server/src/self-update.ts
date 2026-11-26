@@ -138,6 +138,7 @@ export class SelfUpdater {
 	private queued = false;
 	private queuedTarget: { from: string; to: string; fromVersion: string | null; toVersion: string | null } | null = null;
 	private lastReportedRunning = -1;
+	private static readonly MAX_VERSION_CACHE = 64;
 	/** The version found at a release commit never changes, so each commit is read once. */
 	private readonly versionAt = new Map<string, string | null>();
 
@@ -171,6 +172,11 @@ export class SelfUpdater {
 			} catch { /* not JSON: no version */ }
 		}
 		this.versionAt.set(sha, found);
+		while (this.versionAt.size > SelfUpdater.MAX_VERSION_CACHE) {
+			const oldest = this.versionAt.keys().next().value;
+			if (oldest === undefined) break;
+			this.versionAt.delete(oldest);
+		}
 		return { ok: true, version: found };
 	}
 

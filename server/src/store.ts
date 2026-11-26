@@ -10,6 +10,7 @@ export { SqliteCredentialStore } from "./credential-store.ts";
 export { THINKING_LEVELS, type ThinkingLevel };
 
 import { nameKey } from "./member-names.ts";
+import { replaceToolMessageImages } from "./tool-images.ts";
 
 export interface SessionRecord {
 	id: string;
@@ -446,8 +447,86 @@ export class SessionStore {
 	}
 
 	addCompaction(sessionId: string, c: { uptoSeq: number; summary: string; tokensBefore: number; usage: Record<string, number> | null }): void {
-		this.db.query("INSERT INTO session_compactions (session_id, upto_seq, summary, tokens_before, usage, created_at) VALUES ($sid, $upto, $summary, $before, $usage, $t)")
-			.run({ sid: sessionId, upto: c.uptoSeq, summary: c.summary, before: c.tokensBefore, usage: c.usage ? JSON.stringify(c.usage) : null, t: Date.now() });
+		this.db.transaction(() => {
+			this.db.query("INSERT INTO session_compactions (session_id, upto_seq, summary, tokens_before, usage, created_at) VALUES ($sid, $upto, $summary, $before, $usage, $t)")
+				.run({ sid: sessionId, upto: c.uptoSeq, summary: c.summary, before: c.tokensBefore, usage: c.usage ? JSON.stringify(c.usage) : null, t: Date.now() });
+			// Messages at or before uptoSeq are never sent back to the model and UI fetches with omitToolImages=true;
+			// strip bulky inline base64 toolResult images now while keeping text and user images intact.
+			this.stripToolImages(sessionId, c.uptoSeq);
+		})();
+	}
+
+	/**
+	 * Replaces inline base64 image blocks in `toolResult` messages up to `upToSeq` (inclusive) with a short
+	 * text placeholder. Text blocks, tool metadata, and `user` images are left untouched. Returns rows updated.
+	 */
+	stripToolImages(sessionId: string, upToSeq: number): number {
+		if (upToSeq < 0) return 0;
+		const rows = this.db.query(
+			`SELECT seq, data FROM messages
+			 WHERE session_id = $sid AND role = 'toolResult' AND seq <= $upto AND instr(data, '"type":"image"') > 0
+			 ORDER BY seq`,
+		).all({ sid: sessionId, upto: upToSeq }) as { seq: number; data: string }[];
+		if (!rows.length) return 0;
+		const update = this.db.query("UPDATE messages SET data = $data WHERE session_id = $sid AND seq = $seq");
+		let updated = 0;
+		for (const row of rows) {
+			let parsed: unknown;
+			try { parsed = JSON.parse(row.data); } catch { continue; }
+			const stripped = replaceToolMessageImages(parsed);
+			if (stripped === parsed) continue;
+			update.run({ sid: sessionId, seq: row.seq, data: JSON.stringify(stripped) });
+			updated++;
+		}
+		return updated;
+	}
+
+	/**
+	 * Replaces inline base64 image blocks in `toolResult` messages belonging to sessions closed before `cutoffMs`.
+	 * Cursor-paginated and time-budgeted so a single maintenance pass never stalls the event loop and text-only
+	 * false positives containing the literal substring cannot starve subsequent rows.
+	 */
+	pruneClosedToolImages(cutoffMs: number, opts: number | { limit?: number; budgetMs?: number } = {}): number {
+		const limit = typeof opts === "number" ? opts : (opts.limit ?? 100);
+		const budgetMs = typeof opts === "number" ? 200 : (opts.budgetMs ?? 200);
+		if (limit <= 0) return 0;
+		const PAGE = 100;
+		const select = this.db.query(
+			`SELECT m.session_id, m.seq, m.data
+			 FROM messages m
+			 JOIN sessions s ON s.id = m.session_id
+			 WHERE s.closed = 1 AND s.updated_at < $cutoff
+			   AND m.role = 'toolResult'
+			   AND instr(m.data, '"type":"image"') > 0
+			   AND (m.session_id > $afterSid OR (m.session_id = $afterSid AND m.seq > $afterSeq))
+			 ORDER BY m.session_id, m.seq
+			 LIMIT $page`,
+		);
+		const update = this.db.query("UPDATE messages SET data = $data WHERE session_id = $sid AND seq = $seq");
+		const started = Date.now();
+		let afterSid = "";
+		let afterSeq = -1;
+		let updated = 0;
+		while (updated < limit) {
+			if (budgetMs > 0 && Date.now() - started >= budgetMs) break;
+			const rows = select.all({ cutoff: cutoffMs, afterSid, afterSeq, page: PAGE }) as { session_id: string; seq: number; data: string }[];
+			if (!rows.length) break;
+			this.db.transaction(() => {
+				for (const row of rows) {
+					afterSid = row.session_id;
+					afterSeq = row.seq;
+					if (updated >= limit) break;
+					let parsed: unknown;
+					try { parsed = JSON.parse(row.data); } catch { continue; }
+					const stripped = replaceToolMessageImages(parsed);
+					if (stripped === parsed) continue;
+					update.run({ sid: row.session_id, seq: row.seq, data: JSON.stringify(stripped) });
+					updated++;
+				}
+			})();
+			if (rows.length < PAGE) break;
+		}
+		return updated;
 	}
 
 	/** What the model sees: the latest summary (if any) followed by the messages after it. */

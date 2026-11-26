@@ -115,6 +115,7 @@ function parseDef(file: string, scope: SubagentDef["scope"]): SubagentDef | null
 
 const dirOf = (scope: SubagentDef["scope"], cwd: string, home: string) => join(scope === "global" ? home : cwd, ".agents", "subagents");
 
+const MAX_SCOPE_CACHE = 64;
 const scopeCache = new Map<string, { fingerprint: string; defs: SubagentDef[] }>();
 
 /** Clears the cached subagent definitions (primarily for tests; saveSubagent/removeSubagent invalidate their own scope via scopeCache.delete). */
@@ -143,14 +144,25 @@ function readScope(dir: string, scope: SubagentDef["scope"]): SubagentDef[] {
 	}
 	const fingerprint = parts.join("\n");
 	const cached = scopeCache.get(cacheKey);
-	if (cached && cached.fingerprint === fingerprint) return cached.defs;
+	if (cached && cached.fingerprint === fingerprint) {
+		// Refresh insertion order for LRU eviction.
+		scopeCache.delete(cacheKey);
+		scopeCache.set(cacheKey, cached);
+		return cached.defs;
+	}
 
 	const out: SubagentDef[] = [];
 	for (const file of files) {
 		const def = parseDef(file, scope);
 		if (def) out.push(def);
 	}
+	scopeCache.delete(cacheKey);
 	scopeCache.set(cacheKey, { fingerprint, defs: out });
+	while (scopeCache.size > MAX_SCOPE_CACHE) {
+		const oldest = scopeCache.keys().next().value;
+		if (oldest === undefined) break;
+		scopeCache.delete(oldest);
+	}
 	return out;
 }
 

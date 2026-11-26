@@ -45,7 +45,7 @@ import { isTerminalId, TerminalManager } from "./terminals.ts";
 import { registerTerminalRoutes } from "./routes/terminal-routes.ts";
 import { LocaleStore } from "./locales.ts";
 import { registerLocaleRoutes } from "./routes/locales-routes.ts";
-import { openDb } from "./db.ts";
+import { convertToIncrementalAutoVacuum, maintainDb, openDb } from "./db.ts";
 import { badRequest, HttpError, notFound } from "./errors.ts";
 import { EventBus } from "./events.ts";
 import { createModelRegistry, describeModels } from "./models.ts";
@@ -82,7 +82,9 @@ import { registerProviderRoutes } from "./routes/providers-routes.ts";
 import { registerSessionRoutes } from "./routes/sessions-routes.ts";
 
 /** How long persisted events are kept for a client that reconnects with a cursor. */
-export const EVENT_RETENTION_MS = 3 * 24 * 3600_000;
+export const EVENT_RETENTION_MS = 24 * 3600_000;
+/** How long inline base64 toolResult images are kept in closed sessions before being stripped (text & user images stay). */
+export const CLOSED_TOOL_IMAGE_RETENTION_MS = 7 * 24 * 3600_000;
 
 const DEFAULT_BODY_LIMIT = 2 * 1024 * 1024;
 // A message may carry images and files (up to 100 MB of files, as base64: x1.34) alongside each other.
@@ -135,7 +137,10 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 	const startedAt = Date.now();
 	const teardown = new TeardownStack();
 	const db = openDb(cfg.dbPath);
-	teardown.onClose(() => db.close());
+	teardown.onClose(() => {
+		try { maintainDb(db, { maxIncrementalPages: 0 }); } catch { /* closing */ }
+		db.close();
+	});
 	const server = Fastify({
 		logger: cfg.logLevel === "silent" ? false : {
 			level: cfg.logLevel,
@@ -410,7 +415,16 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 	registerConfigurationRoutes(server, configuration, bus, opts.home);
 	registerLlmRoutes(server, modelRoles, llm, bus);
 	registerCompactionRoutes(server, compactionSettings, bus);
-	const retention = new Retention(db, store, busy, (id) => sessions.delete(id), (m) => server.log.info(m));
+	const retention = new Retention(
+		db,
+		store,
+		busy,
+		(id) => sessions.delete(id),
+		(m) => server.log.info(m),
+		() => {
+			try { maintainDb(db); } catch (e) { server.log.warn({ err: e }, "db maintenance after retention failed"); }
+		},
+	);
 	registerRetentionRoutes(server, retention, bus);
 	const scheduler = new Scheduler(db, { session: (id) => store.get(id), isRunning: (id) => sessions.isRunning(id), send: (id, input) => sessions.send(id, input) }, {
 		deferRun: () => updater.isPending,
@@ -465,6 +479,7 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 	registerFsRoutes(server, () => configuration.defaultWorkdir(), cfg.restrictWorkspace ? cfg.workspaceRoot : undefined);
 	const sessionDirs = (id: string) => { const r = store.get(id); return r ? [...new Set([workDirOf(r), r.cwd])] : undefined; };
 	const sessionMedia = new SessionMedia(join(cfg.dataDir, "session-media"), (id) => store.get(id) !== undefined);
+	void sessionMedia.sweepOrphans().catch(() => {});
 	bus.subscribe((e) => {
 		if (e.type === "message_end" && e.sessionId) {
 			const text = assistantMessageText((e.data as { message?: unknown })?.message);
@@ -501,14 +516,36 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 	const agentsWatch = new AgentsWatcher(bus, { home: opts.home, workdirs: () => [configuration.defaultWorkdir(), ...store.workdirs().filter((w) => w.active > 0).map((w) => w.cwd)] });
 	agentsWatch.start();
 	teardown.onClose(() => agentsWatch.stop());
-	// The events table holds a copy of every message (the messages table is the record), so it is the bulk of the database. Clients
-	// resume from the latest id, not from old ones: keep a few days for reconnects. Also at startup: a server restarted more often
-	// than the 6 hour timer would otherwise never prune.
-	const pruneEvents = () => { try { bus.prune(EVENT_RETENTION_MS); } catch (e) { server.log.warn({ err: e }, "pruning old events failed"); } };
-	pruneEvents();
-	const prune = setInterval(pruneEvents, 6 * 3600_000);
+	// The events table holds replay payloads, and closed sessions accumulate bulky inline toolResult images; prune both
+	// and incrementally reclaim SQLite pages / truncate the WAL. Also at startup: a server restarted more often than the
+	// 6 hour timer would otherwise never prune.
+	const runStorageMaintenance = () => {
+		try { bus.prune(EVENT_RETENTION_MS); } catch (e) { server.log.warn({ err: e }, "pruning old events failed"); }
+		try { store.pruneClosedToolImages(Date.now() - CLOSED_TOOL_IMAGE_RETENTION_MS); } catch (e) { server.log.warn({ err: e }, "pruning old closed tool images failed"); }
+		try { maintainDb(db); } catch (e) { server.log.warn({ err: e }, "sqlite maintenance failed"); }
+	};
+	runStorageMaintenance();
+	const prune = setInterval(runStorageMaintenance, 6 * 3600_000);
 	prune.unref?.();
 	teardown.onClose(() => clearInterval(prune));
+
+	// Schedule one-time conversion of legacy `auto_vacuum = NONE` DBs AFTER startup pruning and AFTER listen(),
+	// only while idle, so large DBs never block startup or trip the desktop sidecar's 20 s connect timeout.
+	if (cfg.dbPath !== ":memory:") {
+		const vacuumTimer = setTimeout(() => {
+			if (sessions.runningCount > 0) return;
+			try {
+				convertToIncrementalAutoVacuum(db, cfg.dbPath, {
+					force: process.env.PIPAYA_DB_VACUUM === "1",
+					onLog: (m) => server.log.info(m),
+				});
+			} catch (e) {
+				server.log.warn({ err: e }, "incremental auto_vacuum conversion failed");
+			}
+		}, 2000);
+		vacuumTimer.unref?.();
+		teardown.onClose(() => clearTimeout(vacuumTimer));
+	}
 	// Finalize any runs left active by a previous crash / SIGKILL / sudden reboot before scheduled tasks or clients act on them.
 	sessions.recoverInterruptedRuns();
 	teardown.onClose(() => goals.stop());

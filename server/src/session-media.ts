@@ -17,6 +17,8 @@ const MAX_SNAPSHOT_STORED_BYTES = 8 * 1024 * 1024;
 const IMAGE_EXT_RE = /\.(png|jpe?g|gif|webp|bmp|avif|svg)$/i;
 const RESIZABLE_EXT = new Set(["png", "jpg", "jpeg", "webp", "bmp"]);
 const SAFE_SESSION_ID = /^[A-Za-z0-9_-]{1,128}$/;
+/** Cap retained delete-generation counters so long-running servers do not accumulate dead session IDs. */
+const MAX_GEN_ENTRIES = 2000;
 
 const EXT_FOR_MIME: Record<string, string> = {
 	"image/jpeg": "jpg",
@@ -118,6 +120,7 @@ export interface SessionMediaOptions {
 	minResizeBytes?: number;
 	maxSourceBytes?: number;
 	maxStoredBytes?: number;
+	maxGenEntries?: number;
 }
 
 /**
@@ -131,6 +134,7 @@ export class SessionMedia {
 	private readonly minResizeBytes: number;
 	private readonly maxSourceBytes: number;
 	private readonly maxStoredBytes: number;
+	private readonly maxGenEntries: number;
 	/** Monotonic counter per session; incremented on delete so in-flight captures never resurrect a deleted folder. */
 	private readonly gen = new Map<string, number>();
 	private readonly inflight = new Map<string, Promise<void>>();
@@ -145,6 +149,7 @@ export class SessionMedia {
 		this.minResizeBytes = opts.minResizeBytes ?? SNAPSHOT_MIN_RESIZE_BYTES;
 		this.maxSourceBytes = opts.maxSourceBytes ?? MAX_SNAPSHOT_SOURCE_BYTES;
 		this.maxStoredBytes = opts.maxStoredBytes ?? MAX_SNAPSHOT_STORED_BYTES;
+		this.maxGenEntries = opts.maxGenEntries ?? MAX_GEN_ENTRIES;
 	}
 
 	private sessionDir(sessionId: string): string | null {
@@ -302,8 +307,37 @@ export class SessionMedia {
 	/** Delete all archived snapshots for a deleted session. */
 	async delete(sessionId: string): Promise<void> {
 		this.gen.set(sessionId, (this.gen.get(sessionId) ?? 0) + 1);
+		if (this.gen.size > this.maxGenEntries) {
+			for (const id of this.gen.keys()) {
+				if (this.gen.size <= this.maxGenEntries) break;
+				if (id !== sessionId && !this.isAlive(id)) this.gen.delete(id);
+			}
+		}
 		const dir = this.sessionDir(sessionId);
 		if (!dir) return;
 		await rm(dir, { recursive: true, force: true }).catch(() => {});
+	}
+
+	/**
+	 * Remove archived snapshot folders whose session no longer exists (e.g. after an ungraceful shutdown
+	 * mid-delete). Non-directory files and unsafe names are ignored. Returns the number of folders removed.
+	 */
+	async sweepOrphans(): Promise<number> {
+		let entries;
+		try {
+			entries = await readdir(this.root, { withFileTypes: true });
+		} catch {
+			return 0;
+		}
+		let removed = 0;
+		for (const entry of entries) {
+			if (!entry.isDirectory() || !SAFE_SESSION_ID.test(entry.name)) continue;
+			if (this.isAlive(entry.name)) continue;
+			try {
+				await rm(join(this.root, entry.name), { recursive: true, force: true });
+				removed++;
+			} catch { /* best effort */ }
+		}
+		return removed;
 	}
 }

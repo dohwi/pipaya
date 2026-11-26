@@ -300,6 +300,7 @@ export class OpenRouterCatalog {
 		}
 	}
 
+	private static readonly MAX_TIER_CACHE = 256;
 	private tierCache = new Map<string, { at: number; tiers: ServiceTier[] }>();
 	private tierRequests = new Map<string, Promise<ServiceTier[]>>();
 
@@ -320,7 +321,19 @@ export class OpenRouterCatalog {
 			const rows: unknown = JSON.parse(text)?.data?.endpoints;
 			if (!Array.isArray(rows)) throw new Error("Invalid OpenRouter endpoints");
 			const tiers = ENDPOINT_TIERS.filter(tier => rows.some(e => e?.service_tier === tier));
-			this.tierCache.set(id, { at: this.now(), tiers });
+			const now = this.now();
+			this.tierCache.delete(id);
+			this.tierCache.set(id, { at: now, tiers });
+			if (this.tierCache.size > OpenRouterCatalog.MAX_TIER_CACHE) {
+				for (const [k, v] of this.tierCache) {
+					if (now - v.at >= this.cacheMs) this.tierCache.delete(k);
+				}
+				while (this.tierCache.size > OpenRouterCatalog.MAX_TIER_CACHE) {
+					const oldest = this.tierCache.keys().next().value;
+					if (oldest === undefined) break;
+					this.tierCache.delete(oldest);
+				}
+			}
 			return tiers;
 		};
 		const request = load().finally(() => this.tierRequests.delete(id));

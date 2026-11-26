@@ -50,6 +50,7 @@ export class Retention {
 		private busy: (id: string) => boolean,
 		private remove: (id: string) => void,
 		private log: (msg: string) => void = () => {},
+		private onPurged?: (deleted: number) => void,
 	) {}
 
 	private read(key: string): unknown {
@@ -96,7 +97,10 @@ export class Retention {
 			try { this.remove(id); deleted++; } catch (e) { this.log(`retention: could not delete ${id}: ${String(e)}`); }
 		}
 		this.write(STATE_KEY, { lastRun: now, lastDeleted: deleted });
-		if (deleted) this.log(`retention: deleted ${deleted} session(s) not used for ${p.days} days`);
+		if (deleted) {
+			this.log(`retention: deleted ${deleted} session(s) not used for ${p.days} days`);
+			try { this.onPurged?.(deleted); } catch (e) { this.log(`retention: post-purge hook failed: ${String(e)}`); }
+		}
 		return deleted;
 	}
 

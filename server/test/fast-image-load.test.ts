@@ -150,8 +150,12 @@ describe("fast session messages, events and cached file previews", () => {
 		expect((persistedEnd?.data as any)?.result?.content?.some((c: any) => c.type === "image")).toBe(false);
 		const persistedMsgEnd = persisted.find((e) => e.type === "message_end" && (e.data as any)?.message?.role === "toolResult");
 		expect((persistedMsgEnd?.data as any)?.message?.content?.some((c: any) => c.type === "image")).toBe(false);
+		const persistedMsgStart = persisted.find((e) => e.type === "message_start" && (e.data as any)?.message?.role === "toolResult");
+		expect((persistedMsgStart?.data as any)?.message).toEqual({ role: "toolResult" });
 		const persistedTurnEnd = persisted.find((e) => e.type === "turn_end");
 		expect((persistedTurnEnd?.data as any)?.toolResults?.some((tr: any) => tr.content?.some((c: any) => c.type === "image"))).toBe(false);
+		expect((persistedTurnEnd?.data as any)?.toolResults).toEqual([]);
+		expect((persistedTurnEnd?.data as any)?.message).toBeUndefined();
 
 		// Default GET /messages keeps toolResult images for backwards compatibility.
 		const full = (await call("GET", `/sessions/${id}/messages`)).json.messages as any[];

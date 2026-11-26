@@ -581,10 +581,15 @@ export const EVENTS: EventDef[] = [
 	{
 		type: "turn_end",
 		persisted: true,
-		description: "A turn finished",
-		data: Type.Object({ message: Message, toolResults: Type.Array(Type.Unknown()) }),
+		description: "A turn finished. Replayed/history events store only the marker (`toolResults: []`, no `message`); read stored messages via GET /sessions/:id/messages.",
+		data: Type.Object({ message: Type.Optional(Message), toolResults: Type.Array(Type.Unknown()) }),
 	},
-	{ type: "message_start", persisted: true, description: "A message began (user, assistant or toolResult)", data: Type.Object({ message: Message }) },
+	{
+		type: "message_start",
+		persisted: true,
+		description: "A message began (user, assistant or toolResult). Replayed/history events store only `{ message: { role } }`; read full messages via message_end or GET /sessions/:id/messages.",
+		data: Type.Object({ message: Type.Union([Message, Type.Object({ role: Type.String() })]) }),
+	},
 	{
 		type: "message_update",
 		persisted: false,

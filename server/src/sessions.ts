@@ -2027,7 +2027,12 @@ export class SessionManager {
 				pub("tool_execution_update", { toolCallId: event.toolCallId, toolName: event.toolName, partialResult: event.partialResult }, { ephemeral: true });
 				return;
 			case "message_start":
-				pub("message_start", { message: stripToolMessageImages(event.message) });
+				// Replay only inspects `message.role` to open a stream bubble; avoid persisting full message content twice.
+				pub(
+					"message_start",
+					{ message: stripToolMessageImages(event.message) },
+					{ persistData: { message: { role: event.message.role } } },
+				);
 				return;
 			case "tool_execution_end":
 				pub(
@@ -2093,7 +2098,12 @@ export class SessionManager {
 				pub("agent_end", { messageCount: event.messages.length });
 				return;
 			case "turn_end":
-				pub("turn_end", { ...event, toolResults: event.toolResults.map(stripToolMessageImages) });
+				// Replay/extensions only consume the turn_end marker; message_end already persists each message and tool result.
+				pub(
+					"turn_end",
+					{ ...event, toolResults: event.toolResults.map(stripToolMessageImages) },
+					{ persistData: { type: "turn_end", toolResults: [] } },
+				);
 				this.guardRunaway(sessionId, live, event);
 				return;
 			default:
