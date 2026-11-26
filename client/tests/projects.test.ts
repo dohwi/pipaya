@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { branchLabel, dissolveProject, flattenBlocks, joinProject, leaveProject, projectBlocks, reorderProjectDir, subPath, tabLead, tabLeads, type RepoMap } from "../src/lib/projects";
+import { branchLabel, cleanManualProjects, dissolveProject, flattenBlocks, joinProject, leaveProject, projectBlocks, reorderProjectDir, subPath, tabLead, tabLeads, type RepoMap } from "../src/lib/projects";
 import { withoutDirKeys } from "../src/lib/sidebar.svelte";
 import type { DirBlock } from "../src/lib/nav";
 
@@ -62,15 +62,29 @@ describe("hand-made projects", () => {
 	const dirs = [dir("/w/app", "a"), dir("/w/app-x", "x"), dir("/w/api", "b"), dir("/w/web", "c")];
 	const roots = (bs: ReturnType<typeof projectBlocks>) => bs.map((b) => (b.kind === "dir" ? b.dir.path : `${b.root}[${b.dirs.map((d) => d.path).join(",")}]`));
 
-	test("a hand-made project wins over the repository and keeps its own order, even with one folder", () => {
+	test("a hand-made project wins over the repository, keeps its order, and collapses to a plain folder when only one member is visible", () => {
 		const over = { projects: [{ id: "c", name: "회사", dirs: ["/w/web", "/w/api"] }] };
 		expect(roots(projectBlocks(dirs, repos, over))).toEqual(["/w/app[/w/app,/w/app-x]", "manual:c[/w/web,/w/api]"]);
-		expect(roots(projectBlocks([dir("/w/web")], repos, over))).toEqual(["manual:c[/w/web]"]);
+		// Only one member visible: renders as a plain folder row instead of a 1-folder project wrapper
+		expect(roots(projectBlocks([dir("/w/web")], repos, over))).toEqual(["/w/web"]);
+		// A collapsed manual member stays apart from its git repository's automatic project until the project is dissolved
+		const split = { projects: [{ id: "m", name: "임시", dirs: ["/w/app-x", "/w/hidden"] }] };
+		expect(roots(projectBlocks([dir("/w/app", "a"), dir("/w/app-x", "x")], repos, split))).toEqual(["/w/app", "/w/app-x"]);
+		// Legacy 1-dir, intra-project duplicate, or cross-project overlapping manual entries are cleaned (first valid project wins)
+		expect(cleanManualProjects([{ id: "one", name: "One", dirs: ["/w/web"] }, { id: "dup", name: "Dup", dirs: ["/w/web", "/w/web"] }])).toEqual([]);
+		expect(
+			cleanManualProjects([
+				{ id: "bad", name: "Bad", dirs: ["/w/a"] },
+				{ id: "p1", name: "P1", dirs: ["/w/a", "/w/b"] },
+				{ id: "p2", name: "P2", dirs: ["/w/a", "/w/c"] },
+			]),
+		).toEqual([{ id: "p1", name: "P1", dirs: ["/w/a", "/w/b"] }]);
+		expect(roots(projectBlocks([dir("/w/app", "a"), dir("/w/app-x", "x")], repos, { projects: [{ id: "old", name: "Old", dirs: ["/w/app-x"] }] }))).toEqual(["/w/app[/w/app,/w/app-x]"]);
 	});
 	test("a folder taken out of its repository stands alone, and the rest of the project with one folder is no project", () => {
 		expect(roots(projectBlocks(dirs, repos, { ungrouped: ["/w/app-x"] }))).toEqual(["/w/app", "/w/app-x", "/w/api", "/w/web"]);
 	});
-	test("joining: a new project with another folder, then a third one into it; a git folder can go back", () => {
+	test("joining: a new project with another folder, then a third one into it; moving a folder out dissolves a 2-folder source project", () => {
 		let o = joinProject({}, "/w/web", { with: "/w/api", id: "p", name: "api" });
 		expect(o.projects).toEqual([{ id: "p", name: "api", dirs: ["/w/api", "/w/web"] }]);
 		o = joinProject(o, "/w/app-x", { root: "manual:p" });
@@ -78,13 +92,18 @@ describe("hand-made projects", () => {
 		o = joinProject(o, "/w/app-x", { root: "/w/app" });
 		expect(o.projects[0]!.dirs).toEqual(["/w/api", "/w/web"]);
 		expect(o.ungrouped).toEqual([]);
+		// Moving one of the remaining two folders into another project dissolves the 1-folder source
+		o = joinProject(o, "/w/web", { with: "/w/app", id: "q", name: "app" });
+		expect(o.projects).toEqual([{ id: "q", name: "app", dirs: ["/w/app", "/w/web"] }]);
 	});
-	test("leaving: out of a hand-made project, or marked apart from its repository; dissolving undoes the project", () => {
-		const o = { projects: [{ id: "p", name: "x", dirs: ["/w/api", "/w/web"] }], ungrouped: [] };
-		expect(leaveProject(o, "/w/web", false)).toEqual({ projects: [{ id: "p", name: "x", dirs: ["/w/api"] }], ungrouped: [] });
-		expect(leaveProject(o, "/w/app-x", true).ungrouped).toEqual(["/w/app-x"]);
-		expect(leaveProject({ projects: [{ id: "p", name: "x", dirs: ["/w/app-x"] }] }, "/w/app-x", true)).toEqual({ projects: [], ungrouped: [] });
-		expect(dissolveProject(o, "p").projects).toEqual([]);
+	test("leaving: a 2-folder hand-made project dissolves automatically; a 3-folder one keeps the rest; dissolving undoes the project", () => {
+		const two = { projects: [{ id: "p", name: "x", dirs: ["/w/api", "/w/web"] }], ungrouped: [] };
+		expect(leaveProject(two, "/w/web", false)).toEqual({ projects: [], ungrouped: [] });
+		const three = { projects: [{ id: "p", name: "x", dirs: ["/w/api", "/w/web", "/w/app-x"] }], ungrouped: [] };
+		expect(leaveProject(three, "/w/web", false)).toEqual({ projects: [{ id: "p", name: "x", dirs: ["/w/api", "/w/app-x"] }], ungrouped: [] });
+		expect(leaveProject(two, "/w/app-x", true).ungrouped).toEqual(["/w/app-x"]);
+		expect(leaveProject({ projects: [{ id: "p", name: "x", dirs: ["/w/app-x"] }] }, "/w/app-x", true)).toEqual({ projects: [], ungrouped: ["/w/app-x"] });
+		expect(dissolveProject(two, "p").projects).toEqual([]);
 	});
 	test("joinProject handles self-drop, duplicate manual joins, positional insert, and git project promotion", () => {
 		expect(joinProject({}, "/w/web", { with: "/w/web", id: "p", name: "web" })).toEqual({ projects: [], ungrouped: [] });

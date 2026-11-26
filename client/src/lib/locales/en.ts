@@ -766,6 +766,7 @@ export const en: Record<string, string> = {
 	"'{name}'를 묶을 곳": "Add '{name}' to",
 	"묶을 다른 폴더가 없습니다": "No other folder to group with",
 	"프로젝트 · 폴더 {n}개": "Project · {n} folders",
+	"'{name}' 프로젝트 · {path}": "'{name}' project · {path}",
 	"새 프로젝트 · {path}": "New project · {path}",
 	"탭 펼치기": "Show tabs",
 	"탭 접기": "Hide tabs",

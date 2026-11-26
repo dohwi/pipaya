@@ -4,7 +4,7 @@
  */
 import { clampTo } from "./number";
 import { K, read, remove, write } from "./persist";
-import type { ManualProject, ProjectOverrides } from "./projects";
+import { cleanManualProjects, manualRoot, projectKey, type ManualProject, type ProjectOverrides } from "./projects";
 
 export const SIDEBAR_W = { min: 220, max: 560, def: 288 };
 const clamp = (n: number) => clampTo(Number.isFinite(n) ? Math.round(n) : n, SIDEBAR_W.min, SIDEBAR_W.max, SIDEBAR_W.def);
@@ -51,11 +51,16 @@ export interface SidebarShared {
 const strs = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : []);
 const projectList = (v: unknown): ManualProject[] =>
   Array.isArray(v)
-    ? v
-        .filter((p): p is ManualProject => !!p && typeof p === "object" && typeof p.id === "string" && typeof p.name === "string" && Array.isArray(p.dirs))
-        .map((p) => ({ id: p.id, name: p.name, dirs: strs(p.dirs) }))
-        .filter((p) => p.dirs.length)
+    ? cleanManualProjects(
+        v
+          .filter((p): p is ManualProject => !!p && typeof p === "object" && typeof p.id === "string" && typeof p.name === "string" && Array.isArray(p.dirs))
+          .map((p) => ({ id: p.id, name: p.name, dirs: strs(p.dirs) })),
+      )
     : [];
+const projectMap = (v: unknown): Record<string, ManualProject[]> =>
+  v && typeof v === "object" && !Array.isArray(v)
+    ? Object.fromEntries(Object.entries(v).map(([id, list]) => [id, projectList(list)]).filter(([, list]) => list.length > 0))
+    : {};
 const strMap = (v: unknown): Record<string, string> =>
   v && typeof v === "object" && !Array.isArray(v) ? Object.fromEntries(Object.entries(v).filter((e): e is [string, string] => typeof e[1] === "string")) : {};
 
@@ -101,7 +106,7 @@ export class SidebarState {
   tabOrder = $state<Record<string, string[]>>(read<Record<string, string[]>>(K.tabOrder, {}));
 
   /** Projects the user made by hand, per server (they win over the git grouping). */
-  projects = $state<Record<string, ManualProject[]>>(read<Record<string, ManualProject[]>>(K.projects, {}));
+  projects = $state<Record<string, ManualProject[]>>(projectMap(read<unknown>(K.projects, {})));
   /** Folders taken out of their git repository's project, per server. */
   ungrouped = $state<Record<string, string[]>>(read<Record<string, string[]>>(K.ungrouped, {}));
 
@@ -109,12 +114,31 @@ export class SidebarState {
     return { projects: this.projects[serverId] ?? [], ungrouped: this.ungrouped[serverId] ?? [] };
   }
 
+  /** Drop local fold keys for hand-made projects that were removed or dissolved on `serverId`. */
+  private dropProjectFoldKeys(serverId: string, prev: readonly ManualProject[], next: readonly ManualProject[]) {
+    if (!prev.length) return;
+    const nextIds = new Set(next.map((p) => p.id));
+    const droppedKeys = new Set<string>();
+    for (const p of prev) {
+      if (!nextIds.has(p.id)) droppedKeys.add(projectKey(serverId, manualRoot(p.id)));
+    }
+    if (!droppedKeys.size) return;
+    const nextFolded = this.folded.filter((k) => !droppedKeys.has(k));
+    if (nextFolded.length !== this.folded.length) {
+      this.folded = nextFolded;
+      write(K.folded, this.folded);
+    }
+  }
+
   /** Keep what `projects.ts` (joinProject, leaveProject, dissolveProject) worked out for a server. */
   setOverrides(serverId: string, o: Required<ProjectOverrides>) {
-    this.projects = { ...this.projects, [serverId]: [...o.projects] };
+    const prev = this.projects[serverId] ?? [];
+    const next = cleanManualProjects(o.projects);
+    this.projects = { ...this.projects, [serverId]: next };
     this.ungrouped = { ...this.ungrouped, [serverId]: [...o.ungrouped] };
     write(K.projects, this.projects);
     write(K.ungrouped, this.ungrouped);
+    this.dropProjectFoldKeys(serverId, prev, next);
     this.onEdit(serverId);
   }
 
@@ -402,10 +426,13 @@ export class SidebarState {
     this.tabOrder = { ...this.tabOrder, [serverId]: strs(o.tabOrder) };
     this.dirNames = { ...this.dirNames, [serverId]: strMap(o.dirNames) };
     this.groupDir = { ...this.groupDir, [serverId]: strMap(o.groupDir) };
-    this.projects = { ...this.projects, [serverId]: projectList(o.projects) };
+    const prevProjects = this.projects[serverId] ?? [];
+    const nextProjects = projectList(o.projects);
+    this.projects = { ...this.projects, [serverId]: nextProjects };
     this.ungrouped = { ...this.ungrouped, [serverId]: strs(o.ungrouped) };
     write(K.projects, this.projects);
     write(K.ungrouped, this.ungrouped);
+    this.dropProjectFoldKeys(serverId, prevProjects, nextProjects);
     write(K.pinnedDirs, this.pinned);
     write(K.pinnedTabs, this.pinnedTabs);
     write(K.dirOrder, this.dirOrder);
