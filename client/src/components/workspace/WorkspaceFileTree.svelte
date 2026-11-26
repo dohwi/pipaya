@@ -1,9 +1,11 @@
 <script lang="ts">
-	import { tick } from "svelte";
+	import { tick, untrack } from "svelte";
 	import { splitFilePath } from "../../lib/files";
+	import { tilde } from "../../lib/format";
 	import { t } from "../../lib/i18n";
 	import { formatCombo, OVERLAY_SELECTOR } from "../../lib/keys";
 	import { workDir } from "../../lib/nav";
+	import { leafName, parentPath } from "../../lib/sidebar-model";
 	import { app } from "../../lib/store.svelte";
 	import { EdgeResizeController, RAIL_W } from "../../lib/shell/sidebar-resize.svelte";
 	import { viewport } from "../../lib/viewport.svelte";
@@ -31,10 +33,29 @@
 
 	const session = $derived(app.current);
 	const sessionId = $derived(session?.id ?? workspaceViewer.sessionId);
-	const folderName = $derived(
-		workspaceViewer.workDir.split(/[\\/]/).filter(Boolean).pop() ??
-			(session ? workDir(session).split(/[\\/]/).filter(Boolean).pop() ?? workDir(session) : ""),
+	const activeWorkDir = $derived(workspaceViewer.workDir || (session ? workDir(session) : ""));
+	const home = $derived(app.link?.workspace?.home);
+	const folderLabel = $derived(
+		activeWorkDir
+			? (app.serverId ? app.sidebar.dirName(app.serverId, activeWorkDir) : null) ?? leafName(activeWorkDir, home)
+			: "",
 	);
+	const parentLabel = $derived(activeWorkDir ? parentPath(activeWorkDir, home, folderLabel) : "");
+	const branchLabelText = $derived.by(() => {
+		if (!workspaceViewer.isRepo) return "";
+		if (workspaceViewer.branch) return workspaceViewer.branch;
+		if (workspaceViewer.head) return `HEAD · ${workspaceViewer.head}`;
+		return "HEAD";
+	});
+	const metaText = $derived(workspaceViewer.isRepo ? branchLabelText : parentLabel);
+	const metaIcon = $derived<"fork" | "folder">(workspaceViewer.isRepo ? "fork" : "folder");
+	const headTooltip = $derived.by(() => {
+		const prettyDir = activeWorkDir ? tilde(activeWorkDir, home) : "";
+		if (workspaceViewer.isRepo && branchLabelText) {
+			return prettyDir ? `${prettyDir} · ${branchLabelText}` : branchLabelText;
+		}
+		return prettyDir;
+	});
 	const shortcutHint = $derived(app.prefs.bindings.toggleFiles ? ` (${formatCombo(app.prefs.bindings.toggleFiles)})` : "");
 	const totalAdd = $derived(workspaceViewer.changes.reduce((n, c) => n + c.additions, 0));
 	const totalDel = $derived(workspaceViewer.changes.reduce((n, c) => n + c.deletions, 0));
@@ -89,10 +110,39 @@
 		},
 	]);
 
-	// Refresh tree when drawer opens or bound session changes.
+	// Refresh tree when the drawer transitions from closed -> open (binding/session switches already refresh in App.svelte).
+	let wasOpen = untrack(() => open);
+	$effect(() => {
+		const nowOpen = open;
+		const sid = sessionId;
+		if (nowOpen && !wasOpen && sid) {
+			void workspaceViewer.refreshTree({ preserveOpenDirs: true });
+		}
+		wasOpen = nowOpen;
+	});
+
+	function refreshNow() {
+		void workspaceViewer.refreshTree({ preserveOpenDirs: true });
+		if (activeWorkDir) app.link?.refreshRepos([activeWorkDir]);
+	}
+
+	// Refresh open drawer when the window/tab returns to the foreground (e.g. after switching branches in an external terminal).
 	$effect(() => {
 		if (!open || !sessionId) return;
-		void workspaceViewer.refreshTree({ preserveOpenDirs: true });
+		let lastAt = 0;
+		const onResume = () => {
+			if (document.hidden || app.net !== "online") return;
+			const now = Date.now();
+			if (now - lastAt < 2000) return;
+			lastAt = now;
+			void workspaceViewer.refreshTree({ preserveOpenDirs: true });
+		};
+		document.addEventListener("visibilitychange", onResume);
+		window.addEventListener("focus", onResume);
+		return () => {
+			document.removeEventListener("visibilitychange", onResume);
+			window.removeEventListener("focus", onResume);
+		};
 	});
 
 	// Close mobile drawer on Escape (matching the left sidebar's Escape guard so modals/IME keep Escape).
@@ -295,15 +345,17 @@
 		{#if !viewport.narrow}
 			<IconButton icon="sidebar" class="foldbtn flip-x" label={t("파일 뷰어 접기")} title={t("파일 뷰어 접기") + shortcutHint} onclick={(e) => setFilesOpen(false, e)} />
 		{/if}
-		<div class="htitle" title={workspaceViewer.workDir}>
-			{#if workspaceViewer.branch}
-				<span class="hbranch mono" title="{folderName} · {workspaceViewer.branch}">{workspaceViewer.branch}</span>
-			{:else}
-				<span class="hname mono">{folderName || t("파일 뷰어")}</span>
+		<div class="htitle" title={headTooltip}>
+			<span class="hname">{folderLabel || t("파일 뷰어")}</span>
+			{#if metaText}
+				<span class="hmeta">
+					<span class="hico" aria-hidden="true"><Icon name={metaIcon} /></span>
+					<span class="hbranch mono">{metaText}</span>
+				</span>
 			{/if}
 		</div>
 		<div class="hact">
-			<IconButton icon="retry" label={t("새로고침")} onclick={() => workspaceViewer.refreshTree({ preserveOpenDirs: true })} />
+			<IconButton icon="retry" label={t("새로고침")} onclick={refreshNow} />
 			{#if viewport.narrow}
 				<IconButton icon="x" label={t("파일 뷰어 닫기")} title={t("파일 뷰어 닫기") + shortcutHint} onclick={() => (app.filesOpen = false)} />
 			{/if}
@@ -746,13 +798,10 @@
 		flex: 1;
 		min-width: 0;
 		display: flex;
-		align-items: center;
-		gap: 8px;
-		line-height: 20px;
+		flex-direction: column;
+		justify-content: center;
 	}
-	.hname,
-	.hbranch {
-		flex: 1;
+	.hname {
 		min-width: 0;
 		font-size: var(--fs-xs);
 		font-weight: 600;
@@ -760,11 +809,38 @@
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
-		line-height: 20px;
+		line-height: 16px;
+	}
+	.hmeta {
+		min-width: 0;
+		display: flex;
+		align-items: center;
+		gap: 4px;
+		line-height: 16px;
+	}
+	.hico {
+		width: 12px;
+		height: 12px;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		flex: none;
+		color: var(--text-faint);
+	}
+	.hico :global(svg) {
+		width: 12px;
+		height: 12px;
 	}
 	.hbranch {
-		color: var(--text-dim);
+		flex: 1;
+		min-width: 0;
+		font-size: var(--fs-2xs);
 		font-weight: 500;
+		color: var(--text-dim);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		line-height: 16px;
 	}
 	.hact {
 		display: flex;

@@ -163,7 +163,7 @@
 
 	{#if zoomed && !viewport.narrow && id}
 		<!-- the title bar is hidden while zoomed: the path and the shrink button float in the pane's top-right corner -->
-		{@const dir = term?.cwd ?? session?.cwd ?? ""}
+		{@const dir = term?.cwd ?? (session ? workDir(session) : "")}
 		<div class="corner">
 			{#if dir}<span class="cwd mono" title={dir}>{dir.split(/[\\/]/).slice(-2).join("/")}</span>{/if}
 			<button class="x tap" onclick={toggleZoom} aria-label={t("작게 보기")} title={full ? t("작게 보기") : t("작게 보기 (Esc)")}><Icon name="shrink" /></button>

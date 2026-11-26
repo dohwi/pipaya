@@ -105,13 +105,19 @@ describe("workspace viewer routes", () => {
 			const root = rootRes.json();
 			expect(root.isRepo).toBe(true);
 			expect(root.branch).toBe("main");
+			expect(typeof root.head).toBe("string");
+			expect(root.head.length).toBeGreaterThanOrEqual(7);
 			expect(root.entries.map((e: { name: string }) => e.name)).toEqual(["src", "README.md"]);
 			expect(root.changes.map((c: { path: string }) => c.path).sort()).toEqual(["src/app.ts", "src/new.ts"]);
 
-			// Subdir listing
+			// Subdir listing keeps git metadata without full diff work
 			const subRes = await app.inject({ method: "GET", url: "/sessions/s1/workspace/tree?dir=src" });
 			expect(subRes.statusCode).toBe(200);
-			expect(subRes.json().entries.map((e: { path: string }) => e.path)).toEqual(["src/app.ts", "src/new.ts"]);
+			const sub = subRes.json();
+			expect(sub.isRepo).toBe(true);
+			expect(sub.branch).toBe("main");
+			expect(sub.head).toBe(root.head);
+			expect(sub.entries.map((e: { path: string }) => e.path)).toEqual(["src/app.ts", "src/new.ts"]);
 
 			// Search
 			const qRes = await app.inject({ method: "GET", url: "/sessions/s1/workspace/tree?q=new.ts" });
@@ -195,11 +201,57 @@ describe("workspace viewer routes", () => {
 			expect(res.statusCode).toBe(200);
 			const data = res.json();
 			expect(data.isRepo).toBe(false);
+			expect(data.branch).toBeNull();
+			expect(data.head).toBeNull();
 			expect(data.changes).toEqual([]);
 			expect(data.entries.map((e: { name: string }) => e.name)).toEqual(["note.txt"]);
 		} finally {
 			await app.close();
 			db.close();
+		}
+	});
+
+	test("reports detached HEAD short sha, branch switch, and unborn repo accurately", async () => {
+		const repo = await initRepo();
+		const { app, db } = await setupServer(repo);
+		try {
+			// Branch switch updates branch immediately
+			await git(repo, ["checkout", "-b", "feat/sidebar-meta"]);
+			const brRes = await app.inject({ method: "GET", url: "/sessions/s1/workspace/tree" });
+			expect(brRes.statusCode).toBe(200);
+			const br = brRes.json();
+			expect(br.isRepo).toBe(true);
+			expect(br.branch).toBe("feat/sidebar-meta");
+			expect(typeof br.head).toBe("string");
+
+			// Detached HEAD returns branch: null and short sha in head
+			await git(repo, ["checkout", "--detach", "HEAD"]);
+			const detRes = await app.inject({ method: "GET", url: "/sessions/s1/workspace/tree" });
+			expect(detRes.statusCode).toBe(200);
+			const det = detRes.json();
+			expect(det.isRepo).toBe(true);
+			expect(det.branch).toBeNull();
+			expect(det.head).toBe(br.head);
+		} finally {
+			await app.close();
+			db.close();
+		}
+
+		// Unborn repo (no commits yet): branch is reported, head is null
+		const unborn = mkTempDir("pipaya-wv-unborn-");
+		await git(unborn, ["init", "-b", "main"]);
+		writeFileSync(join(unborn, "draft.txt"), "hi\n");
+		const { app: app2, db: db2 } = await setupServer(unborn);
+		try {
+			const res = await app2.inject({ method: "GET", url: "/sessions/s1/workspace/tree" });
+			expect(res.statusCode).toBe(200);
+			const data = res.json();
+			expect(data.isRepo).toBe(true);
+			expect(data.branch).toBe("main");
+			expect(data.head).toBeNull();
+		} finally {
+			await app2.close();
+			db2.close();
 		}
 	});
 });
