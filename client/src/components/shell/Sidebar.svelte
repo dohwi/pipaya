@@ -32,12 +32,12 @@
 	import type { Point } from "../../lib/press-menu";
 	import { drag } from "../../lib/dnd.svelte";
 	import { blockDrag } from "../../lib/block-drag";
-	import { applyDirDrop, resolveDirDrop } from "../../lib/dir-drop";
+	import { applyDirDrop, leaveToStandalone, resolveDirDrop } from "../../lib/dir-drop";
 	import { InlineRename } from "../../lib/inline-rename.svelte";
 	import { registerRenamePlace } from "../../lib/rename-places";
 	import { DragMarks } from "../../lib/drag-marks.svelte";
 	import { dirPaneCount, workDir, type DirBlock, type Tab } from "../../lib/nav";
-	import { dissolveProject, flattenBlocks, isManualRoot, leaveProject, projectKey, type SidebarBlock } from "../../lib/projects";
+	import { cleanManualProjects, dissolveProject, flattenBlocks, isManualRoot, leaveProject, projectKey, type SidebarBlock } from "../../lib/projects";
 	import { dirKey, connectionState, edgeOf, headMenuEntries, leafName, newKey, newMenuEntries, orderServers, projectMenuEntries, rowMenuEntries, shortName, targetId, type RowActions } from "../../lib/sidebar-model";
 	import type { Group, Session } from "../../lib/types";
 	import { isTerminalId, platformName } from "../../lib/terminal";
@@ -453,7 +453,9 @@
 		const workdir = path === null ? "." : path === n.root ? "." : path;
 		// a folder folds by its own list (they start folded); a server keeps the shared one
 		const dir = path !== null;
-		const inProject = dir && !!projectOf(n, path);
+		const proj = dir ? projectOf(n, path) : null;
+		const storedManual = dir && !proj ? cleanManualProjects(app.sidebar.overrides(n.server.id).projects ?? []).find((m) => m.dirs.includes(path)) : null;
+		const inProject = !!proj;
 		const items = headMenuEntries(platformName(n.platform), dir ? isDirFolded(key, inProject) : isFolded(key), {
 			chat: () => app.openIn(n.server.id, { workdir }),
 			terminal: () => app.openIn(n.server.id, { workdir, terminal: true }),
@@ -463,7 +465,11 @@
 			rename: path !== null ? () => dirRename.start(key, shortLabel(n, path)) : undefined,
 			copyPath: path === null ? undefined : () => void copyText(path).then((ok) => app.toast(ok ? t("경로를 복사했습니다") : t("복사하지 못했습니다"), ok ? "ok" : "error")),
 			joinProject: path !== null && n.current ? () => pickProject(n, path) : undefined,
-			leaveProject: path !== null && projectOf(n, path) ? () => app.sidebar.setOverrides(n.server.id, leaveProject(app.sidebar.overrides(n.server.id), path, !isManualRoot(projectOf(n, path)!.root))) : undefined,
+			leaveProject: proj
+				? () => app.sidebar.setOverrides(n.server.id, leaveToStandalone(app.sidebar.overrides(n.server.id), path!, proj, n.blocks, n.repos))
+				: storedManual
+					? () => app.sidebar.setOverrides(n.server.id, leaveProject(app.sidebar.overrides(n.server.id), path!, false))
+					: undefined,
 		});
 		trackAnchor(null);
 		rowMenu?.openAt(pt, id, items);
@@ -485,12 +491,21 @@
 		const own = projectOf(n, path);
 		const projects = n.blocks.filter((b) => b.kind === "project" && b !== own) as Extract<SidebarBlock, { kind: "project" }>[];
 		const folders = n.dirs.filter((d) => d.path !== path && !projectOf(n, d.path));
+		const stored = cleanManualProjects(app.sidebar.overrides(n.server.id).projects ?? []);
+		const hiddenProjectOf = (p: string) => stored.find((m) => m.dirs.includes(p));
 		app.palette = {
 			title: t("'{name}'를 묶을 곳", { name: shortLabel(n, path) }),
 			empty: msg("묶을 다른 폴더가 없습니다"),
 			items: [
 				...projects.map((b) => ({ id: `p:${b.root}`, title: projectName(n, b.root), sub: t("프로젝트 · 폴더 {n}개", { n: b.dirs.length }) })),
-				...folders.map((d) => ({ id: `d:${d.path}`, title: shortLabel(n, d.path), sub: t("새 프로젝트 · {path}", { path: pretty(n, d.path) }) })),
+				...folders.map((d) => {
+					const hidden = hiddenProjectOf(d.path);
+					return {
+						id: `d:${d.path}`,
+						title: shortLabel(n, d.path),
+						sub: hidden ? t("'{name}' 프로젝트 · {path}", { name: hidden.name, path: pretty(n, d.path) }) : t("새 프로젝트 · {path}", { path: pretty(n, d.path) }),
+					};
+				}),
 			],
 			onpick: (it) => {
 				if (it.id.startsWith("p:")) runDirDrop(n, path, { id: `project:${it.id.slice(2)}`, place: "over" });
@@ -572,6 +587,12 @@
 		shortLabel,
 	});
 	$effect(() => { void app.configTick; void app.serverExtensionsTick; void extensionUpdates.refresh(Object.fromEntries(Object.entries(app.links).map(([id, l]) => [id, l?.api]))); });
+	// Clear the project strip if its project dissolves or collapses below two visible folders, so it never re-engages unasked later.
+	$effect(() => {
+		const p = app.tabProject;
+		if (!p) return;
+		if (app.links[p.serverId]?.listed && !app.projectDirs(p.serverId, p.root)) app.tabProject = null;
+	});
 	const problems = $derived(app.problemCount);
 	/** Scheduled tasks of the open server: the button shows for any server that has the feature, even with none (so it can be found). */
 	const scheduled = $derived(app.schedules.all(app.serverId));

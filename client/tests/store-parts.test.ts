@@ -189,6 +189,47 @@ describe("sidebar shared part", () => {
 		sb.applyShared("s1", {});
 		expect(edits.length).toBe(n); // a value from the server is not an edit
 	});
+
+	test("hand-made projects with fewer than two distinct folders are dropped on load, sync, and edit, and dissolved fold keys are cleaned", () => {
+		const prevStorage = (globalThis as any).localStorage;
+		const bag: Record<string, string> = {
+			"pipaya.projects": JSON.stringify({
+				s1: [
+					{ id: "one", name: "One", dirs: ["/a"] },
+					{ id: "dup", name: "Dup", dirs: ["/a", "/a"] },
+					{ id: "ok", name: "OK", dirs: ["/a", "/b", "/a"] },
+				],
+			}),
+			"pipaya.folded": JSON.stringify(["project\u0000s1\u0000manual:ok", "project\u0000s1\u0000/repo"]),
+		};
+		(globalThis as any).localStorage = {
+			getItem: (k: string) => bag[k] ?? null,
+			setItem: (k: string, v: string) => { bag[k] = v; },
+			removeItem: (k: string) => { delete bag[k]; },
+		};
+		try {
+			const sb = new SidebarState();
+			expect(sb.overrides("s1").projects).toEqual([{ id: "ok", name: "OK", dirs: ["/a", "/b"] }]);
+			// Dissolving "ok" drops its folded key while leaving unrelated project fold keys intact
+			sb.setOverrides("s1", { projects: [{ id: "ok", name: "OK", dirs: ["/a"] }], ungrouped: [] });
+			expect(sb.overrides("s1").projects).toEqual([]);
+			expect([...sb.folded]).toEqual(["project\u0000s1\u0000/repo"]);
+			// applyShared rejects < 2 distinct dirs and also drops fold keys for projects removed by sync
+			sb.applyShared("s1", {
+				projects: [
+					{ id: "solo", name: "Solo", dirs: ["/x"] },
+					{ id: "pair", name: "Pair", dirs: ["/x", "/y"] },
+				],
+			});
+			expect(sb.overrides("s1").projects).toEqual([{ id: "pair", name: "Pair", dirs: ["/x", "/y"] }]);
+			sb.toggleFolded("project\u0000s1\u0000manual:pair");
+			expect(sb.folded).toContain("project\u0000s1\u0000manual:pair");
+			sb.applyShared("s1", { projects: [] });
+			expect([...sb.folded]).toEqual(["project\u0000s1\u0000/repo"]);
+		} finally {
+			(globalThis as any).localStorage = prevStorage;
+		}
+	});
 });
 
 describe("feedback", () => {

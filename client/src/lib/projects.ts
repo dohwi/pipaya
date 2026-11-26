@@ -43,10 +43,28 @@ export const isManualRoot = (root: string) => root.startsWith("manual:");
 /** Fold key of a project header (servers and split tabs have their own; see sidebar-model). */
 export const projectKey = (serverId: string, root: string) => `project${SEP}${serverId}${SEP}${root}`;
 
+/** Drop duplicate folder paths (within and across projects; first valid project wins) and any hand-made project with fewer than two folders. */
+export function cleanManualProjects(projects: readonly ManualProject[]): ManualProject[] {
+	const seen = new Set<string>();
+	const out: ManualProject[] = [];
+	for (const p of projects) {
+		const dirs: string[] = [];
+		for (const d of p.dirs) {
+			if (seen.has(d) || dirs.includes(d)) continue;
+			dirs.push(d);
+		}
+		if (dirs.length < 2) continue;
+		for (const d of dirs) seen.add(d);
+		out.push({ ...p, dirs });
+	}
+	return out;
+}
+
 /**
  * Group `dirs` (already in sidebar order) into projects, in this order of precedence:
- *  1. a project the user made (`over.projects`): its folders, in the order listed there, under its name. Shown even with
- *     one folder listed, since the user asked for it.
+ *  1. a project the user made (`over.projects`, at least two folders): its folders, in the order listed there, under
+ *     its name. When fewer than two of its folders are listed now it collapses to a plain folder row while keeping the
+ *     stored grouping (and holding its member apart from its repository's automatic project) until another folder returns.
  *  2. the git repository of the folder, unless the user took the folder out (`over.ungrouped`); the main checkout leads.
  *     A repository with one folder listed is not a project.
  *  3. otherwise the folder alone.
@@ -54,7 +72,7 @@ export const projectKey = (serverId: string, root: string) => `project${SEP}${se
  */
 export function projectBlocks(dirs: readonly DirBlock[], repos: RepoMap, over: ProjectOverrides = {}): SidebarBlock[] {
 	const manualOf = new Map<string, ManualProject>();
-	for (const p of over.projects ?? []) for (const d of p.dirs) if (!manualOf.has(d)) manualOf.set(d, p);
+	for (const p of cleanManualProjects(over.projects ?? [])) for (const d of p.dirs) if (!manualOf.has(d)) manualOf.set(d, p);
 	const out = new Set(over.ungrouped ?? []);
 	const gitRoot = (path: string) => (manualOf.has(path) || out.has(path) ? null : (repos[path]?.root ?? null));
 	const byRoot = new Map<string, DirBlock[]>();
@@ -69,7 +87,7 @@ export function projectBlocks(dirs: readonly DirBlock[], repos: RepoMap, over: P
 		const m = manualOf.get(d.path);
 		const root = m ? manualRoot(m.id) : gitRoot(d.path);
 		const members = root ? byRoot.get(root)! : null;
-		if (!root || !members || (!m && members.length < 2)) {
+		if (!root || !members || members.length < 2) {
 			blocks.push({ kind: "dir", dir: d });
 			continue;
 		}
@@ -131,15 +149,15 @@ function insertDir(dirs: readonly string[], path: string, at?: { path: string; a
  */
 export function joinProject(over: ProjectOverrides, path: string, target: JoinTarget): Required<ProjectOverrides> {
 	const ungrouped0 = [...(over.ungrouped ?? [])];
-	const cloneProjects = () => (over.projects ?? []).map((p) => ({ ...p, dirs: [...p.dirs] }));
-	if ("with" in target && target.with === path) return { projects: cloneProjects().filter((p) => p.dirs.length), ungrouped: ungrouped0 };
+	const base = cleanManualProjects(over.projects ?? []);
+	if ("with" in target && target.with === path) return { projects: base, ungrouped: ungrouped0 };
 	if ("root" in target && isManualRoot(target.root) && !target.at) {
 		const id = target.root.slice("manual:".length);
-		if ((over.projects ?? []).some((p) => p.id === id && p.dirs.includes(path))) {
-			return { projects: cloneProjects().filter((p) => p.dirs.length), ungrouped: ungrouped0 };
+		if (base.some((p) => p.id === id && p.dirs.includes(path))) {
+			return { projects: base, ungrouped: ungrouped0 };
 		}
 	}
-	const projects = (over.projects ?? []).map((p) => ({ ...p, dirs: p.dirs.filter((d) => d !== path) }));
+	const projects = base.map((p) => ({ ...p, dirs: p.dirs.filter((d) => d !== path) }));
 	let ungrouped = ungrouped0;
 	if ("root" in target) {
 		if (isManualRoot(target.root)) {
@@ -161,7 +179,7 @@ export function joinProject(over: ProjectOverrides, path: string, target: JoinTa
 			projects.push({ id: target.id, name: target.name, dirs });
 		}
 	}
-	return { projects: projects.filter((p) => p.dirs.length), ungrouped };
+	return { projects: cleanManualProjects(projects), ungrouped };
 }
 
 /** Reorder `path` before or after `target` within a hand-made project's folder list. Null when nothing changes. */
@@ -179,10 +197,11 @@ export function reorderProjectDir(over: ProjectOverrides, projectId: string, pat
 	return { projects, ungrouped: [...(over.ungrouped ?? [])] };
 }
 
-/** Take folder `path` out of whatever project holds it: out of a hand-made one, or marked to stand apart from its repository. */
+/** Take folder `path` out of whatever project holds it: out of a hand-made one (dissolving it if fewer than two remain), or marked to stand apart from its repository. */
 export function leaveProject(over: ProjectOverrides, path: string, inGitProject: boolean): Required<ProjectOverrides> {
-	const projects = (over.projects ?? []).map((p) => ({ ...p, dirs: p.dirs.filter((d) => d !== path) })).filter((p) => p.dirs.length);
-	const wasManual = (over.projects ?? []).some((p) => p.dirs.includes(path));
+	const base = cleanManualProjects(over.projects ?? []);
+	const wasManual = base.some((p) => p.dirs.includes(path));
+	const projects = cleanManualProjects(base.map((p) => ({ ...p, dirs: p.dirs.filter((d) => d !== path) })));
 	const ungrouped = [...(over.ungrouped ?? [])];
 	if (!wasManual && inGitProject && !ungrouped.includes(path)) ungrouped.push(path);
 	return { projects, ungrouped };

@@ -208,7 +208,7 @@ export function resolveDirDrop(opts: DirResolveOpts): BlockDrop | null {
  * If it was in a hand-made project and would immediately snap back into an automatic git project with sibling folders,
  * mark it `ungrouped` too so it actually lands outside.
  */
-function leaveToStandalone(
+export function leaveToStandalone(
 	over: ProjectOverrides,
 	dragPath: string,
 	srcProj: ProjectEntry,
@@ -312,11 +312,12 @@ export function applyDirDrop(ctx: DirDropContext, dragPath: string, drop: BlockD
 			id,
 			name: ctx.labelOf(targetPath),
 		});
+		const joined = overrides.projects.find((p) => p.dirs.includes(targetPath));
 		const dirOrder = anchorOrderAfter(ctx.dirOrder, dragPath, targetPath);
 		return {
 			overrides,
 			dirOrder,
-			revealRoot: manualRoot(id),
+			revealRoot: manualRoot(joined?.id ?? id),
 		};
 	}
 

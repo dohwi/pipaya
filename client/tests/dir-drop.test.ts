@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { applyDirDrop, resolveDirDrop, type DirDropContext } from "../src/lib/dir-drop";
+import { applyDirDrop, leaveToStandalone, resolveDirDrop, type DirDropContext } from "../src/lib/dir-drop";
 import type { DirBlock } from "../src/lib/nav";
 import { projectBlocks, type ProjectOverrides, type RepoMap, type SidebarBlock } from "../src/lib/projects";
 
@@ -153,21 +153,24 @@ describe("applyDirDrop", () => {
 		expect(shape(blocks)).toEqual(["G:/r[/r,/r-1,/r-2]"]);
 	});
 
-	test("pulling a folder out of its project onto an outside folder edge or its own header top leaves the project", () => {
-		const init: ProjectOverrides = { projects: [{ id: "p1", name: "P1", dirs: ["/a", "/b"] }] };
-		// Pull /b out onto /x after
-		const r1 = runDrop([dir("/a"), dir("/b"), dir("/x")], {}, init, "/b", { id: "dir:/x", place: "after" });
-		expect(shape(r1.blocks)).toEqual(["M:manual:p1[/a]", "/x", "/b"]);
-		// Pull /b out via its own project header top half
-		const r2 = runDrop([dir("/a"), dir("/b"), dir("/x")], {}, init, "/b", { id: "project:manual:p1", place: "before" });
-		expect(shape(r2.blocks)).toEqual(["/b", "M:manual:p1[/a]", "/x"]);
-		// Pulling the sole folder out of a 1-folder manual project dissolves it
-		const r3 = runDrop([dir("/a"), dir("/x")], {}, { projects: [{ id: "p1", name: "P1", dirs: ["/a"] }] }, "/a", { id: "project:manual:p1", place: "before" });
-		expect(r3.over.projects).toEqual([]);
-		expect(shape(r3.blocks)).toEqual(["/a", "/x"]);
+	test("pulling a folder out of a 2-folder project dissolves it; a 3-folder project keeps the remaining two", () => {
+		const two: ProjectOverrides = { projects: [{ id: "p1", name: "P1", dirs: ["/a", "/b"] }] };
+		// Pull /b out onto /x after -> p1 dissolves (only /a left)
+		const r1 = runDrop([dir("/a"), dir("/b"), dir("/x")], {}, two, "/b", { id: "dir:/x", place: "after" });
+		expect(r1.over.projects).toEqual([]);
+		expect(shape(r1.blocks)).toEqual(["/a", "/x", "/b"]);
+		// Pull /b out via its own project header top half -> p1 dissolves
+		const r2 = runDrop([dir("/a"), dir("/b"), dir("/x")], {}, two, "/b", { id: "project:manual:p1", place: "before" });
+		expect(r2.over.projects).toEqual([]);
+		expect(shape(r2.blocks)).toEqual(["/b", "/a", "/x"]);
+		// Pull /c out of a 3-folder project -> p1 stays with [/a, /b]
+		const three: ProjectOverrides = { projects: [{ id: "p1", name: "P1", dirs: ["/a", "/b", "/c"] }] };
+		const r3 = runDrop([dir("/a"), dir("/b"), dir("/c"), dir("/x")], {}, three, "/c", { id: "dir:/x", place: "after" });
+		expect(r3.over.projects).toEqual([{ id: "p1", name: "P1", dirs: ["/a", "/b"] }]);
+		expect(shape(r3.blocks)).toEqual(["M:manual:p1[/a,/b]", "/x", "/c"]);
 	});
 
-	test("pulling a git-repo folder out of a manual project to standalone keeps it standalone instead of snapping into a git project", () => {
+	test("pulling a git-repo folder out of a manual project dissolves a 2-folder project and keeps the pulled folder standalone", () => {
 		const repos: RepoMap = {
 			"/r": repo("/r", "/r", "main"),
 			"/r-wt": repo("/r", "/r-wt", "feat"),
@@ -175,20 +178,45 @@ describe("applyDirDrop", () => {
 		};
 		const init: ProjectOverrides = { projects: [{ id: "p1", name: "P1", dirs: ["/notes", "/r-wt"] }] };
 		const { blocks, over } = runDrop([dir("/notes"), dir("/r-wt"), dir("/r")], repos, init, "/r-wt", { id: "dir:/r", place: "after" });
+		expect(over.projects).toEqual([]);
 		expect(over.ungrouped).toContain("/r-wt");
-		expect(shape(blocks)).toEqual(["M:manual:p1[/notes]", "/r", "/r-wt"]);
+		expect(shape(blocks)).toEqual(["/notes", "/r", "/r-wt"]);
+
+		// Pulling the non-git folder out instead dissolves p1 and lets /r-wt return to its git project with /r
+		const r2 = runDrop([dir("/notes"), dir("/r-wt"), dir("/r")], repos, init, "/notes", { id: "dir:/r", place: "after" });
+		expect(r2.over).toEqual({ projects: [], ungrouped: [] });
+		expect(shape(r2.blocks)).toEqual(["G:/r[/r,/r-wt]", "/notes"]);
+
+		// leaveToStandalone on a 2-folder manual project of same-repo worktrees dissolves it and marks the leaving folder ungrouped
+		const sameRepo: ProjectOverrides = { projects: [{ id: "p2", name: "P2", dirs: ["/r", "/r-wt"] }] };
+		const sameBlocks = projectBlocks([dir("/r"), dir("/r-wt")], repos, sameRepo);
+		const projBlock = sameBlocks[0]!;
+		expect(projBlock.kind).toBe("project");
+		if (projBlock.kind === "project") {
+			const next = leaveToStandalone(sameRepo, "/r-wt", projBlock, sameBlocks, repos);
+			expect(next).toEqual({ projects: [], ungrouped: ["/r-wt"] });
+			expect(shape(projectBlocks([dir("/r"), dir("/r-wt")], repos, next))).toEqual(["/r", "/r-wt"]);
+		}
 	});
 
-	test("moving a folder from project P1 onto project P2 transfers it and removes P1 if empty", () => {
+	test("moving a folder from a 2-folder project P1 onto P2 transfers it and dissolves P1", () => {
 		const init: ProjectOverrides = {
 			projects: [
-				{ id: "p1", name: "P1", dirs: ["/a"] },
+				{ id: "p1", name: "P1", dirs: ["/a", "/d"] },
 				{ id: "p2", name: "P2", dirs: ["/b", "/c"] },
 			],
 		};
-		const { blocks, over } = runDrop([dir("/a"), dir("/b"), dir("/c")], {}, init, "/a", { id: "dir:/b", place: "over" });
+		const { blocks, over } = runDrop([dir("/a"), dir("/d"), dir("/b"), dir("/c")], {}, init, "/a", { id: "dir:/b", place: "over" });
 		expect(over.projects).toEqual([{ id: "p2", name: "P2", dirs: ["/b", "/c", "/a"] }]);
-		expect(shape(blocks)).toEqual(["M:manual:p2[/b,/c,/a]"]);
+		expect(shape(blocks)).toEqual(["/d", "M:manual:p2[/b,/c,/a]"]);
+	});
+
+	test("dropping a folder onto the sole visible member of a collapsed manual project reuses and reveals that project", () => {
+		const init: ProjectOverrides = { projects: [{ id: "p1", name: "회사", dirs: ["/a", "/hidden"] }] };
+		const { res, blocks, over } = runDrop([dir("/a"), dir("/b")], {}, init, "/b", { id: "dir:/a", place: "over" }, "unused-new-id");
+		expect(res?.revealRoot).toBe("manual:p1");
+		expect(over.projects).toEqual([{ id: "p1", name: "회사", dirs: ["/a", "/hidden", "/b"] }]);
+		expect(shape(blocks)).toEqual(["M:manual:p1[/a,/b]"]);
 	});
 
 	test("reordering a standalone folder past a folded project moves it cleanly around the whole project", () => {
