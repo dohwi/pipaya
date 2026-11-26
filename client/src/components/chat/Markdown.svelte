@@ -108,6 +108,9 @@
 	import { awaitsHighlight, isSafeExternalUrl, renderMarkdown, renderStreaming } from "../../lib/markdown";
 	import { onHighlightReady } from "../../lib/code-highlight";
 	import { copyText } from "../../lib/clipboard";
+	import { ICON_PATHS } from "../../lib/icons";
+	import { errorText } from "../../lib/api";
+	import { saveFile, sourceBlob } from "../../lib/save-file";
 	import { openExternal } from "../../lib/tauri";
 	import { sharedMedia } from "../../lib/media-urls";
 	import { patchHtml, type PatchInput } from "../../lib/patch-html";
@@ -276,6 +279,88 @@
 		if (!root) return;
 		return attachMarkdownCopy(root, () => ({ sessionId, mentions }));
 	});
+	function iconSvg(name: "download" | "copy" | "check"): SVGSVGElement {
+		const el = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+		el.setAttribute("viewBox", "0 0 24 24");
+		el.setAttribute("aria-hidden", "true");
+		const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+		path.setAttribute("d", ICON_PATHS[name]);
+		el.append(path);
+		return el;
+	}
+	function setIcon(btn: HTMLElement, name: "download" | "copy" | "check") {
+		btn.querySelector("path")?.setAttribute("d", ICON_PATHS[name]);
+	}
+	/** A save button: one save at a time, the glyph turns into a check for a moment, a failure is toasted. `save` resolves false when the dialog was cancelled. */
+	function saveButton(className: string, save: () => Promise<boolean | void>): HTMLButtonElement {
+		const btn = document.createElement("button");
+		btn.type = "button";
+		btn.className = `${className} tap`;
+		btn.append(iconSvg("download"));
+		const text = t("저장");
+		btn.setAttribute("aria-label", text);
+		btn.title = text;
+		let saving = false;
+		let resetTimer: ReturnType<typeof setTimeout> | undefined;
+		btn.addEventListener("click", async (e) => {
+			e.stopPropagation(); // never opens the viewer
+			e.preventDefault();
+			if (saving || destroyed) return;
+			saving = true;
+			btn.disabled = true;
+			btn.classList.add("saving");
+			if (resetTimer) {
+				clearTimeout(resetTimer);
+				copyTimers.delete(resetTimer);
+				resetTimer = undefined;
+			}
+			try {
+				if ((await save()) !== false && !destroyed && btn.isConnected) {
+					setIcon(btn, "check");
+					btn.classList.add("done");
+					const timer = setTimeout(() => {
+						copyTimers.delete(timer);
+						if (resetTimer === timer) resetTimer = undefined;
+						setIcon(btn, "download");
+						btn.classList.remove("done");
+					}, 1400);
+					resetTimer = timer;
+					copyTimers.add(timer);
+				}
+			} catch (err) {
+				if (!destroyed) app.toast(`${t("저장하지 못했습니다")}: ${errorText(err)}`, "error");
+			} finally {
+				saving = false;
+				btn.disabled = false;
+				btn.classList.remove("saving");
+			}
+		});
+		return btn;
+	}
+	function remoteName(href: string, mimeType?: string): string {
+		let name = "";
+		try {
+			const raw = decodeURIComponent(new URL(href).pathname.split("/").pop() ?? "");
+			// Strip path separators, traversal segments, and control characters from untrusted URLs.
+			const cleaned = raw.replace(/[/\\\x00-\x1f\x7f]/g, "").trim();
+			if (cleaned && cleaned !== "." && cleaned !== "..") name = cleaned;
+		} catch {
+			/* fall through */
+		}
+		if (!name) name = "image";
+		if (!/\.[a-z0-9]{1,8}$/i.test(name) && mimeType?.startsWith("image/")) {
+			const ext = mimeType.split("/")[1]?.replace("jpeg", "jpg").replace(/[^a-z0-9].*$/i, "");
+			if (ext) name = `${name}.${ext}`;
+		}
+		return name;
+	}
+	/** An <img> inside a wrapper that carries the save button; `save` gets the picture's current src. */
+	function pictureWrap(img: HTMLImageElement, save: () => Promise<boolean | void>): HTMLSpanElement {
+		const wrap = document.createElement("span");
+		wrap.className = "wd-pic-wrap";
+		wrap.append(img, saveButton("wd-media-dl", save));
+		return wrap;
+	}
 	function applyLoadedSlot(slot: HTMLElement, kind: "image" | "audio" | "video", src: string) {
 		const path = slot.dataset.wdSrc ?? "";
 		if (kind === "video") {
@@ -293,7 +378,54 @@
 				audio.dataset.wdSrc = path;
 				audio.dataset.wdCopyName = baseName(path);
 			}
-			slot.replaceWith(audio);
+			const wrap = document.createElement("div");
+			wrap.className = "wd-audio-wrap";
+			const name = path ? baseName(path) : "audio.mp3";
+			if (supportsFileClipboard()) {
+				const copyBtn = document.createElement("button");
+				copyBtn.type = "button";
+				copyBtn.className = "wd-audio-btn wd-audio-copy tap";
+				copyBtn.append(iconSvg("copy"));
+				const copyLabel = t("파일 복사");
+				copyBtn.setAttribute("aria-label", copyLabel);
+				copyBtn.title = copyLabel;
+				let copying = false;
+				let resetTimer: ReturnType<typeof setTimeout> | undefined;
+				copyBtn.addEventListener("click", async () => {
+					if (copying || destroyed) return;
+					copying = true;
+					copyBtn.disabled = true;
+					if (resetTimer) {
+						clearTimeout(resetTimer);
+						copyTimers.delete(resetTimer);
+						resetTimer = undefined;
+					}
+					try {
+						const res = await copyFile(src, name);
+						if (destroyed) return;
+						const msg = fileCopyMessage(res);
+						app.toast(msg.text, msg.ok ? "ok" : "error");
+						if (res === "ok" && copyBtn.isConnected) {
+							setIcon(copyBtn, "check");
+							const timer = setTimeout(() => {
+								copyTimers.delete(timer);
+								if (resetTimer === timer) resetTimer = undefined;
+								setIcon(copyBtn, "copy");
+							}, 1400);
+							resetTimer = timer;
+							copyTimers.add(timer);
+						}
+					} catch {
+						if (!destroyed) app.toast(fileCopyMessage("error").text, "error");
+					} finally {
+						copying = false;
+						copyBtn.disabled = false;
+					}
+				});
+				wrap.append(audio, copyBtn);
+			} else wrap.append(audio);
+			wrap.append(saveButton("wd-audio-btn wd-audio-download", () => saveFile(src, name)));
+			slot.replaceWith(wrap);
 		} else {
 			const img = document.createElement("img");
 			img.alt = slot.dataset.alt ?? "";
@@ -301,7 +433,17 @@
 			img.src = src;
 			img.className = "wd-pic";
 			if (slot.dataset.wdSrc) img.dataset.wdSrc = slot.dataset.wdSrc;
-			slot.replaceWith(img);
+			const owner = media;
+			slot.replaceWith(
+				pictureWrap(img, async () => {
+					// the inline picture is downscaled: save the original when the file is on the server
+					if (owner && path) {
+						const full = await sharedMedia.get(mediaKey(owner, "image-full", path), loadFullImageBlob(owner, path));
+						return await saveFile(full, baseName(path));
+					}
+					return await saveFile(img.src, remoteName(img.src));
+				}),
+			);
 		}
 	}
 	function loadSlot(slot: HTMLElement, owner: NonNullable<typeof media>, signal?: AbortSignal) {
@@ -349,7 +491,9 @@
 		}
 	}
 	const copyTimers = new Set<ReturnType<typeof setTimeout>>();
+	let destroyed = false;
 	onDestroy(() => {
+		destroyed = true;
 		for (const id of copyTimers) clearTimeout(id);
 		copyTimers.clear();
 		for (const player of videos) disposeVideoPlayer(player);
@@ -416,12 +560,14 @@
 				all.map((p) => {
 					const path = p.dataset.wdSrc;
 					if (!owner || !path) return { src: p.src, mimeType: "image/*" };
+					const name = baseName(path);
 					const fullKey = mediaKey(owner, "image-full", path);
 					const cachedFull = sharedMedia.peek(fullKey);
-					if (cachedFull) return { src: cachedFull, mimeType: "image/*" };
+					if (cachedFull) return { src: cachedFull, mimeType: "image/*", name };
 					return {
 						src: p.src,
 						mimeType: "image/*",
+						name,
 						loadFull: (signal?: AbortSignal) => sharedMedia.get(fullKey, loadFullImageBlob(owner, path), signal),
 					};
 				}),
@@ -436,12 +582,22 @@
 		}
 		const remote = el.closest<HTMLButtonElement>("button[data-img-src]");
 		if (remote) {
+			const remoteSrc = remote.dataset.imgSrc?.trim();
+			if (!remoteSrc) return;
 			// Explicit consent: only now is the remote image requested.
 			const img = document.createElement("img");
 			img.referrerPolicy = "no-referrer";
 			img.alt = remote.dataset.alt ?? "";
-			img.src = remote.dataset.imgSrc ?? "";
-			remote.replaceWith(img);
+			img.decoding = "async";
+			img.src = remoteSrc;
+			img.className = "wd-pic";
+			// saving fetches the URL again without referrer/credentials: a server that blocks CORS ends in the error toast
+			remote.replaceWith(
+				pictureWrap(img, async () => {
+					const blob = await sourceBlob(remoteSrc);
+					return await saveFile(blob, remoteName(remoteSrc, blob.type));
+				}),
+			);
 			return;
 		}
 		const a = el.closest<HTMLAnchorElement>("a[data-ext]");
@@ -821,12 +977,7 @@
 	.md :global(.wd-video-wrap) {
 		margin: 0 0 12px;
 	}
-	.md :global(.wd-audio) {
-		display: block;
-		width: 100%;
-		max-width: 420px;
-		margin: 0 0 12px;
-	}
+	/* the audio player and its buttons (`.wd-audio-wrap`) are styled in app.css */
 	.md :global(.wd-img) {
 		color: var(--text-faint);
 		font-size: var(--fs-xs);
@@ -885,8 +1036,27 @@
 	.md :global(.gallery > :nth-child(n + 5):not(.gallery-more)) {
 		display: none;
 	}
-	.md :global(.gallery > .wd-img),
-	.md :global(.gallery > .wd-pic) {
+	.md :global(.gallery > .wd-pic-wrap) {
+		display: block;
+		width: 100%;
+		height: 100%;
+		min-width: 0;
+		min-height: 0;
+		border-radius: 0;
+	}
+	.md :global(.gallery > .wd-pic-wrap > .wd-pic) {
+		display: block;
+		width: 100%;
+		height: 100%;
+		max-height: none;
+		border-radius: 0;
+		object-fit: cover;
+	}
+	/* the "+N" cell covers the fourth picture: its save button would sit under the badge */
+	.md :global(.gallery:has(> .gallery-more) > .wd-pic-wrap:nth-child(4) > .wd-media-dl) {
+		display: none;
+	}
+	.md :global(.gallery > .wd-img) {
 		display: grid;
 		place-items: center;
 		min-width: 0;

@@ -9,6 +9,8 @@
 	import FileChip from "./FileChip.svelte";
 	import TokenText from "./TokenText.svelte";
 	import { app } from "../../lib/store.svelte";
+	import { saveFile } from "../../lib/save-file";
+	import { errorText } from "../../lib/api";
 	import { getPane } from "../../lib/pane";
 	import { hideMentionHover, scheduleMentionHoverHide, showMentionHover } from "../../lib/mention-hover.svelte";
 	import { openMentionMenu } from "../../lib/mention-menu";
@@ -63,6 +65,32 @@
 	const copied = new CopyFlag();
 	onDestroy(() => copied.dispose());
 	let expanded = $state(false);
+	/** the attached picture being saved / just saved (one at a time; the check shows for a moment) */
+	let savingImg = $state<number | null>(null);
+	let doneImg = $state<number | null>(null);
+	let doneTimer: ReturnType<typeof setTimeout> | undefined;
+	let destroyed = false;
+	onDestroy(() => {
+		destroyed = true;
+		clearTimeout(doneTimer);
+	});
+	async function saveImage(e: MouseEvent, img: UserItem["images"][number], i: number) {
+		e.stopPropagation(); // not the message's tap-to-reveal, never the viewer
+		if (savingImg !== null || destroyed) return;
+		savingImg = i;
+		try {
+			const ext = (img.mimeType.split("/")[1] ?? "png").replace("jpeg", "jpg").replace(/[^a-z0-9].*$/i, "") || "png";
+			if ((await saveFile(`data:${img.mimeType};base64,${img.data}`, `image-${i + 1}.${ext}`)) !== false && !destroyed) {
+				doneImg = i;
+				clearTimeout(doneTimer);
+				doneTimer = setTimeout(() => (doneImg = null), 1400);
+			}
+		} catch (err) {
+			if (!destroyed) app.toast(`${t("저장하지 못했습니다")}: ${errorText(err)}`, "error");
+		} finally {
+			savingImg = null;
+		}
+	}
 </script>
 
 <!-- a tap shows this message's buttons on a touch screen (reveal.svelte.ts); the buttons themselves are reachable on their own -->
@@ -72,9 +100,23 @@
 		{#if item.images.length}
 			<div class="imgs">
 				{#each item.images as img, i}
+					<div class="imgwrap">
 					<button class="zoom" onclick={() => app.openImage(item.images.map((m) => ({ src: `data:${m.mimeType};base64,${m.data}`, mimeType: m.mimeType })), i)} aria-label={t("이미지 크게 보기")}>
 						<img src={`data:${img.mimeType};base64,${img.data}`} alt={t("첨부 이미지 {n}", { n: i + 1 })} />
 					</button>
+					<button
+						type="button"
+						class="wd-media-dl tap"
+						class:saving={savingImg === i}
+						class:done={doneImg === i}
+						disabled={savingImg !== null}
+						aria-label={t("저장")}
+						title={t("저장")}
+						onclick={(e) => void saveImage(e, img, i)}
+					>
+						<Icon name={doneImg === i ? "check" : "download"} />
+					</button>
+					</div>
 				{/each}
 			</div>
 		{/if}
@@ -300,6 +342,7 @@
 		gap: 4px;
 		margin: 4px 0 8px;
 	}
+	/* the wrapper and the save button's look are in app.css (`.imgwrap`, `.wd-media-dl`): the button is a sibling of `.zoom`, never inside it */
 	.zoom {
 		display: block;
 		padding: 0;

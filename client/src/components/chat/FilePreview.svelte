@@ -11,6 +11,7 @@
 	import Markdown from "./Markdown.svelte";
 	import Modal from "../ui/Modal.svelte";
 	import { saveFile } from "../../lib/save-file";
+	import { sharedMedia } from "../../lib/media-urls";
 	import { disposeVideoPlayer, isVideoFullscreen, videoPlayer } from "../../lib/video-view";
 
 	/** Preview of a file in the session's working directory: an image, PDF, audio, video, Markdown, CSV table, text, or just a download for anything else. */
@@ -43,7 +44,7 @@
 	$effect(() => {
 		const target = open;
 		if (kind !== "video" || !url || mediaFailed || !videoHost || !target) return;
-		const player = videoPlayer(url, { filename: target.file.name });
+		const player = videoPlayer(url, { filename: target.file.name, download: "fullscreen" });
 		player.querySelector("video")?.addEventListener("error", () => (mediaFailed = true));
 		videoHost.replaceChildren(player);
 		return () => disposeVideoPlayer(player);
@@ -126,18 +127,42 @@
 		return () => ctl.abort();
 	});
 
+	/** the viewer opens on the preview and swaps in the full-resolution file; its save writes the original under the file's name */
+	function openViewer() {
+		const target = open;
+		const api = app.api;
+		if (!target || !url) return;
+		const fullKey = api ? `${api.baseUrl}\0${target.sessionId}\0image-full\0${target.file.path}` : "";
+		const cachedFull = fullKey ? sharedMedia.peek(fullKey) : null;
+		app.openImage([
+			{
+				src: cachedFull ?? url,
+				mimeType: target.file.mimeType ?? "image/png",
+				name: target.file.name,
+				...(api && !cachedFull
+					? {
+							loadFull: (signal?: AbortSignal) =>
+								sharedMedia.get(fullKey, (s) => api.fetchFile(target.sessionId, target.file.path, s), signal),
+						}
+					: {}),
+			},
+		]);
+	}
+
 	async function save() {
 		const target = open;
 		if (!url || !target || saving) return;
+		saving = true;
 		if (kind !== "image" || !app.api) {
 			try {
 				await saveFile(url, target.file.name);
 			} catch (e) {
 				app.toast(`${t("저장하지 못했습니다")}: ${errorText(e)}`, "error");
+			} finally {
+				saving = false;
 			}
 			return;
 		}
-		saving = true;
 		let fullUrl: string | null = null;
 		try {
 			const full = await app.api.fetchFile(target.sessionId, target.file.path);
@@ -233,7 +258,7 @@
 			{:else if failed}
 				<div class="note">{failed}</div>
 			{:else if kind === "image" && url}
-				<button type="button" class="pic" onclick={() => app.openImage([{ src: url!, mimeType: open.file.mimeType ?? "image/png" }])} aria-label={t("이미지 크게 보기")}>
+				<button type="button" class="pic" onclick={() => openViewer()} aria-label={t("이미지 크게 보기")}>
 					<img src={url} alt={open.file.name} />
 				</button>
 			{:else if kind === "pdf" && url}

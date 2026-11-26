@@ -15,12 +15,20 @@ import { canInterceptCopyKey, copyFile, fileCopyMessage, supportsFileClipboard, 
 import { backLayer, modalCount } from "./dialog";
 import { t } from "./i18n";
 import { ICON_PATHS } from "./icons";
+import { saveFile } from "./save-file";
 
 export interface VideoPlayerOptions {
 	/** Original file name (e.g. "demo.mp4") used when copying the file to the desktop clipboard. */
 	filename?: string;
 	/** Custom copy handler override (mainly for tests or callers with custom blob loading). */
 	onCopy?: () => Promise<FileCopyResult>;
+	/**
+	 * Save button: `true` (default) shows it in the bar and in full screen, `"fullscreen"` only in full screen (the caller
+	 * already has a save button in its own header), `false` leaves it out.
+	 */
+	download?: boolean | "fullscreen";
+	/** Custom save handler (tests, callers with their own blob loading). Resolve `false` when the user cancelled the dialog. */
+	onDownload?: () => Promise<boolean | void>;
 }
 
 type Shown = {
@@ -108,10 +116,10 @@ const PLAYER_PATHS = {
 	muted: "M11 5 6.5 9H3.5v6h3L11 19zM16 9.5l5 5M21 9.5l-5 5",
 } as const;
 
-type Glyph = keyof typeof PLAYER_PATHS | "expand" | "shrink" | "copy" | "check" | "x";
+type Glyph = keyof typeof PLAYER_PATHS | "expand" | "shrink" | "copy" | "download" | "check" | "x";
 
 function glyph(name: Glyph): string {
-	return name in PLAYER_PATHS ? PLAYER_PATHS[name as keyof typeof PLAYER_PATHS] : ICON_PATHS[name as "expand" | "shrink" | "copy" | "check" | "x"];
+	return name in PLAYER_PATHS ? PLAYER_PATHS[name as keyof typeof PLAYER_PATHS] : ICON_PATHS[name as "expand" | "shrink" | "copy" | "download" | "check" | "x"];
 }
 
 function svg(name: Glyph): SVGSVGElement {
@@ -245,12 +253,15 @@ export function videoPlayer(src: string, opts?: VideoPlayerOptions): HTMLDivElem
 		}, ok ? 2000 : 3000);
 	};
 
+	let disposed = false;
+
 	const runCopy = async () => {
-		if (!canCopy || copying) return;
+		if (!canCopy || copying || disposed) return;
 		copying = true;
 		if (copyBtn) copyBtn.disabled = true;
 		try {
 			const res = opts?.onCopy ? await opts.onCopy() : await copyFile(src, opts?.filename || "video.mp4");
+			if (disposed) return;
 			const msg = fileCopyMessage(res);
 			if (res === "ok" && copyBtn) {
 				setGlyph(copyBtn, "check");
@@ -261,21 +272,58 @@ export function videoPlayer(src: string, opts?: VideoPlayerOptions): HTMLDivElem
 			}
 			showNote(msg.text, msg.ok);
 		} catch {
-			showNote(t("복사하지 못했습니다"), false);
+			if (!disposed) showNote(t("복사하지 못했습니다"), false);
 		} finally {
 			copying = false;
 			if (copyBtn) copyBtn.disabled = false;
 		}
 	};
 
+	const canDownload = opts?.download !== false;
+	let downloadBtn: HTMLButtonElement | null = null;
+	let downloadIconTimer: ReturnType<typeof setTimeout> | undefined;
+	let saving = false;
+
+	const runDownload = async () => {
+		if (!canDownload || saving || disposed) return;
+		saving = true;
+		if (downloadBtn) downloadBtn.disabled = true;
+		try {
+			const res = opts?.onDownload ? await opts.onDownload() : await saveFile(src, opts?.filename || "video.mp4");
+			if (disposed) return;
+			// false = the save dialog was cancelled: nothing to report
+			if (res !== false) {
+				if (downloadBtn) {
+					setGlyph(downloadBtn, "check");
+					clearTimeout(downloadIconTimer);
+					downloadIconTimer = setTimeout(() => {
+						if (downloadBtn) setGlyph(downloadBtn, "download");
+					}, 1400);
+				}
+				showNote(t("저장했습니다"), true);
+			}
+		} catch {
+			if (!disposed) showNote(t("저장하지 못했습니다"), false);
+		} finally {
+			saving = false;
+			if (downloadBtn) downloadBtn.disabled = false;
+		}
+	};
+
+	const tools: HTMLButtonElement[] = [];
 	if (canCopy) {
 		copyBtn = button("wd-video-copy", "copy", () => void runCopy());
 		label(copyBtn, t("파일 복사"));
-		bar.append(play, time, seek, speed, volBox, copyBtn, full);
+		tools.push(copyBtn);
 		registerCopyHandler(wrap, () => void runCopy());
-	} else {
-		bar.append(play, time, seek, speed, volBox, full);
 	}
+	if (canDownload) {
+		downloadBtn = button("wd-video-download", "download", () => void runDownload());
+		label(downloadBtn, t("저장"));
+		tools.push(downloadBtn);
+		if (opts?.download === "fullscreen") wrap.classList.add("dl-fullscreen-only");
+	}
+	bar.append(play, time, seek, speed, volBox, ...tools, full);
 	wrap.append(video, bar);
 
 	// ── state → bar
@@ -353,8 +401,10 @@ export function videoPlayer(src: string, opts?: VideoPlayerOptions): HTMLDivElem
 	// the bar follows the full screen state: expand/close call this after they change it
 	wrap.addEventListener("wd-video-state", sync);
 	wrap.addEventListener("wd-video-dispose", () => {
+		disposed = true;
 		clearTimeout(idle);
 		clearTimeout(copyIconTimer);
+		clearTimeout(downloadIconTimer);
 		clearTimeout(noteTimer);
 	});
 	paint();

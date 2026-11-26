@@ -9,6 +9,8 @@ import type { PaletteSpec } from "../store-model";
 export interface ViewerImage {
   src: string;
   mimeType: string;
+  /** File name offered when saving (otherwise `image-N.ext`). */
+  name?: string;
   loadFull?: (signal?: AbortSignal) => Promise<string>;
 }
 
