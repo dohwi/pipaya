@@ -49,10 +49,11 @@
 	const cur = $derived(!app.graphOpen && n.current && dirs.some((d) => d.path === (app.activeTab?.dir.path ?? app.workdirAbs)));
 	/** The tab bar lists the whole project (its name was clicked) */
 	const shown = $derived(cur && app.tabProject?.serverId === n.server.id && app.tabProject.root === root && app.stripDirs.length > 1);
+	const mark = $derived(sb.marks.blockMark(`project:${root}`));
 </script>
 
-<div class="projblock">
-	<div class="dir proj grabbable" class:folded class:cur={cur && folded} class:shown use:sb.dirSource={{ kind: "dir", serverId: n.server.id, path: dirs[0]?.path ?? root, paths: [], disabled: true, menu: (pt) => sb.projectMenuAt(pt, n, root, key, workdir) }}>
+<div class="projblock" data-block={`project:${root}`} data-server={n.server.id} data-folded={folded ? "1" : undefined} class:before={mark.before} class:after={mark.after}>
+	<div class="dir proj grabbable" class:folded class:cur={cur && folded} class:shown class:over={mark.over} use:sb.dirSource={{ kind: "dir", serverId: n.server.id, path: dirs[0]?.path ?? root, paths: [], disabled: true, menu: (pt) => sb.projectMenuAt(pt, n, root, key, workdir) }}>
 		<button class="projfold" onclick={() => app.sidebar.toggleFolded(key)} aria-expanded={!folded} aria-label={folded ? t("프로젝트 펼치기") : t("프로젝트 접기")} title={folded ? t("프로젝트 펼치기") : t("프로젝트 접기")}>
 			<span class="chev" class:folded><Icon name="chevron-down" /></span>
 		</button>
@@ -95,6 +96,25 @@
 </div>
 
 <style>
+	.projblock {
+		position: relative;
+	}
+	.projblock.before::before,
+	.projblock.after::after {
+		left: 0;
+		right: 0;
+	}
+	.projblock.before::before {
+		top: -1px;
+	}
+	.projblock.after::after {
+		bottom: -1px;
+	}
+	.proj.over {
+		outline: 1px solid var(--accent); /* the row has no border: a drop target is outlined inside its box */
+		outline-offset: -1px;
+		background: var(--accent-soft);
+	}
 	.proj {
 		display: flex;
 		align-items: center;

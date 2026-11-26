@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { branchLabel, dissolveProject, flattenBlocks, joinProject, leaveProject, projectBlocks, subPath, tabLead, tabLeads, type RepoMap } from "../src/lib/projects";
+import { branchLabel, dissolveProject, flattenBlocks, joinProject, leaveProject, projectBlocks, reorderProjectDir, subPath, tabLead, tabLeads, type RepoMap } from "../src/lib/projects";
 import { withoutDirKeys } from "../src/lib/sidebar.svelte";
 import type { DirBlock } from "../src/lib/nav";
 
@@ -85,6 +85,26 @@ describe("hand-made projects", () => {
 		expect(leaveProject(o, "/w/app-x", true).ungrouped).toEqual(["/w/app-x"]);
 		expect(leaveProject({ projects: [{ id: "p", name: "x", dirs: ["/w/app-x"] }] }, "/w/app-x", true)).toEqual({ projects: [], ungrouped: [] });
 		expect(dissolveProject(o, "p").projects).toEqual([]);
+	});
+	test("joinProject handles self-drop, duplicate manual joins, positional insert, and git project promotion", () => {
+		expect(joinProject({}, "/w/web", { with: "/w/web", id: "p", name: "web" })).toEqual({ projects: [], ungrouped: [] });
+		const base = { projects: [{ id: "p", name: "x", dirs: ["/w/api", "/w/web"] }], ungrouped: [] };
+		expect(joinProject(base, "/w/api", { root: "manual:p" })).toEqual(base);
+		expect(joinProject(base, "/w/app-x", { root: "manual:p", at: { path: "/w/api", after: false } }).projects[0]!.dirs).toEqual(["/w/app-x", "/w/api", "/w/web"]);
+		// Unrelated folder joining a git project promotes it into a hand-made project
+		const promoted = joinProject({}, "/w/web", { root: "/w/app", members: ["/w/app", "/w/app-x"], name: "app", id: "g1", gitRoot: null });
+		expect(promoted.projects).toEqual([{ id: "g1", name: "app", dirs: ["/w/app", "/w/app-x", "/w/web"] }]);
+		// Same-repo folder joining its git project stays a git project (simply clears ungrouped)
+		const rejoined = joinProject({ ungrouped: ["/w/app-x"] }, "/w/app-x", { root: "/w/app", members: ["/w/app"], name: "app", id: "g2", gitRoot: "/w/app" });
+		expect(rejoined).toEqual({ projects: [], ungrouped: [] });
+	});
+	test("reorderProjectDir reorders within a hand-made project and returns null on no-ops", () => {
+		const o = { projects: [{ id: "p", name: "x", dirs: ["/a", "/b", "/c"] }], ungrouped: [] };
+		expect(reorderProjectDir(o, "p", "/c", "/a", false)?.projects[0]?.dirs).toEqual(["/c", "/a", "/b"]);
+		expect(reorderProjectDir(o, "p", "/a", "/b", true)?.projects[0]?.dirs).toEqual(["/b", "/a", "/c"]);
+		expect(reorderProjectDir(o, "p", "/a", "/b", false)).toBeNull();
+		expect(reorderProjectDir(o, "p", "/a", "/a", true)).toBeNull();
+		expect(reorderProjectDir(o, "missing", "/a", "/b", true)).toBeNull();
 	});
 });
 
