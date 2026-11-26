@@ -1,6 +1,6 @@
 <script lang="ts" module>
 	import type { Outgoing } from "../../lib/chat.svelte";
-	import { isDraftForgotten, memoryDrafts as drafts } from "../../lib/composer/memory-drafts";
+	import { claimMemoryDraft, isDraftForgotten, memoryDrafts as drafts, releaseMemoryDraft, setMemoryDraft } from "../../lib/composer/memory-drafts";
 </script>
 
 <script lang="ts">
@@ -40,7 +40,7 @@
 	import { getPane } from "../../lib/pane";
 	import { extensions } from "../../lib/extensions/host.svelte";
 	import { makeQuote } from "../../lib/quote";
-	import { Attachments } from "../../lib/attachments.svelte";
+	import { Attachments, releaseFiles } from "../../lib/attachments.svelte";
 	import DropZone from "./DropZone.svelte";
 	import WhereChip from "./WhereChip.svelte";
 	import ReplyBadge from "./ReplyBadge.svelte";
@@ -167,11 +167,12 @@
 		saveNow();
 		saveAttachmentsNow();
 		const k = draftKey ?? "";
-		if (text || attached.any || reply) drafts.set(k, { text, attachments: attached.images, files: attached.files, reply });
+		if (text || attached.any || reply) setMemoryDraft(k, { text, attachments: attached.images, files: attached.files, reply });
 		else drafts.delete(k);
 	}
 	$effect(() => {
 		const id = pane.id;
+		const unclaim = claimMemoryDraft(id ?? "");
 		untrack(() => {
 			stash();
 			draftKey = id;
@@ -186,16 +187,25 @@
 			attachLoading = !kept;
 			if (!kept)
 				void loadAttachments(id ?? "").then((back) => {
-					if (draftKey !== id) return;
+					if (draftKey !== id) {
+						if (back) releaseFiles(back.files);
+						return;
+					}
 					attachLoading = false;
 					if (back && !attached.any) {
 						attached.load(back.images, back.files);
 						attachSaved = attachmentsSignature(back.images, back.files);
-					} else saveAttachmentsNow();
+					} else {
+						if (back) releaseFiles(back.files);
+						saveAttachmentsNow();
+					}
 				});
 		});
 		if (pane.focused && !isTouch()) queueMicrotask(() => { if (shouldTakeFocus(document.activeElement)) editor?.focus(); });
-		return () => untrack(stash);
+		return () => {
+			untrack(stash);
+			unclaim();
+		};
 	});
 
 	// Edit-and-branch hands over text once; declared after the effect above so it wins when both fire together.
@@ -592,7 +602,7 @@
 	function clearSent(key: string | null, sentText: string) {
 		if (pane.id !== key) {
 			// already moved to the new session, whose input was restored empty
-			drafts.delete(key ?? "");
+			releaseMemoryDraft(key ?? "");
 			forgetDraft(key ?? "");
 			forgetAttachments(key ?? "");
 			return;

@@ -96,10 +96,16 @@
 	type FontSet = { nm: FontSpec; nmMono: FontSpec; meta: FontSpec; metaBold: FontSpec; metaMono: FontSpec; title: FontSpec; when: FontSpec; dotW: number };
 	let fonts = $state<FontSet | null>(null);
 	let fontGen = $state(0);
+	const MAX_WIDTH_CACHE = 2000;
 	const widthCache = new Map<string, number>();
 	let whenSamplesKey = "";
 	let whenSamplesCache: string[] = [];
 	const whenWidthCache = new Map<string, number>();
+
+	function cacheWidth(cache: Map<string, number>, key: string, value: number) {
+		if (!cache.has(key) && cache.size >= MAX_WIDTH_CACHE) cache.clear();
+		cache.set(key, value);
+	}
 
 	function readFonts(root: HTMLDivElement): FontSet | null {
 		const nmEl = root.querySelector<HTMLElement>('[data-kind="session"]');
@@ -156,7 +162,7 @@
 				}
 			}
 		}
-		whenWidthCache.set(key, wWhen);
+		cacheWidth(whenWidthCache, key, wWhen);
 		return wWhen;
 	}
 
@@ -200,7 +206,7 @@
 		// the name sits in the middle column, with the (empty) third column's 12px gap after it; the facts line spans both
 		const line = Math.max(nm.getBoundingClientRect().width + 12, meta.getBoundingClientRect().width + facts.extra);
 		const w = Math.ceil(line) + 24 + 12 + 32 + 2; // mark + gap + padding + border
-		widthCache.set(key, w);
+		cacheWidth(widthCache, key, w);
 		return w;
 	}
 	/** A chat: its name with the time beside it, its title below (what it is doing while it works is live text: it never widens a column). */
@@ -229,7 +235,7 @@
 		const wWhen = maxWhenWidth(srv, null);
 		const line = Math.max(nm.getBoundingClientRect().width + 12 + wWhen, tl.getBoundingClientRect().width);
 		const w = Math.ceil(line) + 24 + 12 + 32 + 2; // mark + gap + padding + border
-		widthCache.set(key, w);
+		cacheWidth(widthCache, key, w);
 		return w;
 	}
 	/**

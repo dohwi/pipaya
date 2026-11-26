@@ -63,6 +63,15 @@ export class IdleExtensionStores {
     this.tick++;
   }
 
+  /** Stop editing a removed server without flushing back to localStorage or the network. */
+  discard(serverId: string): void {
+    const e = this.editors.get(serverId);
+    if (!e) return;
+    this.editors.delete(serverId);
+    this.tick++;
+    e.sync.dispose();
+  }
+
   /** Stop editing a server's list apart from the host (it was opened, or removed). Pending changes are sent first. */
   drop(serverId: string): Promise<void> {
     const e = this.editors.get(serverId);

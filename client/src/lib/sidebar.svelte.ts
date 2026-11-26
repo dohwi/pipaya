@@ -413,4 +413,41 @@ export class SidebarState {
     write(K.dirNames, this.dirNames);
     write(K.groupDir, this.groupDir);
   }
+
+  /** Drop every persisted sidebar entry belonging to a removed server so stale keys do not accumulate. */
+  forgetServer(serverId: string) {
+    if (!serverId) return;
+    const prefix = `${serverId}\u0000`;
+    const projPrefix = `project\u0000${serverId}\u0000`;
+    const dropFromRecord = <T>(rec: Record<string, T>): [Record<string, T>, boolean] => {
+      if (!Object.hasOwn(rec, serverId)) return [rec, false];
+      const next = { ...rec };
+      delete next[serverId];
+      return [next, true];
+    };
+
+    const nextFolded = this.folded.filter((k) => k !== serverId && !k.startsWith(projPrefix) && !k.startsWith(prefix));
+    if (nextFolded.length !== this.folded.length) { this.folded = nextFolded; write(K.folded, this.folded); }
+    const nextOpenDirs = this.openDirs.filter((k) => !k.startsWith(prefix));
+    if (nextOpenDirs.length !== this.openDirs.length) { this.openDirs = nextOpenDirs; write(K.openDirs, this.openDirs); }
+    const nextFoldedProj = this.foldedProjectDirs.filter((k) => !k.startsWith(prefix));
+    if (nextFoldedProj.length !== this.foldedProjectDirs.length) { this.foldedProjectDirs = nextFoldedProj; write(K.foldedProjectDirs, this.foldedProjectDirs); }
+
+    const [dirOrder, cDirOrder] = dropFromRecord(this.dirOrder);
+    if (cDirOrder) { this.dirOrder = dirOrder; write(K.dirOrder, this.dirOrder); }
+    const [pinned, cPinned] = dropFromRecord(this.pinned);
+    if (cPinned) { this.pinned = pinned; write(K.pinnedDirs, this.pinned); }
+    const [dirNames, cDirNames] = dropFromRecord(this.dirNames);
+    if (cDirNames) { this.dirNames = dirNames; write(K.dirNames, this.dirNames); }
+    const [pinnedTabs, cPinnedTabs] = dropFromRecord(this.pinnedTabs);
+    if (cPinnedTabs) { this.pinnedTabs = pinnedTabs; write(K.pinnedTabs, this.pinnedTabs); }
+    const [tabOrder, cTabOrder] = dropFromRecord(this.tabOrder);
+    if (cTabOrder) { this.tabOrder = tabOrder; write(K.tabOrder, this.tabOrder); }
+    const [projects, cProjects] = dropFromRecord(this.projects);
+    if (cProjects) { this.projects = projects; write(K.projects, this.projects); }
+    const [ungrouped, cUngrouped] = dropFromRecord(this.ungrouped);
+    if (cUngrouped) { this.ungrouped = ungrouped; write(K.ungrouped, this.ungrouped); }
+    const [groupDir, cGroupDir] = dropFromRecord(this.groupDir);
+    if (cGroupDir) { this.groupDir = groupDir; write(K.groupDir, this.groupDir); }
+  }
 }
