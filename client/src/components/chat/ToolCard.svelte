@@ -5,6 +5,8 @@
 	import Markdown from "./Markdown.svelte";
 	import QuestionReply from "./QuestionReply.svelte";
 	import { app } from "../../lib/store.svelte";
+	import { hideMentionHover, scheduleMentionHoverHide, showMentionHover } from "../../lib/mention-hover.svelte";
+	import { openMentionMenu } from "../../lib/mention-menu";
 	import { getPane } from "../../lib/pane";
 	import { clip, duration, fullTime } from "../../lib/format";
 	import { modelRefName } from "../../lib/model-name";
@@ -21,7 +23,7 @@
 	let { id, name, args }: { id: string; name: string; args: Record<string, unknown> } = $props();
 
 	const pane = getPane();
-	const run = $derived<ToolRun>(app.chatOf(pane.id)?.tools[id] ?? { state: "pending", output: "" });
+	const run = $derived<ToolRun>((pane.chat ?? app.chatOf(pane.id))?.tools[id] ?? { state: "pending", output: "" });
 	let open = $state(false);
 
 	const summary = $derived(toolSummary(name, args));
@@ -88,28 +90,43 @@
 		return [{ oldText: str(args.oldText), newText: str(args.newText) }];
 	});
 
-	/** For `peer` calls, link straight to the session or group it acted on when still open (falls back to old name on rename). */
+	const paneServer = $derived(pane.server ?? app.serverId);
+	/** Only sessions on the currently open server can open local file/skill/schedule/goal/subagent dialogs. */
+	const localPaneId = $derived(!paneServer || paneServer === app.serverId ? pane.id : null);
+	const mentionIdx = $derived(app.mentionIndexOf(paneServer));
+	/** For `peer` calls, link straight to the session or group it acted on (including closed ones). */
 	const peerResolved = $derived.by(() => {
 		if (name !== "peer") return null;
 		for (const handle of peerTargetsOf(args, run.output)) {
-			const target = app.mentionIndex.resolve(handle);
-			if (target) return { handle, target };
+			const target = mentionIdx.resolve(handle);
+			if (target) {
+				const scoped =
+					target.kind === "session" && !target.server && paneServer && paneServer !== app.serverId
+						? { ...target, server: paneServer }
+						: target;
+				return { handle, target: scoped };
+			}
 		}
 		return null;
 	});
 	const peerIsSelf = $derived(
-		!!peerResolved && peerResolved.target.kind === "session" && !!pane.id && peerResolved.target.id === pane.id,
+		!!peerResolved &&
+			peerResolved.target.kind === "session" &&
+			!!pane.id &&
+			peerResolved.target.id === pane.id &&
+			(!peerResolved.target.server || !paneServer || peerResolved.target.server === paneServer),
 	);
-	const skillName = $derived(skillOf(name, args));
+	const peerActivity = $derived(peerResolved && !peerIsSelf ? app.mentionActivity(peerResolved.target) : "idle");
+	const skillName = $derived(localPaneId ? skillOf(name, args) : null);
 	const fileTarget = $derived.by(() => {
-		if (skillName || !pane.id || (name !== "read" && name !== "write" && name !== "edit")) return null;
+		if (skillName || !localPaneId || (name !== "read" && name !== "write" && name !== "edit")) return null;
 		const path = str(args.path).trim();
 		if (!path) return null;
 		const offset = typeof args.offset === "number" && Number.isSafeInteger(args.offset) && args.offset >= 1 ? args.offset : undefined;
 		return { path, line: name === "read" ? offset : undefined };
 	});
-	const delegateRole = $derived(name === "delegate" && pane.id ? str(args.role).trim() || null : null);
-	const scheduleId = $derived(name === "schedule" ? scheduleIdOf(args, run.details ?? null) : null);
+	const delegateRole = $derived(name === "delegate" && localPaneId ? str(args.role).trim() || null : null);
+	const scheduleId = $derived(name === "schedule" && localPaneId ? scheduleIdOf(args, run.details ?? null) : null);
 
 	/** Re-render highlighted lines once lazy highlight.js grammars finish loading. */
 	let hlTick = $state(0);
@@ -294,9 +311,13 @@
 						<button
 							type="button"
 							class="jump-tok mention"
-							title={peerResolved.target.kind === "group" ? t("{name} 그룹 열기", { name: `@${peerResolved.handle}` }) : t("{name} 대화 미리 보기", { name: `@${peerResolved.handle}` })}
-							onclick={(e) => app.openMention(peerResolved.target, { direct: e.ctrlKey || e.metaKey })}
-						><span class="jlabel">@{peerResolved.handle}</span></button>
+							class:closed={peerResolved.target.kind === "session" && peerResolved.target.closed}
+							title={peerResolved.target.kind === "group" ? t("{name} 그룹 열기", { name: `@${peerResolved.handle}` }) : peerResolved.target.closed ? t("{name} 닫힌 대화 보기", { name: `@${peerResolved.handle}` }) : t("{name} 대화 미리 보기", { name: `@${peerResolved.handle}` })}
+							onclick={(e) => { hideMentionHover(); app.openMention(peerResolved.target, { direct: e.ctrlKey || e.metaKey }); }}
+							oncontextmenu={(e) => openMentionMenu(e, peerResolved.target, { label: `@${peerResolved.handle}`, currentSessionId: pane.id })}
+							onpointerenter={(e) => { if (e.pointerType === "mouse") showMentionHover(e.currentTarget, peerResolved.target, `@${peerResolved.handle}`); }}
+							onpointerleave={(e) => { if (e.pointerType === "mouse") scheduleMentionHoverHide(); }}
+						>{#if peerActivity !== "idle"}<span class="mdot" data-activity={peerActivity}></span>{/if}<span class="jlabel">@{peerResolved.handle}</span></button>
 					{/if}
 				</div>
 			{:else if delegateRole && !delegateView}
@@ -308,22 +329,22 @@
 						onclick={() => app.openSubagents(pane.id)}
 					><Icon name="bot" /><span class="jlabel">{delegateRole}</span></button>
 				</div>
-			{:else if name === "schedule" && pane.id && !genericView}
+			{:else if name === "schedule" && localPaneId && !genericView}
 				<div class="jump">
 					<button
 						type="button"
 						class="jump-tok file"
 						title={t("예약 작업 보기")}
-						onclick={() => (scheduleId ? app.openScheduleEdit(scheduleId) : app.openScheduleFor(pane.id!))}
+						onclick={() => (scheduleId ? app.openScheduleEdit(scheduleId) : app.openScheduleFor(localPaneId!))}
 					><Icon name="clock" /><span class="jlabel">{t("예약 작업")}</span></button>
 				</div>
-			{:else if name === "goal" && pane.id && !genericView}
+			{:else if name === "goal" && localPaneId && !genericView}
 				<div class="jump">
 					<button
 						type="button"
 						class="jump-tok file"
 						title={t("목표 보기")}
-						onclick={() => app.openGoal(pane.id)}
+						onclick={() => app.openGoal(localPaneId)}
 					><Icon name="target" /><span class="jlabel">{t("목표")}</span></button>
 				</div>
 			{/if}
@@ -408,13 +429,13 @@
 							{#each grepParsed.groups as g, gi (gi)}
 								{#if g.path}
 									<div class="grep-file">
-										{#if pane.id}
+										{#if localPaneId}
 											{@const fp = splitFilePath(g.path)}
 											<button
 												type="button"
 												class="grep-path"
 												title={t("{name} 미리 보기", { name: g.path })}
-												onclick={() => app.openFile(pane.id!, { path: g.path, name: baseName(g.path) })}
+												onclick={() => app.openFile(localPaneId!, { path: g.path, name: baseName(g.path) })}
 											>
 												<Icon name="file" />
 												{#if fp}
@@ -429,11 +450,11 @@
 									</div>
 								{/if}
 								{#each g.hits as hit, hi (hi)}
-									{#if g.path && pane.id && hit.line != null}
+									{#if g.path && localPaneId && hit.line != null}
 										<button
 											type="button"
 											class="grep-hit"
-											onclick={() => app.openFile(pane.id!, { path: g.path, name: baseName(g.path), line: hit.line! })}
+											onclick={() => app.openFile(localPaneId!, { path: g.path, name: baseName(g.path), line: hit.line! })}
 										>
 											<span class="lno">{hit.line}</span>
 											<span class="hit-text">{hit.text || " "}</span>
@@ -473,16 +494,18 @@
 										<Icon name={e.isDir ? "folder" : "file"} />
 										<span class="jlabel">{e.name}{e.isDir ? "/" : ""}</span>
 									</span>
-								{:else}
+								{:else if localPaneId}
 									<button
 										type="button"
 										class="ls-entry"
 										title={t("{name} 미리 보기", { name: e.fullPath })}
-										onclick={() => app.openFile(pane.id!, { path: e.fullPath, name: e.name })}
+										onclick={() => app.openFile(localPaneId!, { path: e.fullPath, name: e.name })}
 									>
 										<Icon name="file" />
 										<span class="jlabel">{e.name}</span>
 									</button>
+								{:else}
+									<span class="ls-entry"><Icon name="file" /><span class="jlabel">{e.name}</span></span>
 								{/if}
 							{/each}
 						</div>
@@ -530,27 +553,31 @@
 								<button
 									type="button"
 									class="codebar-file mention mono"
-									title={peerResolved.target.kind === "group" ? t("{name} 그룹 열기", { name: `@${peerResolved.handle}` }) : t("{name} 대화 미리 보기", { name: `@${peerResolved.handle}` })}
-									onclick={(e) => app.openMention(peerResolved.target, { direct: e.ctrlKey || e.metaKey })}
-								><Icon name="chat" /><span class="jlabel">@{peerResolved.handle}</span></button>
+									class:closed={peerResolved.target.kind === "session" && peerResolved.target.closed}
+									title={peerResolved.target.kind === "group" ? t("{name} 그룹 열기", { name: `@${peerResolved.handle}` }) : peerResolved.target.closed ? t("{name} 닫힌 대화 보기", { name: `@${peerResolved.handle}` }) : t("{name} 대화 미리 보기", { name: `@${peerResolved.handle}` })}
+									onclick={(e) => { hideMentionHover(); app.openMention(peerResolved.target, { direct: e.ctrlKey || e.metaKey }); }}
+									oncontextmenu={(e) => openMentionMenu(e, peerResolved.target, { label: `@${peerResolved.handle}`, currentSessionId: pane.id })}
+									onpointerenter={(e) => { if (e.pointerType === "mouse") showMentionHover(e.currentTarget, peerResolved.target, `@${peerResolved.handle}`); }}
+									onpointerleave={(e) => { if (e.pointerType === "mouse") scheduleMentionHoverHide(); }}
+								>{#if peerActivity !== "idle"}<span class="mdot" data-activity={peerActivity}></span>{:else}<Icon name="chat" />{/if}<span class="jlabel">@{peerResolved.handle}</span></button>
 							{/if}
 						</div>
-					{:else if name === "schedule" && pane.id}
+					{:else if name === "schedule" && localPaneId}
 						<div class="codebar">
 							<button
 								type="button"
 								class="codebar-file mono"
 								title={t("예약 작업 보기")}
-								onclick={() => (scheduleId ? app.openScheduleEdit(scheduleId) : app.openScheduleFor(pane.id!))}
+								onclick={() => (scheduleId ? app.openScheduleEdit(scheduleId) : app.openScheduleFor(localPaneId!))}
 							><Icon name="clock" /><span class="jlabel">{t("예약 작업")}</span></button>
 						</div>
-					{:else if name === "goal" && pane.id}
+					{:else if name === "goal" && localPaneId}
 						<div class="codebar">
 							<button
 								type="button"
 								class="codebar-file mono"
 								title={t("목표 보기")}
-								onclick={() => app.openGoal(pane.id)}
+								onclick={() => app.openGoal(localPaneId)}
 							><Icon name="target" /><span class="jlabel">{t("목표")}</span></button>
 						</div>
 					{/if}
@@ -791,6 +818,41 @@
 	.jump-tok.mention.self {
 		--hue: var(--mark-mention-self);
 		cursor: default;
+	}
+	.jump-tok.mention.closed {
+		--hue: var(--mark-mention-closed);
+		font-weight: 500;
+		background: color-mix(in srgb, var(--hue) 8%, transparent);
+		box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--hue) 26%, transparent);
+	}
+	.mdot {
+		flex: none;
+		width: 6px;
+		height: 6px;
+		border-radius: var(--radius-pill);
+	}
+	.mdot[data-activity="working"] {
+		background: var(--info);
+		animation: tc-dot-pulse var(--anim-working-duration) var(--anim-working-ease) infinite;
+	}
+	.mdot[data-activity="asking"] {
+		background: var(--warn);
+		animation: tc-dot-pulse var(--anim-working-duration) var(--anim-working-ease) infinite;
+	}
+	.mdot[data-activity="done"] {
+		background: var(--ok);
+	}
+	.mdot[data-activity="failed"] {
+		background: var(--danger);
+	}
+	@keyframes tc-dot-pulse {
+		0%, 100% { opacity: 1; }
+		50% { opacity: var(--anim-working-dim); }
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.mdot {
+			animation: none;
+		}
 	}
 	.jump-tok.skill {
 		--hue: var(--accent);
@@ -1045,6 +1107,12 @@
 	}
 	.codebar-file.mention.self :global(svg) {
 		color: var(--mark-mention-self);
+	}
+	.codebar-file.mention.closed {
+		color: var(--mark-mention-closed);
+	}
+	.codebar-file.mention.closed :global(svg) {
+		color: var(--mark-mention-closed);
 	}
 	.codeempty {
 		padding: 12px;

@@ -142,6 +142,9 @@ function purifier(): DOMPurify {
 			node.removeAttribute("data-mention-id");
 			node.removeAttribute("data-mention-kind");
 			node.removeAttribute("data-mention-self");
+			node.removeAttribute("data-mention-closed");
+			node.removeAttribute("data-mention-server");
+			node.removeAttribute("data-activity");
 			node.removeAttribute("data-skill");
 			node.removeAttribute("data-prompt");
 			const tag = node.tagName?.toUpperCase();
@@ -193,7 +196,7 @@ export function renderMarkdown(src: string, opts: { cache?: boolean } = {}): str
 	const html = groupPictures(purifier().sanitize(parsed, {
 		ALLOWED_URI_REGEXP: SAFE_URI_REGEXP,
 		ADD_ATTR: ["data-copy", "data-ext", "data-img-src", "data-alt", "data-file", "data-line", "data-end-line", "data-wd-src", "data-kind", "data-hl-wait"],
-		FORBID_ATTR: ["data-mention-id", "data-mention-kind", "data-mention-self", "data-skill", "data-prompt"],
+		FORBID_ATTR: ["data-mention-id", "data-mention-kind", "data-mention-self", "data-mention-closed", "data-mention-server", "data-activity", "data-skill", "data-prompt"],
 		FORBID_TAGS: ["style", "form", "input", "iframe", "object", "embed", "img", "picture", "source", "video", "audio", "link", "meta"],
 	}));
 	// Finished messages are re-rendered on every sidebar toggle; keep a small cache for them. Not while a grammar loads:

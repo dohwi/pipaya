@@ -70,6 +70,38 @@ describe("parentLabel", () => {
 	});
 });
 
+describe("buildMentionIndex (closed & remote sessions)", () => {
+	test("indexes closed sessions without overriding active sessions or groups, and indexes @server/name remotes", () => {
+		const idx = buildMentionIndex(
+			[s("s1", "서아")],
+			[{ id: "g1", name: "팀" }],
+			{
+				closedSessions: [
+					s("c1", "서아", { closed: true }), // clashes with active -> active wins
+					s("c2", "팀", { closed: true }), // clashes with group -> group wins
+					s("c3", "소민", { closed: true }), // closed -> resolved with closed: true
+				],
+				remotes: [
+					{
+						serverId: "srv-desktop",
+						handle: "desktop",
+						sessions: [s("r1", "민석")],
+						closedSessions: [
+							s("r2", "민석", { closed: true }), // active remote wins
+							s("r3", "예서", { closed: true }),
+						],
+					},
+				],
+			},
+		);
+		expect(idx.resolve("@서아")).toEqual({ kind: "session", id: "s1" });
+		expect(idx.resolve("@팀")).toEqual({ kind: "group", id: "g1" });
+		expect(idx.resolve("@소민")).toEqual({ kind: "session", id: "c3", closed: true });
+		expect(idx.resolve("@desktop/민석")).toEqual({ kind: "session", id: "r1", server: "srv-desktop" });
+		expect(idx.resolve("@desktop/예서")).toEqual({ kind: "session", id: "r3", server: "srv-desktop", closed: true });
+	});
+});
+
 describe("planMentionAction", () => {
 	const base = {
 		graphOpen: false,
@@ -83,7 +115,7 @@ describe("planMentionAction", () => {
 	};
 
 	test("opens another session in the chat quick-look modal on normal click, and navigates directly on Ctrl/Cmd+click", () => {
-		expect(planMentionAction({ kind: "session", id: "s2" }, base)).toEqual({ type: "chatPeek", id: "s2" });
+		expect(planMentionAction({ kind: "session", id: "s2" }, base)).toEqual({ type: "chatPeek", server: "srv1", id: "s2" });
 		expect(planMentionAction({ kind: "session", id: "s2" }, { ...base, direct: true })).toEqual({
 			type: "openSession",
 			id: "s2",
@@ -92,15 +124,19 @@ describe("planMentionAction", () => {
 	});
 
 	test("switches modal target in place and closes peek when clicking a session already visible behind the modal", () => {
-		expect(planMentionAction({ kind: "session", id: "s3" }, { ...base, chatPeek: "s2" })).toEqual({ type: "chatPeek", id: "s3" });
-		expect(planMentionAction({ kind: "session", id: "s2" }, { ...base, chatPeek: "s2" })).toEqual({ type: "noop" });
-		expect(planMentionAction({ kind: "session", id: "s1" }, { ...base, chatPeek: "s2" })).toEqual({ type: "closeChatPeek" });
+		expect(planMentionAction({ kind: "session", id: "s3" }, { ...base, chatPeek: { server: "srv1", session: "s2" } })).toEqual({
+			type: "chatPeek",
+			server: "srv1",
+			id: "s3",
+		});
+		expect(planMentionAction({ kind: "session", id: "s2" }, { ...base, chatPeek: { server: "srv1", session: "s2" } })).toEqual({ type: "noop" });
+		expect(planMentionAction({ kind: "session", id: "s1" }, { ...base, chatPeek: { server: "srv1", session: "s2" } })).toEqual({ type: "closeChatPeek" });
 		// Clicking a sibling pane in a split group focuses it instead of opening a duplicate modal
 		expect(planMentionAction({ kind: "session", id: "s2" }, { ...base, baseVisibleIds: ["s1", "s2"] })).toEqual({
 			type: "closeChatPeek",
 			focusId: "s2",
 		});
-		expect(planMentionAction({ kind: "session", id: "s2" }, { ...base, chatPeek: "s3", baseVisibleIds: ["s1", "s2"] })).toEqual({
+		expect(planMentionAction({ kind: "session", id: "s2" }, { ...base, chatPeek: { server: "srv1", session: "s3" }, baseVisibleIds: ["s1", "s2"] })).toEqual({
 			type: "closeChatPeek",
 			focusId: "s2",
 		});
@@ -108,13 +144,32 @@ describe("planMentionAction", () => {
 		expect(planMentionAction({ kind: "session", id: "s1" }, base)).toEqual({ type: "noop" });
 	});
 
+	test("handles closed and remote-server sessions in chat peek and direct navigation", () => {
+		expect(planMentionAction({ kind: "session", id: "c1", closed: true }, base)).toEqual({ type: "chatPeek", server: "srv1", id: "c1" });
+		expect(planMentionAction({ kind: "session", id: "r1", server: "srv2" }, base)).toEqual({ type: "chatPeek", server: "srv2", id: "r1" });
+		expect(planMentionAction({ kind: "session", id: "r1", server: "srv2" }, { ...base, direct: true })).toEqual({
+			type: "openSession",
+			id: "r1",
+			server: "srv2",
+			leaveGraph: false,
+		});
+		// Same session id on a DIFFERENT server is never treated as the locally visible pane
+		expect(planMentionAction({ kind: "session", id: "s1", server: "srv2" }, base)).toEqual({ type: "chatPeek", server: "srv2", id: "s1" });
+	});
+
 	test("switches graph quick-look without closing graph, and leaves graph on direct click", () => {
 		expect(planMentionAction({ kind: "session", id: "s2" }, { ...base, graphOpen: true, graphPeek: { server: "srv1", session: "s1" } })).toEqual({
 			type: "graphPeek",
+			server: "srv1",
 			id: "s2",
 		});
 		expect(planMentionAction({ kind: "session", id: "s1" }, { ...base, graphOpen: true, graphPeek: { server: "srv1", session: "s1" } })).toEqual({
 			type: "noop",
+		});
+		expect(planMentionAction({ kind: "session", id: "r1", server: "srv2" }, { ...base, graphOpen: true, graphPeek: { server: "srv1", session: "s1" } })).toEqual({
+			type: "graphPeek",
+			server: "srv2",
+			id: "r1",
 		});
 		expect(planMentionAction({ kind: "session", id: "s2" }, { ...base, graphOpen: true, direct: true })).toEqual({
 			type: "openSession",

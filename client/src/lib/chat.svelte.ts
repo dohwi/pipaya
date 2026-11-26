@@ -303,6 +303,12 @@ export class ChatState {
 		return req;
 	}
 
+	/** Discard any in-flight initial load or earlier-page prefetch (used when a standalone read-only preview unmounts). */
+	dispose(): void {
+		this.token++;
+		this.ahead = null;
+	}
+
 	/** Start fetching the next older page in the background (no-op when there is none or it is already fetched). */
 	prefetchEarlier(): void {
 		if (this.hasEarlier && !this.syncing) void this.fetchAhead().catch(() => {});

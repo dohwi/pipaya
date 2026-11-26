@@ -43,7 +43,8 @@ import { graphRuns } from "./graph-runs.svelte";
 import { fetchLocalePacks } from "./locale-sync";
 import { configureUiEnv } from "./ui-env.svelte";
 import { groupNameFor } from "./group-name";
-import { buildMentionIndex, planMentionAction, type MentionIndex, type MentionTarget } from "./peers";
+import { buildMentionIndex, planMentionAction, type MentionIndex, type MentionTarget, type PeekTarget, type RemoteMentionSource } from "./peers";
+import { activityOf, mostUrgent, type Activity } from "./activity";
 import { parseConfiguration, type ConfigurationDocument } from "./extensions/configuration";
 import { rehydrateSettingsFromDurable } from "./durable-storage";
 import { K, read, write } from "./persist";
@@ -146,12 +147,19 @@ class AppStore {
     return this.link?.netError ?? "";
   }
 
-  /** Active (not closed) sessions only. Closed ones are fetched on demand by /resume and /tree. */
+  /** Active (not closed) sessions only. */
   get sessions(): Session[] {
     return this.link?.data.sessions ?? NONE;
   }
   set sessions(v: Session[]) {
     if (this.link) this.link.data.sessions = v;
+  }
+  /** Closed sessions cached in the background for read-only `@mention` previews and hover cards. */
+  get closedSessions(): Session[] {
+    return this.link?.data.closedSessions ?? NONE;
+  }
+  set closedSessions(v: Session[]) {
+    if (this.link) this.link.data.closedSessions = v;
   }
   /** The tab overview (the folder's tabs as a grid of cards, behind the tab count button) is open. */
   get tabOverview(): boolean { return this.ui.tabOverview; }
@@ -261,17 +269,100 @@ class AppStore {
   set groups(v: Group[]) {
     if (this.link) this.link.data.groups = v;
   }
-  /** Shared lookup from `@name` (session or group) to the target it opens, memoized across all messages and tool cards. */
-  mentionIndex: MentionIndex = $derived(buildMentionIndex(this.sessions, this.groups));
+  /** Shared lookup from `@name` (active session, group, closed session, or `@server/session`) to the target it opens. */
+  mentionIndex: MentionIndex = $derived.by(() => {
+    const remotes: RemoteMentionSource[] = [];
+    for (const s of this.servers) {
+      if (s.id === this.serverId) continue;
+      const link = this.links[s.id];
+      if (!link) continue;
+      remotes.push({
+        serverId: s.id,
+        handle: this.serverLabel(s),
+        sessions: link.data.sessions,
+        closedSessions: link.data.closedSessions,
+      });
+    }
+    return buildMentionIndex(this.sessions, this.groups, {
+      closedSessions: this.closedSessions,
+      remotes,
+    });
+  });
+
+  /** Memoized mention indexes per remote server (groups omitted: groups only open on the active server). */
+  private remoteMentionIndices: Map<string, MentionIndex> = $derived.by(() => {
+    const out = new Map<string, MentionIndex>();
+    for (const s of this.servers) {
+      if (s.id === this.serverId) continue;
+      const link = this.links[s.id];
+      if (!link) continue;
+      const remotes: RemoteMentionSource[] = [];
+      for (const otherSrv of this.servers) {
+        if (otherSrv.id === s.id) continue;
+        const other = this.links[otherSrv.id];
+        if (!other) continue;
+        remotes.push({
+          serverId: otherSrv.id,
+          handle: this.serverLabel(otherSrv),
+          sessions: other.data.sessions,
+          closedSessions: other.data.closedSessions,
+        });
+      }
+      out.set(
+        s.id,
+        buildMentionIndex(link.data.sessions, [], {
+          closedSessions: link.data.closedSessions,
+          remotes,
+        }),
+      );
+    }
+    return out;
+  });
+
+  /** Look up a memoized mention index scoped to a specific server (used by read-only remote-server previews). */
+  mentionIndexOf(serverId: string | null | undefined): MentionIndex {
+    if (!serverId || serverId === this.serverId) return this.mentionIndex;
+    return this.remoteMentionIndices.get(serverId) ?? this.mentionIndex;
+  }
+
+  /** Live activity of a mention target (open session on any connected server, or most urgent pane in a group). */
+  mentionActivity(target: MentionTarget): Activity {
+    if (target.kind === "group") {
+      const link = this.link;
+      if (!link) return "idle";
+      const g = link.data.groups.find((x) => x.id === target.id);
+      if (!g) return "idle";
+      return mostUrgent(panesOf(g.layout).filter((id) => link.sessionById.has(id)).map((id) => activityOf(link.data, id)));
+    }
+    if (target.closed) return "idle";
+    const sid = target.server ?? this.serverId;
+    const link = sid ? this.links[sid] : undefined;
+    if (!link || !link.sessionById.has(target.id)) return "idle";
+    return activityOf(link.data, target.id);
+  }
+
+  private pushPeekHistory(stack: PeekTarget[], prev: PeekTarget | null): PeekTarget[] {
+    if (!prev) return stack;
+    const top = stack[stack.length - 1];
+    if (top && top.server === prev.server && top.session === prev.session) return stack;
+    const next = [...stack, prev];
+    return next.length > 20 ? next.slice(next.length - 20) : next;
+  }
 
   /**
-   * Open the active session or group named by a mention chip, closing the queue modal if it was opened from there.
+   * Open the session or group named by a mention chip, closing the queue modal if it was opened from there.
    * Normal clicks on a session open the quick-look modal over the current chat (or switch the graph's quick look);
-   * `direct` (`Ctrl`/`⌘`+click) navigates straight to that session.
+   * `direct` (`Ctrl`/`⌘`+click) navigates straight to that session (resuming closed ones and switching server if needed).
    */
   openMention(target: MentionTarget, opts: { direct?: boolean } = {}) {
     if (this.queueDialog) this.queueDialog = null;
-    const action = planMentionAction(target, {
+    const targetServer = target.kind === "session" ? (target.server ?? this.serverId) : this.serverId;
+    const targetSession = target.kind === "session" && targetServer ? this.sessionAny(target.id, targetServer) : undefined;
+    const resolvedTarget: MentionTarget =
+      target.kind === "session" && targetSession
+        ? { ...target, closed: targetSession.closed }
+        : target;
+    const action = planMentionAction(resolvedTarget, {
       direct: opts.direct,
       graphOpen: this.graphOpen,
       serverId: this.serverId,
@@ -279,38 +370,49 @@ class AppStore {
       chatPeek: this.ui.chatPeek,
       activeId: this.activeId,
       baseVisibleIds: this.baseVisibleIds,
-      hasSession: target.kind === "session" && this.sessions.some((s) => s.id === target.id),
-      hasGroup: target.kind === "group" && this.groups.some((g) => g.id === target.id),
+      hasSession: resolvedTarget.kind === "session" && !!targetSession,
+      hasGroup: resolvedTarget.kind === "group" && this.groups.some((g) => g.id === resolvedTarget.id),
     });
     switch (action.type) {
       case "noop":
         return;
       case "openGroup":
-        this.ui.chatPeek = null;
+        this.ui.closeChatPeek();
         this.openTab(action.id);
         return;
       case "openSession":
-        this.ui.chatPeek = null;
+        this.ui.closeChatPeek();
         if (action.leaveGraph) {
           this.graphFrom = null;
           this.graphOpen = false;
-          this.graphPeek = null;
+          this.ui.closePeek();
         }
-        void this.openAny(action.id);
+        if (action.server && action.server !== this.serverId) {
+          void this.openAnyOn(action.server, action.id);
+        } else {
+          void this.openAny(action.id);
+        }
         return;
       case "graphPeek":
-        if (this.serverId) void this.peekChat(this.serverId, action.id);
+        void this.peekChat(action.server, action.id, { pushHistory: true });
         return;
       case "closeChatPeek":
-        this.ui.chatPeek = null;
+        this.ui.closeChatPeek();
         if (action.focusId) void this.openSession(action.focusId, false, false);
         return;
-      case "chatPeek":
-        this.ui.chatPeek = action.id;
-        delete this.unread[action.id];
-        delete this.failed[action.id];
-        notifications.read(action.id);
+      case "chatPeek": {
+        const prev = this.ui.chatPeek;
+        if (prev && (prev.server !== action.server || prev.session !== action.id)) {
+          this.ui.chatPeekHistory = this.pushPeekHistory(this.ui.chatPeekHistory, prev);
+        }
+        this.ui.chatPeek = { server: action.server, session: action.id };
+        if (action.server === this.serverId && this.session(action.id)) {
+          delete this.unread[action.id];
+          delete this.failed[action.id];
+          notifications.read(action.id);
+        }
         return;
+      }
     }
   }
   /** Terminals open on the server (shells on its own OS), and what it supports; null support = not known (yet) */
@@ -432,10 +534,23 @@ class AppStore {
    * input and status line), opened on its server the usual way while the graph stays up; the graph remembers where the
    * user came from (`graphFrom`) and goes back there when it closes.
    */
-  get graphPeek(): { server: string; session: string } | null { return this.ui.graphPeek; }
-  set graphPeek(v: { server: string; session: string } | null) { this.ui.graphPeek = v; }
-  async peekChat(server: string, session: string) {
+  get graphPeek(): PeekTarget | null { return this.ui.graphPeek; }
+  set graphPeek(v: PeekTarget | null) {
+    this.ui.graphPeek = v;
+    if (!v) this.ui.graphPeekHistory = [];
+  }
+  get graphPeekHistory(): PeekTarget[] { return this.ui.graphPeekHistory; }
+  async peekChat(server: string, session: string, opts: { pushHistory?: boolean } = {}) {
+    const prev = this.ui.graphPeek;
+    if (opts.pushHistory && prev && (prev.server !== server || prev.session !== session)) {
+      this.ui.graphPeekHistory = this.pushPeekHistory(this.ui.graphPeekHistory, prev);
+    } else if (!opts.pushHistory) {
+      this.ui.graphPeekHistory = [];
+    }
     this.ui.graphPeek = { server, session };
+    // A closed session stays read-only inside the graph modal without switching server/activeId.
+    const link = this.links[server];
+    if (link && !link.sessionById.has(session) && link.closedSessionById.has(session)) return;
     // the chat's own server becomes the open one (its transcript, composer and status read from it)
     if (server !== this.serverId || this.net === "idle") {
       write(`${K.active}.${server}`, session);
@@ -444,31 +559,75 @@ class AppStore {
     }
     await this.openSession(session, false, false);
   }
+  graphPeekBack() {
+    while (this.ui.graphPeekHistory.length) {
+      const prev = this.ui.graphPeekHistory[this.ui.graphPeekHistory.length - 1]!;
+      this.ui.graphPeekHistory = this.ui.graphPeekHistory.slice(0, -1);
+      if (this.sessionAny(prev.session, prev.server)) {
+        this.ui.graphPeek = prev;
+        const link = this.links[prev.server];
+        if (link?.sessionById.has(prev.session)) {
+          if (prev.server !== this.serverId || this.net === "idle") {
+            write(`${K.active}.${prev.server}`, prev.session);
+            this.openServer(prev.server, true);
+          } else {
+            void this.openSession(prev.session, false, false);
+          }
+        }
+        return;
+      }
+    }
+  }
   closePeek() {
     this.ui.closePeek();
   }
   /** Quick-look session modal opened over the chat view (null = closed). */
-  get chatPeek(): string | null { return this.ui.chatPeek; }
-  set chatPeek(v: string | null) { this.ui.chatPeek = v; }
+  get chatPeek(): PeekTarget | null { return this.ui.chatPeek; }
+  set chatPeek(v: PeekTarget | null) {
+    this.ui.chatPeek = v;
+    if (!v) this.ui.chatPeekHistory = [];
+  }
+  get chatPeekHistory(): PeekTarget[] { return this.ui.chatPeekHistory; }
+  chatPeekBack() {
+    while (this.ui.chatPeekHistory.length) {
+      const prev = this.ui.chatPeekHistory[this.ui.chatPeekHistory.length - 1]!;
+      this.ui.chatPeekHistory = this.ui.chatPeekHistory.slice(0, -1);
+      if (this.sessionAny(prev.session, prev.server)) {
+        this.ui.chatPeek = prev;
+        if (prev.server === this.serverId && this.session(prev.session)) {
+          delete this.unread[prev.session];
+          delete this.failed[prev.session];
+          notifications.read(prev.session);
+        }
+        return;
+      }
+    }
+  }
   closeChatPeek() {
     this.ui.closeChatPeek();
   }
-  /** The session currently holding user focus for slash commands/input: the chat peek modal when open, otherwise `activeId`. */
+  /** Session id of `chatPeek` ONLY when it is a live (open) session on the current server. */
+  get liveChatPeekId(): string | null {
+    const p = this.ui.chatPeek;
+    if (!p || p.server !== this.serverId) return null;
+    return this.session(p.session) ? p.session : null;
+  }
+  /** The session currently holding user focus for slash commands/input: a live chat peek modal when open, otherwise `activeId`. */
   get focusedSessionId(): string | null {
-    return this.ui.chatPeek && this.session(this.ui.chatPeek) ? this.ui.chatPeek : this.activeId;
+    return this.liveChatPeekId ?? this.activeId;
   }
 
   toggleGraph(open = !this.ui.graphOpen) {
     if (open === this.ui.graphOpen) return;
     if (open) {
-      this.ui.chatPeek = null;
+      this.ui.closeChatPeek();
       this.ui.graphFrom = this.serverId && this.activeId ? { server: this.serverId, session: this.activeId } : null;
       this.ui.graphOpen = true;
       this.sidebar.open = false;
       return;
     }
     this.ui.graphOpen = false;
-    this.ui.graphPeek = null;
+    this.ui.closePeek();
     // back to the chat the graph was opened from (a quick look may have opened others meanwhile)
     const from = this.ui.graphFrom;
     if (!from) return;
@@ -691,6 +850,13 @@ class AppStore {
     return id ? this.link?.sessionById.get(id) : undefined;
   }
 
+  /** Look up either an open or cached closed session on the given server (defaults to the open server). */
+  sessionAny(id: string | null | undefined, serverId?: string | null): Session | undefined {
+    if (!id) return undefined;
+    const link = serverId ? this.links[serverId] : this.link;
+    return link?.sessionById.get(id) ?? link?.closedSessionById.get(id);
+  }
+
   /** Transcript of the focused session. */
   get chat(): ChatState | null {
     return this.chatOf(this.activeId);
@@ -707,7 +873,7 @@ class AppStore {
 
   /** The focused session when it is a chat (what the server counts as read while this window is in front). */
   get readableId(): string | null {
-    if (this.ui.chatPeek && this.session(this.ui.chatPeek)) return this.ui.chatPeek;
+    if (this.liveChatPeekId) return this.liveChatPeekId;
     return this.activeId && !isTerminalId(this.activeId) ? this.activeId : null;
   }
 
@@ -721,10 +887,10 @@ class AppStore {
     return [...out];
   }
 
-  /** Sessions whose transcripts must be loaded: the focused one, every pane of the group on a wide screen, and any peeked chat. */
+  /** Sessions whose transcripts must be loaded: the focused one, every pane of the group on a wide screen, and any live peeked chat. */
   get visibleIds(): string[] {
     const out = new Set<string>(this.baseVisibleIds);
-    if (this.ui.chatPeek && this.session(this.ui.chatPeek)) out.add(this.ui.chatPeek);
+    if (this.liveChatPeekId) out.add(this.liveChatPeekId);
     return [...out];
   }
 
@@ -751,7 +917,7 @@ class AppStore {
     const g = this.activeGroup;
     const out = new Set<string>(this.activeId ? [this.activeId] : []);
     if (g && !viewport.narrow) for (const id of panesOf(g.layout)) if (this.shows(id)) out.add(id);
-    if (this.ui.chatPeek && this.session(this.ui.chatPeek)) out.add(this.ui.chatPeek);
+    if (this.liveChatPeekId) out.add(this.liveChatPeekId);
     return [...out];
   }
 
@@ -1087,7 +1253,7 @@ class AppStore {
     // The extension host reads the open server's list once at launch (init); only a later switch has to swap it.
     const changing = this.openedFor !== null && this.openedFor !== id;
     if (changing) this.draft = readDraft(); // Never carry an explicit tier to a different server.
-    this.ui.chatPeek = null;
+    this.ui.closeChatPeek();
     this.serverId = id;
     this.openedFor = id;
     write(K.currentServer, id);
@@ -1133,7 +1299,7 @@ class AppStore {
     this.settingsSync = null;
     this.serverPrefs.clear();
     notifications.connect(null);
-    this.ui.chatPeek = null;
+    this.ui.closeChatPeek();
     this.activeId = null;
     this.chats = {};
     try {
@@ -1146,8 +1312,8 @@ class AppStore {
   /** Go to a server and open one of its sessions, or start a new chat in one of its working directories. */
   openIn(serverId: string, to: { session?: string; workdir?: string; terminal?: boolean }) {
     this.graphOpen = false;
-    this.graphPeek = null;
-    this.ui.chatPeek = null;
+    this.ui.closePeek();
+    this.ui.closeChatPeek();
     if (serverId !== this.serverId || this.net === "idle") {
       // A terminal or new chat asked for on another server opens once that server is connected (see attach).
       const pending = { terminal: to.terminal ? (to.workdir ?? ".") : null, chat: !to.session && !to.terminal };
@@ -1306,6 +1472,7 @@ class AppStore {
         activeId: this.activeId,
         quietPeers: this.serverPrefs.quietPeers,
         sessions: this.sessions,
+        closedSessions: this.closedSessions,
         groups: this.groups,
         terminals: this.terminals,
         running: link.data.running,
@@ -1315,6 +1482,7 @@ class AppStore {
         failed: link.data.failed,
         chats: this.chats,
         setSessions: (next) => { this.sessions = next; },
+        setClosedSessions: (next) => { this.closedSessions = next; },
         setGroups: (next) => { this.groups = next; },
         setToolsInfo: (next) => { this.toolsInfo = next; },
         setWorkdirInfo: (next) => { this.workdirInfo = next; },
@@ -1785,6 +1953,9 @@ class AppStore {
       if (this.links[sid] !== link) return;
       this.forgetInGroupsOn(link, id);
       link.data.sessions = link.data.sessions.filter((x) => x.id !== id);
+      link.data.closedSessions = closed
+        ? [closed, ...link.data.closedSessions.filter((x) => x.id !== id)]
+        : link.data.closedSessions.filter((x) => x.id !== id);
       link.data.running[id] = false;
       delete link.data.compacting[id];
       link.data.awaiting[id] = 0;
@@ -1792,8 +1963,8 @@ class AppStore {
       delete link.data.failed[id];
       if (closed === undefined) this.cleanupDeletedSession(sid, id);
       else this.cleanupClosedSession(sid, id);
-      if (this.graphPeek?.server === sid && this.graphPeek?.session === id) this.graphPeek = null;
-      if (this.serverId === sid && this.ui.chatPeek === id) this.ui.chatPeek = null;
+      if (this.graphPeek?.server === sid && this.graphPeek?.session === id) this.ui.closePeek();
+      if (this.ui.chatPeek?.server === sid && this.ui.chatPeek?.session === id) this.ui.closeChatPeek();
       if (this.graphFrom?.server === sid && this.graphFrom?.session === id) this.graphFrom = next ? { server: sid, session: next } : null;
       if (this.serverId === sid && this.activeId === id) {
         if (this.graphOpen) {
@@ -1884,6 +2055,7 @@ class AppStore {
       const i = this.sessions.findIndex((x) => x.id === id);
       if (i >= 0) this.sessions.splice(i, 1);
       this.sessions.unshift(s);
+      this.closedSessions = this.closedSessions.filter((x) => x.id !== id);
       if (g && from && from !== id && !layoutHas(g.layout, id)) {
         await this.saveLayout(g.id, replaceSession(g.layout, from, id));
         void this.refreshGroups();
@@ -1902,6 +2074,25 @@ class AppStore {
     else await this.resume(id);
   }
 
+  /** Open an active or closed session on a specific server, resuming it first if closed. */
+  async openAnyOn(serverId: string, id: string) {
+    if (serverId === this.serverId) return this.openAny(id);
+    const link = this.links[serverId];
+    if (!link) return;
+    if (!link.sessionById.has(id) && link.closedSessionById.has(id)) {
+      try {
+        const s = await link.api.patchSession(id, { closed: false });
+        link.data.closedSessions = link.data.closedSessions.filter((x) => x.id !== id);
+        if (!link.data.sessions.some((x) => x.id === id)) link.data.sessions.unshift(s);
+      } catch (e) {
+        this.probeIfNetwork(link, e);
+        this.fail(e, t("다시 열지 못했습니다"));
+        return;
+      }
+    }
+    this.openIn(serverId, { session: id });
+  }
+
   async listClosed(): Promise<Session[]> {
     return this.api ? this.api.allSessions(true) : [];
   }
@@ -1915,8 +2106,8 @@ class AppStore {
 
   newChat() {
     this.graphOpen = false;
-    this.graphPeek = null;
-    this.ui.chatPeek = null;
+    this.ui.closePeek();
+    this.ui.closeChatPeek();
     this.rememberPrevious();
     this.activeId = null;
     try {
@@ -2071,7 +2262,7 @@ class AppStore {
    */
   async openSession(id: string, force = false, reveal = true) {
     if (!this.api) return;
-    this.ui.chatPeek = null;
+    this.ui.closeChatPeek();
     // opening a chat leaves the graph, unless it is the one the graph's quick look shows
     if (this.graphPeek?.session !== id) this.graphOpen = false;
     if (!force && this.activeId === id && (this.chats[id] || isTerminalId(id))) {
@@ -2191,7 +2382,7 @@ class AppStore {
       this.chats = next;
     }
     for (const id of ids) {
-      if (id === this.activeId || id === this.ui.chatPeek) {
+      if (id === this.activeId || id === this.liveChatPeekId) {
         delete this.unread[id];
         delete this.failed[id];
       }
@@ -2631,14 +2822,15 @@ class AppStore {
       if (this.links[sid] !== link) return false;
       this.forgetInGroupsOn(link, id);
       link.data.sessions = link.data.sessions.filter((x) => x.id !== id);
+      link.data.closedSessions = link.data.closedSessions.filter((x) => x.id !== id);
       delete link.data.running[id];
       delete link.data.compacting[id];
       delete link.data.awaiting[id];
       delete link.data.unread[id];
       delete link.data.failed[id];
       this.cleanupDeletedSession(sid, id);
-      if (this.graphPeek?.server === sid && this.graphPeek?.session === id) this.graphPeek = null;
-      if (this.serverId === sid && this.ui.chatPeek === id) this.ui.chatPeek = null;
+      if (this.graphPeek?.server === sid && this.graphPeek?.session === id) this.ui.closePeek();
+      if (this.ui.chatPeek?.server === sid && this.ui.chatPeek?.session === id) this.ui.closeChatPeek();
       if (this.graphFrom?.server === sid && this.graphFrom?.session === id) this.graphFrom = next ? { server: sid, session: next } : null;
       if (this.serverId === sid && this.activeId === id) this.leave(next);
       void link.refreshWorkspace();

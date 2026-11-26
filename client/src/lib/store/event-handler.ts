@@ -39,6 +39,7 @@ export interface OpenEventContext {
   activeId: string | null;
   quietPeers: boolean;
   sessions: Session[];
+  closedSessions?: Session[];
   groups: Group[];
   terminals: TerminalInfo[];
   running: Record<string, boolean>;
@@ -48,6 +49,7 @@ export interface OpenEventContext {
   failed: Record<string, boolean>;
   chats: Record<string, ChatState>;
   setSessions(next: Session[]): void;
+  setClosedSessions?(next: Session[]): void;
   setGroups(next: Group[]): void;
   setToolsInfo(next: ToolsInfo): void;
   setWorkdirInfo(next: WorkdirInfo): void;
@@ -113,7 +115,16 @@ export function handleOpenServerEvent(ctx: OpenEventContext, e: PipayaEvent): vo
     }
     case "session_created": {
       const s = e.data as Session;
-      if (!s.closed && !ctx.sessions.some((x) => x.id === s.id)) ctx.sessions.unshift(s);
+      if (s.closed) {
+        if (ctx.closedSessions && ctx.setClosedSessions) {
+          ctx.setClosedSessions([s, ...ctx.closedSessions.filter((x) => x.id !== s.id)]);
+        }
+      } else {
+        if (ctx.closedSessions && ctx.setClosedSessions) {
+          ctx.setClosedSessions(ctx.closedSessions.filter((x) => x.id !== s.id));
+        }
+        if (!ctx.sessions.some((x) => x.id === s.id)) ctx.sessions.unshift(s);
+      }
       ctx.refreshWorkspace();
       break;
     }
@@ -124,6 +135,13 @@ export function handleOpenServerEvent(ctx: OpenEventContext, e: PipayaEvent): vo
       if (hide) ctx.forgetInGroups(s.id);
       const i = ctx.sessions.findIndex((x) => x.id === s.id);
       if (i >= 0) ctx.sessions.splice(i, 1);
+      if (ctx.closedSessions && ctx.setClosedSessions) {
+        ctx.setClosedSessions(
+          s.closed
+            ? [s, ...ctx.closedSessions.filter((x) => x.id !== s.id)]
+            : ctx.closedSessions.filter((x) => x.id !== s.id),
+        );
+      }
       if (s.closed) {
         ctx.running[s.id] = false;
         delete ctx.compacting[s.id];
@@ -168,6 +186,9 @@ export function handleOpenServerEvent(ctx: OpenEventContext, e: PipayaEvent): vo
       const next = ctx.neighbourOf(id);
       ctx.forgetInGroups(id);
       ctx.setSessions(ctx.sessions.filter((x) => x.id !== id));
+      if (ctx.closedSessions && ctx.setClosedSessions) {
+        ctx.setClosedSessions(ctx.closedSessions.filter((x) => x.id !== id));
+      }
       delete ctx.running[id];
       delete ctx.compacting[id];
       delete ctx.awaiting[id];

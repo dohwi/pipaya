@@ -7,6 +7,8 @@ export type CompactionReason = "manual" | "threshold";
 /** What the client keeps live about one server: its lists and what each session is doing. */
 export interface LinkData {
 	sessions: Session[];
+	/** Closed sessions cached in the background so `@mention` chips keep linking to finished workers read-only. */
+	closedSessions: Session[];
 	groups: Group[];
 	terminals: TerminalInfo[];
 	running: Record<string, boolean>;
@@ -23,7 +25,7 @@ export interface LinkData {
 	tool: Record<string, { name: string; args: Record<string, unknown> }>;
 }
 
-export const emptyLinkData = (): LinkData => ({ sessions: [], groups: [], terminals: [], running: {}, compacting: {}, awaiting: {}, unread: {}, failed: {}, queued: {}, tool: {} });
+export const emptyLinkData = (): LinkData => ({ sessions: [], closedSessions: [], groups: [], terminals: [], running: {}, compacting: {}, awaiting: {}, unread: {}, failed: {}, queued: {}, tool: {} });
 
 /**
  * Reconcile `running[sid]` when a compaction ends. A `threshold` compaction always runs inside an agent run (so the
@@ -105,25 +107,32 @@ export function applyLinkEvent(d: LinkData, e: PipayaEvent, onUnknownCompaction?
 	switch (e.type) {
 		case "session_created": {
 			const s = e.data as Session;
-			if (s.closed) break;
+			if (s.closed) {
+				d.closedSessions = [s, ...d.closedSessions.filter((x) => x.id !== s.id)];
+				break;
+			}
+			d.closedSessions = d.closedSessions.filter((x) => x.id !== s.id);
 			if (!d.sessions.some((x) => x.id === s.id)) d.sessions.unshift(s);
 			break;
 		}
 		case "session_updated": {
 			const s = e.data as Session;
 			d.sessions = d.sessions.filter((x) => x.id !== s.id);
+			d.closedSessions = d.closedSessions.filter((x) => x.id !== s.id);
 			if (s.closed) {
 				d.running[s.id] = false;
 				delete d.compacting[s.id];
 				d.awaiting[s.id] = 0;
 				delete d.unread[s.id];
 				delete d.failed[s.id];
+				d.closedSessions.unshift(s);
 			} else d.sessions.unshift(s);
 			break;
 		}
 		case "session_deleted": {
 			const id = (e.data as { id: string }).id;
 			d.sessions = d.sessions.filter((x) => x.id !== id);
+			d.closedSessions = d.closedSessions.filter((x) => x.id !== id);
 			delete d.running[id];
 			delete d.compacting[id];
 			delete d.awaiting[id];

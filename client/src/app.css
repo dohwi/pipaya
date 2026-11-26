@@ -261,6 +261,7 @@
 	--mark-header: #fcd34d;
 	--mark-mention: #fcd34d;
 	--mark-mention-self: #7dd3fc; /* sky-300: cool counterpart to amber @mention so tagging the current chat stands apart (7.7:1+ on --user-bg tint) */
+	--mark-mention-closed: #a1a1aa; /* zinc-400: calm muted chip for closed sessions so finished workers remain clickable without competing with live ones */
 	--info: #5aa9ff;
 	--pinned: #ffffff; /* the pinned mark: white on dark, black on light; no status hue, so it is never read as one */
 	--ok: #3ecf8e;
@@ -330,6 +331,7 @@
 	--mark-header: #92400e; /* amber-800: 4.5:1+ even over tinted chips on --user-bg #f5f5f7 (dark uses #fcd34d) */
 	--mark-mention: #92400e;
 	--mark-mention-self: #075985; /* sky-800: 5.9:1+ over tinted chips on --user-bg #f5f5f7 (dark uses #7dd3fc) */
+	--mark-mention-closed: #52525b; /* zinc-600: 5.7:1+ over tinted chips on --user-bg #f5f5f7 (dark uses #a1a1aa) */
 	/* The four status colours are text as often as fills (badges, chips, the who/@name, notices, errors), so each is set
 	   for 4.5:1 or better as text on every light surface, its own soft tint included (worst case: on --bg-active under
 	   the tint). They were 2.5 (ok) to 3.6 (danger): "사용 가능", "오류", "꺼짐" read faint. The soft tints keep the old,

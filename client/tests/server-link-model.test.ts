@@ -114,3 +114,26 @@ describe("the queue and current tool the graph view shows", () => {
 		expect([d.queued, d.tool]).toEqual([{}, {}]);
 	});
 });
+
+describe("applyLinkEvent (closedSessions tracking)", () => {
+	test("moves sessions between sessions and closedSessions on close, resume, and delete", () => {
+		const d = emptyLinkData();
+		applyLinkEvent(d, ev("session_created", session("a", { closed: false })));
+		expect(d.sessions.map((s) => s.id)).toEqual(["a"]);
+		expect(d.closedSessions).toEqual([]);
+
+		applyLinkEvent(d, ev("session_updated", session("a", { closed: true })));
+		expect(d.sessions).toEqual([]);
+		expect(d.closedSessions.map((s) => s.id)).toEqual(["a"]);
+
+		applyLinkEvent(d, ev("session_updated", session("a", { closed: false })));
+		expect(d.sessions.map((s) => s.id)).toEqual(["a"]);
+		expect(d.closedSessions).toEqual([]);
+
+		applyLinkEvent(d, ev("session_created", session("b", { closed: true })));
+		expect(d.closedSessions.map((s) => s.id)).toEqual(["b"]);
+
+		applyLinkEvent(d, ev("session_deleted", { id: "b" }));
+		expect(d.closedSessions).toEqual([]);
+	});
+});

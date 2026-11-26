@@ -34,6 +34,7 @@
 	import Header from "./components/shell/Header.svelte";
 	import Pane from "./components/shell/Pane.svelte";
 	import SessionQuickModal from "./components/shell/SessionQuickModal.svelte";
+	import MentionHoverCard from "./components/chat/MentionHoverCard.svelte";
 	import GroupView from "./components/shell/GroupView.svelte";
 	import TabBar from "./components/shell/TabBar.svelte";
 	import Palette from "./components/shell/Palette.svelte";
@@ -128,10 +129,10 @@
 		};
 	});
 
-	// Close the chat quick-look modal automatically if its session is closed or deleted remotely.
+	// Close the chat quick-look modal automatically if its session is deleted remotely (closing flips it to read-only).
 	$effect(() => {
-		const peekId = app.chatPeek;
-		if (peekId && !app.session(peekId)) app.closeChatPeek();
+		const peek = app.chatPeek;
+		if (peek && !app.sessionAny(peek.session, peek.server)) app.closeChatPeek();
 	});
 	// The server decides "is somebody looking at this session" from the last report, so switching panes/sessions is reported at once
 	// instead of at the next 10 s beat (a run finishing in between would otherwise be judged against the old session).
@@ -147,7 +148,7 @@
 		installFocusRescue(
 			document,
 			() => {
-				const focusId = app.chatPeek ?? app.activeId;
+				const focusId = app.liveChatPeekId ?? app.activeId;
 				const pane = (focusId && document.querySelector(`[data-pane="${CSS.escape(focusId)}"]`)) || document.querySelector("[data-part=pane]");
 				return pane?.querySelector<HTMLElement>("[data-composer], .xterm-helper-textarea") ?? null;
 			},
@@ -550,8 +551,8 @@
 	</div>
 {/if}
 
-{#if !app.graphOpen && app.chatPeek && app.serverId && app.session(app.chatPeek)}
-	<SessionQuickModal server={app.serverId} session={app.chatPeek} mode="chat" onclose={() => app.closeChatPeek()} />
+{#if !app.graphOpen && app.chatPeek && app.sessionAny(app.chatPeek.session, app.chatPeek.server)}
+	<SessionQuickModal server={app.chatPeek.server} session={app.chatPeek.session} mode="chat" onclose={() => app.closeChatPeek()} />
 {/if}
 {#if app.settingsOpen}<Lazy load={load.settings} />{/if}
 {#if app.sessionsDialog}<Lazy load={load.sessions} serverId={app.sessionsDialog} />{/if}
@@ -607,6 +608,7 @@
 {#if app.linking}<Lazy load={load.linkCard} />{/if}
 <Palette />
 <RowMenu bind:this={contextMenu} />
+<MentionHoverCard />
 <Toasts />
 <UpdateBanner />
 <ChordStrip />

@@ -3,6 +3,8 @@
 	import Icon from "../ui/Icon.svelte";
 	import TokenText from "./TokenText.svelte";
 	import { app } from "../../lib/store.svelte";
+	import { hideMentionHover, scheduleMentionHoverHide, showMentionHover } from "../../lib/mention-hover.svelte";
+	import { openMentionMenu } from "../../lib/mention-menu";
 	import { parsePeer } from "../../lib/peers";
 	import { extensions } from "../../lib/extensions/host.svelte";
 	import { queuedShown } from "../../lib/queue";
@@ -23,7 +25,9 @@
 		return app.mentionIndex.resolve(head.from);
 	});
 	const openHeadTarget = (e: MouseEvent) => {
-		if (headTarget) app.openMention(headTarget, { direct: e.ctrlKey || e.metaKey });
+		if (!headTarget) return;
+		hideMentionHover();
+		app.openMention(headTarget, { direct: e.ctrlKey || e.metaKey });
 	};
 </script>
 
@@ -35,8 +39,11 @@
 				<button
 					type="button"
 					class="from-link"
-					title={headTarget.kind === "group" ? t("{name} 그룹 열기", { name: head.from }) : t("{name} 대화 미리 보기", { name: head.from })}
+					title={headTarget.kind === "group" ? t("{name} 그룹 열기", { name: head.from }) : headTarget.closed ? t("{name} 닫힌 대화 보기", { name: head.from }) : t("{name} 대화 미리 보기", { name: head.from })}
 					onclick={openHeadTarget}
+					oncontextmenu={(e) => openMentionMenu(e, headTarget, { label: head.from })}
+					onpointerenter={(e) => { if (e.pointerType === "mouse") showMentionHover(e.currentTarget, headTarget, head.from); }}
+					onpointerleave={(e) => { if (e.pointerType === "mouse") scheduleMentionHoverHide(); }}
 				>{head.from}</button>
 			{:else}
 				<span>{head.from}</span>

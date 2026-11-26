@@ -30,15 +30,16 @@
 	/** `late`: the pane already waited on this conversation (it held the previous one), so its skeleton shows at once */
 	let { chat, held = false, late = false }: { chat: ChatState; held?: boolean; late?: boolean } = $props();
 	const pane = getPane();
-	const session = $derived(app.session(pane.id));
+	const session = $derived(app.sessionAny(pane.id, pane.server));
 	const canContinue = $derived(
-		canContinueRun({
-			ready: chat.ready,
-			running: chat.running,
-			retrying: Boolean(chat.retrying),
-			compacting: chat.compacting,
-			closed: Boolean(session?.closed),
-		}),
+		!pane.readonly &&
+			canContinueRun({
+				ready: chat.ready,
+				running: chat.running,
+				retrying: Boolean(chat.retrying),
+				compacting: chat.compacting,
+				closed: Boolean(session?.closed),
+			}),
 	);
 	/** The outline stays a moment once it was seen, so a load that ends just after it appeared does not flash it */
 	const lateStart = untrack(() => late);
