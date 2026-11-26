@@ -145,7 +145,7 @@ A stored package that no longer validates (e.g. a removed permission) is kept ra
 Reapplied on light/dark switch; later extensions in the list win on the same token. No selectors, `url()` or `var()`; for anything else use `ui-style` (see `trusted-ui.md`). Allowed tokens (`THEME_TOKENS` in `schema.ts`):
 
 - Colors (hex `#rgb #rgba #rrggbb #rrggbbaa` or numeric `rgb()/rgba()`):
-  `--bg --bg-side --bg-group --bg-elev --bg-hover --bg-active --bg-code --border --border-strong --text --text-dim --text-faint --user-bg --accent --accent-hover --accent-fg --accent-soft --info --ok --ok-fg --warn --danger --info-soft --ok-soft --warn-soft --danger-soft --scrim --lv-minimal --lv-low --lv-medium --lv-high --lv-xhigh --lv-max --mark-img --mark-file --mark-header --mark-mention`
+  `--bg --bg-side --bg-group --bg-elev --bg-hover --bg-active --bg-code --border --border-strong --text --text-dim --text-faint --user-bg --accent --accent-hover --accent-fg --accent-soft --info --ok --ok-fg --warn --danger --info-soft --ok-soft --warn-soft --danger-soft --scrim --lv-minimal --lv-low --lv-medium --lv-high --lv-xhigh --lv-max --mark-img --mark-file --mark-header --mark-mention --mark-mention-self --mark-mention-closed`
 - Sizes (integer px, bounds in `SIZE_TOKENS`): `--radius --radius-panel --radius-sm --radius-control --radius-xs` (0–32), `--radius-pill` (0–999), `--control-h` (24–64), `--control-h-sm` (20–56), `--content-w` (480–1200), `--sidebar-w` (200–480; the default width until the user drags the sidebar's edge, a double click on the edge goes back to it; drawn within the grip's 220–560), `--fs-2xs … --fs-2xl` (8–40/48)
 - Every corner of the app follows the radius tokens (the composer box is `--radius-panel` × 1.375, the server card's header `--radius` − 1, the header's tab buttons at most `--radius-pill`), so a theme with `--radius*: 0px` squares them all.
 - Fonts: `--font --mono`, a family list (`"Brand Sans", Inter, sans-serif`). They change every text of the app except the pipaya logo, which is drawn from fixed outlines in its own colours (see `trusted-ui.md`). Ship the faces as `assets` with `@font-face` in `styles`.
@@ -322,20 +322,13 @@ const res = await sdk.http.requestJson({ path: '/resource', method: 'PUT', body:
 
 ## Verification
 
+In `client/`:
+
 ```sh
 bun run check && bun run test && bun run build
 ```
 
-Browser QA (isolation, management, composer, heartbeat) against the dev server; Playwright is installed outside the app:
-
-```sh
-npm install --prefix /tmp/pipaya-browser-qa playwright
-/tmp/pipaya-browser-qa/node_modules/.bin/playwright install chromium
-NODE_PATH=/tmp/pipaya-browser-qa/node_modules node scripts/check-extensions.cjs
-NODE_PATH=/tmp/pipaya-browser-qa/node_modules node scripts/check-extension-ui.cjs
-```
-
-Default URL `http://localhost:1420`, override with `EXTENSION_TEST_URL`. This does not replace QA in a native Tauri WebView.
+From the repository root, run `python3 scripts/e2e-smoke.py` (requires `client/dist`) and `python3 scripts/ui-lint.py`. Browser smoke tests do not replace QA in a native Tauri WebView.
 
 ## Not supported
 
