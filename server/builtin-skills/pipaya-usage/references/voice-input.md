@@ -11,14 +11,15 @@ is stored on the server and never sent back; the screen only says whether one is
 | Field | What it is |
 |---|---|
 | Use voice input | the on/off switch |
+| Mode | `file` (default: upload finished clip) or `realtime` (stream PCM16 24 kHz over `WS /voice/realtime` for live transcription) |
 | Server address | the transcription server's origin, e.g. `https://api.openai.com` (no path) |
-| Path | the request path; empty means `/v1/audio/transcriptions`. Gateways often mount it elsewhere (`/v0/management/audio/transcriptions`) |
-| Model | free text, the name the transcription server takes; empty sends no model and the server picks its default |
+| Path | the request path (`file` mode); empty means `/v1/audio/transcriptions`. Gateways often mount it elsewhere (`/v0/management/audio/transcriptions`) |
+| Model | free text, the name the transcription server takes (`file` mode); empty sends no model and the server picks its default |
 | Language | optional hint (`ko`); empty lets the server decide. `gpt-transcribe` is sent `languages[]` instead |
 | API key | written once, never shown again; saving it empty removes it |
+| Realtime settings (`realtime` mode) | `realtime.url` (WebSocket/HTTP origin), `realtime.model` (default `gpt-realtime-2.1`), `realtime.transcribeModel` (default `gpt-live-transcribe`), `realtime.keywords` (up to 20 terms), `realtime.prompt`, and optional separate `realtimeApiKey` (write-only) |
 
-Any OpenAI-compatible transcription endpoint works: the server posts `multipart/form-data` with `file`, `model` and
-`language` (or `languages[]`) and reads `{ "text": "..." }`.
+In `file` mode, any OpenAI-compatible transcription endpoint works: the server posts `multipart/form-data` with `file`, `model` and `language` (or `languages[]`) and reads `{ "text": "..." }`. In `realtime` mode, the client streams audio through the server's `WS /voice/realtime` proxy (up to 10 minutes per recording).
 
 When the transcription server refuses a request it usually says why (an unknown model, a missing account); that
 sentence is shown after the error, so a wrong model name reads as such. A rate or quota limit (HTTP 429) is reported
@@ -65,3 +66,13 @@ holding records while held. The app's own shortcuts win, and a shortcut the app 
 - **macOS**: the app declares the microphone in its Info.plist, so the system asks on the first recording.
 - The extension `voice-input` (the earlier microphone button) is superseded by this. If it is still installed, disable
   or remove it: two microphone buttons with two different settings would be confusing.
+
+## HTTP API
+
+| Method | Path | Purpose |
+|---|---|---|
+| `GET` | `/voice` | Read `settings`, `hasKey`, `hasRealtimeKey`, resolved endpoints, and last test status |
+| `PUT` | `/voice` | `{ settings: { enabled, baseUrl, path, model, language, mode?, realtime? }, apiKey?, realtimeApiKey? }` (omit keys to keep stored values; prefer Settings UI for real keys) |
+| `POST` | `/voice/test` | Run connection probe for the active mode (`file` or `realtime`) |
+
+Source: `server/src/voice-input.ts`, `server/src/voice-realtime.ts`, `server/src/routes/voice-routes.ts`.

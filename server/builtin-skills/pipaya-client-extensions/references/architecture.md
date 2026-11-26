@@ -79,11 +79,11 @@ Global limits: 50 extensions, 1 MiB package, 512 KiB code, 16,000-char settings 
 | `layout-spec.ts` | `parseLayout`: an extension's layout tree, validated (no app imports, so the host can use it) |
 | `workspace.ts` / `workspace-spec.ts` | `workspaceAdapter` for `sdk.workspace` / the settings tabs and dialogs it accepts |
 
-`src/components/extensions/`: `Extensions.svelte` (Settings > Extensions tab), `ExtensionPanels` (launcher, panel modal, composer widgets), `ExtensionSurface` (draft values, event queue of 20), `ExtensionView` (recursive node renderer), `ExtensionIcon`, `SettingsForm`, `PermissionList`, `ExtensionRow`, `ExtensionPage`, `InstalledDetail`, `ServerDetail`, `Marketplace`, `ImportDialogs`, `RemoveConfirm`, `UnreadableCard`, `ExtensionApproval`, `ExtensionDialog`, `EntryCard`, `ExtensionSlot`, `NavbarItems`, `ExtensionDock` (side panels), `ExtensionFloating` (floating panels).
+`src/components/extensions/`: `Extensions.svelte` (Settings > Extensions tab), `ExtensionPanels` (launcher, panel modal, composer widgets), `ExtensionSurface` (draft values, event queue of 20), `ExtensionView` (recursive node renderer), `ExtensionIcon`, `SettingsForm`, `PermissionList`, `ExtensionRow`, `ExtensionPage`, `InstalledDetail`, `ServerDetail`, `Marketplace`, `ImportDialogs`, `RemoveExtensionConfirm`, `UnreadableCard`, `ExtensionApproval`, `ExtensionDialog`, `EntryCard`, `ExtensionSlot`, `NavbarItems`, `ExtensionDock` (side panels), `ExtensionFloating` (floating panels).
 
 Wiring: `App.svelte` (`extensions.init(adapter)`), `Header.svelte`, `Composer.svelte`, `StatusLine.svelte`, `lib/commands.ts`, `lib/store.svelte.ts` (`extensions.emit`, `applyThemes`, `confirmExtension`), `Settings.svelte`, `Backup.svelte`, `lib/api.ts`.
 
-Server: `server/src/extension-settings.ts`, `extension-settings-routes.ts`. The extension ID rule exists twice: client `schema.ts` `ID` and server `EXTENSION_ID_PATTERN`. Change both; a server test compares them.
+Server: `server/src/extension-settings.ts`, `server/src/routes/extension-settings-routes.ts`. The extension ID rule exists twice: client `schema.ts` `ID` and server `EXTENSION_ID_PATTERN`. Change both; a server test compares them.
 
 Tests: `client/tests/extensions-*.test.ts`, `server/test/extension-settings.test.ts`.
 
