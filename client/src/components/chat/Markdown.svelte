@@ -115,7 +115,8 @@
 	import { sharedMedia } from "../../lib/media-urls";
 	import { patchHtml, type PatchInput } from "../../lib/patch-html";
 	import { decorateMarkdownTokens, mentionSignature } from "../../lib/markdown-tokens";
-	import { disposeVideoPlayer, videoPlayer } from "../../lib/video-view";
+	import type { ViewerImage } from "../../lib/store/ui-overlay.svelte";
+	import { applyVideoState, disposeVideoPlayer, readVideoState, videoPlayer } from "../../lib/video-view";
 	import { getPane } from "../../lib/pane";
 	import type { MentionTarget } from "../../lib/peers";
 	import { hideMentionHover, scheduleMentionHoverHide, showMentionHover } from "../../lib/mention-hover.svelte";
@@ -364,8 +365,12 @@
 	function applyLoadedSlot(slot: HTMLElement, kind: "image" | "audio" | "video", src: string) {
 		const path = slot.dataset.wdSrc ?? "";
 		if (kind === "video") {
-			const player = videoPlayer(src, { filename: path ? baseName(path) : undefined });
+			const player: HTMLDivElement = videoPlayer(src, {
+				filename: path ? baseName(path) : undefined,
+				onExpand: () => openMessageMedia(player),
+			});
 			videos.push(player);
+			if (path) player.dataset.wdSrc = path;
 			slot.replaceWith(player);
 		} else if (kind === "audio") {
 			const audio = document.createElement("audio");
@@ -500,6 +505,46 @@
 		videos.length = 0;
 	});
 
+	/** Every picture and video of this message in one viewer, in document order, opened at `target`; full resolution is fetched on demand. */
+	function openMessageMedia(target: Element) {
+		if (!root) return;
+		const all = [...root.querySelectorAll<HTMLElement>("img.wd-pic, .wd-video-wrap")];
+		const owner = media;
+		const items = all.map((el): ViewerImage => {
+			if (el instanceof HTMLImageElement) {
+				const path = el.dataset.wdSrc;
+				if (!owner || !path) return { src: el.src, mimeType: "image/*" };
+				const name = baseName(path);
+				const fullKey = mediaKey(owner, "image-full", path);
+				const cachedFull = sharedMedia.peek(fullKey);
+				if (cachedFull) return { src: cachedFull, mimeType: "image/*", name };
+				return {
+					src: el.src,
+					mimeType: "image/*",
+					name,
+					loadFull: (signal?: AbortSignal) => sharedMedia.get(fullKey, loadFullImageBlob(owner, path), signal),
+				};
+			}
+			const wrap = el as HTMLDivElement;
+			const video = wrap.querySelector("video");
+			const path = wrap.dataset.wdSrc;
+			return {
+				kind: "video",
+				src: video?.src ?? "",
+				mimeType: "video/*",
+				name: path ? baseName(path) : undefined,
+				getVideoState: () => {
+					const st = readVideoState(wrap);
+					video?.pause();
+					return st;
+				},
+				syncVideoState: (st) => applyVideoState(wrap, st),
+			};
+		});
+		const at = all.findIndex((el) => el === target);
+		app.openImage(items, Math.max(0, at));
+	}
+
 	function onClick(e: MouseEvent) {
 		const el = e.target as HTMLElement;
 		if (mentions) {
@@ -553,26 +598,7 @@
 		}
 		const pic = el.closest<HTMLImageElement>("img.wd-pic");
 		if (pic && root) {
-			// every picture of this message in one viewer, opened at the one pressed; fetch full resolution on demand
-			const all = [...root.querySelectorAll<HTMLImageElement>("img.wd-pic")];
-			const owner = media;
-			app.openImage(
-				all.map((p) => {
-					const path = p.dataset.wdSrc;
-					if (!owner || !path) return { src: p.src, mimeType: "image/*" };
-					const name = baseName(path);
-					const fullKey = mediaKey(owner, "image-full", path);
-					const cachedFull = sharedMedia.peek(fullKey);
-					if (cachedFull) return { src: cachedFull, mimeType: "image/*", name };
-					return {
-						src: p.src,
-						mimeType: "image/*",
-						name,
-						loadFull: (signal?: AbortSignal) => sharedMedia.get(fullKey, loadFullImageBlob(owner, path), signal),
-					};
-				}),
-				Math.max(0, all.indexOf(pic)),
-			);
+			openMessageMedia(pic);
 			return;
 		}
 		const retry = el.closest<HTMLElement>(".wd-img.missing[data-wd-src], .wd-media.missing[data-wd-src]");

@@ -12,7 +12,7 @@
 	import Modal from "../ui/Modal.svelte";
 	import { saveFile } from "../../lib/save-file";
 	import { sharedMedia } from "../../lib/media-urls";
-	import { disposeVideoPlayer, isVideoFullscreen, videoPlayer } from "../../lib/video-view";
+	import { applyVideoState, disposeVideoPlayer, isVideoFullscreen, readVideoState, videoPlayer } from "../../lib/video-view";
 
 	/** Preview of a file in the session's working directory: an image, PDF, audio, video, Markdown, CSV table, text, or just a download for anything else. */
 	const open = $derived(app.filePreview);
@@ -44,7 +44,27 @@
 	$effect(() => {
 		const target = open;
 		if (kind !== "video" || !url || mediaFailed || !videoHost || !target) return;
-		const player = videoPlayer(url, { filename: target.file.name, download: "fullscreen" });
+		const src = url;
+		const name = target.file.name;
+		const player: HTMLDivElement = videoPlayer(src, {
+			filename: name,
+			download: "fullscreen",
+			onExpand: () =>
+				app.openImage([
+					{
+						kind: "video",
+						src,
+						mimeType: target.file.mimeType || "video/*",
+						name,
+						getVideoState: () => {
+							const st = readVideoState(player);
+							player.querySelector("video")?.pause();
+							return st;
+						},
+						syncVideoState: (st) => applyVideoState(player, st),
+					},
+				]),
+		});
 		player.querySelector("video")?.addEventListener("error", () => (mediaFailed = true));
 		videoHost.replaceChildren(player);
 		return () => disposeVideoPlayer(player);
