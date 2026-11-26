@@ -130,7 +130,7 @@ share one left and one right line. Never write a raw side padding in a dialog; u
 | Compact control | `--control-h-sm` 34px; normal control `--control-h` 40px |
 | Gap between two rows of one block | **1px** (the row's own `margin: 1px 0`) |
 | Gap between blocks (a card's header and its first folder) | **4px** |
-| Gap between folders in one card | **4px** folded; **8px** before and after an open folder or project |
+| Gap between folders in one card | **4px** between rows; **8px** after an open folder or project (4px `padding-bottom` on `.fold` + 4px `margin-top` on the next header, so toggling never shifts the clicked header) |
 | Brand row | 44px + 1px hairline (matches the header capsule and the graph view's head) |
 | Search strip | 12px above and below a 34px field |
 | Gap under the strip before the first card | 8px |

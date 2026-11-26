@@ -188,7 +188,7 @@
 	.dir {
 		display: flex;
 		align-items: center;
-		margin-top: 4px; /* folded folders sit 4 apart; an open folder's tab list gets 8 around it (below) */
+		margin-top: 4px; /* every folder header stays 4px below the block above so toggling never shifts the clicked row */
 		margin-right: -8px; /* like a tab row, the highlight (open, drop) runs 8px past the content and the padding gives it back: the count and "+" keep x 256, 8px inside its edge */
 		padding-right: 8px;
 		border-radius: var(--radius-sm);
@@ -196,10 +196,9 @@
 	.dirblock:first-child > .dir {
 		margin-top: 4px;
 	}
-	/* an open folder stands 8 off the folder above, and the next one 8 off its tabs */
-	:global(:where(.side) .dirblock:not(.inproj):has(> .fold):not(:first-child) > .dir),
-	:global(:where(.side) :is(.dirblock, .projblock):has(> .fold) + .dirblock:not(.inproj) > .dir) {
-		margin-top: 8px;
+	/* an open folder keeps 8px before the next block (this 4px + the next header's 4px); placing it on .fold lets collapseIn/Out animate it without snapping */
+	.dirblock:not(.inproj):not(:last-child) > .fold {
+		padding-bottom: 4px;
 	}
 	.dir.grabbable {
 		cursor: grab;
