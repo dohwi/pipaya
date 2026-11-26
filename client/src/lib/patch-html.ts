@@ -10,7 +10,7 @@
  * of it (measured on a 12k-character list answer: p99 22ms against 17ms, with visible stutter). So same-kind nodes are
  * merged in place all the way down: only the text node that grew, and the list item that appeared, are touched.
  */
-export type PatchInput = string | { html: string; decorate?: (root: DocumentFragment) => void };
+export type PatchInput = string | { html: string; decorate?: (root: DocumentFragment) => void; after?: (node: HTMLElement) => void };
 
 export function patchHtml(node: HTMLElement, input: PatchInput) {
 	apply(node, input);
@@ -27,6 +27,7 @@ function apply(node: HTMLElement, input: PatchInput) {
 	tpl.innerHTML = html;
 	if (typeof input !== "string" && input.decorate) input.decorate(tpl.content);
 	merge(node, Array.from(tpl.content.childNodes));
+	if (typeof input !== "string" && input.after) input.after(node);
 }
 
 /** Element node type (kept numeric: the module is also loaded where the DOM globals are not). */

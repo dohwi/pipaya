@@ -98,6 +98,8 @@ export class ServerLink {
 	 * session up, and a `find` per badge turned each list change into (rows x rows) comparisons.
 	 */
 	sessionById: Map<string, Session> = $derived(new Map(this.data.sessions.map((x) => [x.id, x] as const)));
+	/** Recently closed sessions by id, for read-only `@mention` quick-look and hover previews. */
+	closedSessionById: Map<string, Session> = $derived(new Map(this.data.closedSessions.map((x) => [x.id, x] as const)));
 	/**
 	 * The git repository of each listed folder (null: not in one), so the sidebar can put a repository's worktrees under one
 	 * project. Asked for folders not seen yet; empty on a server from before projects (every folder then stands alone).
@@ -420,6 +422,18 @@ export class ServerLink {
 	 * and a retry after a dropped stream catch up live-only state (activity, failed/unread marks, terminals, open chats)
 	 * without rebuilding the lists or transcripts when nothing changed.
 	 */
+	/** Fetch recently closed sessions in the background so `@mention` chips can still preview and resume them. */
+	async refreshClosedSessions(): Promise<void> {
+		const token = this.token;
+		try {
+			const res = await this.api.listSessions(200, true);
+			if (token !== this.token) return;
+			this.data.closedSessions = res.sessions.filter((s) => s.closed);
+		} catch {
+			/* optional background metadata: keep any cached closed list */
+		}
+	}
+
 	private reopen(_wake: boolean): void {
 		if (this.stopped || !this.loaded) {
 			void this.sync();
@@ -538,6 +552,7 @@ export class ServerLink {
 			for (const u of activity?.unread ?? []) (u.kind === "failed" ? failed : unread)[u.sessionId] = true;
 			this.data = {
 				sessions: list.sessions.filter((s: Session) => !s.closed),
+				closedSessions: this.data.closedSessions,
 				groups,
 				terminals,
 				running,
@@ -607,6 +622,7 @@ export class ServerLink {
 							// with `/stream-tickets` or `/events`.
 							void this.lookUpRepos(this.listedPaths(), true);
 							void this.refreshModelSettings();
+							void this.refreshClosedSessions();
 							this.hooks.ready(this, false);
 						}
 					},

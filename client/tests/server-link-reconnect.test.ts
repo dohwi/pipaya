@@ -346,8 +346,8 @@ describe("ServerLink stream drop and automatic reconnect", () => {
 				if (!healthOk) throw new Error("network down");
 				return { ok: true, version: "0.10.4", protocol: 1, minClientProtocol: 1 };
 			},
-			listSessions: async () => {
-				syncLists++;
+			listSessions: async (_limit?: number, closed?: boolean) => {
+				if (!closed) syncLists++;
 				return { sessions: [], nextBefore: null, nextBeforeId: null };
 			},
 			workspace: async () => ({ root: "/w", home: "/h", workdirs: [] }),

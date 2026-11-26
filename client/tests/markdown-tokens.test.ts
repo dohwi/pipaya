@@ -282,14 +282,43 @@ describe("decorateMarkdownTokens + patchHtml", () => {
 		expect([...host.querySelectorAll("button.wd-mention")].map((b) => b.textContent)).toEqual(["@서아", "@서아", "@front-team"]);
 	});
 
-	test("strips spoofed data-mention-self attributes from raw HTML", () => {
-		const html = renderMarkdown('<span data-mention-self="1" class="wd-mention wd-self">fake</span>', { cache: false });
+	test("strips spoofed data-mention-self, closed, server, and activity attributes from raw HTML", () => {
+		const html = renderMarkdown('<span data-mention-self="1" data-mention-closed="1" data-mention-server="x" data-activity="working" class="wd-mention wd-self">fake</span>', { cache: false });
 		const host = dom.document.createElement("div");
 		patchHtml(host, {
 			html,
 			decorate: (frag) => decorateMarkdownTokens(frag, { index, selfId: "s1", skills: false, labels }),
 		});
-		expect(host.querySelectorAll("[data-mention-self]")).toHaveLength(0);
+		expect(host.querySelectorAll("[data-mention-self], [data-mention-closed], [data-mention-server], [data-activity]")).toHaveLength(0);
+	});
+
+	test("renders closed session and remote @server/session mentions with proper dataset and classes", () => {
+		const extIndex = buildMentionIndex(
+			[{ id: "s1", name: "서아", closed: false }],
+			[],
+			{
+				closedSessions: [{ id: "c1", name: "소민", closed: true }],
+				remotes: [{ serverId: "srv-desk", handle: "desktop", sessions: [{ id: "r1", name: "민석", closed: false }] }],
+			},
+		);
+		const html = renderMarkdown("닫힌 @소민 과 원격 @desktop/민석 확인", { cache: false });
+		const host = dom.document.createElement("div");
+		patchHtml(host, {
+			html,
+			decorate: (frag) =>
+				decorateMarkdownTokens(frag, {
+					index: extIndex,
+					selfId: "s1",
+					selfServerId: "srv-main",
+					skills: false,
+					labels: { ...labels, openClosedSession: (n) => `Closed ${n}` },
+				}),
+		});
+		const btns = [...host.querySelectorAll<HTMLButtonElement>("button.wd-mention")];
+		expect(btns.map((b) => [b.textContent, b.className, b.dataset.mentionClosed, b.dataset.mentionServer, b.title])).toEqual([
+			["@소민", "wd-mention wd-closed", "1", undefined, "Closed @소민"],
+			["@desktop/민석", "wd-mention", undefined, "srv-desk", "Open @desktop/민석 chat"],
+		]);
 	});
 });
 

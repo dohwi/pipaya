@@ -4,26 +4,34 @@ import { nameInLang } from "./member-names";
 import { panesOf } from "./layout";
 import type { Group, Session } from "./types";
 
-/** How a group is written in a message: its name with whitespace turned into "-" so the tag stays one token (same rule as the server). */
+/** How a group or server is written in a message: its name with whitespace turned into "-" so the tag stays one token. */
 export const groupHandle = (name: string): string => name.trim().replace(/\s+/g, "-");
 
-export type MentionTarget = { kind: "session"; id: string } | { kind: "group"; id: string };
+export type MentionTarget =
+	| { kind: "session"; id: string; closed?: boolean; server?: string }
+	| { kind: "group"; id: string };
+
+export interface PeekTarget {
+	server: string;
+	session: string;
+}
 
 export type MentionAction =
 	| { type: "noop" }
 	| { type: "openGroup"; id: string }
-	| { type: "openSession"; id: string; leaveGraph: boolean }
-	| { type: "graphPeek"; id: string }
+	| { type: "openSession"; id: string; server?: string; leaveGraph: boolean }
+	| { type: "graphPeek"; server: string; id: string }
 	| { type: "closeChatPeek"; focusId?: string }
-	| { type: "chatPeek"; id: string };
+	| { type: "chatPeek"; server: string; id: string };
 
 /**
  * Decide what clicking a `@mention` chip should do given the current view state:
  *  - group mentions open their group tab
- *  - `direct` (`Ctrl`/`⌘`+click) navigates straight to the session (leaving graph/peek)
+ *  - `direct` (`Ctrl`/`⌘`+click) navigates straight to the session (leaving graph/peek; resumes closed sessions)
  *  - in graph view, normal clicks switch the graph quick-look modal without closing the graph
- *  - in chat/group view, clicking a session already visible behind the modal closes peek and focuses it (never mounting
- *    a duplicate live Pane); clicking any other session opens/switches the chat quick-look modal.
+ *  - in chat/group view, clicking an open session on the current server that is already visible behind the modal closes
+ *    peek and focuses it (never mounting a duplicate live Pane); clicking any other session (including closed or remote
+ *    server sessions) opens/switches the chat quick-look modal.
  */
 export function planMentionAction(
 	target: MentionTarget,
@@ -31,8 +39,8 @@ export function planMentionAction(
 		direct?: boolean;
 		graphOpen: boolean;
 		serverId: string | null;
-		graphPeek: { server: string; session: string } | null;
-		chatPeek: string | null;
+		graphPeek: PeekTarget | null;
+		chatPeek: PeekTarget | null;
 		activeId: string | null;
 		baseVisibleIds: readonly string[];
 		hasSession: boolean;
@@ -43,31 +51,55 @@ export function planMentionAction(
 		return state.hasGroup ? { type: "openGroup", id: target.id } : { type: "noop" };
 	}
 	if (!state.hasSession) return { type: "noop" };
-	if (state.direct) return { type: "openSession", id: target.id, leaveGraph: state.graphOpen };
-	if (state.graphOpen) {
-		if (!state.serverId) return { type: "noop" };
-		if (state.graphPeek?.server === state.serverId && state.graphPeek.session === target.id) return { type: "noop" };
-		return { type: "graphPeek", id: target.id };
+	const targetServer = target.server ?? state.serverId;
+	if (!targetServer) return { type: "noop" };
+	const isSameServer = targetServer === state.serverId;
+	if (state.direct) {
+		return {
+			type: "openSession",
+			id: target.id,
+			...(!isSameServer ? { server: targetServer } : {}),
+			leaveGraph: state.graphOpen,
+		};
 	}
-	if (state.chatPeek === target.id) return { type: "noop" };
-	if (state.baseVisibleIds.includes(target.id)) {
+	if (state.graphOpen) {
+		if (state.graphPeek?.server === targetServer && state.graphPeek.session === target.id) return { type: "noop" };
+		return { type: "graphPeek", server: targetServer, id: target.id };
+	}
+	if (state.chatPeek?.server === targetServer && state.chatPeek.session === target.id) return { type: "noop" };
+	if (isSameServer && !target.closed && state.baseVisibleIds.includes(target.id)) {
 		if (!state.chatPeek && target.id === state.activeId) return { type: "noop" };
 		return { type: "closeChatPeek", ...(target.id !== state.activeId ? { focusId: target.id } : {}) };
 	}
-	return { type: "chatPeek", id: target.id };
+	return { type: "chatPeek", server: targetServer, id: target.id };
 }
 
 export interface MentionIndex {
-	/** All known lowercase handle forms (stored session name, localized romanized form, and group handles). */
+	/** All known lowercase handle forms (stored session name, localized romanized form, group handles, and `@server/name`). */
 	names: string[];
-	/** Resolve a handle (with or without leading `@`) to the active session or group it names. */
+	/** Resolve a handle (with or without leading `@`) to the session or group it names. */
 	resolve: (name: string) => MentionTarget | undefined;
 }
 
-/** Lookup table from every known `@name` (session or group) to the target it opens. Sessions take precedence on a clash. */
+export interface RemoteMentionSource {
+	serverId: string;
+	/** Display handle for the server (whitespace normalized via `groupHandle`), e.g. `desktop` or `맥북`. */
+	handle: string;
+	sessions: readonly Pick<Session, "id" | "name" | "closed">[];
+	closedSessions?: readonly Pick<Session, "id" | "name" | "closed">[];
+}
+
+/**
+ * Lookup table from every known `@name` (active session, group, closed session, or `@server/session`) to the target it
+ * opens. Precedence on name clashes: active sessions > groups > closed sessions.
+ */
 export function buildMentionIndex(
 	sessions: readonly Pick<Session, "id" | "name" | "closed">[],
 	groups: readonly Pick<Group, "id" | "name">[],
+	opts?: {
+		closedSessions?: readonly Pick<Session, "id" | "name" | "closed">[];
+		remotes?: readonly RemoteMentionSource[];
+	},
 ): MentionIndex {
 	const map = new Map<string, MentionTarget>();
 	for (const s of sessions) {
@@ -81,6 +113,34 @@ export function buildMentionIndex(
 		if (!handle) continue;
 		const key = handle.toLowerCase();
 		if (!map.has(key)) map.set(key, { kind: "group", id: g.id });
+	}
+	for (const s of opts?.closedSessions ?? []) {
+		if (!s.name) continue;
+		const target: MentionTarget = { kind: "session", id: s.id, closed: true };
+		const rawKey = s.name.toLowerCase();
+		const langKey = nameInLang(s.name).toLowerCase();
+		if (!map.has(rawKey)) map.set(rawKey, target);
+		if (!map.has(langKey)) map.set(langKey, target);
+	}
+	for (const remote of opts?.remotes ?? []) {
+		const prefix = groupHandle(remote.handle).toLowerCase();
+		if (!prefix) continue;
+		for (const s of remote.sessions) {
+			if (s.closed || !s.name) continue;
+			const target: MentionTarget = { kind: "session", id: s.id, server: remote.serverId };
+			const rawKey = `${prefix}/${s.name.toLowerCase()}`;
+			const langKey = `${prefix}/${nameInLang(s.name).toLowerCase()}`;
+			if (!map.has(rawKey)) map.set(rawKey, target);
+			if (!map.has(langKey)) map.set(langKey, target);
+		}
+		for (const s of remote.closedSessions ?? []) {
+			if (!s.name) continue;
+			const target: MentionTarget = { kind: "session", id: s.id, server: remote.serverId, closed: true };
+			const rawKey = `${prefix}/${s.name.toLowerCase()}`;
+			const langKey = `${prefix}/${nameInLang(s.name).toLowerCase()}`;
+			if (!map.has(rawKey)) map.set(rawKey, target);
+			if (!map.has(langKey)) map.set(langKey, target);
+		}
 	}
 	return {
 		names: [...map.keys()],

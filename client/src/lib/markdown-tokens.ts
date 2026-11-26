@@ -91,7 +91,12 @@ const decodeBasicEntities = (s: string) =>
  * Messages without `@` (or whose resolved targets did not change when an unrelated session opened/closed) keep the
  * exact same signature, avoiding unnecessary DOM re-patching and keeping loaded inline media untouched.
  */
-export function mentionSignature(html: string, index: MentionIndex, selfId?: string | null): string {
+export function mentionSignature(
+	html: string,
+	index: MentionIndex,
+	selfId?: string | null,
+	selfServerId?: string | null,
+): string {
 	if (!index.names.length || !html.includes("@")) return "";
 	let sig = "";
 	const re = /(?<![\p{L}\p{N}_.%+\-@/])@([^\s@<>]+)/gu;
@@ -102,8 +107,11 @@ export function mentionSignature(html: string, index: MentionIndex, selfId?: str
 		if (hit) {
 			const target = index.resolve(hit);
 			if (target) {
-				const self = target.kind === "session" && selfId && target.id === selfId ? ":self" : "";
-				sig += `${hit}:${target.kind}:${target.id}${self};`;
+				const sameServer = target.kind === "session" ? (!target.server || !selfServerId || target.server === selfServerId) : false;
+				const self = target.kind === "session" && selfId && target.id === selfId && sameServer ? ":self" : "";
+				const closed = target.kind === "session" && target.closed ? ":closed" : "";
+				const srv = target.kind === "session" && target.server ? `@${target.server}` : "";
+				sig += `${hit}:${target.kind}:${target.id}${srv}${self}${closed};`;
 			}
 			re.lastIndex = hasEntity ? m.index + 1 : m.index + 1 + hit.length;
 		} else {
@@ -115,6 +123,7 @@ export function mentionSignature(html: string, index: MentionIndex, selfId?: str
 
 export interface DecorateLabels {
 	openSession: (name: string) => string;
+	openClosedSession?: (name: string) => string;
 	openGroup: (name: string) => string;
 	selfSession?: string;
 	openSkill: (name: string) => string;
@@ -159,8 +168,10 @@ function buildMentionNode(
 	target: MentionTarget,
 	labels: DecorateLabels,
 	selfId?: string | null,
+	selfServerId?: string | null,
 ): HTMLElement {
-	const isSelf = target.kind === "session" && Boolean(selfId) && target.id === selfId;
+	const sameServer = target.kind === "session" ? (!target.server || !selfServerId || target.server === selfServerId) : false;
+	const isSelf = target.kind === "session" && Boolean(selfId) && target.id === selfId && sameServer;
 	let el: HTMLElement;
 	if (isSelf) {
 		el = doc.createElement("span");
@@ -170,10 +181,18 @@ function buildMentionNode(
 	} else {
 		const btn = doc.createElement("button");
 		btn.type = "button";
-		btn.className = "wd-mention";
+		const isClosed = target.kind === "session" && Boolean(target.closed);
+		btn.className = isClosed ? "wd-mention wd-closed" : "wd-mention";
 		btn.dataset.mentionKind = target.kind;
 		btn.dataset.mentionId = target.id;
-		btn.title = target.kind === "group" ? labels.openGroup(text) : labels.openSession(text);
+		if (isClosed) btn.dataset.mentionClosed = "1";
+		if (target.kind === "session" && target.server) btn.dataset.mentionServer = target.server;
+		btn.title =
+			target.kind === "group"
+				? labels.openGroup(text)
+				: isClosed
+					? (labels.openClosedSession ?? labels.openSession)(text)
+					: labels.openSession(text);
 		el = btn;
 	}
 	const span = doc.createElement("span");
@@ -191,13 +210,16 @@ function buildMentionNode(
  */
 export function decorateMarkdownTokens(
 	root: ParentNode,
-	opts: { index: MentionIndex; selfId?: string | null; skills: boolean; prompts?: boolean; files?: boolean; labels: DecorateLabels },
+	opts: { index: MentionIndex; selfId?: string | null; selfServerId?: string | null; skills: boolean; prompts?: boolean; files?: boolean; labels: DecorateLabels },
 ): void {
 	// Strip any pre-existing chip attributes before creating genuine chips (defense in depth).
-	for (const el of root.querySelectorAll("[data-mention-id], [data-mention-kind], [data-mention-self], [data-skill], [data-prompt], button[data-file]")) {
+	for (const el of root.querySelectorAll("[data-mention-id], [data-mention-kind], [data-mention-self], [data-mention-closed], [data-mention-server], [data-activity], [data-skill], [data-prompt], button[data-file]")) {
 		el.removeAttribute("data-mention-id");
 		el.removeAttribute("data-mention-kind");
 		el.removeAttribute("data-mention-self");
+		el.removeAttribute("data-mention-closed");
+		el.removeAttribute("data-mention-server");
+		el.removeAttribute("data-activity");
 		el.removeAttribute("data-skill");
 		el.removeAttribute("data-prompt");
 		el.removeAttribute("data-file");
@@ -220,7 +242,7 @@ export function decorateMarkdownTokens(
 						if (/^@[^\s@]+$/.test(trimmed)) {
 							const target = opts.index.resolve(trimmed.slice(1));
 							if (target) {
-								parent.replaceChild(buildMentionNode(doc, trimmed, target, opts.labels, opts.selfId), el);
+								parent.replaceChild(buildMentionNode(doc, trimmed, target, opts.labels, opts.selfId, opts.selfServerId), el);
 								continue;
 							}
 						}
@@ -252,7 +274,7 @@ export function decorateMarkdownTokens(
 				if (p.kind === "mention" && p.name) {
 					const target = opts.index.resolve(p.name);
 					if (target) {
-						frag.appendChild(buildMentionNode(doc, p.text, target, opts.labels, opts.selfId));
+						frag.appendChild(buildMentionNode(doc, p.text, target, opts.labels, opts.selfId, opts.selfServerId));
 						continue;
 					}
 				} else if (p.kind === "skill" && p.name) {

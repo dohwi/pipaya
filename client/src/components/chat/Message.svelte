@@ -23,7 +23,7 @@
 	}: { item: UserItem | AssistantItem; turn?: AssistantItem[]; last?: boolean; live?: boolean; working?: boolean; elapsed?: PromptDuration } = $props();
 
 	const pane = getPane();
-	const session = $derived(app.session(pane.id));
+	const session = $derived(app.sessionAny(pane.id, pane.server));
 	/** The thinking colour of the bubble while the agent works on it: only a model that reasons has one. */
 	const level = $derived(app.effectiveModelOf(pane.id)?.reasoning ? app.effectiveOf(pane.id).thinkingLevel : undefined);
 </script>

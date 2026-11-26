@@ -9,6 +9,9 @@
 	import FileChip from "./FileChip.svelte";
 	import TokenText from "./TokenText.svelte";
 	import { app } from "../../lib/store.svelte";
+	import { getPane } from "../../lib/pane";
+	import { hideMentionHover, scheduleMentionHoverHide, showMentionHover } from "../../lib/mention-hover.svelte";
+	import { openMentionMenu } from "../../lib/mention-menu";
 	import { reveal } from "../../lib/reveal.svelte";
 	import { tapTitle } from "../../lib/touch-hints";
 	import { CopyFlag } from "../../lib/copy-flag.svelte";
@@ -33,15 +36,25 @@
 		onreply,
 	}: { item: UserItem; session: Session | undefined; working?: boolean; level?: string; elapsed?: PromptDuration; onreply: (text: string, who?: string) => void } = $props();
 
+	const pane = getPane();
+	const paneServer = $derived(pane.server ?? app.serverId);
+	const mentionIdx = $derived(app.mentionIndexOf(paneServer));
 	/** Set when an extension recognises the first line of the message (`sdk.messages.setHeader`): a label for where it came from. */
 	const header = $derived(parsePeer(item.text) ?? extensions.headerOf(item.text));
-	/** When the header names another active session/group (`@name`), clicking it jumps straight to that chat. */
+	/** When the header names another session/group (`@name` or `@server/name`), clicking it opens that chat. */
 	const headerTarget = $derived.by(() => {
 		if (!header || ("server" in header && header.server) || !header.from.startsWith("@")) return undefined;
-		return app.mentionIndex.resolve(header.from);
+		const resolved = mentionIdx.resolve(header.from);
+		if (!resolved) return undefined;
+		if (resolved.kind === "session" && !resolved.server && paneServer && paneServer !== app.serverId) {
+			return { ...resolved, server: paneServer };
+		}
+		return resolved;
 	});
 	const openHeaderTarget = (e: MouseEvent) => {
-		if (headerTarget) app.openMention(headerTarget, { direct: e.ctrlKey || e.metaKey });
+		if (!headerTarget) return;
+		hideMentionHover();
+		app.openMention(headerTarget, { direct: e.ctrlKey || e.metaKey });
 	};
 	/** A prompt a scheduled task sent: the bubble is labelled "예약" like a message from another session is labelled with its sender. */
 	const scheduled = $derived(!!item.scheduled && !header);
@@ -79,8 +92,11 @@
 					<button
 						type="button"
 						class="header-link"
-						title={headerTarget.kind === "group" ? t("{name} 그룹 열기", { name: header.from }) : t("{name} 대화 미리 보기", { name: header.from })}
+						title={headerTarget.kind === "group" ? t("{name} 그룹 열기", { name: header.from }) : headerTarget.closed ? t("{name} 닫힌 대화 보기", { name: header.from }) : t("{name} 대화 미리 보기", { name: header.from })}
 						onclick={openHeaderTarget}
+						oncontextmenu={(e) => openMentionMenu(e, headerTarget, { label: header.from, currentSessionId: session?.id })}
+						onpointerenter={(e) => { if (e.pointerType === "mouse") showMentionHover(e.currentTarget, headerTarget, header.from); }}
+						onpointerleave={(e) => { if (e.pointerType === "mouse") scheduleMentionHoverHide(); }}
 					>{header.from}</button>
 				{:else}
 					<span>{header.from}</span>
@@ -120,10 +136,10 @@
 	</div>
 	<div class="actions">
 		<IconButton icon={copied.done ? "check" : "copy"} label={t("메시지 복사")} size="sm" onclick={() => void copied.copy(item.text, item.images)} />
-		{#if header && !("server" in header && header.server)}
+		{#if !pane.readonly && header && !("server" in header && header.server)}
 			<IconButton icon="reply" label={t("답장")} tip size="sm" onclick={() => onreply(header.body, header.from)} />
 		{/if}
-		{#if item.seq !== null && session && item.text}
+		{#if !pane.readonly && item.seq !== null && session && item.text}
 			<IconButton icon="fork" label={t("여기서 분기해 다시 쓰기")} tip size="sm" onclick={() => app.branchEdit(session.id, item.seq!, item.text)} />
 		{/if}
 		{#if item.ts || elapsed}

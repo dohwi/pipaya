@@ -11,6 +11,10 @@
 	import { patchHtml, type PatchInput } from "../../lib/patch-html";
 	import { decorateMarkdownTokens, mentionSignature } from "../../lib/markdown-tokens";
 	import { closeVideoView, videoPlayer } from "../../lib/video-view";
+	import { getPane } from "../../lib/pane";
+	import type { MentionTarget } from "../../lib/peers";
+	import { hideMentionHover, scheduleMentionHoverHide, showMentionHover } from "../../lib/mention-hover.svelte";
+	import { openMentionMenu } from "../../lib/mention-menu";
 
 	const INLINE_IMAGE_MAX = 1280;
 
@@ -21,6 +25,9 @@
 		mentions = false,
 	}: { text: string; streaming?: boolean; sessionId?: string | null; mentions?: boolean } = $props();
 	let root: HTMLElement | undefined = $state();
+	const pane = getPane();
+	const paneServer = $derived(pane.server ?? app.serverId);
+	const mentionIdx = $derived(app.mentionIndexOf(paneServer));
 
 	// While streaming, re-parsing on every token is wasteful on phones; coalesce to one parse per frame.
 	let shown = $state("");
@@ -50,20 +57,23 @@
 	// Assistant replies highlight known @session / @group mentions, /skill:name, /prompt:name, #path, and repo-relative
 	// file paths in inline `<code>` into clickable chips, matching TokenText. `mentionSig` narrows reactivity to targets
 	// that actually appear in this message so unrelated session changes never re-patch the DOM or reset loaded media.
-	const mentionSig = $derived(mentions ? mentionSignature(html, app.mentionIndex, sessionId) : "");
+	let patchTick = $state(0);
+	const mentionSig = $derived(mentions ? mentionSignature(html, mentionIdx, sessionId, paneServer) : "");
 	const patchInput = $derived.by((): PatchInput => {
 		const raw = html;
 		if (!mentions) return raw;
 		const sig = mentionSig;
 		const hasSkill = raw.includes("/skill:");
 		const hasPrompt = raw.includes("/prompt:");
-		const hasFiles = !!sessionId && (raw.includes("<code>") || /(?:^|[\s>])#[^\s#&]/.test(raw));
+		const hasFiles = !!sessionId && paneServer === app.serverId && (raw.includes("<code>") || /(?:^|[\s>])#[^\s#&]/.test(raw));
 		if (!sig && !hasSkill && !hasPrompt && !hasFiles) return raw;
 		void getLang(); // re-apply tooltips when the UI language switches
-		const index = untrack(() => app.mentionIndex);
+		const index = untrack(() => mentionIdx);
 		const selfId = sessionId;
+		const selfServerId = paneServer;
 		const labels = {
 			openSession: (name: string) => t("{name} 대화 미리 보기", { name }),
+			openClosedSession: (name: string) => t("{name} 닫힌 대화 보기", { name }),
 			openGroup: (name: string) => t("{name} 그룹 열기", { name }),
 			selfSession: t("현재 대화"),
 			openSkill: (name: string) => t("스킬 {name} 보기", { name }),
@@ -72,15 +82,48 @@
 		};
 		return {
 			html: raw,
-			decorate: (frag) => decorateMarkdownTokens(frag, { index, selfId, skills: hasSkill, prompts: hasPrompt, files: hasFiles, labels }),
+			decorate: (frag) => decorateMarkdownTokens(frag, { index, selfId, selfServerId, skills: hasSkill, prompts: hasPrompt, files: hasFiles, labels }),
+			after: (node) => {
+				// Apply initial activity dots synchronously before paint, then nudge the reactive effect outside the render pass.
+				untrack(() => syncActivityDots(node));
+				queueMicrotask(() => { patchTick++; });
+			},
 		};
+	});
+
+	function mentionTargetFrom(btn: HTMLButtonElement): MentionTarget {
+		if (btn.dataset.mentionKind === "group") return { kind: "group", id: btn.dataset.mentionId! };
+		const server = btn.dataset.mentionServer || (paneServer && paneServer !== app.serverId ? paneServer : undefined);
+		return {
+			kind: "session",
+			id: btn.dataset.mentionId!,
+			...(btn.dataset.mentionClosed ? { closed: true } : {}),
+			...(server ? { server } : {}),
+		};
+	}
+
+	function syncActivityDots(host: HTMLElement) {
+		const buttons = host.querySelectorAll<HTMLButtonElement>("button.wd-mention[data-mention-id]");
+		for (const btn of buttons) {
+			const act = app.mentionActivity(mentionTargetFrom(btn));
+			if (act === "idle") btn.removeAttribute("data-activity");
+			else btn.dataset.activity = act;
+		}
+	}
+
+	// Sync live activity dots on mention chips in place (outside patchHtml) so status changes never re-patch loaded media.
+	$effect(() => {
+		if (!mentions || !root) return;
+		void patchTick;
+		syncActivityDots(root);
 	});
 
 	// Pictures the agent wrote into the working directory (`![](out/chart.png)`) are fetched with the token and shown inline.
 	// Blob URLs live in the app-wide LRU cache (`sharedMedia`) so switching tabs or remounting after a stream settles
 	// displays already-fetched pictures immediately without downloading them again.
 	let media = $derived.by(() => {
-		const api = app.api, id = sessionId;
+		const api = (paneServer ? app.links[paneServer]?.api : null) ?? app.api;
+		const id = sessionId;
 		return api && id ? { api, id, base: api.baseUrl } : null;
 	});
 	/** the video players this message drew: a player left on the whole screen goes away with the message */
@@ -206,13 +249,8 @@
 		if (mentions) {
 			const mention = el.closest<HTMLButtonElement>("button[data-mention-id]");
 			if (mention) {
-				app.openMention(
-					{
-						kind: mention.dataset.mentionKind === "group" ? "group" : "session",
-						id: mention.dataset.mentionId!,
-					},
-					{ direct: e.ctrlKey || e.metaKey },
-				);
+				hideMentionHover();
+				app.openMention(mentionTargetFrom(mention), { direct: e.ctrlKey || e.metaKey });
 				return;
 			}
 			const skill = el.closest<HTMLButtonElement>("button[data-skill]");
@@ -300,6 +338,28 @@
 			if (isSafeExternalUrl(a.href)) void openExternal(a.href);
 		}
 	}
+	function onContextMenu(e: MouseEvent) {
+		if (!mentions) return;
+		const mention = (e.target as HTMLElement | null)?.closest<HTMLButtonElement>("button[data-mention-id]");
+		if (!mention) return;
+		openMentionMenu(e, mentionTargetFrom(mention), {
+			label: mention.textContent?.trim() || "",
+			currentSessionId: sessionId,
+		});
+	}
+	function onPointerOver(e: PointerEvent) {
+		if (!mentions || e.pointerType !== "mouse") return;
+		const mention = (e.target as HTMLElement | null)?.closest<HTMLButtonElement>("button[data-mention-id]");
+		if (!mention) return;
+		showMentionHover(mention, mentionTargetFrom(mention), mention.textContent?.trim() || "");
+	}
+	function onPointerOut(e: PointerEvent) {
+		if (!mentions || e.pointerType !== "mouse") return;
+		const from = (e.target as HTMLElement | null)?.closest<HTMLButtonElement>("button[data-mention-id]");
+		if (!from) return;
+		const to = (e.relatedTarget as HTMLElement | null)?.closest<HTMLButtonElement>("button[data-mention-id]");
+		if (to !== from) scheduleMentionHoverHide();
+	}
 	function onKeyDown(e: KeyboardEvent) {
 		if (e.key !== "Enter" && e.key !== " ") return;
 		const retry = (e.target as HTMLElement | null)?.closest<HTMLElement>(".wd-img.missing[data-wd-src], .wd-media.missing[data-wd-src]");
@@ -310,9 +370,9 @@
 	}
 </script>
 
-<!-- Delegated click for the links and buttons inside the rendered HTML: those are focusable and keyboard-activated themselves. -->
+<!-- Delegated click/hover/context-menu for the links and buttons inside the rendered HTML: those are focusable and keyboard-activated themselves. -->
 <!-- svelte-ignore a11y_no_static_element_interactions -->
-<div class="md" class:streaming bind:this={root} onclick={onClick} onkeydown={onKeyDown} use:patchHtml={patchInput}></div>
+<div class="md" class:streaming bind:this={root} onclick={onClick} oncontextmenu={onContextMenu} onpointerover={onPointerOver} onpointerout={onPointerOut} onkeydown={onKeyDown} use:patchHtml={patchInput}></div>
 
 <style>
 	/* Korean wraps between words like the rest of the app (app.css keep-all); only a word wider than the line breaks */
@@ -568,6 +628,42 @@
 	.md :global(.wd-mention.wd-self) {
 		--hue: var(--mark-mention-self);
 		cursor: default;
+	}
+	.md :global(.wd-mention.wd-closed) {
+		--hue: var(--mark-mention-closed);
+		font-weight: 500;
+		background: color-mix(in srgb, var(--hue) 8%, transparent);
+		box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--hue) 26%, transparent);
+	}
+	.md :global(button.wd-mention[data-activity]::before) {
+		content: "";
+		flex: none;
+		width: 6px;
+		height: 6px;
+		border-radius: var(--radius-pill);
+	}
+	.md :global(button.wd-mention[data-activity="working"]::before) {
+		background: var(--info);
+		animation: wd-dot-pulse var(--anim-working-duration) var(--anim-working-ease) infinite;
+	}
+	.md :global(button.wd-mention[data-activity="asking"]::before) {
+		background: var(--warn);
+		animation: wd-dot-pulse var(--anim-working-duration) var(--anim-working-ease) infinite;
+	}
+	.md :global(button.wd-mention[data-activity="done"]::before) {
+		background: var(--ok);
+	}
+	.md :global(button.wd-mention[data-activity="failed"]::before) {
+		background: var(--danger);
+	}
+	@keyframes wd-dot-pulse {
+		0%, 100% { opacity: 1; }
+		50% { opacity: var(--anim-working-dim); }
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.md :global(button.wd-mention[data-activity]::before) {
+			animation: none;
+		}
 	}
 	.md :global(button.wd-skill),
 	.md :global(button.wd-prompt) {

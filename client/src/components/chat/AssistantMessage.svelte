@@ -7,6 +7,7 @@
 	import Notice from "../ui/Notice.svelte";
 	import Button from "../ui/Button.svelte";
 	import { app } from "../../lib/store.svelte";
+	import { getPane } from "../../lib/pane";
 	import { reveal } from "../../lib/reveal.svelte";
 	import { CopyFlag } from "../../lib/copy-flag.svelte";
 	import { onDestroy } from "svelte";
@@ -53,15 +54,17 @@
 	/** When each block was written: the time its message (one model call) started. A text the reply went on from (a
 	 *  progress note between tool calls) shows it underneath; the closing text has it in the foot. */
 	const blockTs = $derived(parts.flatMap((p) => p.blocks.map(() => p.ts)));
-	const chat = $derived(app.chatOf(paneId));
+	const pane = getPane();
+	const chat = $derived(pane.chat ?? app.chatOf(paneId));
 	const canContinue = $derived(
-		canContinueRun({
-			ready: chat?.ready ?? true,
-			running: chat?.running ?? false,
-			retrying: Boolean(chat?.retrying),
-			compacting: chat?.compacting ?? false,
-			closed: Boolean(session?.closed),
-		}),
+		!pane.readonly &&
+			canContinueRun({
+				ready: chat?.ready ?? true,
+				running: chat?.running ?? false,
+				retrying: Boolean(chat?.retrying),
+				compacting: chat?.compacting ?? false,
+				closed: Boolean(session?.closed),
+			}),
 	);
 	const actions = $derived(replyActions(tail, last, live, canContinue));
 	/** A model that cannot think shows "off" instead of the session's level, which it ignores. */
@@ -169,9 +172,11 @@
 				</span>
 				<span class="acts">
 					<IconButton icon={copied.done ? "check" : "copy"} label={t("답변 복사")} tip size="sm" onclick={() => void copied.copy(plainText)} disabled={!plainText} />
-					<IconButton icon="reply" label={t("답장")} tip size="sm" onclick={reply} disabled={!plainText} />
-					{#if tail.seq !== null && session && (tail.stopReason === "stop" || tail.stopReason === "length")}
-						<IconButton icon="fork" label={t("여기서 분기")} tip size="sm" onclick={() => app.fork(session.id, tail.seq!)} />
+					{#if !pane.readonly}
+						<IconButton icon="reply" label={t("답장")} tip size="sm" onclick={reply} disabled={!plainText} />
+						{#if tail.seq !== null && session && (tail.stopReason === "stop" || tail.stopReason === "length")}
+							<IconButton icon="fork" label={t("여기서 분기")} tip size="sm" onclick={() => app.fork(session.id, tail.seq!)} />
+						{/if}
 					{/if}
 				</span>
 			</div>

@@ -24,7 +24,7 @@
 	const rollOut = (_: Element) => ({ duration: ms("fast"), easing: easeExit, css: (t: number) => `opacity:${t.toFixed(3)}` });
 
 	const pane = getPane();
-	const runOf = (id: string): ToolRun => (id && app.chatOf(pane.id)?.tools[id]) || { state: "pending", output: "" };
+	const runOf = (id: string): ToolRun => (id && (pane.chat ?? app.chatOf(pane.id))?.tools[id]) || { state: "pending", output: "" };
 	/** Per step: the tool's run state, or null for a thought. */
 	const runs = $derived(steps.map((s) => (s.kind === "tool" ? runOf(s.id) : null)));
 	const tools = $derived(steps.filter((s) => s.kind === "tool"));

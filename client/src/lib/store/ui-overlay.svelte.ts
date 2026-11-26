@@ -69,12 +69,14 @@ export class UiOverlayState {
   commandsDialog = $state<{ cwd: string } | null>(null);
   templatesDialog = $state<{ cwd: string } | null>(null);
 
-  /** Graph view & quick-look peek state. */
+  /** Graph view & quick-look peek state + modal back-navigation history. */
   graphOpen = $state(false);
   graphFrom = $state<{ server: string; session: string } | null>(null);
   graphPeek = $state<{ server: string; session: string } | null>(null);
-  /** Chat quick-look modal: session id on the current server opened from a `@mention` chip without leaving the current pane. */
-  chatPeek = $state<string | null>(null);
+  graphPeekHistory = $state<{ server: string; session: string }[]>([]);
+  /** Chat quick-look modal: session (on the current or another server, open or closed) opened from a `@mention` chip. */
+  chatPeek = $state<{ server: string; session: string } | null>(null);
+  chatPeekHistory = $state<{ server: string; session: string }[]>([]);
 
   /** Read-only workspace file viewer side panel. */
   filesOpen = $state(false);
@@ -97,10 +99,12 @@ export class UiOverlayState {
 
   closePeek() {
     this.graphPeek = null;
+    this.graphPeekHistory = [];
   }
 
   closeChatPeek() {
     this.chatPeek = null;
+    this.chatPeekHistory = [];
   }
 
   openSettings(
