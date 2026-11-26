@@ -46,9 +46,11 @@ describe("list cache", () => {
 		expect(shapeOf("x")).toBeNull();
 	});
 	test("repositories are kept for the listed folders only, and a malformed map only loses the grouping", () => {
-		const repos = { [lists.sessions[0]!.cwd]: { root: "/r", top: "/r", branch: "main" }, "/gone": null };
+		const repos = { [lists.sessions[0]!.cwd]: { root: "/r", top: "/r", branch: "main" }, "/pinned": { root: "/r", top: "/r", branch: "main" }, "/gone": null };
 		const c = toCache(fp, lists, null, 1000, undefined, repos);
 		expect(Object.keys(c.repos ?? {})).toEqual([lists.sessions[0]!.cwd]);
+		const withPinned = toCache(fp, lists, null, 1000, undefined, repos, ["/pinned", ""]);
+		expect(Object.keys(withPinned.repos ?? {}).sort()).toEqual(["/pinned", lists.sessions[0]!.cwd].sort());
 		const bad = fromCache({ ...c, repos: { "/x": { root: 1 } } }, fp, 1000);
 		expect(bad?.sessions.length).toBe(lists.sessions.length);
 		expect(bad?.repos).toBeUndefined();

@@ -1234,6 +1234,7 @@ class AppStore {
         // Pushed pages are live-only: after a reconnect they may have changed unseen, so the pages read the list again.
         ready: (l, warm) => { this.serverExtensionFeed.onEvent(l.id, "extensions_updated", {}); void this.attach(l, warm); },
         shape: (l) => this.sidebarShape(l.id),
+        extraPaths: (l) => this.sidebar.pinned[l.id] ?? [],
       });
       next[s.id] = link;
       changed = true;

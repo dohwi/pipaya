@@ -25,6 +25,8 @@ export interface LinkHooks {
 	ready(link: ServerLink, warm: boolean): void;
 	/** Rows per top-level entry as the sidebar draws this server (the app owns that order), kept with the cached lists. */
 	shape?(link: ServerLink): number[];
+	/** Extra folder paths kept visible in the sidebar (e.g. pinned folders with no open sessions or terminals). */
+	extraPaths?(link: ServerLink): readonly string[];
 }
 
 /** How long a change to the lists waits before they are written to the cache. */
@@ -176,7 +178,7 @@ export class ServerLink {
 		this.stopSaving = $effect.root(() => {
 			$effect(() => {
 				// read what is stored, so any change to it (not to activity) schedules a write
-				void this.data.sessions.length, this.data.sessions.map((s) => s.title + workDir(s) + s.updatedAt), this.data.groups.map((g) => g.updatedAt), this.data.terminals.length, this.repos;
+				void this.data.sessions.length, this.data.sessions.map((s) => s.title + workDir(s) + s.updatedAt), this.data.groups.map((g) => g.updatedAt), this.data.terminals.length, this.hooks.extraPaths?.(this)?.join("\0"), this.repos;
 				this.saveLists();
 			});
 			$effect(() => {
@@ -191,7 +193,7 @@ export class ServerLink {
 	/** Folders asked about and not answered yet, so a burst of list changes asks once per folder. */
 	private reposAsked = new Set<string>();
 	private listedPaths(): string[] {
-		return [...new Set([...this.data.sessions.map(workDir), ...this.data.terminals.map((x) => x.cwd)])];
+		return [...new Set([...this.data.sessions.map(workDir), ...this.data.terminals.map((x) => x.cwd), ...(this.hooks.extraPaths?.(this) ?? [])])].filter(Boolean);
 	}
 
 	/** Re-read git repo/branch metadata for specific paths (or every listed folder). */
@@ -236,7 +238,7 @@ export class ServerLink {
 		if (!this.listed || this.stopped) return;
 		clearTimeout(this.saveTimer);
 		this.saveTimer = setTimeout(() => {
-			if (this.listed && !this.stopped) writeListCache(this.id, toCache(this.fp, this.data, this.workspace, Date.now(), this.hooks.shape?.(this), this.repos));
+			if (this.listed && !this.stopped) writeListCache(this.id, toCache(this.fp, this.data, this.workspace, Date.now(), this.hooks.shape?.(this), this.repos, this.hooks.extraPaths?.(this)));
 		}, SAVE_DELAY_MS);
 	}
 
