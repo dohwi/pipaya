@@ -236,8 +236,8 @@
 
 	<!-- Collapsed desktop rail (56px, mirrors left Rail.svelte): expand button + compact changed-files/+/- summary + quick-jump file icons -->
 	<div class="frail" data-part="workspace-rail" inert={open || viewport.narrow}>
-		<div class="rtop">
-			<IconButton icon="folder" tabindex={-1} label={t("파일 뷰어 펼치기")} title={t("파일 뷰어 펼치기") + shortcutHint} onclick={(e) => setFilesOpen(true, e)} />
+		<div class="rtop" aria-hidden="true">
+			<Icon name="folder" />
 		</div>
 		<div class="rtools">
 			<IconButton icon="sidebar" size="sm" class="flip-x" label={t("파일 뷰어 펼치기")} title={t("파일 뷰어 펼치기") + shortcutHint} onclick={(e) => setFilesOpen(true, e)} />
@@ -562,8 +562,12 @@
 		box-sizing: content-box;
 		height: 44px;
 		border-bottom: 1px solid var(--border);
+		color: var(--text-dim);
 	}
-	.rtop :global(.iconbtn:focus-visible),
+	.rtop :global(.ic) {
+		width: 20px;
+		height: 20px;
+	}
 	.rtools :global(.iconbtn:focus-visible) {
 		outline-offset: -2px;
 	}
