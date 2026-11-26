@@ -1,5 +1,6 @@
 import type { SettingsTabId } from "./settings-search";
 import { t } from "./i18n";
+import { sortActiveFirst } from "./list-order";
 import { serverTitle } from "./server-extension";
 
 /** One extension as the settings sidebar lists it under "확장". */
@@ -70,11 +71,14 @@ export function extensionRows(
 		half: !!n.companion && !have(n.companion),
 	}));
 	const owned = (id: string) => side.some((n) => n.companion === id);
-	// a client extension is paired with the server extension that names it as its client half
+	// a client extension is paired with the server extension that names it as its client half;
+	// standalone client extensions come first (enabled before disabled, matching Extensions.svelte),
+	// followed by server extensions with their paired client halves kept directly underneath.
 	const serverNow = serverSide ?? [];
-	const rows: Row[] = own
-		.filter((e) => !owned(e.id))
-		.map((e) => {
+	const rows: Row[] = sortActiveFirst(
+		own.filter((e) => !owned(e.id)),
+		(e) => e.live,
+	).map((e) => {
 			const missing = updates.missingServerFor(e.id);
 			const here = serverNow.find((n) => n.companion === e.id);
 			return {

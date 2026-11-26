@@ -15,6 +15,7 @@
 	import { Api, errorText } from "../../lib/api";
 	import { recentreOn } from "../../lib/dialog";
 	import { t } from "../../lib/i18n";
+	import { sortActiveFirst } from "../../lib/list-order";
 	import { reflow, rowIn, rowOut } from "../../lib/motion";
 	import { app } from "../../lib/store.svelte";
 	import type { TemplateInfo, TemplateList, TemplateScope } from "../../lib/types";
@@ -127,7 +128,7 @@
 	const groups = $derived(
 		(["project", "global"] as const).map((scope) => ({
 			scope,
-			items: (list?.templates ?? []).filter((x) => x.scope === scope),
+			items: sortActiveFirst((list?.templates ?? []).filter((x) => x.scope === scope), (x) => !x.overridden),
 			path: tilde(scope === "project" ? (list?.projectDir ?? "") : (list?.globalDir ?? "~/.agents/templates")),
 		})),
 	);

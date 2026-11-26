@@ -11,6 +11,7 @@
 	import SkillEditor from "./SkillEditor.svelte";
 	import SkillViewer from "./SkillViewer.svelte";
 	import { t } from "../../lib/i18n";
+	import { sortActiveFirst } from "../../lib/list-order";
 	import { reflow, rowIn, rowOut } from "../../lib/motion";
 	import { untrack } from "svelte";
 	import { errorText, type Api, type ApiError } from "../../lib/api";
@@ -169,7 +170,7 @@
 
 {#snippet list(mode: Mode)}
 	<ul class="list">
-		{#each shown as s (s.name)}
+		{#each sortActiveFirst(shown, (s) => effective(s, mode)) as s (s.name)}
 {@const on = effective(s, mode)}
 <li animate:reflow in:rowIn out:rowOut>
 {#snippet fileActions()}

@@ -19,6 +19,7 @@
 	import { Api, errorText } from "../../lib/api";
 	import { recentreOn } from "../../lib/dialog";
 	import { t } from "../../lib/i18n";
+	import { sortActiveFirst } from "../../lib/list-order";
 	import { reflow, rowIn, rowOut } from "../../lib/motion";
 	import { app } from "../../lib/store.svelte";
 	import { modelRefName } from "../../lib/model-name";
@@ -123,7 +124,14 @@
 	let tab = $state<"project" | "global">("project");
 	const groups = $derived(
 		(globalOnly ? (["global"] as const) : (["project", "global"] as const))
-			.map((scope) => ({ scope, items: (list?.subagents ?? []).filter((r) => r.scope === scope), path: scope === "project" ? tilde(list?.projectDir ?? "") : "~/.agents/subagents" })),
+			.map((scope) => ({
+				scope,
+				items: sortActiveFirst(
+					(list?.subagents ?? []).filter((r) => r.scope === scope),
+					(r) => (!r.enabled ? 2 : r.overridden ? 1 : 0),
+				),
+				path: scope === "project" ? tilde(list?.projectDir ?? "") : "~/.agents/subagents",
+			})),
 	);
 	const current = $derived(groups.find((g) => g.scope === tab) ?? groups[0]);
 	/** `~` for the home folder, and a long path loses its front (the end is the part that tells folders apart). */

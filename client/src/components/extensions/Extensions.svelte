@@ -30,6 +30,8 @@
 	import UnreadableCard from "./UnreadableCard.svelte";
 	import { ExtensionTasks } from "../../lib/extension-tasks.svelte";
 	import { manifestDescription, manifestName } from "../../lib/extensions/translations";
+	import { sortActiveFirst } from "../../lib/list-order";
+	import { reflow } from "../../lib/motion";
 	import { keepDraft } from "../../lib/settings-drafts.svelte";
 
 	/** Every extension of one server, whichever kind it is underneath (a package this app runs, or code inside the server): one list, one "확장". */
@@ -52,9 +54,10 @@
 	// Re-run when the open server changes: the one just left now needs its own editor, the one just opened has the host.
 	// Also when the connection arrives: without one attach does nothing, and the pane would wait for its list forever.
 	$effect(() => { void app.serverId; if (serverId && app.links[serverId]?.api) void app.attachExtensionStore(serverId); });
+	const isEntryOn = (entry: Installed) => (src.runs ? entry.state === "active" || entry.state === "starting" : entry.enabled);
 	// While another server's list is still being read, show nothing rather than the open server's list.
 	const rows = $derived((void app.extensionStoreTick, pendingStore ? [] : src.list()));
-	const list = $derived(rows);
+	const list = $derived(sortActiveFirst(rows, isEntryOn));
 	const unreadable = $derived((void app.extensionStoreTick, pendingStore ? [] : src.unreadable()).map((item) => ({ item, index: item.index })));
 	let filename = $state("");
 	let market = $state(false);
@@ -65,6 +68,7 @@
 	const openServer = $derived(selected?.startsWith("srv:") ? serverSide.find((e) => srvKey(e.name) === selected) : undefined);
 	/** A server extension whose client half is not installed on this server runs only half: say so. */
 	const missingClient = (companion?: string) => !!companion && !app.clientExtensionsOf(serverId ?? app.serverId).some((e) => e.id === companion);
+	const orderedServerSide = $derived(sortActiveFirst(serverSide, (ext) => !missingClient(ext.companion)));
 	/** The server being listed, whether or not it is the open one: its events (settings saved, page changed, reloaded) keep the pages current. */
 	const listed = $derived(serverId ?? app.serverId);
 	async function loadServerSide() {
@@ -451,7 +455,7 @@
 	{@const id = entry.package.manifest.id}
 	{@const fields = entry.package.manifest.settings}
 	{@const gated = !!fields && src.configRequired(id)}
-	{@const on = src.runs ? entry.state === "active" || entry.state === "starting" : entry.enabled}
+	{@const on = isEntryOn(entry)}
 	{@const problem = on ? "" : gated ? t(CONFIG_REQUIRED) : src.settingsProblem(id)}
 	{@const upd = clientUpdate(entry)}
 	{@const needServer = extensionUpdates.missingServerFor(id, serverId ?? app.serverId)}
@@ -555,7 +559,9 @@
 		{/if}
 		<p class="hint">{t("{name}에 설치되어 접속한 모든 기기가 함께 씁니다.", { name: serverName })}</p>
 		{#each list as entry (entry.package.manifest.id)}
-			{@render installedRow(entry)}
+			<div class="ext-slot" animate:reflow>
+				{@render installedRow(entry)}
+			</div>
 		{/each}
 		{#each unreadable as { item, index } (index)}
 			<UnreadableCard
@@ -568,9 +574,10 @@
 				onremove={(keepSettings) => removeUnreadable(index, keepSettings)}
 			/>
 		{/each}
-		{#each serverSide as ext (ext.name)}
-				{@const upd = serverUpdate(ext)}
-				{@const half = missingClient(ext.companion)}
+		{#each orderedServerSide as ext (ext.name)}
+			{@const upd = serverUpdate(ext)}
+			{@const half = missingClient(ext.companion)}
+			<div class="ext-slot" animate:reflow>
 				<ExtensionRow name={serverTitle(ext)} brief={ext.error || serverText(ext) || serverProvides(ext).join(", ")} busy={!!tasks.busy[srvKey(ext.name)]} dim={half} onopen={() => (selected = srvKey(ext.name))}>
 					{#snippet notices()}
 						{#if half}{@render companionLine(ext.companion ?? "", !!tasks.busy.$import)}{/if}
@@ -581,6 +588,7 @@
 						{#if half}<Badge tone="warn">{t("동작 안 함")}</Badge>{/if}
 					{/snippet}
 				</ExtensionRow>
+			</div>
 		{/each}
 		{#if !list.length && !unreadable.length && !serverSide.length}
 			<EmptyState as="p" compact>{t("이 서버에 설치된 확장이 없습니다")}</EmptyState>
@@ -614,6 +622,7 @@
 <style>
 	.extensions,
 	section { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+	.ext-slot { min-width: 0; }
 	.extensions { gap: 16px; color: var(--text); font-size: var(--fs-md); line-height: 1.5; }
 	.feedback { display: flex; flex-direction: column; gap: 8px; }
 	/* The live region stays mounted, but while it holds no element (only Svelte's {#if} anchor comments, so :empty never matches) it must not take a flex gap */

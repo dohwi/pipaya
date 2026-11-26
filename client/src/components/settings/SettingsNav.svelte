@@ -8,6 +8,7 @@
 	import { app } from "../../lib/store.svelte";
 	import { SETTINGS_TABS, needsOnlineServer, type SettingsTabId } from "../../lib/settings-search";
 	import { extensionRows, type ExtensionRow } from "../../lib/settings-extension-rows";
+	import { sortActiveFirst } from "../../lib/list-order";
 	import { navGroups } from "../../lib/settings-phone";
 	import { initialFolded, saveFolded } from "../../lib/settings-fold";
 	import type { Server } from "../../lib/store.svelte";
@@ -75,13 +76,13 @@
 		return () => { live = false; };
 	});
 	/** MCP servers of the chosen server, listed under "MCP" the same way (picking one narrows the pane to it). */
-	let mcpSide = $state<{ id: string; rows: { name: string; ready: boolean; failed: boolean }[] } | null>(null);
+	let mcpSide = $state<{ id: string; rows: { name: string; enabled: boolean; ready: boolean; failed: boolean }[] } | null>(null);
 	$effect(() => {
 		void app.mcpTick;
 		const id = server?.id;
 		if (!id) { mcpSide = null; return; }
 		let live = true;
-		app.links[id]?.api.mcp().then((r) => { if (live) mcpSide = { id, rows: r.servers.map((x) => ({ name: x.name, ready: x.status === "ready", failed: x.status === "error" })) }; }).catch(() => { if (live) mcpSide = null; });
+		app.links[id]?.api.mcp().then((r) => { if (live) mcpSide = { id, rows: r.servers.map((x) => ({ name: x.name, enabled: x.enabled, ready: x.status === "ready", failed: x.status === "error" })) }; }).catch(() => { if (live) mcpSide = null; });
 		return () => { live = false; };
 	});
 	// The client extensions of a server that is not the open one come from its idle editor, which only exists once attached.
@@ -99,7 +100,7 @@
 	const hasUpdate = (id: string) => (id === "info" ? serverHasUpdate : (id === "srvext" ? extensionUpdates.serverCount(server?.id) : 0) > 0);
 	const extsOf = (id: string): Kid[] => {
 		if (id === "mcp") {
-			const rows = mcpSide && mcpSide.id === server?.id ? mcpSide.rows : [];
+			const rows = sortActiveFirst(mcpSide && mcpSide.id === server?.id ? mcpSide.rows : [], (m) => m.enabled);
 			return rows.map((m, i) => ({ id: `mcp:${m.name}`, name: m.name, live: m.ready, half: m.failed, halfLabel: t("오류"), builtin: false, end: i === rows.length - 1 }));
 		}
 		if (id !== "srvext") return [];

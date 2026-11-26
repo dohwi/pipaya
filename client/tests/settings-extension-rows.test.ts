@@ -59,4 +59,19 @@ describe("extensionRows", () => {
 		expect(extensionRows([client("a"), client("b")], null, updates).map((r) => r.update)).toEqual([true, false]);
 		expect(extensionRows([], [{ name: "git" }, { name: "x" }], updates).map((r) => r.update)).toEqual([true, false]);
 	});
+
+	test("disabled standalone client extensions sink below active ones while keeping relative order", () => {
+		const rows = extensionRows(
+			[
+				{ id: "off-1", name: "Off 1", live: false },
+				client("on-1"),
+				{ id: "off-2", name: "Off 2", live: false },
+				client("on-2"),
+			],
+			null,
+			none,
+		);
+		expect(rows.map((r) => r.id)).toEqual(["on-1", "on-2", "off-1", "off-2"]);
+		expect(rows.map((r) => r.end)).toEqual([false, false, false, true]);
+	});
 });

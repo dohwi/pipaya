@@ -17,6 +17,7 @@
 	import { recentreOn } from "../../lib/dialog";
 	import { errorText, type Api } from "../../lib/api";
 	import { keepDraft } from "../../lib/settings-drafts.svelte";
+	import { sortActiveFirst } from "../../lib/list-order";
 	import { t } from "../../lib/i18n";
 	import { reflow, rowIn, rowOut } from "../../lib/motion";
 	import { app } from "../../lib/store.svelte";
@@ -158,8 +159,12 @@
 		}
 	}
 
-	/** One server's card only (picked in the settings sidebar); the whole list when it is gone or not asked for. */
-	const shown = $derived(only && data?.servers.some((x) => x.name === only) ? data.servers.filter((x) => x.name === only) : (data?.servers ?? []));
+	/** One server's card only (picked in the settings sidebar); the whole list when it is gone or not asked for, switched-off last. */
+	const shown = $derived(
+		only && data?.servers.some((x) => x.name === only)
+			? data.servers.filter((x) => x.name === only)
+			: sortActiveFirst(data?.servers ?? [], (s) => s.enabled),
+	);
 	const statusTone = (s: McpServerInfo["status"]) => (s === "ready" ? "ok" : s === "error" ? "danger" : "neutral");
 	const statusText = (s: McpServerInfo["status"]) =>
 		s === "ready" ? t("연결됨") : s === "error" ? t("오류") : s === "connecting" ? t("연결하는 중…") : t("꺼짐");
