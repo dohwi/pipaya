@@ -4,9 +4,15 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { compileModule } from "svelte/compiler";
 import ts from "typescript";
-import type { CloseHold, SessionCloseGuard as SessionCloseGuardType } from "../src/lib/session-close-guard.svelte";
+import type {
+	CloseHold,
+	CloseHoldInput,
+	decideCloseHold as decideCloseHoldType,
+	SessionCloseGuard as SessionCloseGuardType,
+} from "../src/lib/session-close-guard.svelte";
 
 let SessionCloseGuard: typeof SessionCloseGuardType;
+let decideCloseHold: typeof decideCloseHoldType;
 let dir: string;
 
 beforeAll(async () => {
@@ -33,7 +39,9 @@ beforeAll(async () => {
 	if (!build.success) throw new Error(build.logs.join("\n"));
 	const file = join(dir, "session-close-guard.mjs");
 	await writeFile(file, await build.outputs[0]!.text());
-	SessionCloseGuard = (await import(file)).SessionCloseGuard;
+	const mod = await import(file);
+	SessionCloseGuard = mod.SessionCloseGuard;
+	decideCloseHold = mod.decideCloseHold;
 });
 
 afterAll(async () => {
@@ -122,5 +130,135 @@ describe("SessionCloseGuard (multi-server)", () => {
 		guard.ask!.confirm();
 		expect(await p2).toBe(true);
 		expect(guard.ask).toBeNull();
+	});
+
+	test("scheduled hold carries scheduledCount and pinned details, including combinations with working/asking", async () => {
+		const holds: Record<string, CloseHoldInput> = {
+			"srv-a:s1": { hold: "scheduled", scheduledCount: 2, pinned: false },
+			"srv-a:s2": { hold: "scheduled", scheduledCount: 1, pinned: true },
+			"srv-a:s3": { hold: "working", scheduledCount: 3, pinned: false },
+			"srv-a:s4": { hold: "scheduled", scheduledCount: -2 },
+		};
+		const guard = new SessionCloseGuard(
+			(id, sid) => holds[`${sid}:${id}`] ?? null,
+			(id) => `Title ${id}`,
+		);
+
+		const p1 = guard.request("s1", "srv-a");
+		expect(guard.ask?.hold).toBe("scheduled");
+		expect(guard.ask?.scheduledCount).toBe(2);
+		expect(guard.ask?.pinned).toBe(false);
+		guard.ask!.cancel();
+		expect(await p1).toBe(false);
+
+		const p2 = guard.request("s2", "srv-a");
+		expect(guard.ask?.hold).toBe("scheduled");
+		expect(guard.ask?.scheduledCount).toBe(1);
+		expect(guard.ask?.pinned).toBe(true);
+		guard.ask!.confirm();
+		expect(await p2).toBe(true);
+
+		const p3 = guard.request("s3", "srv-a");
+		expect(guard.ask?.hold).toBe("working");
+		expect(guard.ask?.scheduledCount).toBe(3);
+		expect(guard.ask?.pinned).toBe(false);
+		guard.ask!.cancel();
+		expect(await p3).toBe(false);
+
+		const p4 = guard.request("s4", "srv-a");
+		expect(guard.ask?.hold).toBe("scheduled");
+		expect(guard.ask?.scheduledCount).toBe(0);
+		expect(guard.ask?.pinned).toBe(false);
+		guard.ask!.cancel();
+		expect(await p4).toBe(false);
+	});
+
+	test("async holdOf blocks concurrent requests, settles null/hold, and respects cancelTarget/cancelServer mid-flight", async () => {
+		let calls = 0;
+		let finish!: (v: CloseHoldInput) => void;
+		const guard = new SessionCloseGuard(
+			() => {
+				calls++;
+				return new Promise<CloseHoldInput>((resolve) => {
+					finish = resolve;
+				});
+			},
+			(id) => `Chat ${id}`,
+		);
+
+		// Concurrent request while async lookup is pending is refused without calling holdOf again.
+		const p1 = guard.request("s1", "srv-a");
+		expect(calls).toBe(1);
+		expect(guard.ask).toBeNull();
+		expect(await guard.request("s2", "srv-a")).toBe(false);
+		expect(calls).toBe(1);
+
+		// Non-matching cancels leave pending intact.
+		guard.cancelServer("srv-b");
+		guard.cancelTarget("srv-a", "s2");
+		finish({ hold: "scheduled", scheduledCount: 1 });
+		await new Promise((r) => setTimeout(r, 0));
+		expect(guard.ask?.hold).toBe("scheduled");
+		expect(guard.ask?.scheduledCount).toBe(1);
+		guard.ask!.confirm();
+		expect(await p1).toBe(true);
+
+		// cancelTarget during in-flight async lookup prevents opening a stale dialog.
+		const p2 = guard.request("s1", "srv-a");
+		guard.cancelTarget("srv-a", "s1");
+		finish({ hold: "scheduled", scheduledCount: 2 });
+		expect(await p2).toBe(false);
+		expect(guard.ask).toBeNull();
+
+		// cancelServer during in-flight async lookup prevents opening a stale dialog.
+		const p3 = guard.request("s1", "srv-a");
+		guard.cancelServer("srv-a");
+		finish("working");
+		expect(await p3).toBe(false);
+		expect(guard.ask).toBeNull();
+
+		// Async lookup resolving to null allows closing immediately.
+		const p4 = guard.request("s1", "srv-a");
+		finish(null);
+		expect(await p4).toBe(true);
+		expect(guard.ask).toBeNull();
+	});
+
+	test("sync throw and async rejection in holdOf resolve false and do not wedge the guard", async () => {
+		let mode: "throw" | "reject" | "ok" = "throw";
+		const guard = new SessionCloseGuard(
+			() => {
+				if (mode === "throw") throw new Error("sync boom");
+				if (mode === "reject") return Promise.reject(new Error("async boom"));
+				return { hold: "scheduled", scheduledCount: 1 };
+			},
+			() => "Chat",
+		);
+
+		expect(await guard.request("s1", "srv-a")).toBe(false);
+		expect(guard.ask).toBeNull();
+
+		mode = "reject";
+		expect(await guard.request("s1", "srv-a")).toBe(false);
+		expect(guard.ask).toBeNull();
+
+		mode = "ok";
+		const p = guard.request("s1", "srv-a");
+		expect(guard.ask?.hold).toBe("scheduled");
+		guard.ask!.confirm();
+		expect(await p).toBe(true);
+	});
+
+	test("decideCloseHold follows priority asking > working > scheduled > pinned and ignores schedules for terminals", () => {
+		const base = { terminal: false, pinned: false, awaiting: 0, running: false, compacting: false, scheduledCount: 0 };
+		expect(decideCloseHold(base)).toBeNull();
+		expect(decideCloseHold({ ...base, pinned: true })).toEqual({ hold: "pinned", pinned: true });
+		expect(decideCloseHold({ ...base, scheduledCount: 2 })).toEqual({ hold: "scheduled", scheduledCount: 2, pinned: false });
+		expect(decideCloseHold({ ...base, scheduledCount: 2, pinned: true })).toEqual({ hold: "scheduled", scheduledCount: 2, pinned: true });
+		expect(decideCloseHold({ ...base, running: true, scheduledCount: 1, pinned: true })).toEqual({ hold: "working", scheduledCount: 1, pinned: true });
+		expect(decideCloseHold({ ...base, compacting: true, scheduledCount: 3 })).toEqual({ hold: "working", scheduledCount: 3, pinned: false });
+		expect(decideCloseHold({ ...base, awaiting: 1, running: true, scheduledCount: 2 })).toEqual({ hold: "asking", scheduledCount: 2, pinned: false });
+		expect(decideCloseHold({ ...base, terminal: true, scheduledCount: 5 })).toBeNull();
+		expect(decideCloseHold({ ...base, terminal: true, pinned: true, scheduledCount: 5 })).toEqual({ hold: "pinned-terminal", pinned: true });
 	});
 });

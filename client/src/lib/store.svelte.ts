@@ -34,7 +34,7 @@ import { IdleExtensionStores } from "./idle-extension-stores.svelte";
 import { ServerExtensionFeed } from "./server-extension-feed.svelte";
 import type { PairingLink } from "./pairing";
 import { CloseGuard } from "./close-guard.svelte";
-import { SessionCloseGuard } from "./session-close-guard.svelte";
+import { decideCloseHold, SessionCloseGuard, type CloseHoldInfo } from "./session-close-guard.svelte";
 import { sessionTitle } from "./session-title";
 import { PairingFlow } from "./pairing-flow.svelte";
 import { getLang, onLangChange, setRemotePacks, t } from "./i18n";
@@ -977,17 +977,45 @@ class AppStore {
   /** Resolves true when the window may close now (nothing running, or the user confirmed and the work was stopped). */
   requestClose(): Promise<boolean> { return this.closing.request(); }
 
-  /** Closing a tab that needs confirmation (working/asking conversation, or a pinned conversation/terminal). */
+  private closeHoldFor(id: string, serverId: string, scheduledCount: number): CloseHoldInfo | null {
+    const link = this.links[serverId];
+    if (!link) return null;
+    const isMember = link.data.groups.some((g) => layoutHas(g.layout, id));
+    const pinned = !isMember && this.sidebar.isTabPinned(serverId, id);
+    return decideCloseHold({
+      terminal: isTerminalId(id),
+      pinned,
+      awaiting: link.data.awaiting[id] ?? 0,
+      running: !!link.data.running[id],
+      compacting: serverId === this.serverId && !!this.chatOf(id)?.compacting,
+      scheduledCount,
+    });
+  }
+
+  /** Closing a tab that needs confirmation (working/asking, active scheduled tasks, or pinned). */
   private readonly sessionClosing = new SessionCloseGuard(
     (id, serverId) => {
       const link = this.links[serverId];
       if (!link) return null;
-      const isMember = link.data.groups.some((g) => layoutHas(g.layout, id));
-      const pinned = !isMember && this.sidebar.isTabPinned(serverId, id);
-      if (isTerminalId(id)) return pinned ? "pinned-terminal" : null;
-      if ((link.data.awaiting[id] ?? 0) > 0) return "asking";
-      if (link.data.running[id] || (serverId === this.serverId && this.chatOf(id)?.compacting)) return "working";
-      return pinned ? "pinned" : null;
+      if (isTerminalId(id)) return this.closeHoldFor(id, serverId, 0);
+      // Fast synchronous path when the active server's schedule book is fresh (or server lacks /schedules / is offline).
+      if (!link.online || !this.schedules.supported(serverId) || (serverId === this.serverId && this.schedules.isFresh(serverId))) {
+        return this.closeHoldFor(id, serverId, this.schedules.of(serverId, id).count);
+      }
+      // Fallback for non-active servers, initial boot before follow() finishes, or the 300ms debounce after schedules_updated.
+      // Times out quickly and falls back to the cached count (0 if never loaded) so a flaky network never blocks closing.
+      return link.api.schedules(id, AbortSignal.timeout(1500)).then(
+        (r) => {
+          if (this.links[serverId] !== link) return null;
+          const count = r.schedules.filter((s) => s.enabled).length;
+          return this.closeHoldFor(id, serverId, count);
+        },
+        (e) => {
+          if (isUnsupportedRoute(e)) this.schedules.markUnsupported(serverId);
+          if (this.links[serverId] !== link) return null;
+          return this.closeHoldFor(id, serverId, this.schedules.of(serverId, id).count);
+        },
+      );
     },
     (id, serverId) =>
       isTerminalId(id)

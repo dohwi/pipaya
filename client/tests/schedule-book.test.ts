@@ -94,6 +94,39 @@ describe("ScheduleBook", () => {
 		book.patch("never-read", "x", null); // a server not read yet: nothing to change
 		expect(book.listOf("never-read", "x")).toEqual([]);
 	});
+	test("tracks freshness across initial read, debounced refetch, unsupported routes, and errors", async () => {
+		const book = new ScheduleBook();
+		expect(book.isFresh(null)).toBe(false);
+		expect(book.isFresh("a")).toBe(false);
+
+		book.follow("a", apiOf(async () => ({ schedules: [task({ id: "1", sessionId: "x" })] })));
+		await wait(5);
+		expect(book.isFresh("a")).toBe(true);
+
+		// A subsequent follow waits for PAUSE_MS and marks the cache stale until it finishes.
+		const stop = book.follow("a", apiOf(async () => ({ schedules: [] })));
+		expect(book.isFresh("a")).toBe(false);
+		await wait(400);
+		expect(book.isFresh("a")).toBe(true);
+		stop?.();
+
+		// A failed delayed refetch clears stale (keeps previous cache) so tab closes do not stall on repeated failures.
+		book.follow("a", apiOf(async () => { throw new ApiError(500, "http_error", "boom"); }));
+		expect(book.isFresh("a")).toBe(false);
+		await wait(400);
+		expect(book.isFresh("a")).toBe(true);
+
+		// Unsupported (404) marks the server read and fresh (empty).
+		book.follow("old", apiOf(async () => { throw new ApiError(404, "not_found", "route not found"); }));
+		await wait(5);
+		expect(book.supported("old")).toBe(false);
+		expect(book.isFresh("old")).toBe(true);
+
+		// markUnsupported records a non-active old server directly.
+		book.markUnsupported("bg-old");
+		expect(book.supported("bg-old")).toBe(false);
+		expect(book.isFresh("bg-old")).toBe(true);
+	});
 	test("a server that disconnects (no api) asks nothing", () => {
 		const book = new ScheduleBook();
 		expect(book.follow("a", null)).toBeUndefined();
