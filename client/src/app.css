@@ -1861,6 +1861,9 @@ html.dnd {
 	max-width: none;
 	margin: 0;
 	border-radius: 0;
+	background: var(--lb-scrim);
+	-webkit-backdrop-filter: blur(10px);
+	backdrop-filter: blur(10px);
 }
 .wd-video-wrap.open .wd-video {
 	position: fixed;
@@ -1875,7 +1878,71 @@ html.dnd {
 	padding: 24px 16px calc(8px + env(safe-area-inset-bottom, 0px));
 }
 .wd-video-wrap.open .wd-video-note {
-	top: calc(16px + env(safe-area-inset-top, 0px));
+	top: calc(64px + var(--sat)); /* under the top bar: 34px buttons + 2x12px padding + 6px */
+}
+/* standalone full screen: a top bar styled like the Lightbox's `.bar.top` / `.ctl` */
+.wd-video-top {
+	display: none;
+}
+.wd-video-wrap.open .wd-video-top {
+	position: absolute;
+	top: 0;
+	left: 0;
+	right: 0;
+	z-index: 1;
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	padding: calc(12px + var(--sat)) 12px 12px;
+	background: linear-gradient(to bottom, var(--lb-top-fade), transparent);
+	transition: opacity var(--motion-fast) var(--ease-std);
+}
+.wd-video-wrap.open.idle .wd-video-top {
+	opacity: 0;
+	pointer-events: none;
+}
+.wd-video-title {
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-size: var(--fs-sm);
+	line-height: 20px;
+	color: var(--lb-ink);
+}
+.wd-video-top .wd-video-top-btn {
+	width: 34px;
+	height: 34px;
+	color: var(--lb-ink);
+	background: var(--lb-ctrl-bg);
+	border-radius: var(--radius);
+}
+@media (hover: hover) {
+	.wd-video-top .wd-video-top-btn:hover:not(:disabled) {
+		background: var(--lb-ctrl-hover);
+	}
+}
+/* the top bar already carries copy and save while open */
+.wd-video-wrap.open .wd-video-bar .wd-video-copy,
+.wd-video-wrap.open .wd-video-bar .wd-video-download {
+	display: none;
+}
+
+/* inside the Lightbox (Lightbox.svelte): playback bar only, sized to clear the top bar and the dots for 16:9 and 9:16 */
+.wd-video-wrap.lightbox-mode {
+	min-width: min(320px, 90vw);
+	max-width: min(94vw, 1440px);
+	max-height: min(calc(var(--dvh) * 0.80), calc(var(--dvh) - 112px - var(--sat) - var(--sab)));
+	border-radius: var(--radius);
+}
+.wd-video-wrap.lightbox-mode .wd-video {
+	display: block;
+	margin-inline: auto;
+	width: auto;
+	max-width: min(94vw, 1440px);
+	max-height: min(calc(var(--dvh) * 0.80), calc(var(--dvh) - 112px - var(--sat) - var(--sab)));
+	object-fit: contain;
 }
 
 /* Save buttons on inline media (Markdown.svelte, UserMessage.svelte). Pictures: a translucent button over the top right

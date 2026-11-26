@@ -10,7 +10,7 @@
 	import { saveFile } from "../../lib/save-file";
 	import { sharedMedia } from "../../lib/media-urls";
 	import { app } from "../../lib/store.svelte";
-	import { disposeVideoPlayer, videoPlayer } from "../../lib/video-view";
+	import { applyVideoState, disposeVideoPlayer, readVideoState, videoPlayer } from "../../lib/video-view";
 	import { buildFullFileDiff, formatLineSpec, splitHighlightedHtml, type FullDiffRow } from "../../lib/workspace-edits";
 	import { workspaceViewer } from "../../lib/workspace-viewer.svelte";
 	import Markdown from "../chat/Markdown.svelte";
@@ -145,7 +145,27 @@
 	// Mount Pipaya's video player (includes mobile fullscreen support).
 	$effect(() => {
 		if (kind !== "video" || !mediaUrl || mediaFailed || !videoHost) return;
-		const player = videoPlayer(mediaUrl, { filename: fileName || undefined, download: "fullscreen" });
+		const src = mediaUrl;
+		const name = fileName || undefined;
+		const player: HTMLDivElement = videoPlayer(src, {
+			filename: name,
+			download: "fullscreen",
+			onExpand: () =>
+				app.openImage([
+					{
+						kind: "video",
+						src,
+						mimeType: mediaMime || "video/*",
+						name,
+						getVideoState: () => {
+							const st = readVideoState(player);
+							player.querySelector("video")?.pause();
+							return st;
+						},
+						syncVideoState: (st) => applyVideoState(player, st),
+					},
+				]),
+		});
 		player.querySelector("video")?.addEventListener("error", () => (mediaFailed = true));
 		videoHost.replaceChildren(player);
 		return () => disposeVideoPlayer(player);

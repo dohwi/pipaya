@@ -6,12 +6,27 @@ import type { SettingsFocus } from "../settings-focus";
 import type { SettingsSectionAlias, SettingsTabId } from "../settings-search";
 import type { PaletteSpec } from "../store-model";
 
+/** What a video player carries from one surface to another (inline <-> viewer) so playback continues seamlessly. */
+export interface VideoPlaybackState {
+  time: number;
+  rate: number;
+  volume: number;
+  muted: boolean;
+  playing: boolean;
+}
+
 export interface ViewerImage {
   src: string;
   mimeType: string;
   /** File name offered when saving (otherwise `image-N.ext`). */
   name?: string;
   loadFull?: (signal?: AbortSignal) => Promise<string>;
+  /** `"video"` slides play in the viewer's own player (default `"image"`). */
+  kind?: "image" | "video";
+  /** Video: snapshot the inline player's state and pause it. */
+  getVideoState?: () => VideoPlaybackState | null;
+  /** Video: hand the viewer's final state back to the inline player (slide change / close). */
+  syncVideoState?: (state: VideoPlaybackState) => void;
 }
 
 export interface ViewerState {

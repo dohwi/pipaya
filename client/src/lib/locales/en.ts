@@ -368,6 +368,9 @@ export const en: Record<string, string> = {
 
 	/* ---- lightbox, messages ---- */
 	"이미지 보기": "Image viewer",
+	"미디어 보기": "Media viewer",
+	"이전 미디어": "Previous media",
+	"다음 미디어": "Next media",
 	"첨부 이미지 {n}": "Attached image {n}",
 	"축소": "Zoom out",
 	"원래 크기로": "Actual size",
