@@ -44,6 +44,81 @@ export function tailCandidates(full: string): string[] {
 	return out;
 }
 
+function splitPathSegs(p: string): string[] {
+	if (!p) return [];
+	if (p === "/") return ["/"];
+	return p.split(/[\\/]/).filter(Boolean);
+}
+
+function endsWithSegs(segs: readonly string[], suffix: readonly string[]): boolean {
+	if (segs.length < suffix.length) return false;
+	const off = segs.length - suffix.length;
+	for (let i = 0; i < suffix.length; i++) if (segs[off + i] !== suffix[i]) return false;
+	return true;
+}
+
+/**
+ * Candidate display strings for a path that has twin peers, ordered longest-first, excluding any shortened suffix that
+ * would collide with a peer. With `compact` (default true, for dim parent paths beside a folder name), shared trailing
+ * folders after the distinguishing segment (`~/a/sub` vs `~/b/sub`) can collapse to `a/…` vs `b/…`; with `compact: false`
+ * (for primary names like a worktree subpath), it stops at the shortest unique slice (`a/sub`) so CSS ellipsis keeps both ends clear.
+ */
+export function twinParentCandidates(full: string, peers: readonly string[], options?: { compact?: boolean }): string[] {
+	if (!full) return [""];
+	const other = peers.filter(Boolean);
+	if (!other.length) return tailCandidates(full);
+	const compactMode = options?.compact ?? true;
+	const sep = full.includes("\\") ? "\\" : "/";
+	const segs = splitPathSegs(full);
+	const peerSegs = other.map(splitPathSegs);
+	const peerTails = new Set<string>();
+	for (const p of other) for (const c of tailCandidates(p)) peerTails.add(c);
+	const unique = tailCandidates(full).filter((c) => {
+		if (peerTails.has(c)) return false;
+		if (c.startsWith("…/") || c.startsWith("…\\")) {
+			const tailSegs = splitPathSegs(c.slice(2));
+			if (tailSegs.length && peerSegs.some((ps) => endsWithSegs(ps, tailSegs))) return false;
+		}
+		return true;
+	});
+	if (!unique.length) return [full];
+	const out = [...unique];
+	const push = (s: string) => {
+		if (s && !out.includes(s)) out.push(s);
+	};
+	// Find the shortest trailing segment slice unique among peers.
+	let start = -1;
+	for (let i = segs.length - 1; i >= 0; i--) {
+		const slice = segs.slice(i);
+		if (!peerSegs.some((ps) => endsWithSegs(ps, slice))) {
+			start = i;
+			break;
+		}
+	}
+	if (start >= 0) {
+		// When the distinguishing segment is the very first segment, `full` is already in `out` (with its leading `/` or `\\`).
+		if (start > 0) {
+			const bare = segs.slice(start).join(sep);
+			if (!other.includes(bare)) push(bare);
+		}
+		// If peers share trailing folders after the distinguishing segment (`~/a/sub` vs `~/b/sub`), elide that shared tail.
+		// Never emit `seg/…` if any peer also contains `seg` before its last segment (e.g. `~/a/y/x` vs `~/a/x`, or `~/a/b` vs `~/b`).
+		if (compactMode && start < segs.length - 1) {
+			const seg = segs[start]!;
+			const compact = `${seg}${sep}…`;
+			const collides = peerSegs.some((ps) => ps.slice(0, -1).includes(seg)) || other.includes(compact);
+			if (!collides) push(compact);
+		}
+	}
+	return out;
+}
+
+function sameList(a: readonly string[], b: readonly string[]): boolean {
+	if (a.length !== b.length) return false;
+	for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
+	return true;
+}
+
 /**
  * A path too long for its row keeps its end and drops whole folders from the start: `…/pipaya`. When not even the last folder
  * fits, the row shows nothing: half a folder name (`…rkspace`) says less than no name (the full path stays in the tooltip).
@@ -53,29 +128,30 @@ export function tail(node: HTMLElement, text: string) {
 }
 
 /** Like `tail`, but the last folder always shows: when even it is too wide the row ends it with the CSS ellipsis instead of going blank. */
-export function tailKeepLast(node: HTMLElement, text: string) {
+export function tailKeepLast(node: HTMLElement, text: string | readonly string[]) {
 	return fitTail(node, text, true);
 }
 
-function fitTail(node: HTMLElement, text: string, keepLast: boolean) {
-	let full = text;
+function fitTail(node: HTMLElement, input: string | readonly string[], keepLast: boolean) {
+	const toList = (v: string | readonly string[]) => (typeof v === "string" ? tailCandidates(v) : v.length ? [...v] : [""]);
+	let candidates = toList(input);
 	const fit = () => {
-		for (const c of tailCandidates(full)) {
+		for (const c of candidates) {
 			node.textContent = c;
 			if (node.scrollWidth <= node.clientWidth) return;
 		}
-		const c = tailCandidates(full);
-		node.textContent = keepLast ? c[c.length - 1]! : "";
+		node.textContent = keepLast ? candidates[candidates.length - 1]! : "";
 	};
-	const ro = new ResizeObserver(() => schedule(node, () => fit()));
-	ro.observe(node);
+	const unobserve = observeResize(node, () => schedule(node, fit));
 	fit();
 	return {
-		update(next: string) {
-			full = next;
-			fit();
+		update(next: string | readonly string[]) {
+			const list = toList(next);
+			if (sameList(candidates, list)) return;
+			candidates = list;
+			schedule(node, fit);
 		},
-		destroy: () => (ro.disconnect(), unschedule(node)),
+		destroy: () => (unobserve(), unschedule(node)),
 	};
 }
 

@@ -50,7 +50,9 @@ export function parentPath(path: string, home: string | undefined, label: string
 	if (cut === 0) return "";
 	// only a whole-segment match: a label that merely ends the path (`clone` in `meet-clone`) is not that folder's name
 	if (!/[\\/]/.test(pretty[cut - 1]!)) return pretty;
-	return pretty.slice(0, cut).replace(/[\\/]+$/, "");
+	const head = pretty.slice(0, cut).replace(/[\\/]+$/, "");
+	// a folder right under `/` (`parentPath("/app", ..., "app")`) keeps the root slash as its parent
+	return head || (pretty[0] === "/" ? "/" : "");
 }
 
 /**

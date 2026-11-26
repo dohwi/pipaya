@@ -67,9 +67,13 @@ describe("folder labels", () => {
 		// a renamed folder: its label is nowhere in the path, so the whole path still says where it sits
 		expect(parentPath("/h/a/meet-clone", "/h", "내 앱")).toBe("~/a/meet-clone");
 	});
-	test("the dim path cuts at the OS's own separator", () => {
+	test("the dim path cuts at the OS's own separator and keeps `/` for root children", () => {
 		expect(parentPath("C:\\Users\\me\\work\\app", "C:\\Users\\me", "work/app")).toBe("C:\\Users\\me");
 		expect(parentPath("C:\\Users\\me\\work\\app", "C:\\Users\\me", "me/work/app")).toBe("C:\\Users");
+		expect(parentPath("C:\\app", "C:\\Users\\me", "app")).toBe("C:");
+		expect(parentPath("/app", "/h", "app")).toBe("/");
+		expect(parentPath("/app", undefined, "app")).toBe("/");
+		expect(parentPath("/", undefined, "/")).toBe("");
 	});
 });
 
