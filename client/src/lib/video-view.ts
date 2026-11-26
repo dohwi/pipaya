@@ -11,9 +11,17 @@
  * The player leaves the message while it is open (a transformed ancestor would otherwise trap `position: fixed`) and goes
  * back to where the message drew it on close.
  */
-import { backLayer } from "./dialog";
+import { canInterceptCopyKey, copyFile, fileCopyMessage, supportsFileClipboard, type FileCopyResult } from "./clipboard";
+import { backLayer, modalCount } from "./dialog";
 import { t } from "./i18n";
 import { ICON_PATHS } from "./icons";
+
+export interface VideoPlayerOptions {
+	/** Original file name (e.g. "demo.mp4") used when copying the file to the desktop clipboard. */
+	filename?: string;
+	/** Custom copy handler override (mainly for tests or callers with custom blob loading). */
+	onCopy?: () => Promise<FileCopyResult>;
+}
 
 type Shown = {
 	wrap: HTMLDivElement;
@@ -28,6 +36,67 @@ type Shown = {
 /** At most one player owns the screen. */
 let shown: Shown | null = null;
 
+/** Copy-capable players currently mounted, managed by a single capture-phase Ctrl/Cmd+C listener. */
+const copyHandlers = new Map<HTMLDivElement, () => void>();
+let copyKeyAttached = false;
+
+/** True while any video player is expanded to the CSS fullscreen overlay. */
+export function isVideoFullscreen(): boolean {
+	return shown !== null;
+}
+
+function detachCopyKeyIfEmpty() {
+	if (copyKeyAttached && copyHandlers.size === 0 && typeof window !== "undefined") {
+		window.removeEventListener("keydown", onInlineCopyKey, true);
+		copyKeyAttached = false;
+	}
+}
+
+function pruneDisconnectedPlayers() {
+	for (const wrap of [...copyHandlers.keys()]) {
+		if (!wrap.isConnected) copyHandlers.delete(wrap);
+	}
+	detachCopyKeyIfEmpty();
+}
+
+function onInlineCopyKey(e: KeyboardEvent) {
+	pruneDisconnectedPlayers();
+	if (shown || modalCount() > 0 || !canInterceptCopyKey(e)) return;
+	const active = typeof document !== "undefined" ? document.activeElement : null;
+	let target: (() => void) | null = null;
+	for (const [wrap, run] of copyHandlers) {
+		if (active && wrap.contains(active)) {
+			target = run;
+			break;
+		}
+	}
+	if (!target) {
+		for (const [wrap, run] of copyHandlers) {
+			try {
+				if (wrap.matches(":hover")) {
+					target = run;
+					break;
+				}
+			} catch {
+				/* ignore environments without :hover support */
+			}
+		}
+	}
+	if (!target) return;
+	e.preventDefault();
+	e.stopPropagation();
+	target();
+}
+
+function registerCopyHandler(wrap: HTMLDivElement, run: () => void) {
+	pruneDisconnectedPlayers();
+	copyHandlers.set(wrap, run);
+	if (!copyKeyAttached && typeof window !== "undefined") {
+		window.addEventListener("keydown", onInlineCopyKey, true);
+		copyKeyAttached = true;
+	}
+}
+
 /** How long the bar stays after the last touch or move while the video plays. */
 const IDLE_MS = 2500;
 
@@ -39,10 +108,10 @@ const PLAYER_PATHS = {
 	muted: "M11 5 6.5 9H3.5v6h3L11 19zM16 9.5l5 5M21 9.5l-5 5",
 } as const;
 
-type Glyph = keyof typeof PLAYER_PATHS | "expand" | "shrink";
+type Glyph = keyof typeof PLAYER_PATHS | "expand" | "shrink" | "copy" | "check" | "x";
 
 function glyph(name: Glyph): string {
-	return name === "expand" || name === "shrink" ? ICON_PATHS[name] : PLAYER_PATHS[name];
+	return name in PLAYER_PATHS ? PLAYER_PATHS[name as keyof typeof PLAYER_PATHS] : ICON_PATHS[name as "expand" | "shrink" | "copy" | "check" | "x"];
 }
 
 function svg(name: Glyph): SVGSVGElement {
@@ -97,9 +166,10 @@ export function clock(seconds: number): string {
 }
 
 /** The video as a message shows it: a bare <video> under the page's own bar. */
-export function videoPlayer(src: string): HTMLDivElement {
+export function videoPlayer(src: string, opts?: VideoPlayerOptions): HTMLDivElement {
 	const wrap = document.createElement("div");
 	wrap.className = "wd-video-wrap";
+	wrap.tabIndex = -1;
 	const video = document.createElement("video");
 	video.src = src;
 	video.controls = false;
@@ -124,7 +194,7 @@ export function videoPlayer(src: string): HTMLDivElement {
 	speed.type = "button";
 	speed.className = "wd-video-btn wd-video-speed tap";
 	speed.addEventListener("click", () => (video.playbackRate = nextSpeed(video.playbackRate)));
-	const coarse = () => matchMedia("(pointer: coarse)").matches;
+	const coarse = () => typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches;
 	// on a touch screen (no hover) a tap on the speaker opens the vertical slider instead of muting; 0 is mute there
 	const mute = button("wd-video-mute", "volume", () => {
 		if (coarse()) volBox.classList.toggle("open");
@@ -150,7 +220,62 @@ export function videoPlayer(src: string): HTMLDivElement {
 	volPop.className = "wd-video-volpop";
 	volPop.append(vol);
 	volBox.append(mute, volPop);
-	bar.append(play, time, seek, speed, volBox, full);
+
+	const canCopy = Boolean(opts?.onCopy) || supportsFileClipboard();
+	let copyBtn: HTMLButtonElement | null = null;
+	let noteEl: HTMLDivElement | null = null;
+	let copyIconTimer: ReturnType<typeof setTimeout> | undefined;
+	let noteTimer: ReturnType<typeof setTimeout> | undefined;
+	let copying = false;
+
+	const showNote = (text: string, ok: boolean) => {
+		if (!noteEl) {
+			noteEl = document.createElement("div");
+			noteEl.className = "wd-video-note";
+			noteEl.setAttribute("role", "status");
+			noteEl.setAttribute("aria-live", "polite");
+			wrap.append(noteEl);
+		}
+		noteEl.classList.toggle("err", !ok);
+		noteEl.replaceChildren(svg(ok ? "check" : "x"), document.createTextNode(text));
+		noteEl.classList.add("show");
+		clearTimeout(noteTimer);
+		noteTimer = setTimeout(() => {
+			noteEl?.classList.remove("show");
+		}, ok ? 2000 : 3000);
+	};
+
+	const runCopy = async () => {
+		if (!canCopy || copying) return;
+		copying = true;
+		if (copyBtn) copyBtn.disabled = true;
+		try {
+			const res = opts?.onCopy ? await opts.onCopy() : await copyFile(src, opts?.filename || "video.mp4");
+			const msg = fileCopyMessage(res);
+			if (res === "ok" && copyBtn) {
+				setGlyph(copyBtn, "check");
+				clearTimeout(copyIconTimer);
+				copyIconTimer = setTimeout(() => {
+					if (copyBtn) setGlyph(copyBtn, "copy");
+				}, 1400);
+			}
+			showNote(msg.text, msg.ok);
+		} catch {
+			showNote(t("복사하지 못했습니다"), false);
+		} finally {
+			copying = false;
+			if (copyBtn) copyBtn.disabled = false;
+		}
+	};
+
+	if (canCopy) {
+		copyBtn = button("wd-video-copy", "copy", () => void runCopy());
+		label(copyBtn, t("파일 복사"));
+		bar.append(play, time, seek, speed, volBox, copyBtn, full);
+		registerCopyHandler(wrap, () => void runCopy());
+	} else {
+		bar.append(play, time, seek, speed, volBox, full);
+	}
 	wrap.append(video, bar);
 
 	// ── state → bar
@@ -206,7 +331,10 @@ export function videoPlayer(src: string): HTMLDivElement {
 	video.addEventListener("dblclick", () => (shown?.wrap === wrap ? closeVideoView(wrap) : expand(wrap)));
 	wrap.addEventListener("pointermove", wake);
 	wrap.addEventListener("pointerdown", (e) => {
-		if (!volBox.contains(e.target as Node)) volBox.classList.remove("open");
+		const target = e.target as Element | null;
+		if (target && !volBox.contains(target)) volBox.classList.remove("open");
+		// Focus the player when clicking the video surface so Ctrl/Cmd+C immediately targets it.
+		if (!target?.closest("button, input")) wrap.focus({ preventScroll: true });
 		wake();
 	});
 	wrap.addEventListener("focusin", wake);
@@ -224,6 +352,11 @@ export function videoPlayer(src: string): HTMLDivElement {
 	});
 	// the bar follows the full screen state: expand/close call this after they change it
 	wrap.addEventListener("wd-video-state", sync);
+	wrap.addEventListener("wd-video-dispose", () => {
+		clearTimeout(idle);
+		clearTimeout(copyIconTimer);
+		clearTimeout(noteTimer);
+	});
 	paint();
 	sync();
 	return wrap;
@@ -241,6 +374,15 @@ function expand(wrap: HTMLDivElement) {
 	// Esc and the phone's back button both leave (dialog.ts owns the history entry a back press takes). Esc is taken in
 	// the capture phase: the app's own Escape ("stop the agent") listens on the window and must not act here.
 	const key = (e: KeyboardEvent) => {
+		if (canInterceptCopyKey(e)) {
+			const copy = copyHandlers.get(wrap);
+			if (copy) {
+				e.preventDefault();
+				e.stopPropagation();
+				copy();
+				return;
+			}
+		}
 		if (e.key !== "Escape" || e.defaultPrevented || e.isComposing) return;
 		e.preventDefault();
 		closeVideoView(wrap);
@@ -266,7 +408,19 @@ export function closeVideoView(wrap?: HTMLDivElement) {
 	document.body.style.overflow = it.overflow;
 	// back where the message drew it, unless the message was re-rendered meanwhile (then it is gone for good)
 	if (it.mark.isConnected) it.mark.replaceWith(it.wrap);
-	else it.wrap.remove();
+	else {
+		it.wrap.remove();
+		copyHandlers.delete(it.wrap);
+		detachCopyKeyIfEmpty();
+	}
 	it.wrap.dispatchEvent(new Event("wd-video-state"));
 	it.wrap.querySelector<HTMLElement>(".wd-video-full")?.focus({ preventScroll: true });
+}
+
+/** Detaches a player when its host unmounts: exits fullscreen if active, clears timers, and drops key listeners. */
+export function disposeVideoPlayer(wrap: HTMLDivElement) {
+	closeVideoView(wrap);
+	wrap.dispatchEvent(new Event("wd-video-dispose"));
+	copyHandlers.delete(wrap);
+	detachCopyKeyIfEmpty();
 }

@@ -1,8 +1,110 @@
+<script module lang="ts">
+	import { canInterceptCopyKey, copyFile, fileCopyMessage, supportsFileClipboard } from "../../lib/clipboard";
+	import { modalCount } from "../../lib/dialog";
+	import { baseName } from "../../lib/files";
+	import { app as globalApp } from "../../lib/store.svelte";
+	import { isVideoFullscreen } from "../../lib/video-view";
+
+	type MarkdownCopyEntry = {
+		getContext: () => { sessionId: string | null; mentions: boolean };
+	};
+	const markdownCopyRoots = new Map<HTMLElement, MarkdownCopyEntry>();
+	let markdownCopyAttached = false;
+	let markdownCopying = false;
+
+	function findCopyTarget(root: HTMLElement, selector: string): HTMLElement | null {
+		const active = typeof document !== "undefined" && document.activeElement instanceof HTMLElement ? document.activeElement : null;
+		if (active && root.contains(active)) {
+			const hit = active.closest<HTMLElement>(selector);
+			if (hit && root.contains(hit)) return hit;
+		}
+		try {
+			const hovered = root.querySelectorAll<HTMLElement>(selector);
+			for (const el of hovered) {
+				if (el.matches(":hover")) return el;
+			}
+		} catch {
+			/* ignore environments without :hover support */
+		}
+		return null;
+	}
+
+	function onMarkdownCopyKey(e: KeyboardEvent) {
+		if (!supportsFileClipboard() || modalCount() > 0 || isVideoFullscreen() || !canInterceptCopyKey(e)) return;
+		for (const [root, entry] of markdownCopyRoots) {
+			if (!root.isConnected) continue;
+			const ctx = entry.getContext();
+			const selector = ctx.mentions ? ".wd-audio[data-wd-copy-src], a[data-file], button[data-file]" : ".wd-audio[data-wd-copy-src], a[data-file]";
+			const target = findCopyTarget(root, selector);
+			if (!target) continue;
+			e.preventDefault();
+			e.stopPropagation();
+			if (markdownCopying) return;
+			const audioSrc = target.dataset.wdCopySrc;
+			if (audioSrc) {
+				const audioPath = target.dataset.wdSrc;
+				const name = target.dataset.wdCopyName || (audioPath ? baseName(audioPath) : "audio");
+				const api = globalApp.api;
+				markdownCopying = true;
+				void copyFile(audioSrc, name)
+					.then(async (res) => {
+						if (res === "error" && audioPath && ctx.sessionId && api) {
+							const blob = await api.fetchFile(ctx.sessionId, audioPath);
+							return copyFile(blob, name);
+						}
+						return res;
+					})
+					.then((res) => {
+						const msg = fileCopyMessage(res, res === "ok" ? name : undefined);
+						globalApp.toast(msg.text, msg.ok ? "ok" : "error");
+					})
+					.catch(() => {
+						globalApp.toast(fileCopyMessage("error").text, "error");
+					})
+					.finally(() => (markdownCopying = false));
+				return;
+			}
+			const path = target.dataset.file;
+			const api = globalApp.api;
+			if (!ctx.sessionId || !path || !api) return;
+			const name = baseName(path);
+			markdownCopying = true;
+			void api
+				.fetchFile(ctx.sessionId, path)
+				.then((blob) => copyFile(blob, name))
+				.then((res) => {
+					const msg = fileCopyMessage(res, res === "ok" ? name : undefined);
+					globalApp.toast(msg.text, msg.ok ? "ok" : "error");
+				})
+				.catch(() => {
+					globalApp.toast(fileCopyMessage("error").text, "error");
+				})
+				.finally(() => (markdownCopying = false));
+			return;
+		}
+	}
+
+	function attachMarkdownCopy(root: HTMLElement, getContext: MarkdownCopyEntry["getContext"]) {
+		if (!supportsFileClipboard()) return () => {};
+		markdownCopyRoots.set(root, { getContext });
+		if (!markdownCopyAttached && typeof window !== "undefined") {
+			window.addEventListener("keydown", onMarkdownCopyKey, true);
+			markdownCopyAttached = true;
+		}
+		return () => {
+			markdownCopyRoots.delete(root);
+			if (markdownCopyAttached && markdownCopyRoots.size === 0 && typeof window !== "undefined") {
+				window.removeEventListener("keydown", onMarkdownCopyKey, true);
+				markdownCopyAttached = false;
+			}
+		};
+	}
+</script>
+
 <script lang="ts">
 	import { onDestroy, tick, untrack } from "svelte";
 	import { getLang, t } from "../../lib/i18n";
 	import { app } from "../../lib/store.svelte";
-	import { baseName } from "../../lib/files";
 	import { awaitsHighlight, isSafeExternalUrl, renderMarkdown, renderStreaming } from "../../lib/markdown";
 	import { onHighlightReady } from "../../lib/code-highlight";
 	import { copyText } from "../../lib/clipboard";
@@ -10,7 +112,7 @@
 	import { sharedMedia } from "../../lib/media-urls";
 	import { patchHtml, type PatchInput } from "../../lib/patch-html";
 	import { decorateMarkdownTokens, mentionSignature } from "../../lib/markdown-tokens";
-	import { closeVideoView, videoPlayer } from "../../lib/video-view";
+	import { disposeVideoPlayer, videoPlayer } from "../../lib/video-view";
 	import { getPane } from "../../lib/pane";
 	import type { MentionTarget } from "../../lib/peers";
 	import { hideMentionHover, scheduleMentionHoverHide, showMentionHover } from "../../lib/mention-hover.svelte";
@@ -170,9 +272,14 @@
 			sharedMedia.prefetch(mediaKey(owner, "image", path), loadSlotBlob(owner, "image", path));
 		}
 	}
+	$effect(() => {
+		if (!root) return;
+		return attachMarkdownCopy(root, () => ({ sessionId, mentions }));
+	});
 	function applyLoadedSlot(slot: HTMLElement, kind: "image" | "audio" | "video", src: string) {
+		const path = slot.dataset.wdSrc ?? "";
 		if (kind === "video") {
-			const player = videoPlayer(src);
+			const player = videoPlayer(src, { filename: path ? baseName(path) : undefined });
 			videos.push(player);
 			slot.replaceWith(player);
 		} else if (kind === "audio") {
@@ -181,6 +288,11 @@
 			audio.controls = true;
 			audio.preload = "metadata";
 			audio.className = "wd-audio";
+			audio.dataset.wdCopySrc = src;
+			if (path) {
+				audio.dataset.wdSrc = path;
+				audio.dataset.wdCopyName = baseName(path);
+			}
 			slot.replaceWith(audio);
 		} else {
 			const img = document.createElement("img");
@@ -240,7 +352,7 @@
 	onDestroy(() => {
 		for (const id of copyTimers) clearTimeout(id);
 		copyTimers.clear();
-		for (const player of videos) closeVideoView(player);
+		for (const player of videos) disposeVideoPlayer(player);
 		videos.length = 0;
 	});
 
