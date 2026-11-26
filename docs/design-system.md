@@ -70,9 +70,7 @@ share one left and one right line. Never write a raw side padding in a dialog; u
   `input/textarea/select` no longer reset `outline`. No `0 0 0 3px var(--accent-soft)`.
 - **Disabled is explicit.** `--disabled-bg` / `--disabled-border` / `--disabled-fg` (dark #161619 / #26262d / #63636d, light #f5f5f7 / #e4e4e7 / #8f8f99).
   No blanket `opacity` on a `:disabled` / `.disabled` rule (`ui-lint` `disabled`): on dark it made controls vanish.
-- **Borderless tinted groups, no box-in-box.** `.set-group` and a list `ListItem` are borderless tinted surfaces (`--radius-sm` 8px); inside a `.set-group`
-  `--item-bg` makes the item the page colour. Never a bordered card inside a bordered dialog or group. A selected row is a Hairline Inset Fill
-  (`--bg-active` + 1px `--border-strong`, `--radius-xs`/6px); inactive siblings carry `1px solid transparent` so selecting never moves the layout.
+- **Hairline tinted groups, no box-in-box.** `.set-group`, `SessionsPanel .group`, and dialog-level `ListItem` / `EmptyState.card` surfaces are tinted groups with a subtle outer `1px solid var(--border)` hairline (`--radius-sm` 8px; light `#e4e4e7`, dark `#2b2b30`), and sidebars carry a `1px solid var(--border)` boundary hairline. Inside a bordered `.set-group`, `--item-bg` (`var(--bg)`) and `--item-border: transparent` keep inner rows/cards (`ListItem`, `EmptyState`, `ModelPage .capsw`, `ExtensionView` cards/lists) borderless or separated by `1px` dividers only — never a bordered card inside another bordered card. A selected row is a Hairline Inset Fill (`--bg-active` + 1px `--border-strong`, `--radius-xs`/6px); inactive siblings carry `1px solid transparent` so selecting never moves the layout.
 - **Status is a Badge or a quieter name**, never a decorative leading dot (the settings nav's live state is a `Badge`, off is `--text-faint`).
 - **Motion is restrained.** `--motion-fast/normal/slow` = 120 / 160 / 220ms, `--ease` calm ease-out; no `--ease-spring`, no idle shake, no expanding
   ping ring, no `box-shadow` in a `transition`. "Working" is a steady tinted border (`.glow-working`, no loop) and the logo / pin opacity breath.

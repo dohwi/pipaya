@@ -567,7 +567,7 @@
 	thead th { border-top: 0; background: var(--bg-elev); font-weight: 600; color: var(--text-dim); white-space: nowrap; }
 	td { overflow-wrap: anywhere; min-width: 6rem; }
 
-	.list { display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; border: 1px solid var(--border); border-radius: var(--radius-sm); }
+	.list { display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; background: var(--item-bg, transparent); border: 1px solid var(--item-border, var(--border)); border-radius: var(--radius-sm); }
 	/* Keep list rows compact: title and description sit on one baseline when wide, wrapping tightly on narrow panes. */
 	.list li { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 12px; }
 	.list li + li { border-top: 1px solid var(--border); }
