@@ -1,6 +1,6 @@
 /**
- * Whether the caret sits on the first / last *visual* line of a textarea (soft-wrapped lines count).
- * Measured with a hidden mirror element that copies the textarea's text metrics.
+ * Whether the caret sits on the first / last *visual* line of a composer input (soft-wrapped lines count).
+ * Supports both a contenteditable element (measured directly from Range client rects) and a plain `<textarea>`.
  */
 const COPY = [
 	"boxSizing", "width", "fontFamily", "fontSize", "fontWeight", "fontStyle", "letterSpacing", "lineHeight",
@@ -37,12 +37,63 @@ function markerTops(ta: HTMLTextAreaElement, positions: number[]): number[] {
 	}
 }
 
-export function caretOnFirstVisualLine(ta: HTMLTextAreaElement): boolean {
-	const [at, first] = markerTops(ta, [ta.selectionStart, 0]);
-	return at === first;
+function caretRectOf(el: HTMLElement): DOMRect | null {
+	const sel = el.ownerDocument.getSelection();
+	if (!sel || sel.rangeCount === 0) return null;
+	const r = sel.getRangeAt(0);
+	if (!el.contains(r.startContainer)) return null;
+	const rects = r.getClientRects();
+	for (let i = 0; i < rects.length; i++) {
+		if (rects[i]!.height > 0) return rects[i]!;
+	}
+	const box = r.getBoundingClientRect();
+	if (box.height > 0) return box;
+	return null;
 }
 
-export function caretOnLastVisualLine(ta: HTMLTextAreaElement): boolean {
-	const [at, last] = markerTops(ta, [ta.selectionStart, ta.value.length]);
-	return at === last;
+function contentBounds(el: HTMLElement): { top: number; bottom: number; lineHeight: number } {
+	const cs = getComputedStyle(el);
+	const lineHeight = parseFloat(cs.lineHeight) || 24;
+	const padTop = parseFloat(cs.paddingTop) || 0;
+	const padBottom = parseFloat(cs.paddingBottom) || 0;
+	const elRect = el.getBoundingClientRect();
+	const top = elRect.top + padTop - el.scrollTop;
+	const bottom = elRect.top + el.scrollHeight - padBottom - el.scrollTop;
+	return { top, bottom, lineHeight };
+}
+
+export function caretOnFirstVisualLine(el: HTMLElement): boolean {
+	if (el instanceof HTMLTextAreaElement) {
+		const [at, first] = markerTops(el, [el.selectionStart, 0]);
+		return at === first;
+	}
+	if (!el.childNodes.length) return true;
+	const rect = caretRectOf(el);
+	const { top, lineHeight } = contentBounds(el);
+	if (!rect) {
+		const sel = el.ownerDocument.getSelection();
+		if (!sel || sel.rangeCount === 0) return true;
+		const r = sel.getRangeAt(0);
+		return r.startContainer === el && r.startOffset === 0;
+	}
+	return rect.top < top + lineHeight * 0.6;
+}
+
+export function caretOnLastVisualLine(el: HTMLElement): boolean {
+	if (el instanceof HTMLTextAreaElement) {
+		const [at, last] = markerTops(el, [el.selectionStart, el.value.length]);
+		return at === last;
+	}
+	if (!el.childNodes.length) return true;
+	const rect = caretRectOf(el);
+	const { bottom, lineHeight } = contentBounds(el);
+	if (!rect) {
+		const sel = el.ownerDocument.getSelection();
+		if (!sel || sel.rangeCount === 0) return true;
+		const r = sel.getRangeAt(0);
+		const lastIdx = el.childNodes.length;
+		const hasSentinel = lastIdx > 0 && (el.lastChild as HTMLElement)?.dataset?.sentinel !== undefined;
+		return r.endContainer === el && r.endOffset >= lastIdx - (hasSentinel ? 1 : 0);
+	}
+	return rect.bottom > bottom - lineHeight * 0.6;
 }

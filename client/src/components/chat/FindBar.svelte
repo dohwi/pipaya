@@ -72,7 +72,7 @@
 		ranges = [];
 		paint();
 		// give the keyboard back to the composer
-		bar?.closest(".pane")?.querySelector<HTMLTextAreaElement>("textarea")?.focus();
+		bar?.closest(".pane")?.querySelector<HTMLElement>("[data-composer], textarea")?.focus();
 	}
 
 	// Ctrl+F: the focused pane opens or closes its bar.

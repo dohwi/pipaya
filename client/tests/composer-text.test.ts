@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { dropImageToken, extractSkillNames, insertToken, knownMention, mentionAt, mirrorHtml, replaceMention, slashAt, splitTokens } from "../src/lib/composer-text";
+import { dropImageToken, extractSkillNames, insertToken, knownMention, mentionAt, mirrorHtml, replaceMention, slashAt, splitTokens, tokenizeComposer } from "../src/lib/composer-text";
 
 describe("mentionAt", () => {
 	test("finds the token that ends at the caret", () => {
@@ -158,6 +158,31 @@ describe("splitTokens", () => {
 			{ text: "/skill:review-extra /skill:unknown /skill:review_x foo/skill:review" },
 		]);
 		expect(splitTokens("/skill:review", known)).toEqual([{ text: "/skill:review" }]);
+	});
+});
+
+describe("tokenizeComposer", () => {
+	const known = { commands: ["prompt:daily", "snip:fix"], skills: [{ name: "review" }], mentions: ["미나"], images: 2, paths: ["LICENSE", "src/a.ts"] };
+	test("splits all known token kinds, keeps particles outside, and distinguishes prompts from skills", () => {
+		expect(tokenizeComposer("#image1 #LICENSE #src/b.ts @미나랑 /skill:review로 /prompt:daily /snip:fix #nope", known)).toEqual([
+			{ kind: "image", text: "#image1", name: "1" },
+			{ kind: "text", text: " " },
+			{ kind: "file", text: "#LICENSE", name: "LICENSE" },
+			{ kind: "text", text: " " },
+			{ kind: "file", text: "#src/b.ts", name: "src/b.ts" },
+			{ kind: "text", text: " " },
+			{ kind: "mention", text: "@미나", name: "미나" },
+			{ kind: "text", text: "랑 " },
+			{ kind: "skill", text: "/skill:review", name: "review" },
+			{ kind: "text", text: "로 " },
+			{ kind: "prompt", text: "/prompt:daily", name: "daily" },
+			{ kind: "text", text: " " },
+			{ kind: "skill", text: "/snip:fix", name: "snip:fix" },
+			{ kind: "text", text: " #nope" },
+		]);
+	});
+	test("returns empty array for empty text", () => {
+		expect(tokenizeComposer("", known)).toEqual([]);
 	});
 });
 

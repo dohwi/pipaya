@@ -207,8 +207,9 @@ describe("shortcut catalogue", () => {
 	});
 
 	test("Shift+Tab cycles the thinking level from the composer only; elsewhere it moves focus back", () => {
-		const composer = { tagName: "TEXTAREA", dataset: { composer: "" } };
+		const composer = { tagName: "DIV", isContentEditable: true, dataset: { composer: "" } };
 		expect(tabComboYieldsFocus("Shift+Tab", composer)).toBe(false);
+		expect(tabComboYieldsFocus("Shift+Tab", { tagName: "TEXTAREA", dataset: { composer: "" } })).toBe(false);
 		expect(tabComboYieldsFocus("Shift+Tab", { tagName: "BODY" })).toBe(false);
 		expect(tabComboYieldsFocus("Shift+Tab", null)).toBe(false);
 		expect(tabComboYieldsFocus("Shift+Tab", { tagName: "BUTTON" })).toBe(true); // a sidebar row
@@ -228,9 +229,10 @@ describe("shortcut catalogue", () => {
 	});
 
 	test("Esc stops the agent only when nothing else is using it", () => {
-		const composer = { tagName: "TEXTAREA", dataset: { composer: "" } };
+		const composer = { tagName: "DIV", isContentEditable: true, dataset: { composer: "" } };
 		const base = { busy: true, overlayOpen: false, target: composer };
 		expect(escapeShouldStop(base)).toBe(true);
+		expect(escapeShouldStop({ ...base, target: { tagName: "TEXTAREA", dataset: { composer: "" } } })).toBe(true);
 		expect(escapeShouldStop({ ...base, target: { tagName: "BODY" } })).toBe(true);
 		expect(escapeShouldStop({ ...base, target: null })).toBe(true);
 		expect(escapeShouldStop({ ...base, busy: false })).toBe(false); // nothing running
@@ -255,6 +257,7 @@ describe("shortcut catalogue", () => {
 		expect(renameShouldFallThrough({ ...base, target: { tagName: "INPUT" } })).toBe(false);
 		expect(renameShouldFallThrough({ ...base, target: { tagName: "TEXTAREA" } })).toBe(false);
 		expect(renameShouldFallThrough({ ...base, target: { tagName: "TEXTAREA", dataset: { composer: "" } } })).toBe(true); // the composer takes focus on a switch
+		expect(renameShouldFallThrough({ ...base, target: { tagName: "DIV", isContentEditable: true, dataset: { composer: "" } } })).toBe(true);
 		expect(renameShouldFallThrough({ ...base, target: { tagName: "SELECT" } })).toBe(false);
 		expect(renameShouldFallThrough({ ...base, target: { tagName: "DIV", isContentEditable: true } })).toBe(false);
 	});
@@ -262,6 +265,8 @@ describe("shortcut catalogue", () => {
 	test("Esc shrinks the zoomed pane only when nothing else uses it", () => {
 		expect(escapeShouldUnzoom({ overlayOpen: false, target: { tagName: "BODY" } })).toBe(true);
 		expect(escapeShouldUnzoom({ overlayOpen: false, target: { tagName: "TEXTAREA", dataset: { composer: "" } } })).toBe(true); // the input box
+		expect(escapeShouldUnzoom({ overlayOpen: false, target: { tagName: "DIV", isContentEditable: true, dataset: { composer: "" } } })).toBe(true);
+		expect(escapeShouldUnzoom({ overlayOpen: false, target: { tagName: "DIV", isContentEditable: true } })).toBe(false);
 		expect(escapeShouldUnzoom({ overlayOpen: true, target: { tagName: "BODY" } })).toBe(false); // a menu closes first
 		expect(escapeShouldUnzoom({ overlayOpen: false, target: { tagName: "INPUT" } })).toBe(false); // a rename field cancels
 	});

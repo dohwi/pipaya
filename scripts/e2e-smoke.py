@@ -207,11 +207,11 @@ def run_flows(a, out, client_url, api_base, token, api, console, work):
 
         def b_send():
             composer().fill("hello smoke")
-            expect(composer()).to_have_value("hello smoke")
+            expect(composer()).to_have_attribute("data-value", "hello smoke")
             page.get_by_role("button", name="보내기", exact=True).click()
             expect(page.locator('[data-part="message.user"]').get_by_text("hello smoke")).to_be_visible()
             expect(page.get_by_text("Echo: hello smoke")).to_be_visible()
-            expect(composer()).to_have_value("")
+            expect(composer()).to_have_attribute("data-value", "")
 
         def b_shortcut_toggles():
             dialog = page.get_by_role("dialog")
@@ -300,7 +300,7 @@ def run_flows(a, out, client_url, api_base, token, api, console, work):
             expect(queue.get_by_role("option")).to_have_count(3)
             page.keyboard.up("Enter")
             expect(dialog).to_have_count(0)
-            expect(running_input).to_have_value("queue second")
+            expect(running_input).to_have_attribute("data-value", "queue second")
             expect(running_input).to_be_focused()
             expect(waiting.get_by_role("listitem")).to_have_count(2)
             expect(waiting.get_by_text("queue second")).to_have_count(0)
@@ -310,7 +310,7 @@ def run_flows(a, out, client_url, api_base, token, api, console, work):
             expect(page.get_by_role("dialog", name="대기열 1")).to_be_visible()
             dialog.get_by_role("button", name="대기열에서 빼기").click()
             expect(dialog).to_have_count(0)
-            expect(running_input).to_have_value("queue first\nqueue second")
+            expect(running_input).to_have_attribute("data-value", "queue first\nqueue second")
             expect(waiting.get_by_role("listitem")).to_have_count(1)
             expect(waiting).to_contain_text("queue third")
             page.get_by_role("button", name="중지", exact=True).click()
@@ -319,11 +319,11 @@ def run_flows(a, out, client_url, api_base, token, api, console, work):
 
         def b2_draft_survives_reload():
             composer().fill("kept across a reload")
-            expect(composer()).to_have_value("kept across a reload")
+            expect(composer()).to_have_attribute("data-value", "kept across a reload")
             page.reload()  # a restart: the page and its memory are gone, only storage is left
-            expect(composer()).to_have_value("kept across a reload")
+            expect(composer()).to_have_attribute("data-value", "kept across a reload")
             composer().fill("")
-            expect(composer()).to_have_value("")
+            expect(composer()).to_have_attribute("data-value", "")
 
         def b3_attachments_survive_reload():
             png = work / "dot.png"
@@ -341,11 +341,13 @@ def run_flows(a, out, client_url, api_base, token, api, console, work):
             chip = page.get_by_role("button", name="note.txt 미리보기")
             expect(thumb).to_be_visible()
             expect(chip).to_be_visible()
-            expect(composer()).to_have_value(re.compile(r"#image1"))
+            expect(composer()).to_have_attribute("data-value", re.compile(r"#image1"))
+            expect(composer().locator('.tok.image svg.ic')).to_have_count(1)
             composer().press("End")
             composer().type(" look")
             page.reload()
-            expect(composer()).to_have_value(re.compile(r"#image1\s+look"))
+            expect(composer()).to_have_attribute("data-value", re.compile(r"#image1\s+look"))
+            expect(composer().locator('.tok.image svg.ic')).to_have_count(1)
             expect(thumb).to_be_visible()
             expect(page.get_by_role("img", name="dot.png")).to_have_js_property("naturalWidth", 1)
             expect(chip).to_be_visible()
@@ -355,7 +357,7 @@ def run_flows(a, out, client_url, api_base, token, api, console, work):
             page.reload()
             expect(page.get_by_role("button", name="dot.png 크게 보기")).to_have_count(0)
             expect(page.get_by_role("button", name="note.txt 미리보기")).to_have_count(0)
-            expect(composer()).to_have_value("")
+            expect(composer()).to_have_attribute("data-value", "")
 
         def c_stream_auth():
             events = [u for u in requests if re.search(r"/events(\?|$)", u)]
@@ -375,7 +377,7 @@ def run_flows(a, out, client_url, api_base, token, api, console, work):
             page.mouse.move(700, 400)  # the "+" menu opens on hover and can stay open under the pointer; it does not matter here
             expect(composer()).to_be_empty()
             composer().fill("will fail")
-            expect(composer()).to_have_value("will fail")
+            expect(composer()).to_have_attribute("data-value", "will fail")
             page.get_by_role("button", name="보내기", exact=True).click()
             status = page.get_by_role("status").filter(has_text="다시 시도 중")
             expect(status).to_be_visible()
