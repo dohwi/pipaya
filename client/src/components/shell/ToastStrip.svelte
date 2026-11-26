@@ -240,7 +240,7 @@
 					{:else}
 						{@const notice = entry.item}
 						<div class="inner notice-inner" use:measureCard={notice.id}>
-							<button type="button" class="go" onclick={() => onNoticeClick(notice)}>
+							<button type="button" class="go wide" onclick={() => onNoticeClick(notice)}>
 								<span class="badge-ic" aria-hidden="true">
 									<AgentBadge id={notice.sid} state={notice.tone} size={18} server={notice.server} />
 								</span>

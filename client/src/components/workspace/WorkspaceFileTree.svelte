@@ -202,7 +202,7 @@
 			{@const isOpen = !!workspaceViewer.expandedDirs[entry.path]}
 			<button
 				type="button"
-				class="trow dir"
+				class="trow dir wide"
 				draggable="true"
 				ondragstart={(e) => startFileDrag(e, entry.path, true)}
 				style:padding-left="{12 + depth * 16}px"
@@ -220,7 +220,7 @@
 		{:else}
 			<button
 				type="button"
-				class="trow file"
+				class="trow file wide"
 				draggable="true"
 				ondragstart={(e) => startFileDrag(e, entry.path, false)}
 				class:on={workspaceViewer.activeFile === entry.path}
@@ -402,7 +402,8 @@
 							{@const dirLabel = parts?.dir.replace(/\/$/, "") ?? ""}
 							<button
 								type="button"
-								class="trow file search-row"
+								class="trow file search-row wide"
+								class:has-dir={!!dirLabel}
 								draggable="true"
 								ondragstart={(e) => startFileDrag(e, entry.path, false)}
 								class:on={workspaceViewer.activeFile === entry.path}
@@ -437,7 +438,8 @@
 						{@const dirLabel = parts?.dir.replace(/\/$/, "") ?? ""}
 						<button
 							type="button"
-							class="trow file changed-row"
+							class="trow file changed-row wide"
+							class:has-dir={!!dirLabel}
 							draggable="true"
 							ondragstart={(e) => startFileDrag(e, ch.path, false)}
 							class:on={workspaceViewer.activeFile === ch.path}
@@ -923,6 +925,10 @@
 		padding: 4px 12px;
 		gap: 8px;
 		content-visibility: auto;
+		contain-intrinsic-size: auto 28px;
+	}
+	.changed-row.has-dir,
+	.search-row.has-dir {
 		contain-intrinsic-size: auto 44px;
 	}
 	.tstack {

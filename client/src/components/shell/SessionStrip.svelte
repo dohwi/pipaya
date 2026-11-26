@@ -55,7 +55,7 @@
 			{@const who = whoOf(x.id)}
 			{#if rename.is(x.id)}
 				<InlineRenameField
-					variant="bar"
+					variant="tab"
 					class="strip-rename"
 					value={rename.draft}
 					ariaLabel={t("이름 바꾸기")}
@@ -65,7 +65,7 @@
 				/>
 			{:else}
 				<span class="gitem">
-				<button class="gchip tap" tabindex={open && x.id === app.activeId ? 0 : -1} class:on={open && x.id === app.activeId} aria-current={open && x.id === app.activeId ? "true" : undefined} onclick={() => (workspaceViewer.deactivateFile(), app.openSession(x.id))} onkeydown={(e) => e.key === RENAME_KEY && (e.preventDefault(), rename.start(x.id, x.title))} class:carried={drag.id === x.id} use:dragSource={{ id: x.id, menu: (pt) => chipMenu(pt, x.id, x.title) }} title="{who ? `${who.title} · ` : ''}{sessionTitle(x.title)} · {ACTIVITY_LABEL[st]}">
+				<button class="gchip wide tap" tabindex={open && x.id === app.activeId ? 0 : -1} class:on={open && x.id === app.activeId} aria-current={open && x.id === app.activeId ? "true" : undefined} onclick={() => (workspaceViewer.deactivateFile(), app.openSession(x.id))} onkeydown={(e) => e.key === RENAME_KEY && (e.preventDefault(), rename.start(x.id, x.title))} class:carried={drag.id === x.id} use:dragSource={{ id: x.id, menu: (pt) => chipMenu(pt, x.id, x.title) }} title="{who ? `${who.title} · ` : ''}{sessionTitle(x.title)} · {ACTIVITY_LABEL[st]}">
 					{#if app.terminal(x.id)}<span class="tico"><Icon name="terminal" /></span>{:else}<AgentBadge id={x.id} state={st} size={16} />{/if}
 					{#if who}<Handle text={who.text} state={st} />{/if}<span class="t">{sessionTitle(x.title)}</span>
 				</button>
@@ -197,9 +197,18 @@
 			color: var(--text);
 		}
 	}
-	.strip :global(.strip-rename) {
+	/* outrank .inline-rename.tab (0,2,0 -> 0,3,0) so bundle CSS order never shrinks the strip field to 140px */
+	.strip :global(.inline-rename.strip-rename) {
 		flex: none;
 		width: 160px;
+	}
+	/* on desktop the strip chip is 28px tall (vs 22px in a compact mobile strip), so restore bar height/padding above 600px */
+	@media (min-width: 601px) {
+		.strip :global(.inline-rename.strip-rename) {
+			height: 28px;
+			padding: 0 8px;
+			border-radius: var(--radius-sm);
+		}
 	}
 	.t {
 		min-width: 0;

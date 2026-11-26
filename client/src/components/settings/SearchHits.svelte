@@ -9,7 +9,7 @@
 {#if !hits.length}<span class="hint">{t("검색 결과가 없습니다")}</span>{/if}
 <ul class="hits">
 	{#each hits as h (h.key)}
-		<li><button onclick={() => onpick(h)}>
+		<li><button class="wide" onclick={() => onpick(h)}>
 			<span class="ht">{h.title}</span>
 			<span class="hw">{h.where}</span>
 			{#if h.combo}<span class="hc">{h.combo}</span>{/if}

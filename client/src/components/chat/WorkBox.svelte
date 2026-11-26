@@ -80,9 +80,9 @@
 	 */
 	const PEEK_LINES = 2;
 	const LINE_H = 18;
-	/** Natural height of the preview text. The window follows it, up to PEEK_LINES lines, so a short output stays short. */
-	let peekH = $state(0);
-	const peekWin = $derived(Math.min(peekH, PEEK_LINES * LINE_H));
+	/** Natural height of the preview text. Starts null so the first paint uses natural height (capped at PEEK_LINES) instead of 0px. */
+	let peekH = $state<number | null>(null);
+	const peekWin = $derived(peekH === null ? null : Math.min(peekH, PEEK_LINES * LINE_H));
 	// long lines wrap, so keep more than fit; the box clips the top
 	const tail = (text: string) => peekLines(text, PEEK_LINES * 3);
 	const text = (v: unknown) => (typeof v === "string" ? v : "");
@@ -189,7 +189,7 @@
 		<!-- A mouse shortcut to the same steps the summary line above opens (hidden from assistive tech on purpose). -->
 		<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
 		<div class="peek mono {shownPeek.kind}" data-fold-toggle onclick={() => (open = true)} aria-hidden="true" in:collapseIn out:collapseOut>
-			<div class="pin" class:clip={peekH > PEEK_LINES * LINE_H} style:height="{peekWin}px">
+			<div class="pin" class:clip={peekH !== null && peekH > PEEK_LINES * LINE_H} style:height={peekWin === null ? undefined : `${peekWin}px`} style:max-height="{PEEK_LINES * LINE_H}px">
 				<div class="inner" bind:clientHeight={peekH}>
 					{#each shownPeek.lines as l, i (i)}
 						<div class="pl">{l}</div>

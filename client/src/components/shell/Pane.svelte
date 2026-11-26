@@ -265,7 +265,7 @@
 		flex: 1;
 		min-width: 0;
 		display: flex;
-		align-items: baseline;
+		align-items: center;
 		gap: 8px;
 	}
 	/* pushed to the right edge of the title area, next to the badge / unlink button */
@@ -299,6 +299,7 @@
 		min-width: 0;
 		margin-left: auto;
 		font-size: var(--fs-2xs);
+		line-height: 16px;
 		color: var(--text-faint);
 		white-space: nowrap;
 		overflow: hidden;
@@ -311,6 +312,7 @@
 		text-overflow: ellipsis;
 		white-space: nowrap;
 		font-size: var(--fs-xs);
+		line-height: 16px;
 		font-weight: 600;
 		color: var(--text-dim);
 	}

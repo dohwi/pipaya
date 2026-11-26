@@ -105,8 +105,14 @@
 	/* variants */
 	.outline {
 		background: transparent;
-		border: 1px solid var(--badge-border, var(--border-strong));
+		/* inset ring instead of a 1px border so .outline and .soft keep identical inner height on 18px .sm badges */
+		box-shadow: inset 0 0 0 1px var(--badge-border, var(--border-strong));
 		font-weight: 500;
+	}
+	@media (forced-colors: active) {
+		.outline {
+			border: 1px solid CanvasText;
+		}
 	}
 	.outline.neutral {
 		--badge-fg: var(--text-faint);

@@ -845,10 +845,6 @@
 		.t {
 			flex: 0 1 auto;
 		}
-		.tab :global(.inline-rename) {
-			flex: none;
-			width: 140px;
-		}
 		.tail {
 			width: 8px; /* no "+" after the tabs here: the strip's own air at its end */
 		}

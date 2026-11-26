@@ -125,10 +125,10 @@
 				<span class="chev" class:folded><Icon name="chevron-down" /></span>
 			</button>
 		{/if}
-		<button class="dirtoggle" onclick={() => (d.tabs.length ? app.openDir(n.server.id, d.path) : undefined)} aria-disabled={empty ? "true" : undefined} aria-current={cur ? "true" : undefined} title={parent}>
-			<span class="dicon">{#if branch}<Icon name="fork" />{:else}<Icon name="folder" />{/if}{#if pinned}<PinMark />{/if}</span>
-			<span class="dlabel">
-				{#if sb.dirRename.is(key)}
+		{#if sb.dirRename.is(key)}
+			<div class="dirtoggle">
+				<span class="dicon">{#if branch}<Icon name="fork" />{:else}<Icon name="folder" />{/if}{#if pinned}<PinMark />{/if}</span>
+				<span class="dlabel">
 					<InlineRenameField
 						variant="heading"
 						value={sb.dirRename.draft}
@@ -139,27 +139,34 @@
 						stopClick
 						stopKeys
 					/>
-				{:else if usesBranch && branch}
-					<!-- a path inside the worktree keeps its distinguishing folder (`…/alpha/app` instead of collapsing twins to `…/app`) -->
-					<span class="dname mono" title={branch.name} use:tailKeepLast={branchNameHints}></span>
-					{#if branch.sub}
-						<span class="dparent mono" use:tail={branch.sub}></span>
-					{:else if twin && above}
-						<span class="dparent mono twin" use:tailKeepLast={twinHints}></span>
-					{/if}
-				{:else}
-					<span class="dname">{label}</span>
-					{#if above && (inProject !== "git" || twin)}
-						{#if twin}
+				</span>
+			</div>
+		{:else}
+			<button class="dirtoggle wide" onclick={() => (d.tabs.length ? app.openDir(n.server.id, d.path) : undefined)} aria-disabled={empty ? "true" : undefined} aria-current={cur ? "true" : undefined} title={parent}>
+				<span class="dicon">{#if branch}<Icon name="fork" />{:else}<Icon name="folder" />{/if}{#if pinned}<PinMark />{/if}</span>
+				<span class="dlabel">
+					{#if usesBranch && branch}
+						<!-- a path inside the worktree keeps its distinguishing folder (`…/alpha/app` instead of collapsing twins to `…/app`) -->
+						<span class="dname mono" title={branch.name} use:tailKeepLast={branchNameHints}></span>
+						{#if branch.sub}
+							<span class="dparent mono" use:tail={branch.sub}></span>
+						{:else if twin && above}
 							<span class="dparent mono twin" use:tailKeepLast={twinHints}></span>
-						{:else}
-							<span class="dparent mono" use:tail={above}></span>
+						{/if}
+					{:else}
+						<span class="dname">{label}</span>
+						{#if above && (inProject !== "git" || twin)}
+							{#if twin}
+								<span class="dparent mono twin" use:tailKeepLast={twinHints}></span>
+							{:else}
+								<span class="dparent mono" use:tail={above}></span>
+							{/if}
 						{/if}
 					{/if}
-				{/if}
-			</span>
-			{#if folded && dcount}<span class="cbadge tint {ACTIVITY_TONE[dstate]}" title={t("{n}개", { n: dcount }) + (dstate !== "idle" ? ` · ${ACTIVITY_LABEL[dstate]}` : "")}>{dcount}</span>{/if}
-		</button>
+				</span>
+				{#if folded && dcount}<span class="cbadge tint {ACTIVITY_TONE[dstate]}" title={t("{n}개", { n: dcount }) + (dstate !== "idle" ? ` · ${ACTIVITY_LABEL[dstate]}` : "")}>{dcount}</span>{/if}
+			</button>
+		{/if}
 		<ListButton serverId={n.server.id} filter={{ cwd: d.path }} name={t("삭제된 대화 목록")} tip={t("이 폴더의 삭제된 대화 목록")} />
 		<NewButton {n} workdir={asWorkdir(d.path, n.root)} {key} name={parent} tip={t("이 폴더에서 새 대화 또는 터미널")} />
 	</div>
