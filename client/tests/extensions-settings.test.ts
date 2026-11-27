@@ -274,12 +274,12 @@ const request = (host: ExtensionHostType, id: string, method: string, args: unkn
 	(host as unknown as { request(id: string, m: string, a: unknown[], r: unknown): any }).request(id, method, args, {});
 
 describe("settings gating, defaults and sdk semantics", () => {
-	test("enable is refused with a Korean reason while required settings are missing; state stays disabled", async () => {
+	test("enable is refused with a localized reason while required settings are missing; state stays disabled", async () => {
 		seed([{ package: parsePackage(cfg()), settings: {} }]); // stored by an earlier version: already "configured"
 		const { host } = await boot(() => null);
 		const id = "example.cfg";
-		await expect(host.enable(id)).rejects.toThrow("필수 설정을 확인하세요");
-		await expect(host.enable(id)).rejects.toThrow("서버 주소: 필수 항목입니다");
+		await expect(host.enable(id)).rejects.toThrow("Check the required settings");
+		await expect(host.enable(id)).rejects.toThrow("서버 주소: This field is required");
 		expect(host.find(id).state).toBe("disabled");
 		expect(host.find(id).enabled).toBe(false);
 		expect(host.settingsProblem(id)).toContain("서버 주소");
@@ -293,7 +293,7 @@ describe("settings gating, defaults and sdk semantics", () => {
 		const { host } = await boot(() => null);
 		expect(host.installed[0]!.state).toBe("disabled");
 		expect(host.installed[0]!.enabled).toBe(false);
-		expect(host.installed[0]!.error).toContain("필수 설정");
+		expect(host.installed[0]!.error).toContain("Check the required settings");
 		expect(((globalThis as any).__fakeRuntimes as unknown[]).length).toBe(0);
 	});
 	test("setSettings validates against the schema and keeps the old value on error", async () => {
@@ -301,8 +301,8 @@ describe("settings gating, defaults and sdk semantics", () => {
 		const id = host.install(cfg());
 		await host.setSettings(id, { httpOrigin: "https://a.test", ignored: 1 });
 		expect(host.find(id).settings).toEqual({ httpOrigin: "https://a.test", interval: 30 });
-		expect(() => host.setSettings(id, { httpOrigin: "nope" })).toThrow("올바른 주소(origin)가 아닙니다");
-		expect(() => host.setSettings(id, { httpOrigin: "https://a.test", interval: 5 })).toThrow("최소 10 이상");
+		expect(() => host.setSettings(id, { httpOrigin: "nope" })).toThrow("Not a valid address (origin)");
+		expect(() => host.setSettings(id, { httpOrigin: "https://a.test", interval: 5 })).toThrow("At least 10");
 		expect(host.find(id).settings.httpOrigin).toBe("https://a.test");
 	});
 	test("install fills defaults immediately; reinstall keeps values and fills new defaults", async () => {
@@ -656,7 +656,7 @@ describe("configured gate for new packages with a settings schema", () => {
 		const id = host.install(cfg("example.cfg", [{ key: "interval", type: "number", label: "간격", default: 30 }]));
 		expect(host.find(id).configured).toBe(false);
 		expect(host.configRequired(id)).toBe(true);
-		await expect(host.enable(id)).rejects.toThrow("먼저 설정을 저장해야 켤 수 있습니다");
+		await expect(host.enable(id)).rejects.toThrow("Save the settings first to turn it on");
 		expect(host.find(id).state).toBe("disabled");
 		expect(host.find(id).enabled).toBe(false);
 		await host.setSettings(id, host.find(id).settings); // confirm the prefilled defaults
@@ -696,7 +696,7 @@ describe("configured gate for new packages with a settings schema", () => {
 		const { host } = await boot(() => null);
 		expect(host.installed[0]!.state).toBe("disabled");
 		expect(host.installed[0]!.enabled).toBe(false);
-		expect(host.installed[0]!.error).toBe("먼저 설정을 저장해야 켤 수 있습니다");
+		expect(host.installed[0]!.error).toBe("Save the settings first to turn it on");
 		expect(((globalThis as any).__fakeRuntimes as unknown[]).length).toBe(0);
 	});
 	test("a server sync that supplies settings marks the entry configured", async () => {
@@ -725,7 +725,7 @@ describe("never auto-disabling other extensions", () => {
 		expect(host.safeMode).toBe(false);
 		expect(storage.has("pipaya.extensions.safe")).toBe(false);
 		const b = host.find("example.b");
-		expect(b.enabled).toBe(false); expect(b.state).toBe("disabled"); expect(b.error).toBe("시작이 끝나지 않아 껐습니다");
+		expect(b.enabled).toBe(false); expect(b.state).toBe("disabled"); expect(b.error).toBe("Turned off because it didn't finish starting");
 		expect(host.find("example.a").state).toBe("active");
 		expect(host.find("example.c").state).toBe("active");
 		expect(JSON.parse(storage.get("pipaya.extensions.v1")!).map((e: any) => e.enabled)).toEqual([true, false, true]);
@@ -752,7 +752,7 @@ describe("never auto-disabling other extensions", () => {
 		]));
 		const { host } = await boot(() => null);
 		expect(host.find("example.bad").enabled).toBe(false);
-		expect(host.find("example.bad").error).toContain("필수 설정");
+		expect(host.find("example.bad").error).toContain("Check the required settings");
 		expect(host.find("example.good").state).toBe("active");
 		expect(host.safeMode).toBe(false);
 	});
@@ -780,7 +780,7 @@ describe("unreadable stored entries are preserved", () => {
 		const { host } = await boot(() => null);
 		expect(host.unreadable.map(u => u.id)).toEqual([undefined, undefined, undefined]);
 		expect(host.installed).toHaveLength(47);
-		expect(() => host.install(cfg("example.over", null))).toThrow("최대 50개");
+		expect(() => host.install(cfg("example.over", null))).toThrow("At most 50");
 		expect(JSON.parse(storage.get("pipaya.extensions.v1") ?? "[]")).toHaveLength(50);
 		host.removeUnreadable(0, { keepSettings: true });
 		expect(host.install(cfg("example.fits", null))).toBe("example.fits");
@@ -812,7 +812,7 @@ describe("unreadable stored entries are preserved", () => {
 	test("a corrupt list is backed up once before the first write and not silently replaced", async () => {
 		storage.set("pipaya.extensions.v1", "{not json");
 		const { host } = await boot(() => null);
-		expect(host.loadError).toContain("확장 설정을 읽지 못했습니다");
+		expect(host.loadError).toContain("Couldn't read extension settings");
 		expect(storage.get("pipaya.extensions.v1")).toBe("{not json"); // untouched by init
 		expect(storage.has("pipaya.extensions.v1.corrupt")).toBe(false);
 		host.install(cfg("example.new", null));

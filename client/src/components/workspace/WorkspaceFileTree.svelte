@@ -2,7 +2,7 @@
 	import { tick, untrack } from "svelte";
 	import { splitFilePath } from "../../lib/files";
 	import { tilde } from "../../lib/format";
-	import { t } from "../../lib/i18n";
+	import { localeTag, t } from "../../lib/i18n";
 	import { formatCombo, OVERLAY_SELECTOR } from "../../lib/keys";
 	import { workDir } from "../../lib/nav";
 	import { leafName, parentPath } from "../../lib/sidebar-model";
@@ -301,11 +301,11 @@
 					onclick={expandToChanges}
 					title={totalAdd > 0 || totalDel > 0
 						? t("변경된 파일 {n}개 (+{add} / -{del})", {
-								n: workspaceViewer.changes.length.toLocaleString(),
-								add: totalAdd.toLocaleString(),
-								del: totalDel.toLocaleString(),
+								n: workspaceViewer.changes.length.toLocaleString(localeTag()),
+								add: totalAdd.toLocaleString(localeTag()),
+								del: totalDel.toLocaleString(localeTag()),
 							})
-						: t("변경된 파일 {n}개", { n: workspaceViewer.changes.length.toLocaleString() })}
+						: t("변경된 파일 {n}개", { n: workspaceViewer.changes.length.toLocaleString(localeTag()) })}
 					aria-label={t("변경된 파일 {n}개", { n: workspaceViewer.changes.length })}
 				>
 					{#if anyPending}<span class="rpdot" aria-hidden="true"></span>{/if}
@@ -326,7 +326,7 @@
 					class:active={isCur}
 					onclick={() => pickFile(item.path, ch ? "diff" : undefined)}
 					title={ch && (ch.additions > 0 || ch.deletions > 0)
-						? `${item.path} (+${ch.additions.toLocaleString()} -${ch.deletions.toLocaleString()})`
+						? `${item.path} (+${ch.additions.toLocaleString(localeTag())} -${ch.deletions.toLocaleString(localeTag())})`
 						: item.path}
 					aria-label={item.path}
 					aria-current={isCur ? "true" : undefined}
@@ -447,7 +447,7 @@
 							class:recent={workspaceViewer.isRecent(ch.path) || ch.pending}
 							onclick={() => pickFile(ch.path, "diff")}
 							title={ch.additions > 0 || ch.deletions > 0
-								? `${ch.path} (+${ch.additions.toLocaleString()} -${ch.deletions.toLocaleString()})`
+								? `${ch.path} (+${ch.additions.toLocaleString(localeTag())} -${ch.deletions.toLocaleString(localeTag())})`
 								: ch.path}
 						>
 							<span class="fico"><FileIcon name={baseLabel} /></span>

@@ -33,6 +33,7 @@ base = f"http://127.0.0.1:{env['SERVER_PORT']}"
 seed = {
     "pipaya.servers": json.dumps([{"id": "dev", "name": "dev", "baseUrl": base, "token": token}]),
     "pipaya.server": json.dumps("dev"),
+    "pipaya.lang": "ko",
 }
 url = f"http://127.0.0.1:{env['CLIENT_PORT']}/"
 DSF = 4

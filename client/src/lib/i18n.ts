@@ -58,8 +58,7 @@ const hasLang = (tag: Lang): boolean => tag in BUILT_IN || pack(tag) !== undefin
 
 /**
  * The first language in the browser's preference order that the client can show: an exact tag (`pt-br`), then the base
- * language (`pt-BR` -> `pt`, or a `pt-br` pack for `pt-PT`). Falls back to English for a list of unsupported languages,
- * Korean (the source language) when nothing is known.
+ * language (`pt-BR` -> `pt`, or a `pt-br` pack for `pt-PT`). Falls back to English when nothing matches or is known.
  */
 export function systemLang(languages?: readonly string[] | null): Lang {
 	const available = [...Object.keys(BUILT_IN), ...remote.keys(), ...[...local.values()].map((p) => p.tag)];
@@ -71,7 +70,7 @@ export function systemLang(languages?: readonly string[] | null): Lang {
 		const sibling = available.find((a) => a.split("-")[0] === base);
 		if (sibling) return sibling;
 	}
-	return languages?.length ? "en" : "ko";
+	return "en";
 }
 
 /** A picked language whose pack is gone (extension removed, pack deleted) reads as "system" until it comes back. */
@@ -156,10 +155,11 @@ export function localeTag(): string {
 export function languages(): LanguageInfo[] {
 	touch();
 	const tags = new Set<Lang>([...remote.keys(), ...[...local.values()].map((p) => p.tag)]);
+	const loc = localeTag();
 	return [
 		...Object.entries(BUILT_IN).map(([tag, v]) => ({ tag, name: v.name, builtIn: true })),
 		// packs by the name people read in the picker, not by their tag
-		...[...tags].map((tag) => ({ tag, name: pack(tag)!.name, builtIn: false })).sort((a, b) => a.name.localeCompare(b.name)),
+		...[...tags].map((tag) => ({ tag, name: pack(tag)!.name, builtIn: false })).sort((a, b) => a.name.localeCompare(b.name, loc)),
 	];
 }
 /** A language's own name, or the tag when it is unknown. */

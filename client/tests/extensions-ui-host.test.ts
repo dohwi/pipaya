@@ -589,12 +589,12 @@ describe("UI callback lifetime and cleanup", () => {
       runtime.callbacks.request("ui.registerPanel", [spec(), "duplicate"]);
     };
     const id = host.install(pkg());
-    await expect(host.enable(id)).rejects.toThrow(/중복/);
+    await expect(host.enable(id)).rejects.toThrow(/Duplicate/);
     const runtime = runtimes().at(-1)!;
     expect(partial).toBeDefined();
     expect(host.find(id).state).toBe("error");
     expect(host.find(id).enabled).toBe(false);
-    expect(host.find(id).error).toMatch(/중복/);
+    expect(host.find(id).error).toMatch(/Duplicate/);
     expect(host.panels).toEqual([]);
     expect(host.activePanel).toBeNull();
     expect(host.panelOpen).toBe(false);

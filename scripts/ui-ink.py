@@ -15,7 +15,7 @@ if not envf.exists():
 env = dict(l.split("=", 1) for l in envf.read_text().split() if "=" in l)
 token = pathlib.Path(env["TOKEN_FILE"]).read_text().strip()
 srv = {"id": "dev", "name": "dev", "baseUrl": f"http://127.0.0.1:{env['SERVER_PORT']}", "token": token}
-seed = {"pipaya.servers": json.dumps([srv]), "pipaya.server": json.dumps("dev")}
+seed = {"pipaya.servers": json.dumps([srv]), "pipaya.server": json.dumps("dev"), "pipaya.lang": "ko"}
 
 ap = argparse.ArgumentParser(description=__doc__)
 ap.add_argument("name", nargs="?", default="ink")

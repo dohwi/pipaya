@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { app } from "../../lib/store.svelte";
-	import { t } from "../../lib/i18n";
+	import { localeTag, t } from "../../lib/i18n";
 	import { compact, duration, fullTime, tilde } from "../../lib/format";
 	import { livePast } from "../../lib/minute-clock.svelte";
 	import { copyText } from "../../lib/clipboard";
@@ -75,7 +75,7 @@
 		card?.kind === "subagent" ? [...graph.cards.values()].filter((c) => c.kind === "subagent" && c.server === card.server && c.label === card.label && c.id !== card.id).sort((a, b) => b.last! - a.last!) : [],
 	);
 	// one row per role and model, a role's models together (the one used last first)
-	const roles = $derived(card?.kind === "server" ? [...graph.cards.values()].filter((c) => c.kind === "subagent" && c.server === card.server).sort((a, b) => a.label.localeCompare(b.label) || b.last! - a.last!) : []);
+	const roles = $derived(card?.kind === "server" ? [...graph.cards.values()].filter((c) => c.kind === "subagent" && c.server === card.server).sort((a, b) => a.label.localeCompare(b.label, localeTag()) || b.last! - a.last!) : []);
 
 	const STATE_TEXT = { online: () => t("연결됨"), offline: () => t("연결 안 됨"), unauthorized: () => t("토큰 거부됨"), incompatible: () => t("앱 업데이트 필요"), checking: () => t("확인 중") };
 	const serverState = $derived(connectionState(link?.net ?? "connecting"));

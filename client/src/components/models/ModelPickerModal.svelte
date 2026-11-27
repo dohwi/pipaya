@@ -4,7 +4,7 @@
 	import TierOptions from "./TierOptions.svelte";
 	import { takesTier } from "../../lib/service-tier";
 	import type { ServiceTier } from "../../lib/types";
-	import { t } from "../../lib/i18n";
+	import { localeTag, t } from "../../lib/i18n";
 	import Ladder from "../ui/Ladder.svelte";
 	import { collapseIn, collapseOut } from "../../lib/motion";
 	import Icon from "../ui/Icon.svelte";
@@ -97,14 +97,14 @@
 		return [...by.entries()]
 			// models the upstream no longer lists go last in their group (the connection card does the same)
 			.map(([id, list]) => ({ id, name: providerName(id), configured: list.some((m) => m.configured), models: [...list].sort((a, b) => Number(a.available === false) - Number(b.available === false)) }))
-			.sort((a, b) => Number(b.configured) - Number(a.configured) || a.name.localeCompare(b.name));
+			.sort((a, b) => Number(b.configured) - Number(a.configured) || a.name.localeCompare(b.name, localeTag()));
 	});
 	const shown = $derived(groups.map((g) => ({ ...g, models: g.models.filter((m) => !isFav(m) && matches(m)) })).filter((g) => g.models.length));
 	const starred = $derived(favs.map((k) => models.find((m) => key(m.provider, m.id) === k)).filter((m): m is ModelInfo => !!m && matches(m)));
 
 	/** "컨텍스트 400,000 · 최대 출력 4,096" (a picture model has no context size). */
 	const limits = (m: ModelInfo) =>
-		[m.imageGeneration ? "" : t("컨텍스트 {n}", { n: m.contextWindow.toLocaleString() }), t("최대 출력 {n}", { n: m.maxTokens.toLocaleString() })].filter(Boolean).join(" · ");
+		[m.imageGeneration ? "" : t("컨텍스트 {n}", { n: m.contextWindow.toLocaleString(localeTag()) }), t("최대 출력 {n}", { n: m.maxTokens.toLocaleString(localeTag()) })].filter(Boolean).join(" · ");
 	/** The row's tooltip: abilities, then sizes ("채팅 · 추론 · 이미지 읽기 — 컨텍스트 400,000 · 최대 출력 4,096"). */
 	const tipOf = (m: ModelInfo) => `${capsOf(m).map((c) => t(c.label)).join(" · ")}\n${limits(m)}`;
 	const same = (m: ModelInfo) => !!sel && sel.provider === m.provider && sel.model === m.id;

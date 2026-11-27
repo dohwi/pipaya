@@ -399,7 +399,7 @@ describe("safe mode", () => {
 		expect(storage.get("pipaya.extensions.safe")).toBeUndefined();
 		expect(next.host.find(id).state).toBe("disabled");
 		expect(next.host.find(id).enabled).toBe(false);
-		expect(next.host.find(id).error).toBe("시작이 끝나지 않아 껐습니다");
+		expect(next.host.find(id).error).toBe("Turned off because it didn't finish starting");
 		expect(next.host.find(otherId).state).toBe("active");
 		expect(next.host.commands.map(c => c.name)).toEqual(["review"]);
 		expect(next.host.loadError).toBe("");
@@ -759,12 +759,12 @@ describe("navbar and http capabilities", () => {
 		const { host } = newHost();
 		const denied = await activate(host, code("example.none", []));
 		for (const [method, args] of [["navbar.set", ["usage", spec]], ["navbar.remove", ["usage"]], ["http.getJson", ["/x"]]] as [string, unknown[]][]) {
-			expect(() => denied.runtime.callbacks.request(method, args)).toThrow(/권한/);
+			expect(() => denied.runtime.callbacks.request(method, args)).toThrow(/Permission denied/);
 		}
 		const allowed = await activate(host, code("example.generic", ["navbar", "http"]));
-		expect(() => allowed.runtime.callbacks.request("http.getJson", [])).toThrow(/한 개/);
-		expect(() => allowed.runtime.callbacks.request("http.getJson", ["/x", "extra"])).toThrow(/한 개/);
-		expect(() => allowed.runtime.callbacks.request("http.getJson", ["/x"])).toThrow("설정에 httpOrigin이 필요합니다");
+		expect(() => allowed.runtime.callbacks.request("http.getJson", [])).toThrow(/exactly one/);
+		expect(() => allowed.runtime.callbacks.request("http.getJson", ["/x", "extra"])).toThrow(/exactly one/);
+		expect(() => allowed.runtime.callbacks.request("http.getJson", ["/x"])).toThrow("httpOrigin is required in the settings");
 		expect(host.navbar).toEqual([]);
 	});
 
@@ -773,13 +773,13 @@ describe("navbar and http capabilities", () => {
 		const a = await activate(host, code("example.a", ["navbar"]));
 		const b = await activate(host, code("example.b", ["navbar"]));
 		for (const id of ["one", "two", "three"]) a.runtime.callbacks.request("navbar.set", [id, spec]);
-		expect(() => a.runtime.callbacks.request("navbar.set", ["four", spec])).toThrow(/최대 3개/);
+		expect(() => a.runtime.callbacks.request("navbar.set", ["four", spec])).toThrow(/At most 3/);
 		a.runtime.callbacks.request("navbar.set", ["two", { ...spec, label: "updated" }]);
 		expect(host.navbar.filter(i => i.owner === a.id).map(i => i.label)).toEqual(["Usage", "updated", "Usage"]);
 		b.runtime.callbacks.request("navbar.set", ["one", spec]);
 		expect(host.navbar).toHaveLength(4);
 		expect(() => a.runtime.callbacks.request("navbar.set", ["BAD", spec])).toThrow();
-		expect(() => a.runtime.callbacks.request("navbar.set", ["x"])).toThrow(/두 인자/);
+		expect(() => a.runtime.callbacks.request("navbar.set", ["x"])).toThrow(/two arguments/);
 		expect(() => a.runtime.callbacks.request("navbar.set", ["x", { ...spec, extra: 1 }])).toThrow();
 		expect(() => a.runtime.callbacks.request("navbar.set", ["x", { ...spec, label: "x".repeat(41) }])).toThrow();
 		for (const bad of [
@@ -834,7 +834,7 @@ describe("navbar and http capabilities", () => {
 			const a = await activate(host, code("example.http", ["http", "navbar"]));
 			host.setSettings(a.id, { httpOrigin: "http://localhost:8317" });
 			const pending = a.runtime.callbacks.request("http.getJson", ["/data"]) as Promise<unknown>;
-			const rejected = expect(pending).rejects.toThrow(/취소/);
+			const rejected = expect(pending).rejects.toThrow(/cancelled/);
 			await host.enable(a.id);
 			expect(signal.aborted).toBe(true);
 			resolve(new Response(JSON.stringify({ ok: true })));
@@ -858,7 +858,7 @@ describe("navbar and http capabilities", () => {
 			await expect(a.runtime.callbacks.request("http.getJson", ["/one"])).resolves.toEqual({ a: [1, null] });
 			const second = a.runtime.callbacks.request("http.getJson", ["/two"]) as Promise<unknown>;
 			host.setSafeMode(true);
-			await expect(second).rejects.toThrow(/취소/);
+			await expect(second).rejects.toThrow(/cancelled/);
 			expect(signals[1]!.aborted).toBe(true);
 		} finally { globalThis.fetch = original; }
 	});
@@ -871,21 +871,21 @@ describe("generic configuration host capabilities", () => {
 		const host = new ExtensionHost(); host.init(adapter);
 		const sync = await activate(host, code("example.auto", ["configuration", "configuration-background"]));
 		try {
-			expect(() => call(host, sync.id, "configuration.read")).toThrow("승인");
+			expect(() => call(host, sync.id, "configuration.read")).toThrow("Approval");
 			call(host, sync.id, "configuration.authorize"); approve(true); await flush();
 			expect(call(host, sync.id, "configuration.access").authorized).toBe(true);
 			const local = call(host, sync.id, "configuration.read");
 			expect(local.fingerprint).toMatch(/^[a-f0-9]{64}$/);
-			expect(() => call(host, sync.id, "configuration.applyBackground", [local.document, "stale"])).toThrow("충돌");
+			expect(() => call(host, sync.id, "configuration.applyBackground", [local.document, "stale"])).toThrow("conflict");
 			const updated = { ...local.document, preferences: { theme: "light" } };
 			call(host, sync.id, "configuration.applyBackground", [updated, local.fingerprint]); expect(theme).toBe("light");
 			const now = call(host, sync.id, "configuration.read");
 			const unsafe = { ...now.document, extensions: [{ package: code("example.new", []), enabled: false, settings: {} }] };
-			expect(() => call(host, sync.id, "configuration.applyBackground", [unsafe, now.fingerprint])).toThrow("수동");
+			expect(() => call(host, sync.id, "configuration.applyBackground", [unsafe, now.fingerprint])).toThrow("manual");
 			// Changing the requesting extension's own settings invalidates even an already approved grant.
 			await host.setSettings(sync.id, { httpOrigin: "https://changed.test" });
 			expect(call(host, sync.id, "configuration.access").authorized).toBe(false);
-			call(host, sync.id, "configuration.revoke"); expect(() => call(host, sync.id, "configuration.read")).toThrow("승인");
+			call(host, sync.id, "configuration.revoke"); expect(() => call(host, sync.id, "configuration.read")).toThrow("Approval");
 			call(host, sync.id, "configuration.authorize"); host.disable(sync.id); approve(true); await flush();
 			expect(storage.has("pipaya.extensions.background-grant." + sync.id)).toBe(false);
 		} finally { host.stop(); }
@@ -912,7 +912,7 @@ describe("generic configuration host capabilities", () => {
 	test("configuration and write transport require explicit permissions", async () => {
 		const { host } = newHost();
 		const a = await activate(host, code("example.no-sync", []));
-		for (const method of ["configuration.status", "configuration.export", "configuration.apply", "configuration.restore", "http.requestJson"]) expect(() => call(host, a.id, method)).toThrow("권한 없음");
+		for (const method of ["configuration.status", "configuration.export", "configuration.apply", "configuration.restore", "http.requestJson"]) expect(() => call(host, a.id, method)).toThrow("Permission denied");
 		host.stop();
 	});
 	test("approval, disabled package restore, preserved local secrets, backup rollback", async () => {
@@ -1631,9 +1631,9 @@ describe("hold shortcuts and component shortcuts", () => {
 		expect(host.setShortcutCombo(b.id, "two", "Alt+A", {})).toBe(`${a.id}:one`);
 		expect(() => host.setShortcutCombo(b.id, "two", "Mod+J+K", {})).toThrow();
 		expect(() => host.setShortcutCombo(b.id, "two", "Shift+K", {})).toThrow();
-		expect(() => host.setShortcutCombo(b.id, "two", "Mod+B", { toggleSidebar: "Mod+B" })).toThrow(/앱 단축키/);
+		expect(() => host.setShortcutCombo(b.id, "two", "Mod+B", { toggleSidebar: "Mod+B" })).toThrow(/app shortcut/i);
 		// the app's longer shortcut starts with it: the combo would never fire
-		expect(() => host.setShortcutCombo(b.id, "two", "Alt+Q", { toggleSidebar: "Alt+Q+W" })).toThrow(/앱 단축키/);
+		expect(() => host.setShortcutCombo(b.id, "two", "Alt+Q", { toggleSidebar: "Alt+Q+W" })).toThrow(/app shortcut/i);
 		expect(host.shortcutFor("Alt+A")?.owner).toBe(b.id);
 		expect(host.shortcutFor("Alt+B")).toBeUndefined();
 		expect(host.shortcutList().find(x => x.owner === a.id)!.combo).toBeNull();
@@ -1834,7 +1834,7 @@ describe("network, server API, links and clipboard", () => {
 		expect(() => call(host, id, "system.openUrl", ["file:///etc/passwd"])).toThrow();
 		await call(host, id, "system.copy", ["2"]);
 		await call(host, id, "system.copy", ["3"]);
-		expect(() => call(host, id, "system.copy", ["6th"])).toThrow(/10초/);
+		expect(() => call(host, id, "system.copy", ["6th"])).toThrow(/10 seconds/);
 		host.stop();
 	});
 
