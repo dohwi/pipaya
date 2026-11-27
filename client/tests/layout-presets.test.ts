@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from "bun:test";
+import { afterAll, beforeEach, describe, expect, test } from "bun:test";
 import { setLang } from "../src/lib/i18n";
 import { MAX_PANES, MAX_RATIO, MIN_RATIO, measure, pair, pane, panesOf, setRatio, splitAt, type Layout } from "../src/lib/layout";
 import { findPreset, layoutPaletteSpec, layoutsMatch, matchPreset, presetsFor, recommendedPreset, type LayoutPresetId } from "../src/lib/layout-presets";
@@ -13,8 +13,11 @@ function allRatiosValid(l: Layout): boolean {
 	return l.type === "pane" || (l.ratio >= MIN_RATIO && l.ratio <= MAX_RATIO && allRatiosValid(l.a) && allRatiosValid(l.b));
 }
 
-afterEach(() => {
+beforeEach(() => {
 	setLang("ko");
+});
+afterAll(() => {
+	setLang("en");
 });
 
 describe("layout presets", () => {

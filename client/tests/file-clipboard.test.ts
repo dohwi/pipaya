@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from "bun:test";
+import { afterAll, afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { Window } from "happy-dom";
 import {
 	MAX_CLIPBOARD_FILE_BYTES,
@@ -30,9 +30,16 @@ function restoreGlobals() {
 	(globalThis as { KeyboardEvent?: unknown }).KeyboardEvent = origKeyboardEvent;
 }
 
+beforeEach(() => {
+	setLang("ko");
+});
+
 afterEach(() => {
 	restoreGlobals();
-	setLang("ko");
+});
+
+afterAll(() => {
+	setLang("en");
 });
 
 describe("isDesktopTauri", () => {

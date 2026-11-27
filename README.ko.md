@@ -63,7 +63,7 @@ cd server && bun install && bun run dev
 cd client && bun install && bun run dev    # 웹 클라이언트 (포트 1420)
 ```
 
-[CONTRIBUTING.md](CONTRIBUTING.md)와 [`server/README{".ko" if ko else ""}.md`](server/README{".ko" if ko else ""}.md)를 보세요.
+[CONTRIBUTING.md](CONTRIBUTING.md)와 [`server/README.ko.md`](server/README.ko.md)를 보세요.
 
 ## 라이선스
 

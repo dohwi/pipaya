@@ -1,6 +1,8 @@
-import { describe, expect, test } from "bun:test";
+import { afterAll, describe, expect, test } from "bun:test";
 import { setLang } from "../src/lib/i18n";
 import { groupNameFor } from "../src/lib/group-name";
+
+afterAll(() => setLang("en"));
 
 describe("groupNameFor", () => {
 	test("one shared folder, or the distinct folders joined, at most three", () => {

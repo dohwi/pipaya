@@ -2,7 +2,7 @@
 	import { focusOnDesktop } from "../../lib/focus";
 	import Button from "../ui/Button.svelte";
 	import { onDestroy } from "svelte";
-	import { t } from "../../lib/i18n";
+	import { localeTag, t } from "../../lib/i18n";
 	import Icon from "../ui/Icon.svelte";
 	import Badge from "../ui/Badge.svelte";
 	import EmptyState from "../ui/EmptyState.svelte";
@@ -68,7 +68,7 @@
 
 	const builtin = $derived(providers.filter((p) => p.builtin));
 	const match = (name: string) => !query.trim() || name.toLowerCase().includes(query.trim().toLowerCase());
-	const byName = (a: ProviderInfo, b: ProviderInfo) => Number(a.configured) - Number(b.configured) || a.name.localeCompare(b.name);
+	const byName = (a: ProviderInfo, b: ProviderInfo) => Number(a.configured) - Number(b.configured) || a.name.localeCompare(b.name, localeTag());
 	const oauthList = $derived(builtin.filter((p) => p.loginMethods?.includes("oauth") && match(p.name)).sort(byName));
 	const keyList = $derived(builtin.filter((p) => match(p.name)).sort(byName));
 	const localList = $derived(locals.filter((l) => match(l.name)));

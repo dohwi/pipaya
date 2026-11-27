@@ -1,8 +1,12 @@
-import { afterEach, describe, expect, test } from "bun:test";
+import { afterAll, afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { activityOf, setGoalActivity, type ActivityView } from "../src/lib/activity";
 import { lastPromptOf, sentPrompts } from "../src/lib/composer/input-keys";
 import { goalActivity, goalLevel, goalTime, goalTone, goalUsage, resumable } from "../src/lib/goals";
+import { setLang } from "../src/lib/i18n";
 import type { Goal } from "../src/lib/types";
+
+beforeEach(() => setLang("ko"));
+afterAll(() => setLang("en"));
 
 const baseGoal = (over: Partial<Goal> = {}): Goal => ({
 	sessionId: "s1",

@@ -1,6 +1,6 @@
 <script lang="ts">
 	import Button from "../ui/Button.svelte";
-	import { t } from "../../lib/i18n";
+	import { localeTag, t } from "../../lib/i18n";
 	import Icon from "../ui/Icon.svelte";
 	import Badge from "../ui/Badge.svelte";
 	import { app } from "../../lib/store.svelte";
@@ -17,7 +17,7 @@
 	let busy = $state(false);
 	let seq = 0;
 
-	const connected = $derived(providers.filter((p) => p.builtin && p.storedCredential).sort((a, b) => a.name.localeCompare(b.name)));
+	const connected = $derived(providers.filter((p) => p.builtin && p.storedCredential).sort((a, b) => a.name.localeCompare(b.name, localeTag())));
 
 	async function load() {
 		const a = api();

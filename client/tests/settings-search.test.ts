@@ -1,5 +1,9 @@
-import { describe, expect, test } from "bun:test";
+import { afterAll, beforeEach, describe, expect, test } from "bun:test";
+import { setLang } from "../src/lib/i18n";
 import { SETTINGS_TABS, matches, queryWords, searchSettings, toolLabel, type ShortcutEntry } from "../src/lib/settings-search";
+
+beforeEach(() => setLang("ko"));
+afterAll(() => setLang("en"));
 
 const keys: ShortcutEntry[] = [{ id: "newChat", label: "새 대화", combo: "Mod+N", shown: "Ctrl+N" }];
 const find = (q: string, hasServer = true) => searchSettings(queryWords(q), { hasServer, shortcuts: keys });

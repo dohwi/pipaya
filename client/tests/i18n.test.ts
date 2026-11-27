@@ -10,7 +10,7 @@ afterEach(() => {
 	setRemotePacks([]);
 	removeLocalPacks("ext.a");
 	removeLocalPacks("ext.b");
-	setLang("ko");
+	setLang("en");
 });
 
 const ja = { tag: "ja", name: "日本語", messages: { "설정": "設定", "닫기": "閉じる" }, updatedAt: 5 };
@@ -22,10 +22,10 @@ describe("language detection", () => {
 		expect(systemLang(["fr-FR", "en-US"])).toBe("en");
 		expect(systemLang(["KO_kr"])).toBe("ko");
 	});
-	test("an unsupported-only list reads as English, an unknown one as Korean (the source language)", () => {
+	test("an unsupported or unknown list falls back to English", () => {
 		expect(systemLang(["ja-JP", "fr"])).toBe("en");
-		expect(systemLang([])).toBe("ko");
-		expect(systemLang(undefined)).toBe("ko");
+		expect(systemLang([])).toBe("en");
+		expect(systemLang(undefined)).toBe("en");
 	});
 	test("an explicit choice wins over the system", () => {
 		expect(resolveLang("en", ["ko"])).toBe("en");
@@ -36,6 +36,7 @@ describe("language detection", () => {
 
 describe("t()", () => {
 	test("Korean returns the source string, English the dictionary entry", () => {
+		setLang("ko");
 		expect(t("설정")).toBe("설정");
 		setLang("en");
 		expect(t("설정")).toBe("Settings");
@@ -88,7 +89,7 @@ describe("LocalizedError", () => {
 		const e = new LocalizedError(t("저장"));
 		expect(e).toBeInstanceOf(Error);
 		expect(e).toBeInstanceOf(LocalizedError);
-		expect(e.message).toBe("저장");
+		expect(e.message).toBe("Save");
 		expect(new Error("x")).not.toBeInstanceOf(LocalizedError);
 	});
 });

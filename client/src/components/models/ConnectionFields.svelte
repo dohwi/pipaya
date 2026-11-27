@@ -25,7 +25,7 @@
 	<FormField label={t("이름")}>
 		<input class="field" value={form.name} oninput={(e) => onname(e.currentTarget.value)} placeholder={t("예: 내 프록시")} autocomplete="off" />
 	</FormField>
-	<FormField label="Endpoint (Base URL)">
+	<FormField label={t("엔드포인트 (Base URL)")}>
 		<input class="field mono" bind:value={form.baseUrl} placeholder="https://host.example/v1" autocomplete="off" autocapitalize="off" spellcheck="false" inputmode="url" />
 	</FormField>
 	<FormField label={t("API 형식")}>

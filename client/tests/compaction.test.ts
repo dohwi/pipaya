@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -7,6 +7,9 @@ import ts from "typescript";
 import { Api, ApiError } from "../src/lib/api";
 import type { ChatState as ChatStateType } from "../src/lib/chat.svelte";
 import type { PipayaEvent } from "../src/lib/types";
+import { setLang } from "../src/lib/i18n";
+
+beforeEach(() => setLang("en"));
 
 let ChatState: typeof ChatStateType;
 let dir: string;
@@ -80,7 +83,7 @@ describe("pi compaction state", () => {
 		chat.addOptimisticUser("keep original history", []);
 		const request = chat.compact("preserve decisions");
 		expect(chat.compacting).toBe(true);
-		await expect(chat.compact()).rejects.toThrow("작업이 끝난 뒤");
+		await expect(chat.compact()).rejects.toThrow("after the current run finishes");
 		finish(result);
 		await request;
 		expect(calls).toBe(1);
@@ -92,7 +95,7 @@ describe("pi compaction state", () => {
 	test("cannot compact during an agent run", async () => {
 		const { chat } = setup();
 		chat.apply(event("run_started"));
-		await expect(chat.compact()).rejects.toThrow("작업이 끝난 뒤");
+		await expect(chat.compact()).rejects.toThrow("after the current run finishes");
 	});
 
 	test("finished SSE context wins over stale HTTP response", async () => {
@@ -147,7 +150,7 @@ describe("pi compaction state", () => {
 
 	test("unsupported endpoint has an explicit BE requirement, not a model prompt", async () => {
 		const { chat } = setup({ compactSession: async () => { throw new ApiError(501, "compaction_not_supported", "unsupported"); } });
-		await expect(chat.compact()).rejects.toThrow("서버를 업데이트");
+		await expect(chat.compact()).rejects.toThrow("Update the server");
 		expect(chat.items).toHaveLength(0);
 		expect(chat.compacting).toBe(false);
 	});
@@ -171,7 +174,7 @@ describe("pi compaction state", () => {
 		chat.apply(event("compaction_failed", { aborted: true }));
 		expect(chat.compacting).toBe(false);
 		expect(chat.running).toBe(true);
-		expect(chat.compactionError).toContain("취소");
+		expect(chat.compactionError).toContain("cancelled");
 	});
 });
 

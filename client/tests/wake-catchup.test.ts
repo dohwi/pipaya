@@ -192,7 +192,6 @@ describe("catching up after the window was in the background", () => {
 		expect(formatRunError("429 Too Many Requests")).toBe("429 Too Many Requests");
 		setLang("en");
 		expect(formatRunError("The run was interrupted because the server shut down.")).toBe("The run was interrupted because the server shut down.");
-		setLang("ko");
 	});
 
 	test("onStatus reports load and catchUp status changes once buffers are applied", async () => {

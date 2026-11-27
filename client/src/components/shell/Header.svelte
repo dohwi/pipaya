@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { sessionTitle } from "../../lib/session-title";
 	import { RENAME_KEY } from "../../lib/keys";
-	import { t } from "../../lib/i18n";
+	import { localeTag, t } from "../../lib/i18n";
 	import { formatCombo } from "../../lib/keys";
 	import { baseName, sizeLabel, splitFilePath } from "../../lib/files";
 	import Button from "../ui/Button.svelte";
@@ -111,7 +111,7 @@
 						<span class="edirty">{t("수정됨")}</span>
 					{/if}
 					{#if !fileCtrl?.editing && fileChange && (fileChange.additions > 0 || fileChange.deletions > 0)}
-						<span class="fstat mono" title="+{fileChange.additions.toLocaleString()} / -{fileChange.deletions.toLocaleString()}">
+						<span class="fstat mono" title="+{fileChange.additions.toLocaleString(localeTag())} / -{fileChange.deletions.toLocaleString(localeTag())}">
 							{#if fileChange.additions > 0}<span class="fadd">+{formatCompactCount(fileChange.additions)}</span>{/if}
 							{#if fileChange.deletions > 0}<span class="fdel">-{formatCompactCount(fileChange.deletions)}</span>{/if}
 						</span>

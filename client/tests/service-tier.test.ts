@@ -1,5 +1,9 @@
-import { describe, expect, test } from "bun:test";
+import { afterAll, beforeEach, describe, expect, test } from "bun:test";
+import { setLang } from "../src/lib/i18n";
 import { replySpeed } from "../src/lib/service-tier";
+
+beforeEach(() => setLang("ko"));
+afterAll(() => setLang("en"));
 
 describe("replySpeed", () => {
 	test("returns none when no tier metadata is present or speed is default", () => {

@@ -1,4 +1,4 @@
-import { afterAll, afterEach, beforeAll, describe, expect, test } from "bun:test";
+import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -32,7 +32,8 @@ import { rowMenuEntries } from "../src/lib/sidebar-model";
 import { SETTINGS_TABS, queryWords, searchSettings } from "../src/lib/settings-search";
 import type { PipayaEvent, Schedule, UserItem } from "../src/lib/types";
 
-afterEach(() => setLang("ko"));
+beforeEach(() => setLang("ko"));
+afterAll(() => setLang("en"));
 
 const task = (over: Partial<Schedule> = {}): Schedule => ({
 	id: "t", sessionId: "s", title: null, prompt: "상태 알려줘", kind: "interval", runAt: null, everyMs: 600_000, enabled: true,

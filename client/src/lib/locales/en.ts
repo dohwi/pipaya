@@ -415,6 +415,7 @@ export const en: Record<string, string> = {
 	"이름을 입력하세요.": "Enter a name.",
 	"ID는 영문 소문자로 시작하고 소문자·숫자·-·_ 만 쓸 수 있습니다.": "The ID must start with a lowercase letter and use only lowercase letters, digits, - and _.",
 	"Endpoint URL을 입력하세요.": "Enter the endpoint URL.",
+	"엔드포인트 (Base URL)": "Endpoint (Base URL)",
 	"{name} 연결됨": "{name} connected",
 	"뒤로": "Back",
 	"브라우저에서 로그인": "Sign in in your browser",

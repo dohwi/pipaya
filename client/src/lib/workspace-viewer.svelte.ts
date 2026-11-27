@@ -1,6 +1,7 @@
 import type { Api } from "./api";
 import { errorText, isUnsupportedRoute } from "./api";
 import type { ChatState } from "./chat.svelte";
+import { localeTag } from "./i18n";
 import type { PipayaEvent } from "./types";
 import {
 	buildEditHunk,
@@ -436,7 +437,8 @@ export class WorkspaceViewerStore {
 				const isDir = f.dir || clean.includes("/");
 				if (!topMap.has(first)) topMap.set(first, { name: first, path: first, dir: isDir });
 			}
-			const list = [...topMap.values()].sort((a, b) => Number(b.dir) - Number(a.dir) || a.name.localeCompare(b.name));
+			const cmp = new Intl.Collator(localeTag()).compare;
+			const list = [...topMap.values()].sort((a, b) => Number(b.dir) - Number(a.dir) || cmp(a.name, b.name));
 			this.rootEntries = list;
 			this.syncRecentChanges();
 		} catch (e) {
@@ -472,7 +474,8 @@ export class WorkspaceViewerStore {
 					const isDir = e.dir || rest.includes("/");
 					if (!childMap.has(childPath)) childMap.set(childPath, { name: seg, path: childPath, dir: isDir });
 				}
-				const list = [...childMap.values()].sort((a, b) => Number(b.dir) - Number(a.dir) || a.name.localeCompare(b.name));
+				const cmp = new Intl.Collator(localeTag()).compare;
+				const list = [...childMap.values()].sort((a, b) => Number(b.dir) - Number(a.dir) || cmp(a.name, b.name));
 				this.dirEntries = { ...this.dirEntries, [relDir]: list };
 			}
 		} catch { /* ignore unreadable subdirs */ }
