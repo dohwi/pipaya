@@ -696,9 +696,13 @@
 		backdrop-filter: none;
 	}
 	.lb.fs .video-stage {
+		position: absolute;
+		inset: 0;
 		padding: 0;
 		width: 100%;
 		height: 100%;
+		min-width: 0;
+		min-height: 0;
 	}
 	.lb.fs .stage > img {
 		max-width: 100%;
