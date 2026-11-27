@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { pair, pane, paneToward, splitAt, type Layout } from "../src/lib/layout";
 import { dirPaneCount, needsLook, sessionOrder, sidebarDirs, stepFrom, tabOf } from "../src/lib/nav";
 import { registerRenamePlace, renameNow } from "../src/lib/rename-places";
-import { ACTIONS, DEFAULT_BINDINGS, MAX_KEYS, RENAME_KEY, actionFor, fixedActionFor, buildCombo, chordNext, chordOptions, hasLongerBinding, nextChord, emptyRecording, escapeShouldStop, escapeShouldUnzoom, renameShouldFallThrough, tabComboYieldsFocus, OVERLAY_SELECTOR, keyCount, recordKey, recordingCombo, recordingIsEmpty, recordingLabel, undoRecording, type Recording } from "../src/lib/keys";
+import { ACTIONS, DEFAULT_BINDINGS, MAX_KEYS, RENAME_KEY, actionFor, fixedActionFor, buildCombo, chordNext, chordOptions, hasLongerBinding, isNativeTextEditCombo, nextChord, emptyRecording, escapeShouldStop, escapeShouldUnzoom, renameShouldFallThrough, tabComboYieldsFocus, yieldsToNativeTextEdit, OVERLAY_SELECTOR, keyCount, recordKey, recordingCombo, recordingIsEmpty, recordingLabel, undoRecording, type Recording, type TextEditTarget } from "../src/lib/keys";
 import type { Group, Session } from "../src/lib/types";
 
 const sess = (id: string, cwd: string, updatedAt: number) => ({ id, cwd, updatedAt }) as Session;
@@ -514,5 +514,98 @@ describe("F2 renames the open thing", () => {
 		offStrip();
 		offRow();
 		expect(renameNow()).toBeUndefined();
+	});
+});
+
+describe("isNativeTextEditCombo / yieldsToNativeTextEdit", () => {
+	test("identifies OS-specific text-editing shortcuts and excludes chords, Mod+Alt, and non-edit keys", () => {
+		// macOS
+		for (const c of [
+			"Mod+ArrowLeft", "Mod+ArrowRight", "Mod+ArrowUp", "Mod+ArrowDown",
+			"Mod+Shift+ArrowLeft", "Mod+Shift+ArrowRight", "Mod+Shift+ArrowUp", "Mod+Shift+ArrowDown",
+			"Alt+ArrowLeft", "Alt+ArrowRight", "Alt+ArrowUp", "Alt+ArrowDown",
+			"Alt+Shift+ArrowLeft", "Alt+Shift+ArrowRight",
+			"Mod+Backspace", "Mod+Delete", "Alt+Backspace", "Alt+Delete",
+		]) {
+			expect(isNativeTextEditCombo(c, true)).toBe(true);
+		}
+		for (const c of [
+			"", "ArrowLeft", "Shift+ArrowLeft", "Mod+Alt+ArrowLeft", "Mod+B+ArrowLeft",
+			"Mod+K", "Mod+BracketLeft", "Mod+Shift+BracketRight", "Mod+Shift+Backspace", "Mod+Home",
+		]) {
+			expect(isNativeTextEditCombo(c, true)).toBe(false);
+		}
+
+		// Windows / Linux
+		for (const c of [
+			"Mod+ArrowLeft", "Mod+ArrowRight", "Mod+ArrowUp", "Mod+ArrowDown",
+			"Mod+Shift+ArrowLeft", "Mod+Shift+ArrowRight",
+			"Mod+Home", "Mod+End", "Mod+Shift+Home", "Mod+Shift+End",
+			"Mod+Backspace", "Mod+Delete",
+		]) {
+			expect(isNativeTextEditCombo(c, false)).toBe(true);
+		}
+		for (const c of [
+			"", "Alt+ArrowLeft", "Alt+ArrowRight", "Alt+Backspace", "Mod+Alt+ArrowLeft",
+			"Mod+B+ArrowLeft", "Mod+K", "Mod+Shift+Backspace",
+		]) {
+			expect(isNativeTextEditCombo(c, false)).toBe(false);
+		}
+	});
+
+	test("respects enabled toggle, target kind, emptiness, zero-width spaces, and OS physical modifiers", () => {
+		const cmdLeft = { ctrlKey: false, metaKey: true, altKey: false, shiftKey: false };
+		const ctrlLeft = { ctrlKey: true, metaKey: false, altKey: false, shiftKey: false };
+		const bothMods = { ctrlKey: true, metaKey: true, altKey: false, shiftKey: false };
+		const emptyInput: TextEditTarget = { tagName: "INPUT", type: "text", value: "" };
+		const filledInput: TextEditTarget = { tagName: "INPUT", type: "text", value: "query" };
+		const filledSearch: TextEditTarget = { tagName: "INPUT", type: "search", value: "abc" };
+		const checkbox: TextEditTarget = { tagName: "INPUT", type: "checkbox", value: "on" };
+		const emptyTextarea: TextEditTarget = { tagName: "TEXTAREA", value: "" };
+		const filledTextarea: TextEditTarget = { tagName: "TEXTAREA", value: "line" };
+		const select: TextEditTarget = { tagName: "SELECT", value: "a" };
+		const div: TextEditTarget = { tagName: "DIV", textContent: "hello" };
+		const emptyEditable: TextEditTarget = { tagName: "DIV", isContentEditable: true, textContent: "" };
+		const filledEditable: TextEditTarget = { tagName: "DIV", isContentEditable: true, textContent: "edit" };
+		const emptyComposer: TextEditTarget = { tagName: "DIV", isContentEditable: true, dataset: { composer: "", empty: "", value: "" }, textContent: "" };
+		const zwspComposer: TextEditTarget = { tagName: "DIV", isContentEditable: true, dataset: { composer: "", empty: "", value: "" }, textContent: "\u200b" };
+		const filledComposer: TextEditTarget = { tagName: "DIV", isContentEditable: true, dataset: { composer: "", value: "hello" }, textContent: "hello" };
+		const composingComposer: TextEditTarget = { tagName: "DIV", isContentEditable: true, dataset: { composer: "", empty: "" }, textContent: "ㅎ" };
+		const readonlyComposer: TextEditTarget = { tagName: "DIV", isContentEditable: false, dataset: { composer: "", value: "hello" }, textContent: "hello" };
+		const childInFilled: TextEditTarget = { tagName: "SPAN", isContentEditable: true, closest: (s) => (s === "[data-composer]" ? filledComposer : null) };
+		const childInEmpty: TextEditTarget = { tagName: "SPAN", isContentEditable: true, closest: (s) => (s === "[data-composer]" ? emptyComposer : null) };
+
+		// Toggle off: never yields
+		expect(yieldsToNativeTextEdit({ combo: "Mod+ArrowLeft", event: cmdLeft, target: filledComposer, mac: true, enabled: false })).toBe(false);
+		expect(yieldsToNativeTextEdit({ combo: "Mod+ArrowLeft", event: cmdLeft, target: filledInput, mac: true, enabled: false })).toBe(false);
+
+		// Toggle on: filled text inputs yield; empty inputs and non-text inputs do not
+		expect(yieldsToNativeTextEdit({ combo: "Mod+ArrowLeft", event: cmdLeft, target: filledInput, mac: true, enabled: true })).toBe(true);
+		expect(yieldsToNativeTextEdit({ combo: "Mod+ArrowLeft", event: cmdLeft, target: filledSearch, mac: true, enabled: true })).toBe(true);
+		expect(yieldsToNativeTextEdit({ combo: "Mod+ArrowLeft", event: cmdLeft, target: filledTextarea, mac: true, enabled: true })).toBe(true);
+		expect(yieldsToNativeTextEdit({ combo: "Mod+ArrowLeft", event: cmdLeft, target: filledEditable, mac: true, enabled: true })).toBe(true);
+		expect(yieldsToNativeTextEdit({ combo: "Mod+ArrowLeft", event: cmdLeft, target: emptyInput, mac: true, enabled: true })).toBe(false);
+		expect(yieldsToNativeTextEdit({ combo: "Mod+ArrowLeft", event: cmdLeft, target: emptyTextarea, mac: true, enabled: true })).toBe(false);
+		expect(yieldsToNativeTextEdit({ combo: "Mod+ArrowLeft", event: cmdLeft, target: emptyEditable, mac: true, enabled: true })).toBe(false);
+		expect(yieldsToNativeTextEdit({ combo: "Mod+ArrowLeft", event: cmdLeft, target: checkbox, mac: true, enabled: true })).toBe(false);
+		expect(yieldsToNativeTextEdit({ combo: "Mod+ArrowLeft", event: cmdLeft, target: select, mac: true, enabled: true })).toBe(false);
+		expect(yieldsToNativeTextEdit({ combo: "Mod+ArrowLeft", event: cmdLeft, target: div, mac: true, enabled: true })).toBe(false);
+		expect(yieldsToNativeTextEdit({ combo: "Mod+ArrowLeft", event: cmdLeft, target: null, mac: true, enabled: true })).toBe(false);
+
+		// Composer: yields only when editable and non-empty (ignoring zero-width spaces, honoring IME text & child spans)
+		expect(yieldsToNativeTextEdit({ combo: "Mod+ArrowLeft", event: cmdLeft, target: emptyComposer, mac: true, enabled: true })).toBe(false);
+		expect(yieldsToNativeTextEdit({ combo: "Mod+ArrowLeft", event: cmdLeft, target: zwspComposer, mac: true, enabled: true })).toBe(false);
+		expect(yieldsToNativeTextEdit({ combo: "Mod+ArrowLeft", event: cmdLeft, target: childInEmpty, mac: true, enabled: true })).toBe(false);
+		expect(yieldsToNativeTextEdit({ combo: "Mod+ArrowLeft", event: cmdLeft, target: filledComposer, mac: true, enabled: true })).toBe(true);
+		expect(yieldsToNativeTextEdit({ combo: "Mod+ArrowLeft", event: cmdLeft, target: childInFilled, mac: true, enabled: true })).toBe(true);
+		expect(yieldsToNativeTextEdit({ combo: "Mod+ArrowLeft", event: cmdLeft, target: composingComposer, mac: true, enabled: true })).toBe(true);
+		expect(yieldsToNativeTextEdit({ combo: "Mod+ArrowLeft", event: cmdLeft, target: readonlyComposer, mac: true, enabled: true })).toBe(false);
+
+		// Physical modifier matching per OS: macOS requires Meta (not Ctrl); Win/Linux requires Ctrl (not Meta/Super)
+		expect(yieldsToNativeTextEdit({ combo: "Mod+ArrowLeft", event: ctrlLeft, target: filledComposer, mac: true, enabled: true })).toBe(false);
+		expect(yieldsToNativeTextEdit({ combo: "Mod+ArrowLeft", event: bothMods, target: filledComposer, mac: true, enabled: true })).toBe(false);
+		expect(yieldsToNativeTextEdit({ combo: "Mod+ArrowLeft", event: ctrlLeft, target: filledComposer, mac: false, enabled: true })).toBe(true);
+		expect(yieldsToNativeTextEdit({ combo: "Mod+ArrowLeft", event: cmdLeft, target: filledComposer, mac: false, enabled: true })).toBe(false);
+		expect(yieldsToNativeTextEdit({ combo: "Mod+ArrowLeft", event: bothMods, target: filledComposer, mac: false, enabled: true })).toBe(false);
 	});
 });

@@ -26,6 +26,7 @@ export const K = {
   uiScale: "pipaya.uiscale", // whole-app zoom in percent, 50-200 (100 = normal)
   expandWork: "pipaya.work.expand", // work boxes (a reply's tool calls) open by default: true | false
   keys: "pipaya.keys", // shortcut overrides: { <action>: combo | "" }
+  nativeInputKeys: "pipaya.keys.nativeInput", // prefer OS text-editing shortcuts (Cmd/Ctrl+Arrow, etc.) in text fields: true | false
   settingsFold: "pipaya.settings.fold", // settings sections folded or unfolded by the user: { <tabId>: true (folded) | false }
   folded: "pipaya.folded", // sidebar tree nodes collapsed: "<serverId>", "project\u0000<serverId>\u0000<root>", "group\u0000<groupId>"
   openDirs: "pipaya.opendirs", // sidebar folders opened to list their tabs (folders start folded): ["<serverId>\u0000<workdir>", ...]

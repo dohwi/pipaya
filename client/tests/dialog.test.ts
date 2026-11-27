@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { backLayer, handleBack, hasBackLayer, modalCount, modalLayer, onModalStackChange, toggleLayer, trapTab, type LayerOpts } from "../src/lib/dialog";
+import { isMac } from "../src/lib/keys";
+import { configureUiEnv } from "../src/lib/ui-env.svelte";
 
 /** Just enough DOM for the Tab trap: focusable children with a layout box, and a document focus pointer. */
 type Fake = { name: string; tabIndex: number; focus: () => void; getClientRects: () => unknown[]; closest: () => null };
@@ -205,6 +207,45 @@ describe("toggleLayer", () => {
 		toggleLayer(k3.e, locked);
 		expect(k3.prevented).toBe(true);
 		expect(closed).toBe(0);
+	});
+
+	test("yields Mod+Arrow closeBinding only in a non-empty input when nativeInputKeys is enabled, never on a chord second key", () => {
+		let closed = 0;
+		const mod = isMac ? { metaKey: true } : { ctrlKey: true };
+		const filledInput = { tagName: "INPUT", type: "text", value: "abc" } as unknown as EventTarget;
+		const emptyInput = { tagName: "INPUT", type: "text", value: "" } as unknown as EventTarget;
+		const l = layer({ closeBinding: "Mod+ArrowLeft", onclose: () => closed++ });
+		try {
+			configureUiEnv({ nativeInputKeys: () => true });
+			// Non-empty input: yields to native cursor jump
+			const k1 = keyEvent({ code: "ArrowLeft", key: "ArrowLeft", ...mod, target: filledInput });
+			toggleLayer(k1.e, l);
+			expect(k1.prevented).toBe(false);
+			expect(closed).toBe(0);
+			// Empty input: closes the modal
+			const k2 = keyEvent({ code: "ArrowLeft", key: "ArrowLeft", ...mod, target: emptyInput });
+			toggleLayer(k2.e, l);
+			expect(k2.prevented).toBe(true);
+			expect(closed).toBe(1);
+			// Toggle off: closes even in a non-empty input
+			configureUiEnv({ nativeInputKeys: () => false });
+			const k3 = keyEvent({ code: "ArrowLeft", key: "ArrowLeft", ...mod, target: filledInput });
+			toggleLayer(k3.e, l);
+			expect(k3.prevented).toBe(true);
+			expect(closed).toBe(2);
+			// Armed chord second key never yields even when nativeInputKeys is on
+			configureUiEnv({ nativeInputKeys: () => true });
+			const chord = layer({ closeBinding: "Mod+B+ArrowLeft", onclose: () => closed++ });
+			const c1 = keyEvent({ code: "KeyB", key: "b", ...mod, target: filledInput });
+			toggleLayer(c1.e, chord);
+			expect(c1.prevented).toBe(true);
+			const c2 = keyEvent({ code: "ArrowLeft", key: "ArrowLeft", ...mod, target: filledInput });
+			toggleLayer(c2.e, chord);
+			expect(c2.prevented).toBe(true);
+			expect(closed).toBe(3);
+		} finally {
+			configureUiEnv({ nativeInputKeys: () => true });
+		}
 	});
 });
 

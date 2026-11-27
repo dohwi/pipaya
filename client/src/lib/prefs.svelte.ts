@@ -65,6 +65,8 @@ export class Preferences {
   footer = $state<FooterPrefs>(sanitizeFooter(read<unknown>(K.footer, null)));
   /** Work boxes (the tool calls of a reply) show every step open instead of one summary line. */
   expandWork = $state(read<boolean>(K.expandWork, false) === true);
+  /** Prefer OS text-editing shortcuts (e.g. ⌘←/→ line jump) inside focused text inputs over custom app shortcuts. */
+  nativeInputKeys = $state(read<unknown>(K.nativeInputKeys, true) !== false);
   /** The shortcut editor is capturing keys: global shortcuts stand down. */
   recordingKey = $state(false);
 
@@ -86,6 +88,7 @@ export class Preferences {
     this.terminal = sanitizeTerminal(read<unknown>(K.terminal, null));
     this.footer = sanitizeFooter(read<unknown>(K.footer, null));
     this.expandWork = read<boolean>(K.expandWork, false) === true;
+    this.nativeInputKeys = read<unknown>(K.nativeInputKeys, true) !== false;
     this.uiScale = clampScale(read<unknown>(K.uiScale, 100));
     applyUiScale(this.uiScale);
     this.applyTheme();
@@ -202,6 +205,11 @@ export class Preferences {
   }
 
   /* ---------- shortcuts ---------- */
+
+  setNativeInputKeys(on: boolean) {
+    this.nativeInputKeys = on;
+    write(K.nativeInputKeys, on);
+  }
 
   /** Bind `combo` to `id`. A combo can only do one thing, so another action holding it is unbound and returned. */
   setBinding(id: ActionId, combo: string): ActionId | null {

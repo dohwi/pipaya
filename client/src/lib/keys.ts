@@ -728,6 +728,100 @@ export function isBareCombo(combo: string): boolean {
   return !mods.includes("Mod") && !mods.includes("Alt");
 }
 
+const ARROW_KEYS = new Set(["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"]);
+const DELETE_KEYS = new Set(["Backspace", "Delete"]);
+const EDGE_KEYS = new Set(["Home", "End"]);
+const NON_TEXT_INPUT_TYPES = new Set([
+  "checkbox",
+  "radio",
+  "button",
+  "submit",
+  "reset",
+  "range",
+  "color",
+  "file",
+  "hidden",
+  "image",
+]);
+
+export interface TextEditTarget {
+  tagName?: string;
+  type?: string;
+  value?: string;
+  isContentEditable?: boolean;
+  textContent?: string | null;
+  dataset?: { composer?: string; empty?: string; value?: string };
+  closest?: (selector: string) => unknown;
+}
+
+/**
+ * True when `combo` is a standard OS cursor-navigation, selection, or deletion shortcut in a text field
+ * (e.g. ⌘←/→ line start/end, ⌥←/→ word nav, ⌘/⌥+Backspace on macOS; Ctrl+Arrow/Home/End/Backspace on Win/Linux).
+ * Chords (multiple plain keys) and Mod+Alt combinations are excluded.
+ */
+export function isNativeTextEditCombo(combo: string, mac = isMac): boolean {
+  const { mods, keys } = splitCombo(combo);
+  if (keys.length !== 1) return false;
+  const key = keys[0]!;
+  const hasMod = mods.includes("Mod");
+  const hasAlt = mods.includes("Alt");
+  const hasShift = mods.includes("Shift");
+  if (mac) {
+    if (hasMod === hasAlt) return false;
+    if (ARROW_KEYS.has(key)) return true;
+    return !hasShift && DELETE_KEYS.has(key);
+  }
+  if (!hasMod || hasAlt) return false;
+  if (ARROW_KEYS.has(key) || EDGE_KEYS.has(key)) return true;
+  return !hasShift && DELETE_KEYS.has(key);
+}
+
+/**
+ * Whether an app/extension shortcut should yield to native text-editing behaviour inside a focused text input.
+ * Yields only when the focused input actually holds text (empty inputs have nothing to move across or delete,
+ * so custom navigation/modal-toggle shortcuts still chain cleanly even when an input is auto-focused).
+ */
+export function yieldsToNativeTextEdit(o: {
+  combo: string;
+  event?: { ctrlKey: boolean; metaKey: boolean; altKey: boolean; shiftKey: boolean };
+  target: TextEditTarget | null;
+  mac?: boolean;
+  enabled?: boolean;
+}): boolean {
+  if (o.enabled === false) return false;
+  const mac = o.mac ?? isMac;
+  if (!isNativeTextEditCombo(o.combo, mac)) return false;
+  if (o.event && splitCombo(o.combo).mods.includes("Mod")) {
+    // Only the OS's real text-editing modifier counts (⌘ on macOS, Ctrl on Win/Linux — never Ctrl+Arrow on macOS
+    // or Win/Super+Arrow on Win/Linux).
+    const ok = mac ? o.event.metaKey && !o.event.ctrlKey : o.event.ctrlKey && !o.event.metaKey;
+    if (!ok) return false;
+  }
+  const t = o.target;
+  if (!t) return false;
+  const composer =
+    t.dataset?.composer !== undefined
+      ? t
+      : ((t.closest?.("[data-composer]") as TextEditTarget | null) ?? null);
+  if (composer) {
+    if (composer.isContentEditable === false) return false;
+    // Check DOM textContent (stripping zero-width spaces used by editor-dom) rather than data-empty/data-value
+    // so the very first character of an IME composition already counts as non-empty.
+    return (composer.textContent ?? "").replace(/\u200b/g, "") !== "";
+  }
+  if (t.isContentEditable) {
+    const root = (t.closest?.('[contenteditable="true"], [contenteditable=""]') as TextEditTarget | null) ?? t;
+    return (root.textContent ?? "").replace(/\u200b/g, "") !== "";
+  }
+  const tag = (t.tagName ?? "").toUpperCase();
+  if (tag === "TEXTAREA") return (t.value ?? "") !== "";
+  if (tag === "INPUT") {
+    if (NON_TEXT_INPUT_TYPES.has((t.type ?? "text").toLowerCase())) return false;
+    return (t.value ?? "") !== "";
+  }
+  return false;
+}
+
 export const isMac =
   typeof navigator !== "undefined" &&
   /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
