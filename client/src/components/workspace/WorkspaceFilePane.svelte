@@ -10,6 +10,7 @@
 	import { saveFile } from "../../lib/save-file";
 	import { sharedMedia } from "../../lib/media-urls";
 	import { app } from "../../lib/store.svelte";
+	import { audioPlayer, disposeAudioPlayer } from "../../lib/audio-view";
 	import { applyVideoState, disposeVideoPlayer, readVideoState, videoPlayer } from "../../lib/video-view";
 	import { buildFullFileDiff, formatLineSpec, splitHighlightedHtml, type FullDiffRow } from "../../lib/workspace-edits";
 	import { workspaceViewer } from "../../lib/workspace-viewer.svelte";
@@ -58,6 +59,7 @@
 	let mediaFailed = $state(false);
 	let imgDims = $state<{ w: number; h: number } | null>(null);
 	let videoHost = $state<HTMLElement>();
+	let audioHost = $state<HTMLElement>();
 	let saving = $state(false);
 	let copied = $state(false);
 
@@ -140,6 +142,19 @@
 			URL.revokeObjectURL(blobUrl);
 			if (htmlUrl === blobUrl) htmlUrl = null;
 		};
+	});
+
+	// Mount Pipaya's audio player (theme-native controls instead of the browser's).
+	$effect(() => {
+		if (kind !== "audio" || !mediaUrl || mediaFailed || !audioHost) return;
+		const player = audioPlayer(mediaUrl, {
+			filename: fileName || undefined,
+			download: false,
+			copy: false,
+			onError: () => (mediaFailed = true),
+		});
+		audioHost.replaceChildren(player);
+		return () => disposeAudioPlayer(player);
 	});
 
 	// Mount Pipaya's video player (includes mobile fullscreen support).
@@ -1040,8 +1055,7 @@
 						</div>
 					{:else if kind === "audio" && mediaUrl}
 						<div class="media-wrap">
-							<!-- svelte-ignore a11y_media_has_caption -->
-							<audio class="audio" src={mediaUrl} controls preload="metadata" onerror={() => (mediaFailed = true)}></audio>
+							<div class="audiohost" bind:this={audioHost}></div>
 						</div>
 					{:else if kind === "video" && mediaUrl}
 						<div class="media-wrap">
@@ -1469,8 +1483,11 @@
 		border: 0;
 		background: var(--bg);
 	}
-	.audio {
-		width: min(480px, 100%);
+	.audiohost {
+		width: min(520px, 100%);
+	}
+	.audiohost :global(.wd-audio-wrap) {
+		margin: 0;
 	}
 	.videohost {
 		width: min(960px, 100%);

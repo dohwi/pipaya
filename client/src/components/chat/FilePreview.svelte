@@ -12,6 +12,7 @@
 	import Modal from "../ui/Modal.svelte";
 	import { saveFile } from "../../lib/save-file";
 	import { sharedMedia } from "../../lib/media-urls";
+	import { audioPlayer, disposeAudioPlayer } from "../../lib/audio-view";
 	import { applyVideoState, disposeVideoPlayer, isVideoFullscreen, readVideoState, videoPlayer } from "../../lib/video-view";
 
 	/** Preview of a file in the session's working directory: an image, PDF, audio, video, Markdown, CSV table, text, or just a download for anything else. */
@@ -39,6 +40,7 @@
 
 	/** where the video player (lib/video-view.ts) is drawn: it has a full-screen button of its own, which a phone WebView lacks natively */
 	let videoHost = $state<HTMLElement>();
+	let audioHost = $state<HTMLElement>();
 	let bodyEl = $state<HTMLElement>();
 	let linesHost = $state<HTMLElement>();
 	$effect(() => {
@@ -68,6 +70,19 @@
 		player.querySelector("video")?.addEventListener("error", () => (mediaFailed = true));
 		videoHost.replaceChildren(player);
 		return () => disposeVideoPlayer(player);
+	});
+
+	$effect(() => {
+		const target = open;
+		if (kind !== "audio" || !url || mediaFailed || !audioHost || !target) return;
+		const player = audioPlayer(url, {
+			filename: target.file.name,
+			download: false,
+			copy: false,
+			onError: () => (mediaFailed = true),
+		});
+		audioHost.replaceChildren(player);
+		return () => disposeAudioPlayer(player);
 	});
 
 	const MAX_NUMBERED_LINES = 2000;
@@ -286,8 +301,7 @@
 			{:else if (kind === "audio" || kind === "video") && mediaFailed}
 				<div class="note">{t("재생할 수 없는 파일입니다. 파일이 깨졌거나 이 기기가 지원하지 않는 코덱일 수 있습니다. 저장해서 열어 보세요.")}</div>
 			{:else if kind === "audio" && url}
-				<!-- svelte-ignore a11y_media_has_caption -->
-				<audio class="media" src={url} controls preload="metadata" onerror={() => (mediaFailed = true)}></audio>
+				<div class="audiohost" bind:this={audioHost}></div>
 			{:else if kind === "video" && url}
 				<div class="videohost" bind:this={videoHost}></div>
 			{:else if kind === "html" && htmlUrl && !source}
@@ -408,11 +422,8 @@
 	:global(.iconbtn.on) {
 		color: var(--accent, inherit);
 	}
-	.media {
-		display: block;
-		width: 100%;
-		max-height: calc(var(--dvh) * 0.70);
-		border-radius: var(--radius);
+	.audiohost :global(.wd-audio-wrap) {
+		margin: 0 auto;
 	}
 	.videohost {
 		display: grid;
