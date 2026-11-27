@@ -1,6 +1,8 @@
 <script lang="ts">
 	import ConfirmButton from "../ui/ConfirmButton.svelte";
 	import SearchField from "../ui/SearchField.svelte";
+	import SettingRow from "../ui/SettingRow.svelte";
+	import Switch from "../ui/Switch.svelte";
 	import { msg, t } from "../../lib/i18n";
 	import { onDestroy } from "svelte";
 	import { app } from "../../lib/store.svelte";
@@ -8,7 +10,7 @@
 	import { appConflict } from "../../lib/extensions/shortcuts";
 	import { errorText } from "../../lib/api";
 	import Icon from "../ui/Icon.svelte";
-	import { ACTIONS, DEFAULT_BINDINGS, MAX_KEYS, emptyRecording, isBareCombo, fixedActionFor, formatCombo, recordKey, recordingCombo, recordingIsEmpty, recordingLabel, undoRecording, type ActionId } from "../../lib/keys";
+	import { ACTIONS, DEFAULT_BINDINGS, MAX_KEYS, emptyRecording, isBareCombo, isMac, isNativeTextEditCombo, fixedActionFor, formatCombo, recordKey, recordingCombo, recordingIsEmpty, recordingLabel, undoRecording, type ActionId } from "../../lib/keys";
 
 	/** `filter` narrows the list by name, hint or key; the Settings search hands it over when a shortcut result is opened. */
 	let { filter = $bindable("") }: { filter?: string } = $props();
@@ -46,6 +48,12 @@
 		extensions.shortcutList().filter((x) => !q || q.split(/\s+/).every((w) => [x.label, x.ownerName, x.combo ?? "", formatCombo(x.combo ?? "")].join("\n").toLowerCase().includes(w))),
 	);
 	const changed = $derived(ACTIONS.some((a) => app.prefs.bindings[a.id] !== a.default) || extensions.shortcutOverrideCount > 0);
+
+	const nativeInputHint = $derived(
+		isMac
+			? t("입력창에 글자가 있을 때 ⌘←/→, ⌥←/→ 등 기본 커서·삭제 단축키를 유지합니다. 비어 있는 입력창이나 입력창 밖에서는 지정한 단축키가 동작합니다")
+			: t("입력창에 글자가 있을 때 Ctrl+←/→, Ctrl+Backspace 등 기본 커서·삭제 단축키를 유지합니다. 비어 있는 입력창이나 입력창 밖에서는 지정한 단축키가 동작합니다"),
+	);
 
 	function start(id: ActionId) {
 		void extensions.releaseShortcut("recording").catch(() => {}); // a held extension shortcut ends: the keys now belong to this editor
@@ -167,6 +175,12 @@
 		</span>
 	</span>
 
+	<section class="set-group">
+		<SettingRow label={t("입력창 기본 편집 단축키 우선")} hint={nativeInputHint}>
+			<Switch checked={app.prefs.nativeInputKeys} label={t("입력창 기본 편집 단축키 우선")} onchange={(on) => app.prefs.setNativeInputKeys(on)} />
+		</SettingRow>
+	</section>
+
 	<SearchField label={t("단축키 검색")} bind:value={filter} />
 	{#if !visible.length}<span class="hint">{t("검색 결과가 없습니다")}</span>{/if}
 
@@ -180,7 +194,7 @@
 				<div class="what">
 					<span class="name">{t(a.label)}</span>
 					{#if a.hint}<span class="sub">{t(a.hint)}</span>{/if}
-					{#if combo && !a.fixed && isBareCombo(combo)}<span class="sub">{t("입력창에서 글자를 쓰는 중에는 실행되지 않습니다")}</span>{/if}
+					{#if combo && !a.fixed && isBareCombo(combo)}<span class="sub">{t("입력창에서 글자를 쓰는 중에는 실행되지 않습니다")}</span>{:else if combo && !a.fixed && app.prefs.nativeInputKeys && isNativeTextEditCombo(combo, isMac)}<span class="sub">{t("입력창에 글자가 있을 때는 기본 커서·삭제 단축키가 우선합니다")}</span>{/if}
 					{#if note?.id === a.id}<span class="note" class:bad={note.bad}>{note.text}</span>{/if}
 				</div>
 				{#if a.fixed}
@@ -215,6 +229,7 @@
 				<div class="what">
 					<span class="name">{x.label}</span>
 					<span class="sub">{x.ownerName}{#if x.hold} · {t("누르고 있는 동안 동작")}{/if}</span>
+					{#if x.combo && app.prefs.nativeInputKeys && isNativeTextEditCombo(x.combo, isMac)}<span class="sub">{t("입력창에 글자가 있을 때는 기본 커서·삭제 단축키가 우선합니다")}</span>{/if}
 					{#if taken}<span class="note bad">{t('앱 단축키 "{name}"이(가) 우선이라 이 확장 단축키는 동작하지 않습니다', { name: label(taken) })}</span>{/if}
 					{#if extNote?.key === x.owner + ":" + x.id}<span class="note" class:bad={extNote.bad}>{extNote.text}</span>{/if}
 				</div>

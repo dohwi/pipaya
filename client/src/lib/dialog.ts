@@ -11,7 +11,8 @@
  * `on()` from svelte/events so the delegated `onkeydown` handlers of the children still run first.
  */
 import { on } from "svelte/events";
-import { emptyRecording, isBareCombo, isModifierCode, recordKey, recordingCombo, tabComboYieldsFocus, type Recording } from "./keys";
+import { emptyRecording, isBareCombo, isModifierCode, recordKey, recordingCombo, tabComboYieldsFocus, yieldsToNativeTextEdit, type Recording } from "./keys";
+import { uiEnv } from "./ui-env.svelte";
 
 export interface LayerOpts {
 	/** Only this binding may dismiss the layer; never dispatch an action to the page behind it. */
@@ -210,7 +211,12 @@ export function toggleLayer(e: KeyboardEvent, layer: Layer) {
 	const typing = target?.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target?.tagName ?? "");
 	const next = recordKey(layer.prefix ?? emptyRecording(), e).next;
 	const combo = recordingCombo(next);
-	if (!layer.prefix && ((typing && isBareCombo(combo)) || tabComboYieldsFocus(combo, target))) return;
+	if (
+		!layer.prefix &&
+		((typing && isBareCombo(combo)) ||
+			tabComboYieldsFocus(combo, target) ||
+			yieldsToNativeTextEdit({ combo, event: e, target, enabled: uiEnv.nativeInputKeys() }))
+	) return;
 	if (binding === combo || binding.startsWith(`${combo}+`)) {
 		e.preventDefault();
 		if (e.repeat) return;

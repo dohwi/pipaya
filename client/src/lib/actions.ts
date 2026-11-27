@@ -33,6 +33,7 @@ import {
   renameShouldFallThrough,
   splitCombo,
   tabComboYieldsFocus,
+  yieldsToNativeTextEdit,
   type ActionId,
 } from "./keys";
 import { handleBack, hasBackLayer, topLayer } from "./dialog";
@@ -612,6 +613,14 @@ export function onShortcut(e: KeyboardEvent) {
   }
   if (e.repeat || fired) return;
   const mods = { mod: e.ctrlKey || e.metaKey, alt: e.altKey, shift: e.shiftKey };
+  const target = e.target as HTMLElement | null;
+  const yieldsToInput = (combo: string) =>
+    // Shift+Tab outside the composer moves focus backwards, as everywhere else.
+    tabComboYieldsFocus(combo, target) ||
+    // Keys without Ctrl/Alt are normal typing in a text field: leave them alone there.
+    (isBareCombo(combo) && typingTarget(e)) ||
+    // Standard OS text-editing shortcuts (e.g. ⌘←/→ line jump) stay native inside focused text inputs when enabled.
+    (!fromTerminal && yieldsToNativeTextEdit({ combo, event: e, target, enabled: app.prefs.nativeInputKeys }));
   // Keys held together are one shortcut (J+K+L). Fall back to this key alone so a shortcut still works while
   // another plain key happens to be down.
   for (const keys of [[...held], [key]]) {
@@ -627,6 +636,7 @@ export function onShortcut(e: KeyboardEvent) {
       const own = extensions.shortcutFor(combo);
       // An IME composition owns the key, also when a focused terminal let it through above.
       if (own && !composing(e)) {
+        if (yieldsToInput(combo)) return;
         e.preventDefault();
         fired = true;
         extensions.pressShortcut(own).catch(extensionShortcutFailed);
@@ -634,10 +644,7 @@ export function onShortcut(e: KeyboardEvent) {
       }
     }
     if (!id && !starts) continue;
-    // Shift+Tab outside the composer moves focus backwards, as everywhere else.
-    if (tabComboYieldsFocus(combo, e.target as HTMLElement | null)) return;
-    // Keys without Ctrl/Alt are normal typing in a text field: leave them alone there.
-    if (isBareCombo(combo) && typingTarget(e)) return;
+    if (yieldsToInput(combo)) return;
     e.preventDefault();
     if (starts) {
       const prefix = { ...mods, keys };

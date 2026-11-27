@@ -2308,4 +2308,8 @@ export const en: Record<string, string> = {
 	"파일 뷰어 닫기": "Close file viewer",
 	"변경된 파일 {n}개": "{n} changed files",
 	"변경된 파일 {n}개 (+{add} / -{del})": "{n} changed files (+{add} / -{del})",
+	"입력창 기본 편집 단축키 우선": "Prefer native editing shortcuts in inputs",
+	"입력창에 글자가 있을 때 ⌘←/→, ⌥←/→ 등 기본 커서·삭제 단축키를 유지합니다. 비어 있는 입력창이나 입력창 밖에서는 지정한 단축키가 동작합니다": "Keep native cursor and delete shortcuts (⌘←/→, ⌥←/→, etc.) when an input has text. Your custom shortcuts still run in empty inputs or outside inputs",
+	"입력창에 글자가 있을 때 Ctrl+←/→, Ctrl+Backspace 등 기본 커서·삭제 단축키를 유지합니다. 비어 있는 입력창이나 입력창 밖에서는 지정한 단축키가 동작합니다": "Keep native cursor and delete shortcuts (Ctrl+←/→, Ctrl+Backspace, etc.) when an input has text. Your custom shortcuts still run in empty inputs or outside inputs",
+	"입력창에 글자가 있을 때는 기본 커서·삭제 단축키가 우선합니다": "Native cursor and delete shortcuts take priority when an input has text",
 };

@@ -3413,4 +3413,5 @@ setGoalActivity((id) => {
 configureUiEnv({
   dark: () => app.prefs.resolvedDark,
   closeBinding: (action) => (app.prefs.recordingKey ? undefined : app.prefs.bindings[action]),
+  nativeInputKeys: () => app.prefs.nativeInputKeys,
 });
