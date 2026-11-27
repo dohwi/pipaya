@@ -622,6 +622,7 @@
 					<img
 						bind:this={pic}
 						src={displaySrc}
+						referrerpolicy="no-referrer"
 						alt={t("첨부 이미지 {n}", { n: set.index + 1 })}
 						draggable="false"
 						style="transform: translate({x}px, {y}px) scale({scale})"

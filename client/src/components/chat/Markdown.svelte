@@ -484,7 +484,10 @@
 		const items = all.map((el): ViewerImage => {
 			if (el instanceof HTMLImageElement) {
 				const path = el.dataset.wdSrc;
-				if (!owner || !path) return { src: el.src, mimeType: "image/*" };
+				if (!owner || !path) {
+					const rname = remoteName(el.src);
+					return { src: el.src, mimeType: "image/*", ...(rname !== "image" ? { name: rname } : {}) };
+				}
 				const name = baseName(path);
 				const fullKey = mediaKey(owner, "image-full", path);
 				const cachedFull = sharedMedia.peek(fullKey);
