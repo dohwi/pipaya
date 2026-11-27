@@ -1,4 +1,4 @@
-import { actionFor, buildCombo, hasLongerBinding, keyName } from "./keys";
+import { actionFor, buildCombo, hasLongerBinding, isMac, isNativeTextEditEvent, keyName } from "./keys";
 import { PROTOCOL_QUERY, PROTOCOL_VERSION } from "./protocol";
 
 /**
@@ -62,15 +62,66 @@ export function terminalSocketUrl(baseUrl: string, credential: string, id: strin
  * Keys typed in a terminal belong to the shell (Ctrl+B, Ctrl+W, Esc, Alt+F all mean something there). Only a few app
  * shortcuts reach through: the ones bound with Ctrl/⌘ together with Shift or Alt, and function keys, so the user can
  * still leave the terminal or split it without the mouse (F6 moves to the next pane, Mod+Shift+[ / ] to the next tab).
+ * When `nativeEdit` is true, non-Shift OS cursor/delete shortcuts (e.g. ⌘←/→, ⌥←/→, ⌘⌫ on macOS; Ctrl+←/→/Home/End/⌫
+ * on Win/Linux) stay with the terminal even when `appFirst` is enabled.
  */
-export function appTakesKey(e: { code: string; ctrlKey: boolean; metaKey: boolean; altKey: boolean; shiftKey: boolean }, bindings: Record<string, string>, appFirst = false): boolean {
+export function appTakesKey(
+	e: { code: string; ctrlKey: boolean; metaKey: boolean; altKey: boolean; shiftKey: boolean },
+	bindings: Record<string, string>,
+	appFirst = false,
+	nativeEdit = false,
+	mac = isMac,
+): boolean {
 	const mod = e.ctrlKey || e.metaKey;
 	const fn = /^F\d{1,2}$/.test(e.code);
 	// appFirst: every bound combo with Ctrl/⌘/Alt wins (also the start of a longer one, Ctrl+B of Ctrl+B+\). Plain and
 	// Shift-only keys stay the shell's, or typing in the terminal would break.
 	if (!fn && !(mod && (e.shiftKey || e.altKey)) && !(appFirst && (mod || e.altKey))) return false;
 	const combo = buildCombo({ mod, alt: e.altKey, shift: e.shiftKey }, [keyName(e.code)]);
+	if (nativeEdit && !e.shiftKey && isNativeTextEditEvent(e, combo, mac)) return false;
 	return !!actionFor(combo, bindings) || (appFirst && hasLongerBinding(combo, bindings));
+}
+
+export interface TerminalEditOpts {
+	mac?: boolean;
+	nativeEdit: boolean;
+	pty: boolean;
+	/** True while a full-screen TUI (vim, less, tmux) owns the alternate screen buffer. */
+	alternate: boolean;
+	/** Server OS from `TerminalSupport.platform` ("linux", "darwin", "win32", ...). */
+	platform?: string;
+}
+
+export type TerminalEditAction = { kind: "send"; data: string } | { kind: "swallow" } | null;
+
+/**
+ * macOS line- and word-editing shortcuts that xterm.js does not translate on its own:
+ * - ⌘← / ⌘→: line start / end (Ctrl+A / Ctrl+E on Unix, Home / End on Windows)
+ * - ⌘⌫: kill to line start (Ctrl+U on Unix, Ctrl+Home on PowerShell/PSReadLine)
+ * - ⌥← / ⌥→: word back / forward (ESC+b / ESC+f on Unix, Ctrl+←/→ on Windows)
+ * Skips translation in the alternate buffer (vim/less/tmux) or over plain pipes, while still swallowing ⌘+Arrow so
+ * the browser never navigates Back/Forward.
+ */
+export function terminalEditAction(
+	e: { code: string; ctrlKey: boolean; metaKey: boolean; altKey: boolean; shiftKey: boolean; isComposing?: boolean; keyCode?: number },
+	opts: TerminalEditOpts,
+): TerminalEditAction {
+	if (!(opts.mac ?? isMac)) return null;
+	if (e.isComposing || e.keyCode === 229 || e.ctrlKey || e.shiftKey) return null;
+	const translate = opts.nativeEdit && opts.pty && !opts.alternate;
+	const win = opts.platform === "win32";
+	if (e.metaKey && !e.altKey) {
+		if (e.code === "ArrowLeft") return translate ? { kind: "send", data: win ? "\x1b[H" : "\x01" } : { kind: "swallow" };
+		if (e.code === "ArrowRight") return translate ? { kind: "send", data: win ? "\x1b[F" : "\x05" } : { kind: "swallow" };
+		if (e.code === "ArrowUp" || e.code === "ArrowDown") return { kind: "swallow" };
+		if (e.code === "Backspace") return translate ? { kind: "send", data: win ? "\x1b[1;5H" : "\x15" } : null;
+		return null;
+	}
+	if (e.altKey && !e.metaKey && translate) {
+		if (e.code === "ArrowLeft") return { kind: "send", data: win ? "\x1b[1;5D" : "\x1bb" };
+		if (e.code === "ArrowRight") return { kind: "send", data: win ? "\x1b[1;5C" : "\x1bf" };
+	}
+	return null;
 }
 
 /**

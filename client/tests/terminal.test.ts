@@ -3,7 +3,7 @@ import { pair } from "../src/lib/layout";
 import { sessionOrder, sidebarDirs } from "../src/lib/nav";
 import { DEFAULT_BINDINGS } from "../src/lib/keys";
 import { PROTOCOL_VERSION } from "../src/lib/protocol";
-import { appTakesKey, clipboardKey, isTerminalId, localEcho, platformName, terminalSocketUrl, type TerminalInfo } from "../src/lib/terminal";
+import { appTakesKey, clipboardKey, isTerminalId, localEcho, platformName, terminalEditAction, terminalSocketUrl, type TerminalInfo } from "../src/lib/terminal";
 import type { Group, Session } from "../src/lib/types";
 
 const sess = (id: string, cwd: string, updatedAt: number) => ({ id, cwd, updatedAt, title: id }) as Session;
@@ -52,6 +52,92 @@ describe("app shortcuts first in a terminal", () => {
 		expect(appTakesKey(key("KeyA"), DEFAULT_BINDINGS, true)).toBe(false);
 		expect(appTakesKey(key("KeyA", { shift: true }), DEFAULT_BINDINGS, true)).toBe(false);
 		expect(appTakesKey(key("KeyQ", { ctrl: true }), {}, true)).toBe(false);
+	});
+	test("nativeEdit keeps non-Shift OS cursor/delete keys in the terminal even when appKeysFirst is on", () => {
+		const bindings = {
+			...DEFAULT_BINDINGS,
+			prevTab: "Mod+ArrowLeft",
+			nextTab: "Mod+ArrowRight",
+			navBack: "Alt+ArrowLeft",
+			navForward: "Alt+ArrowRight",
+			closeSession: "Mod+Backspace",
+			prevRow: "Mod+Shift+ArrowLeft",
+			findChat: "Mod+Home",
+		};
+		// macOS: Cmd+Arrow, Opt+Arrow, Cmd+Backspace stay in terminal when nativeEdit is on
+		expect(appTakesKey(key("ArrowLeft", { meta: true }), bindings, true, true, true)).toBe(false);
+		expect(appTakesKey(key("ArrowRight", { meta: true }), bindings, true, true, true)).toBe(false);
+		expect(appTakesKey(key("ArrowLeft", { alt: true }), bindings, true, true, true)).toBe(false);
+		expect(appTakesKey(key("Backspace", { meta: true }), bindings, true, true, true)).toBe(false);
+		// macOS: nativeEdit off -> appKeysFirst takes them
+		expect(appTakesKey(key("ArrowLeft", { meta: true }), bindings, true, false, true)).toBe(true);
+		expect(appTakesKey(key("Backspace", { meta: true }), bindings, true, false, true)).toBe(true);
+		// macOS: physical Ctrl+Arrow is NOT a macOS Cmd edit shortcut, so appKeysFirst still takes it
+		expect(appTakesKey(key("ArrowLeft", { ctrl: true }), bindings, true, true, true)).toBe(true);
+		// macOS: Shift variants and non-edit combos still go to the app
+		expect(appTakesKey(key("ArrowLeft", { meta: true, shift: true }), bindings, true, true, true)).toBe(true);
+		expect(appTakesKey(key("ArrowLeft", { meta: true, shift: true }), bindings, false, true, true)).toBe(true);
+		expect(appTakesKey(key("KeyN", { meta: true }), bindings, true, true, true)).toBe(true);
+
+		// Windows/Linux: Ctrl+Arrow, Ctrl+Home, Ctrl+Backspace stay in terminal when nativeEdit is on
+		expect(appTakesKey(key("ArrowLeft", { ctrl: true }), bindings, true, true, false)).toBe(false);
+		expect(appTakesKey(key("Home", { ctrl: true }), bindings, true, true, false)).toBe(false);
+		expect(appTakesKey(key("Backspace", { ctrl: true }), bindings, true, true, false)).toBe(false);
+		// Windows/Linux: nativeEdit off -> appKeysFirst takes them
+		expect(appTakesKey(key("ArrowLeft", { ctrl: true }), bindings, true, false, false)).toBe(true);
+		// Windows/Linux: Win/Meta+Arrow and Alt+Arrow are not Win/Linux edit shortcuts -> appKeysFirst takes them
+		expect(appTakesKey(key("ArrowLeft", { meta: true }), bindings, true, true, false)).toBe(true);
+		expect(appTakesKey(key("ArrowLeft", { alt: true }), bindings, true, true, false)).toBe(true);
+		// Windows/Linux: Shift variant still goes to the app
+		expect(appTakesKey(key("ArrowLeft", { ctrl: true, shift: true }), bindings, true, true, false)).toBe(true);
+	});
+});
+
+describe("macOS native line/word editing in terminals", () => {
+	const unix = { mac: true, nativeEdit: true, pty: true, alternate: false, platform: "linux" };
+	const win = { mac: true, nativeEdit: true, pty: true, alternate: false, platform: "win32" };
+
+	test("translates Cmd+Left/Right, Cmd+Backspace, and Opt+Left/Right in normal buffer", () => {
+		expect(terminalEditAction(key("ArrowLeft", { meta: true }), unix)).toEqual({ kind: "send", data: "\x01" });
+		expect(terminalEditAction(key("ArrowRight", { meta: true }), unix)).toEqual({ kind: "send", data: "\x05" });
+		expect(terminalEditAction(key("Backspace", { meta: true }), unix)).toEqual({ kind: "send", data: "\x15" });
+		expect(terminalEditAction(key("ArrowLeft", { alt: true }), unix)).toEqual({ kind: "send", data: "\x1bb" });
+		expect(terminalEditAction(key("ArrowRight", { alt: true }), unix)).toEqual({ kind: "send", data: "\x1bf" });
+		// Opt+Backspace stays with xterm (\x1b\x7f)
+		expect(terminalEditAction(key("Backspace", { alt: true }), unix)).toBeNull();
+		// Cmd+Up/Down are swallowed so the browser ignores them
+		expect(terminalEditAction(key("ArrowUp", { meta: true }), unix)).toEqual({ kind: "swallow" });
+		expect(terminalEditAction(key("ArrowDown", { meta: true }), unix)).toEqual({ kind: "swallow" });
+	});
+
+	test("uses Windows/PowerShell sequences when the server runs on win32", () => {
+		expect(terminalEditAction(key("ArrowLeft", { meta: true }), win)).toEqual({ kind: "send", data: "\x1b[H" });
+		expect(terminalEditAction(key("ArrowRight", { meta: true }), win)).toEqual({ kind: "send", data: "\x1b[F" });
+		expect(terminalEditAction(key("Backspace", { meta: true }), win)).toEqual({ kind: "send", data: "\x1b[1;5H" });
+		expect(terminalEditAction(key("ArrowLeft", { alt: true }), win)).toEqual({ kind: "send", data: "\x1b[1;5D" });
+		expect(terminalEditAction(key("ArrowRight", { alt: true }), win)).toEqual({ kind: "send", data: "\x1b[1;5C" });
+	});
+
+	test("skips translation in alternate buffer, without pty, or when nativeEdit is off, while still swallowing Cmd+Arrow", () => {
+		for (const opts of [
+			{ ...unix, alternate: true },
+			{ ...unix, pty: false },
+			{ ...unix, nativeEdit: false },
+		]) {
+			expect(terminalEditAction(key("ArrowLeft", { meta: true }), opts)).toEqual({ kind: "swallow" });
+			expect(terminalEditAction(key("ArrowRight", { meta: true }), opts)).toEqual({ kind: "swallow" });
+			expect(terminalEditAction(key("Backspace", { meta: true }), opts)).toBeNull();
+			expect(terminalEditAction(key("ArrowLeft", { alt: true }), opts)).toBeNull();
+		}
+	});
+
+	test("ignores IME composition, Shift/Ctrl combinations, and non-macOS clients", () => {
+		expect(terminalEditAction({ ...key("ArrowLeft", { meta: true }), isComposing: true }, unix)).toBeNull();
+		expect(terminalEditAction(key("ArrowLeft", { meta: true, shift: true }), unix)).toBeNull();
+		expect(terminalEditAction(key("ArrowLeft", { meta: true, ctrl: true }), unix)).toBeNull();
+		expect(terminalEditAction(key("ArrowLeft", { meta: true, alt: true }), unix)).toBeNull();
+		expect(terminalEditAction(key("ArrowLeft", { meta: true }), { ...unix, mac: false })).toBeNull();
+		expect(terminalEditAction(key("ArrowLeft", { ctrl: true }), { ...unix, mac: false })).toBeNull();
 	});
 });
 

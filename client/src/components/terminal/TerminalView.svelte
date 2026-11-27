@@ -11,7 +11,7 @@
 	import { isTouch } from "../../lib/format";
 	import { shouldTakeFocus } from "../../lib/focus-guard";
 	import { applyMods, keySequence, touchLines, type Mods } from "../../lib/terminal-keys";
-	import { appTakesKey, clipboardKey, localEcho, terminalSocketUrl, type TerminalInfo } from "../../lib/terminal";
+	import { appTakesKey, clipboardKey, localEcho, terminalEditAction, terminalSocketUrl, type TerminalInfo } from "../../lib/terminal";
 	import { Api } from "../../lib/api";
 
 	/**
@@ -84,6 +84,7 @@
 	onMount(() => {
 		const conn = app.conn;
 		if (!host || !conn) return;
+		const serverId = app.serverId;
 		// Bound to the server this terminal lives on, like `conn`: switching servers must not move its socket.
 		const api = new Api(conn);
 		const fit = new FitAddon();
@@ -102,7 +103,19 @@
 		xt.open(host);
 		// xterm cancels every key it handles; the app's own Mod+Shift/Alt shortcuts must pass through untouched.
 		xt.attachCustomKeyEventHandler((e) => {
-			if (appTakesKey(e, app.prefs.bindings, app.prefs.terminal.appKeysFirst)) return false;
+			if (appTakesKey(e, app.prefs.bindings, app.prefs.terminal.appKeysFirst, app.prefs.nativeInputKeys)) return false;
+			const edit = terminalEditAction(e, {
+				nativeEdit: app.prefs.nativeInputKeys,
+				pty: terminal.pty,
+				alternate: xt.buffer.active.type === "alternate",
+				platform: (serverId ? app.links[serverId] : app.link)?.terminalSupport?.platform,
+			});
+			if (edit) {
+				if (e.type !== "keydown") return false;
+				e.preventDefault();
+				if (edit.kind === "send") input(edit.data);
+				return false;
+			}
 			const action = clipboardKey(e, xt.hasSelection());
 			if (!action) return true;
 			if (e.type !== "keydown") return false;

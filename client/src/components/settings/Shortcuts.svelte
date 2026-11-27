@@ -10,7 +10,7 @@
 	import { appConflict } from "../../lib/extensions/shortcuts";
 	import { errorText } from "../../lib/api";
 	import Icon from "../ui/Icon.svelte";
-	import { ACTIONS, DEFAULT_BINDINGS, MAX_KEYS, emptyRecording, isBareCombo, isMac, isNativeTextEditCombo, fixedActionFor, formatCombo, recordKey, recordingCombo, recordingIsEmpty, recordingLabel, undoRecording, type ActionId } from "../../lib/keys";
+	import { ACTIONS, DEFAULT_BINDINGS, MAX_KEYS, emptyRecording, isBareCombo, isMac, isNativeTextEditCombo, isTerminalNativeTextEditCombo, fixedActionFor, formatCombo, recordKey, recordingCombo, recordingIsEmpty, recordingLabel, undoRecording, type ActionId } from "../../lib/keys";
 
 	/** `filter` narrows the list by name, hint or key; the Settings search hands it over when a shortcut result is opened. */
 	let { filter = $bindable("") }: { filter?: string } = $props();
@@ -51,8 +51,8 @@
 
 	const nativeInputHint = $derived(
 		isMac
-			? t("입력창에 글자가 있을 때 ⌘←/→, ⌥←/→ 등 기본 커서·삭제 단축키를 유지합니다. 비어 있는 입력창이나 입력창 밖에서는 지정한 단축키가 동작합니다")
-			: t("입력창에 글자가 있을 때 Ctrl+←/→, Ctrl+Backspace 등 기본 커서·삭제 단축키를 유지합니다. 비어 있는 입력창이나 입력창 밖에서는 지정한 단축키가 동작합니다"),
+			? t("입력창에 글자가 있거나 터미널에서 작업할 때 ⌘←/→, ⌥←/→, ⌘⌫ 등 기본 커서·삭제 단축키를 유지합니다. 비어 있는 입력창이나 입력창 밖에서는 지정한 단축키가 동작합니다")
+			: t("입력창에 글자가 있거나 터미널에서 작업할 때 Ctrl+←/→, Ctrl+Backspace 등 기본 커서·삭제 단축키를 유지합니다. 비어 있는 입력창이나 입력창 밖에서는 지정한 단축키가 동작합니다"),
 	);
 
 	function start(id: ActionId) {
@@ -194,7 +194,7 @@
 				<div class="what">
 					<span class="name">{t(a.label)}</span>
 					{#if a.hint}<span class="sub">{t(a.hint)}</span>{/if}
-					{#if combo && !a.fixed && isBareCombo(combo)}<span class="sub">{t("입력창에서 글자를 쓰는 중에는 실행되지 않습니다")}</span>{:else if combo && !a.fixed && app.prefs.nativeInputKeys && isNativeTextEditCombo(combo, isMac)}<span class="sub">{t("입력창에 글자가 있을 때는 기본 커서·삭제 단축키가 우선합니다")}</span>{/if}
+					{#if combo && !a.fixed && isBareCombo(combo)}<span class="sub">{t("입력창에서 글자를 쓰는 중에는 실행되지 않습니다")}</span>{:else if combo && !a.fixed && app.prefs.nativeInputKeys && isTerminalNativeTextEditCombo(combo, isMac)}<span class="sub">{t("입력창에 글자가 있거나 터미널에서 작업할 때는 기본 커서·삭제 단축키가 우선합니다")}</span>{:else if combo && !a.fixed && app.prefs.nativeInputKeys && isNativeTextEditCombo(combo, isMac)}<span class="sub">{t("입력창에 글자가 있을 때는 기본 커서·삭제 단축키가 우선합니다")}</span>{/if}
 					{#if note?.id === a.id}<span class="note" class:bad={note.bad}>{note.text}</span>{/if}
 				</div>
 				{#if a.fixed}
