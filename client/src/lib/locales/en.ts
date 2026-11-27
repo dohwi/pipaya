@@ -126,7 +126,6 @@ export const en: Record<string, string> = {
 
 	/* ---- composer ---- */
 	"{cmd} 실패: {error}": "{cmd} failed: {error}",
-	"알 수 없는 명령입니다. /를 입력해 목록을 확인하세요": "Unknown command. Type / to see the list",
 	"이미지는 최대 {n}장까지 첨부할 수 있습니다": "You can attach up to {n} images",
 	"{name}을(를) 읽지 못했습니다": "Couldn't read {name}",
 	"이미지": "image",

@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { enterPlan, hangulCommit, historyKey, lastPromptOf, menuAria, sentPrompts } from "../src/lib/composer/input-keys";
 import { Ime } from "../src/lib/composer/ime";
 
-const plan = (o: Partial<Parameters<typeof enterPlan>[0]> = {}) => enterPlan({ running: false, combo: "Enter", queueCombo: "Alt+Enter", shift: false, isCommand: false, isUnknownCommand: false, ...o });
+const plan = (o: Partial<Parameters<typeof enterPlan>[0]> = {}) => enterPlan({ running: false, combo: "Enter", queueCombo: "Alt+Enter", shift: false, isCommand: false, ...o });
 
 describe("enterPlan", () => {
 	test("idle Enter sends, running Enter steers", () => {
@@ -18,10 +18,11 @@ describe("enterPlan", () => {
 		expect(plan({ shift: true })).toBe("newline");
 		expect(plan({ shift: true, isCommand: true })).toBe("newline");
 	});
-	test("commands run locally, mid-run too; a mistyped one is refused", () => {
+	test("known commands run locally, mid-run too; non-commands send or steer", () => {
+		expect(plan({ isCommand: true, running: false })).toBe("command");
 		expect(plan({ isCommand: true, running: true })).toBe("command");
-		expect(plan({ isUnknownCommand: true })).toBe("unknown-command");
-		expect(plan({ isUnknownCommand: true, running: true })).toBe("unknown-command");
+		expect(plan({ isCommand: false, running: false })).toBe("send");
+		expect(plan({ isCommand: false, running: true })).toBe("steer");
 	});
 	test("the queue shortcut wins over a command while running", () => {
 		expect(plan({ running: true, combo: "Alt+Enter", isCommand: true })).toBe("queue");

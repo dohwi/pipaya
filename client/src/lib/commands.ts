@@ -35,10 +35,6 @@ export interface SlashCommand {
 export const COMMAND_PREFIX = "/";
 export const commandText = (cmd: SlashCommand) => `${COMMAND_PREFIX}${cmd.name}`;
 
-/** Only the explicit command prefix is reserved; paths and ordinary messages remain text. */
-export const isCommandInput = (text: string) => /^\/[^\s/.]+(?:\s|$)/.test(text.trimStart()) && !isSkillCall(text) && !isFamilyCall(text);
-/** `/prefix:name args` belongs to a server extension's command family (`pi.registerCommands`): the server runs it. */
-export const isFamilyCall = (text: string) => /^\/[a-z][a-z0-9-]*:/.test(text.trimStart()) && !isSkillCall(text);
 /** `/skill:name` is not a client command: the server turns it into a manual skill call. */
 export { SKILL_PREFIX };
 export const isSkillCall = (text: string) => text.trimStart().startsWith(`${COMMAND_PREFIX}${SKILL_PREFIX}`);

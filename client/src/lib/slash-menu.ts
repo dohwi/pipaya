@@ -76,14 +76,14 @@ export interface SlashScope {
 	skills: boolean;
 	/** `/prompt:name` and `/prefix:name` entries (the server runs them at the start of a message, with trailing text or attachments). */
 	startMacros: boolean;
-	/** Open the menu only when at least one row matches, so inline `/` or attached-image drafts do not show an empty menu. */
+	/** Open the menu only when at least one row matches, so inline `/`, attached-image drafts, or typed paths like `/etc` do not show an empty menu. */
 	onlyWhenMatched: boolean;
 }
 
-export function slashScopeOf(s: { atStart: boolean; hasTrailing: boolean; attachments: number }): SlashScope {
+export function slashScopeOf(s: { atStart: boolean; hasTrailing: boolean; attachments: number; query: string }): SlashScope {
 	if (!s.atStart) return { commands: false, skills: true, startMacros: false, onlyWhenMatched: true };
 	if (s.attachments > 0 || s.hasTrailing) return { commands: false, skills: true, startMacros: true, onlyWhenMatched: true };
-	return { commands: true, skills: true, startMacros: true, onlyWhenMatched: false };
+	return { commands: true, skills: true, startMacros: true, onlyWhenMatched: s.query.length > 0 };
 }
 
 /** What the input is asking the menu for: nothing, a /command (or its argument), a folder for /cd, a #file or an @mention. */

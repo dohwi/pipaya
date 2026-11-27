@@ -19,17 +19,16 @@ export function historyKey(e: { key: string; shiftKey: boolean; altKey: boolean;
 }
 
 /** What an Enter press (already known not to be mid-composition and not on a touch device) does. */
-export type EnterPlan = "queue" | "newline" | "command" | "unknown-command" | "steer" | "send";
+export type EnterPlan = "queue" | "newline" | "command" | "steer" | "send";
 
 /**
  * Mid-run: plain Enter steers; the user's queue shortcut (Alt+Enter by default) queues for afterwards. Shift+Enter is a
- * newline. A slash command runs locally even mid-run (/stop, ...); a mistyped one is refused instead of reaching a model.
+ * newline. A known slash command runs locally even mid-run (/stop, ...); unrecognized `/...` inputs send as text.
  */
-export function enterPlan(s: { running: boolean; combo: string; queueCombo: string | undefined; shift: boolean; isCommand: boolean; isUnknownCommand: boolean }): EnterPlan {
+export function enterPlan(s: { running: boolean; combo: string; queueCombo: string | undefined; shift: boolean; isCommand: boolean }): EnterPlan {
 	if (s.running && s.combo !== "Enter" && s.combo === s.queueCombo) return "queue";
 	if (s.shift) return "newline";
 	if (s.isCommand) return "command";
-	if (s.isUnknownCommand) return "unknown-command";
 	return s.running ? "steer" : "send";
 }
 

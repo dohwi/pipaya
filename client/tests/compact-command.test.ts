@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import type { argumentSuggestions, COMMANDS, commandQuery, commandText, isCommandInput, isSkillCall, matchCommands, matchSkills, parseSlash } from "../src/lib/commands";
+import type { argumentSuggestions, COMMANDS, commandQuery, commandText, isSkillCall, matchCommands, matchSkills, parseSlash } from "../src/lib/commands";
 
 let dir: string;
 let commands: {
@@ -13,7 +13,6 @@ let commands: {
 	matchCommands: typeof matchCommands;
 	commandQuery: typeof commandQuery;
 	commandText: typeof commandText;
-	isCommandInput: typeof isCommandInput;
 	COMMANDS: typeof COMMANDS;
 	app: { activeId: string | null; calls: string[] };
 };
@@ -147,26 +146,44 @@ describe("default commands", () => {
 		}
 	});
 
-	test("unknown command-shaped input is blocked without reserving file paths", () => {
-		for (const input of ["/compcat", "/압축", "/unknown instructions"]) {
-			expect(commands.isCommandInput(input)).toBe(true);
+	test("unrecognized slash inputs, root paths, and Korean path mentions are left as ordinary text", () => {
+		for (const input of [
+			"/etc",
+			"/etc 확인해줘",
+			"/tmp에서 파일 지워줘",
+			"/api 엔드포인트",
+			"/어쩌구",
+			"/Makefile",
+			"/new/foo",
+			"/new에서 확인",
+			"  /home 폴더",
+			"/etc\n확인해줘",
+			"/compcat",
+			"/압축",
+			"/unknown instructions",
+			"./compact",
+			"./src/file.ts",
+			"./README.md",
+			"/tmp/file",
+			"/README.md",
+			"/prompt:review",
+			"/ext:run",
+			"normal message",
+			"",
+			"   ",
+		]) {
 			expect(commands.parseSlash(input)).toBeNull();
 		}
-		for (const input of ["./compact", "./src/file.ts", "./README.md", "/tmp/file", "/README.md", "normal message"]) {
-			expect(commands.isCommandInput(input)).toBe(false);
-			expect(commands.parseSlash(input)).toBeNull();
-		}
+		expect(commands.parseSlash("/cd /etc")).toMatchObject({ cmd: { name: "cd" }, arg: "/etc" });
 	});
 });
 
 describe("/skill:name calls", () => {
 	const skills = [{ name: "pipaya-usage" }, { name: "release-notes" }];
 
-	test("are not client commands and are never rejected as unknown", () => {
+	test("are not client commands and pass through as message text", () => {
 		expect(commands.parseSlash("/skill:pipaya-usage check")).toBeNull();
 		expect(commands.isSkillCall("  /skill:pipaya-usage check")).toBe(true);
-		expect(commands.isCommandInput("/skill:pipaya-usage check")).toBe(false);
-		expect(commands.isCommandInput("/nope check")).toBe(true);
 	});
 
 	test("the menu query accepts the skill: prefix", () => {
