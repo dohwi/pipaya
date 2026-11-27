@@ -34,7 +34,7 @@
 		for (const [root, entry] of markdownCopyRoots) {
 			if (!root.isConnected) continue;
 			const ctx = entry.getContext();
-			const selector = ctx.mentions ? ".wd-audio[data-wd-copy-src], a[data-file], button[data-file]" : ".wd-audio[data-wd-copy-src], a[data-file]";
+			const selector = ctx.mentions ? ".wd-audio-wrap[data-wd-copy-src], a[data-file], button[data-file]" : ".wd-audio-wrap[data-wd-copy-src], a[data-file]";
 			const target = findCopyTarget(root, selector);
 			if (!target) continue;
 			e.preventDefault();
@@ -116,6 +116,7 @@
 	import { patchHtml, type PatchInput } from "../../lib/patch-html";
 	import { decorateMarkdownTokens, mentionSignature } from "../../lib/markdown-tokens";
 	import type { ViewerImage } from "../../lib/store/ui-overlay.svelte";
+	import { audioPlayer, disposeAudioPlayer } from "../../lib/audio-view";
 	import { applyVideoState, disposeVideoPlayer, readVideoState, videoPlayer } from "../../lib/video-view";
 	import { getPane } from "../../lib/pane";
 	import type { MentionTarget } from "../../lib/peers";
@@ -234,6 +235,21 @@
 	});
 	/** the video players this message drew: a player left on the whole screen goes away with the message */
 	const videos: HTMLDivElement[] = [];
+	const audios: HTMLDivElement[] = [];
+	function pruneDetachedPlayers() {
+		for (let i = videos.length - 1; i >= 0; i--) {
+			if (!videos[i].isConnected) {
+				disposeVideoPlayer(videos[i]);
+				videos.splice(i, 1);
+			}
+		}
+		for (let i = audios.length - 1; i >= 0; i--) {
+			if (!audios[i].isConnected) {
+				disposeAudioPlayer(audios[i]);
+				audios.splice(i, 1);
+			}
+		}
+	}
 	$effect(() => {
 		// read `patchInput` for real: a bare `html;` is not a dependency, and a mention re-patch restores cached images synchronously
 		const rendered = patchInput;
@@ -245,6 +261,7 @@
 		// the new HTML is put into the page after this effect runs: look for the picture slots once it is there
 		void tick().then(() => {
 			if (ctl.signal.aborted) return;
+			pruneDetachedPlayers();
 			if (live) prefetchPictures(host, owner);
 			else fillPictures(host, owner, ctl.signal);
 		});
@@ -373,63 +390,15 @@
 			if (path) player.dataset.wdSrc = path;
 			slot.replaceWith(player);
 		} else if (kind === "audio") {
-			const audio = document.createElement("audio");
-			audio.src = src;
-			audio.controls = true;
-			audio.preload = "metadata";
-			audio.className = "wd-audio";
-			audio.dataset.wdCopySrc = src;
-			if (path) {
-				audio.dataset.wdSrc = path;
-				audio.dataset.wdCopyName = baseName(path);
-			}
-			const wrap = document.createElement("div");
-			wrap.className = "wd-audio-wrap";
 			const name = path ? baseName(path) : "audio.mp3";
-			if (supportsFileClipboard()) {
-				const copyBtn = document.createElement("button");
-				copyBtn.type = "button";
-				copyBtn.className = "wd-audio-btn wd-audio-copy tap";
-				copyBtn.append(iconSvg("copy"));
-				const copyLabel = t("파일 복사");
-				copyBtn.setAttribute("aria-label", copyLabel);
-				copyBtn.title = copyLabel;
-				let copying = false;
-				let resetTimer: ReturnType<typeof setTimeout> | undefined;
-				copyBtn.addEventListener("click", async () => {
-					if (copying || destroyed) return;
-					copying = true;
-					copyBtn.disabled = true;
-					if (resetTimer) {
-						clearTimeout(resetTimer);
-						copyTimers.delete(resetTimer);
-						resetTimer = undefined;
-					}
-					try {
-						const res = await copyFile(src, name);
-						if (destroyed) return;
-						const msg = fileCopyMessage(res);
-						app.toast(msg.text, msg.ok ? "ok" : "error");
-						if (res === "ok" && copyBtn.isConnected) {
-							setIcon(copyBtn, "check");
-							const timer = setTimeout(() => {
-								copyTimers.delete(timer);
-								if (resetTimer === timer) resetTimer = undefined;
-								setIcon(copyBtn, "copy");
-							}, 1400);
-							resetTimer = timer;
-							copyTimers.add(timer);
-						}
-					} catch {
-						if (!destroyed) app.toast(fileCopyMessage("error").text, "error");
-					} finally {
-						copying = false;
-						copyBtn.disabled = false;
-					}
-				});
-				wrap.append(audio, copyBtn);
-			} else wrap.append(audio);
-			wrap.append(saveButton("wd-audio-btn wd-audio-download", () => saveFile(src, name)));
+			const wrap = audioPlayer(src, {
+				filename: name,
+				onFeedback: (text, ok) => app.toast(text, ok ? "ok" : "error"),
+			});
+			audios.push(wrap);
+			wrap.dataset.wdCopySrc = src;
+			if (path) wrap.dataset.wdSrc = path;
+			wrap.dataset.wdCopyName = name;
 			slot.replaceWith(wrap);
 		} else {
 			const img = document.createElement("img");
@@ -503,6 +472,8 @@
 		copyTimers.clear();
 		for (const player of videos) disposeVideoPlayer(player);
 		videos.length = 0;
+		for (const player of audios) disposeAudioPlayer(player);
+		audios.length = 0;
 	});
 
 	/** Every picture and video of this message in one viewer, in document order, opened at `target`; full resolution is fetched on demand. */

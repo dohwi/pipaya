@@ -1578,6 +1578,7 @@ export const en: Record<string, string> = {
 	"재생 위치": "Seek",
 	"재생 속도": "Playback speed",
 	"일시정지": "Pause",
+	"오디오": "Audio",
 	"재생": "Play",
 	"소리 켜기": "Unmute",
 	"음소거": "Mute",
