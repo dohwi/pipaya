@@ -16,7 +16,8 @@ export { DEFAULT_HISTORY_DAYS, HISTORY_KEEP_MS, MAX_EVERY_MS, MAX_HISTORY_DAYS, 
  * per missed slot; a one-time task more than a day late is switched off instead of run.
  *
  * A one-time task that has run (or was skipped) is "finished": it stays as history, does not count towards MAX_TASKS, and is
- * deleted HISTORY_KEEP_MS after its last run. Switching it on again with a new time makes it a pending task again.
+ * deleted after the configured `historyDays` retention window (default `DEFAULT_HISTORY_DAYS`, 0 = keep forever). Switching
+ * it on again with a new time makes it a pending task again.
  *
  * Invariant: `nextRunAt` is set exactly when the task is enabled.
  */
@@ -99,6 +100,7 @@ export const ScheduleQuery = Type.Object({ sessionId: Type.Optional(Type.String(
 interface Row {
 	id: string;
 	session_id: string;
+	created_by_session_id: string | null;
 	title: string | null;
 	prompt: string;
 	kind: "once" | "interval";
@@ -237,23 +239,31 @@ export class Scheduler {
 
 	list(sessionId?: string, opts?: { forcePrune?: boolean }): ScheduleRecord[] {
 		if (opts?.forcePrune || this.now() - this.lastPruneAt >= PRUNE_INTERVAL_MS) this.prune();
-		const before = this.now() - HISTORY_KEEP_MS;
-		const rows = (sessionId
-			? this.db
-				.query(`SELECT * FROM scheduled_tasks WHERE session_id = $sessionId AND NOT (${FINISHED} AND COALESCE(last_run_at, updated_at) < $before) ORDER BY created_at, id`)
-				.all({ sessionId, before })
-			: this.db
-				.query(`SELECT * FROM scheduled_tasks WHERE NOT (${FINISHED} AND COALESCE(last_run_at, updated_at) < $before) ORDER BY created_at, id`)
-				.all({ before })) as Row[];
+		const days = this.historyDays();
+		const before = days > 0 ? this.now() - days * DAY_MS : null;
+		const rows = this.db
+			.query(
+				`SELECT * FROM scheduled_tasks
+				 WHERE ($sessionId IS NULL OR session_id = $sessionId)
+				   AND ($before IS NULL OR NOT (${FINISHED} AND COALESCE(last_run_at, updated_at) < $before))
+				 ORDER BY created_at, id`,
+			)
+			.all({ sessionId: sessionId ?? null, before }) as Row[];
 		return rows.map(toRecord);
+	}
+
+	/** Session id that originally created this task via the agent tool (null when created via HTTP or older DB rows). */
+	createdBy(id: string): string | null {
+		return this.row(id)?.created_by_session_id ?? null;
 	}
 
 	// ── writing ──
 
-	create(input: CreateScheduleInput): ScheduleRecord {
+	create(input: CreateScheduleInput, opts?: { createdBySessionId?: string | null }): ScheduleRecord {
 		const now = this.now();
 		const prompt = checkPrompt(input.prompt);
 		const title = checkTitle(input.title);
+		const createdBySessionId = opts?.createdBySessionId ?? null;
 		if (!this.host.session(input.sessionId)) throw notFound("session");
 		let runAt: number | null = null;
 		let everyMs: number | null = null;
@@ -276,10 +286,10 @@ export class Scheduler {
 			if (n >= MAX_TASKS) throw badRequest(`at most ${MAX_TASKS} scheduled tasks`);
 			this.db
 				.query(
-					`INSERT INTO scheduled_tasks (id, session_id, title, prompt, kind, run_at, every_ms, enabled, next_run_at, fail_count, created_at, updated_at)
-					 VALUES ($id, $sessionId, $title, $prompt, $kind, $runAt, $everyMs, 1, $next, 0, $now, $now)`,
+					`INSERT INTO scheduled_tasks (id, session_id, created_by_session_id, title, prompt, kind, run_at, every_ms, enabled, next_run_at, fail_count, created_at, updated_at)
+					 VALUES ($id, $sessionId, $createdBySessionId, $title, $prompt, $kind, $runAt, $everyMs, 1, $next, 0, $now, $now)`,
 				)
-				.run({ id, sessionId: input.sessionId, title, prompt, kind: input.kind, runAt, everyMs, next, now });
+				.run({ id, sessionId: input.sessionId, createdBySessionId, title, prompt, kind: input.kind, runAt, everyMs, next, now });
 		})();
 		this.changed(id, "created");
 		return this.get(id);
@@ -519,6 +529,11 @@ export class Scheduler {
 	stop(): void {
 		this.stopped = true;
 		this.disarm();
+	}
+
+	/** Re-arms the timer immediately once a temporary `deferRun()` gate (e.g. startup warmup) clears. */
+	nudge(): void {
+		if (!this.stopped && !this.ticking) this.arm();
 	}
 
 	private disarm(): void {

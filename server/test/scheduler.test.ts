@@ -803,10 +803,55 @@ describe("schedule routes", () => {
 });
 
 describe("migration", () => {
+	test("list() honors configured historyDays (0 = keep forever, 14 = keep 14 days, 1 = keep 1 day)", async () => {
+		const { scheduler, clock } = setup();
+		scheduler.start();
+		const t = once(scheduler, T0 + MIN);
+		await clock.advance(MIN);
+		expect(scheduler.get(t.id).lastStatus).toBe("ok");
+
+		// 10 days later with historyDays = 0 (keep forever): finished task stays listed.
+		scheduler.setHistoryDays(0);
+		clock.set(T0 + MIN + 10 * DAY_MS);
+		expect(scheduler.list().map((x) => x.id)).toContain(t.id);
+		expect(scheduler.list("s1").map((x) => x.id)).toContain(t.id);
+
+		// With historyDays = 14: still listed at 10 days, pruned after 14 days.
+		scheduler.setHistoryDays(14);
+		expect(scheduler.list().map((x) => x.id)).toContain(t.id);
+		clock.set(T0 + MIN + 15 * DAY_MS);
+		expect(scheduler.list().map((x) => x.id)).not.toContain(t.id);
+	});
+
+	test("createdBy persists cross-session creator across restart and nudge() runs deferred due task immediately", async () => {
+		let defer = true;
+		const { db, host, clock, sent } = setup();
+		const scheduler = new Scheduler(db, host, { now: clock.now, timers: clock.timers, deferRun: () => defer });
+		scheduler.start();
+		const t = scheduler.create({ sessionId: "s1", prompt: "after warmup", kind: "once", runAt: T0 + MIN }, { createdBySessionId: "s2" });
+		expect(scheduler.createdBy(t.id)).toBe("s2");
+		scheduler.stop();
+
+		// Restart on the same DB after the task became due while deferRun is true.
+		clock.set(T0 + 2 * MIN);
+		const restarted = new Scheduler(db, host, { now: clock.now, timers: clock.timers, deferRun: () => defer });
+		expect(restarted.createdBy(t.id)).toBe("s2");
+		restarted.start();
+		await clock.advance(0);
+		expect(sent).toHaveLength(0);
+
+		// Once warmup finishes, nudge() re-arms immediately (0 ms) and executes the task.
+		defer = false;
+		restarted.nudge();
+		await clock.advance(0);
+		expect(sent.map((x) => x.text)).toEqual(["after warmup"]);
+		restarted.stop();
+	});
+
 	test("the table exists with the agreed columns, and a session's rows cascade", () => {
 		const db = openDb(":memory:");
 		const cols = (db.query("PRAGMA table_info(scheduled_tasks)").all() as { name: string }[]).map((c) => c.name).sort();
-		expect(cols).toEqual(["created_at", "enabled", "every_ms", "fail_count", "id", "kind", "last_error", "last_run_at", "last_status", "next_run_at", "prompt", "run_at", "session_id", "title", "updated_at"]);
+		expect(cols).toEqual(["created_at", "created_by_session_id", "enabled", "every_ms", "fail_count", "id", "kind", "last_error", "last_run_at", "last_status", "next_run_at", "prompt", "run_at", "session_id", "title", "updated_at"]);
 		expect(() => db.query("INSERT INTO scheduled_tasks (id, session_id, prompt, kind, created_at, updated_at) VALUES ('x', 'missing', 'p', 'once', 1, 1)").run()).toThrow(); // foreign key
 		expect(() => db.query("INSERT INTO sessions (id, title, cwd, provider, model, thinking_level, system_prompt, tools, parent_id, created_at, updated_at, closed, purpose) VALUES ('s', 't', '/', 'p', 'm', 'off', '', '[]', NULL, 1, 1, 0, '')").run()).not.toThrow();
 		expect(() => db.query("INSERT INTO scheduled_tasks (id, session_id, prompt, kind, created_at, updated_at) VALUES ('x', 's', 'p', 'weekly', 1, 1)").run()).toThrow(); // kind check

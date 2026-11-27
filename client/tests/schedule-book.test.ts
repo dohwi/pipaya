@@ -132,4 +132,86 @@ describe("ScheduleBook", () => {
 		expect(book.follow("a", null)).toBeUndefined();
 		expect(book.follow(null, apiOf(async () => ({ schedules: [] })))).toBeUndefined();
 	});
+	test("tracks multiple servers independently and supports immediate reconnect refresh", async () => {
+		const book = new ScheduleBook({ pauseMs: 120 });
+		book.follow("a", apiOf(async () => ({ schedules: [task({ id: "a1", sessionId: "sa", nextRunAt: 10 })] })));
+		book.follow("b", apiOf(async () => ({ schedules: [task({ id: "b1", sessionId: "sb", nextRunAt: 20 })] })));
+		await wait(15);
+		expect(book.of("a", "sa")).toEqual({ count: 1, next: 10 });
+		expect(book.of("b", "sb")).toEqual({ count: 1, next: 20 });
+
+		// Immediate reconnect refresh bypasses debounce and updates server b without affecting server a.
+		book.follow("b", apiOf(async () => ({ schedules: [task({ id: "b2", sessionId: "sb", nextRunAt: 30 })] })), { immediate: true });
+		await wait(15);
+		expect(book.of("b", "sb")).toEqual({ count: 1, next: 30 });
+		expect(book.of("a", "sa")).toEqual({ count: 1, next: 10 });
+	});
+	test("retries transient failures with backoff while online, stops when offline, and never retries 404", async () => {
+		const book = new ScheduleBook({ pauseMs: 10, retryDelays: [15, 25] });
+		let calls = 0;
+		const online = true;
+		book.follow("a", apiOf(async () => {
+			calls++;
+			if (calls < 3) throw new ApiError(503, "unavailable", "booting");
+			return { schedules: [task({ id: "ok", sessionId: "s", nextRunAt: 99 })] };
+		}), { retry: () => online });
+		await wait(90);
+		expect(calls).toBe(3);
+		expect(book.of("a", "s")).toEqual({ count: 1, next: 99 });
+		expect(book.isFresh("a")).toBe(true);
+
+		// Going offline stops further retries cleanly.
+		let offCalls = 0;
+		let stillOnline = true;
+		book.follow("b", apiOf(async () => {
+			offCalls++;
+			stillOnline = false;
+			throw new ApiError(503, "unavailable", "down");
+		}), { retry: () => stillOnline });
+		await wait(80);
+		expect(offCalls).toBe(1);
+		expect(book.isFresh("b")).toBe(false);
+
+		// 404 marks unsupported and does not retry.
+		let oldCalls = 0;
+		book.follow("old", apiOf(async () => {
+			oldCalls++;
+			throw new ApiError(404, "not_found", "route not found");
+		}), { retry: () => true });
+		await wait(80);
+		expect(oldCalls).toBe(1);
+		expect(book.supported("old")).toBe(false);
+	});
+	test("cancelling a debounced refetch clears stale; ensure() avoids duplicate in-flight fetches; forget() drops server state", async () => {
+		const book = new ScheduleBook({ pauseMs: 80 });
+		book.follow("a", apiOf(async () => ({ schedules: [task({ id: "1", sessionId: "s" })] })));
+		await wait(15);
+		expect(book.isFresh("a")).toBe(true);
+
+		const stop = book.follow("a", apiOf(async () => ({ schedules: [] })));
+		expect(book.isFresh("a")).toBe(false);
+		stop?.();
+		expect(book.isFresh("a")).toBe(true);
+
+		// ensure() is a no-op when fresh or in-flight, and fetches immediately when unread.
+		let n = 0;
+		const slowApi = {
+			schedules: async () => {
+				n++;
+				await wait(40);
+				return { schedules: [task({ id: "c1", sessionId: "sc" })] };
+			},
+		} as unknown as Api;
+		book.ensure("a", slowApi);
+		expect(n).toBe(0);
+		book.ensure("c", slowApi);
+		book.ensure("c", slowApi); // still in-flight: must not abort/duplicate
+		await wait(60);
+		expect(n).toBe(1);
+		expect(book.of("c", "sc").count).toBe(1);
+
+		book.forget("c");
+		expect(book.of("c", "sc").count).toBe(0);
+		expect(book.isFresh("c")).toBe(false);
+	});
 });

@@ -513,7 +513,7 @@ class AppStore {
   /** Bumped by `schedules_updated`; the scheduled-tasks list reads it to refetch. */
   get schedulesTick(): number { return this.ui.schedulesTick; }
   set schedulesTick(v: number) { this.ui.schedulesTick = v; }
-  /** Bumped by `goals_updated`; App.svelte refetches the open server's goals. */
+  /** Bumped by `goals_updated` and server reconnects (GoalBook itself follows every server directly). */
   get goalsTick(): number { return this.ui.goalsTick; }
   set goalsTick(v: number) { this.ui.goalsTick = v; }
   /** Session whose goal edit dialog is open. null = closed. */
@@ -998,11 +998,11 @@ class AppStore {
       const link = this.links[serverId];
       if (!link) return null;
       if (isTerminalId(id)) return this.closeHoldFor(id, serverId, 0);
-      // Fast synchronous path when the active server's schedule book is fresh (or server lacks /schedules / is offline).
-      if (!link.online || !this.schedules.supported(serverId) || (serverId === this.serverId && this.schedules.isFresh(serverId))) {
+      // Fast synchronous path when this server's schedule book is fresh (or server lacks /schedules / is offline).
+      if (!link.online || !this.schedules.supported(serverId) || this.schedules.isFresh(serverId)) {
         return this.closeHoldFor(id, serverId, this.schedules.of(serverId, id).count);
       }
-      // Fallback for non-active servers, initial boot before follow() finishes, or the 300ms debounce after schedules_updated.
+      // Fallback during initial boot before follow() finishes, or during the 300ms debounce after schedules_updated.
       // Times out quickly and falls back to the cached count (0 if never loaded) so a flaky network never blocks closing.
       return link.api.schedules(id, AbortSignal.timeout(1500)).then(
         (r) => {
@@ -1256,11 +1256,28 @@ class AppStore {
         continue;
       }
       old?.stop();
+      if (old) {
+        this.schedules.forget(s.id);
+        this.goals.forget(s.id);
+      }
       delete this.parkedChats[s.id]; // they read through the old connection
       const link = new ServerLink(s, {
         event: (l, e) => this.onLinkEvent(l, e),
-        // Pushed pages are live-only: after a reconnect they may have changed unseen, so the pages read the list again.
-        ready: (l, warm) => { this.serverExtensionFeed.onEvent(l.id, "extensions_updated", {}); void this.attach(l, warm); },
+        // Pushed pages, scheduled tasks and goals use ephemeral events (never replayed by SSE): refresh them on every
+        // connect/reconnect for every server so reboot/update/wake never leaves sidebar badges or settings stale.
+        ready: (l, warm) => {
+          this.serverExtensionFeed.onEvent(l.id, "extensions_updated", {});
+          this.syncServerBooks(l, !warm);
+          this.schedulesTick++;
+          this.goalsTick++;
+          if (!warm) {
+            this.mcpTick++;
+            this.skillsTick++;
+            this.configTick++;
+            this.voiceTick++;
+          }
+          void this.attach(l, warm);
+        },
         shape: (l) => this.sidebarShape(l.id),
         extraPaths: (l) => this.sidebar.pinned[l.id] ?? [],
       });
@@ -1270,6 +1287,8 @@ class AppStore {
     }
     for (const id of Object.keys(this.links)) if (!next[id]) {
       delete this.parkedChats[id];
+      this.schedules.forget(id);
+      this.goals.forget(id);
       void this.idleExtensions.drop(id);
       this.links[id]!.stop();
       changed = true;
@@ -1400,20 +1419,35 @@ class AppStore {
     for (const l of Object.values(this.links)) void l.resume(force);
   }
 
+  /** Keep a server's scheduled tasks and goals live (all saved servers, not only the open one). */
+  private syncServerBooks(link: ServerLink, immediate: boolean) {
+    const retry = () => this.links[link.id] === link && link.online;
+    this.schedules.follow(link.id, link.api, { immediate, retry });
+    this.goals.follow(link.id, link.api, { immediate, retry });
+  }
+
   private cueBackground(link: ServerLink, e: PipayaEvent) {
     cueBackgroundEvent(link, e, {
       cue: (kind) => this.prefs.cue(kind),
       announce: (sid, kind, serverId) => this.feedback.announce(sid, kind, serverId),
+      isGoalActive: (sid) => this.goals.isFresh(link.id) && this.goals.of(link.id, sid)?.status === "active",
     });
   }
 
   /** A server's event arrived: the one in view reacts in full, the others just keep their lists and activity current. */
   private onLinkEvent(link: ServerLink, e: PipayaEvent) {
-    // Server extension pages follow their server's events whether or not it is the open one.
+    // Server extension pages, schedules and goals follow every server's events whether or not it is the open one.
     this.serverExtensionFeed.onEvent(link.id, e.type, e.data);
     applyLiveEvent(link.data, e);
     if (this.graphOpen) graphRuns.onEvent(link.id, e.type, e.data);
+    const retry = () => this.links[link.id] === link && link.online;
+    if (e.type === "schedules_updated") this.schedules.follow(link.id, link.api, { retry });
+    else if (e.type === "goals_updated") this.goals.follow(link.id, link.api, { retry });
     if (link.id === this.serverId) return this.handle(e);
+    if (e.type === "schedules_updated") this.schedulesTick++;
+    else if (e.type === "goals_updated") this.goalsTick++;
+    else if (e.type === "mcp_updated") this.mcpTick++;
+    else if (e.type === "skills_updated") this.skillsTick++;
     // The client extensions of a server shown in settings follow what its other devices change.
     if (e.type === "client_settings_updated") this.idleExtensions.onEvent(link.id, e.data as { key?: unknown; updatedAt?: unknown; origin?: unknown });
     // Notices of a server not in view still reach this device.
@@ -1429,7 +1463,11 @@ class AppStore {
     else if (e.type === "terminal_closed") this.cleanupClosedTerminal(link.id, (e.data as { id: string }).id);
     if (e.type === "provider_updated" || e.type === "configuration_updated") {
       void link.refreshCatalog();
-      if (e.type === "configuration_updated") void link.refreshWorkspace();
+      if (e.type === "configuration_updated") {
+        this.configTick++;
+        if ((e.data as { scope?: string } | undefined)?.scope === "voice") this.voiceTick++;
+        void link.refreshWorkspace();
+      }
     }
   }
 
@@ -1476,8 +1514,11 @@ class AppStore {
     // replay cannot carry are read (a run that started or ended, a reply that streamed); a cold one reloads them.
     if (warm) for (const id of this.visibleIds) void this.chats[id]?.catchUp();
     else for (const id of this.visibleIds) if (id !== this.activeId && had.includes(id)) void this.ensureChat(id, true);
+    const retry = () => this.links[link.id] === link && link.online;
+    this.schedules.ensure(link.id, api, { retry });
+    this.goals.ensure(link.id, api, { retry });
     notifications.connect(api);
-    if (!warm) void serverUpdater.check(api, link.id);
+    if (!warm || serverUpdater.pending) void serverUpdater.check(api, link.id, false, serverUpdater.pending);
   }
 
   /** The user is looking at this window right now (so a sound or badge would only be noise). */
@@ -1545,7 +1586,7 @@ class AppStore {
         bumpMcp: () => { this.mcpTick++; },
         bumpSchedules: () => { this.schedulesTick++; },
         bumpGoals: () => { this.goalsTick++; },
-        isGoalActive: (sid) => this.goals.of(this.serverId, sid)?.status === "active",
+        isGoalActive: (sid) => this.goals.isFresh(this.serverId) && this.goals.of(this.serverId, sid)?.status === "active",
         bumpConfig: () => { this.configTick++; },
         bumpVoice: () => { this.voiceTick++; },
         refreshWorkspace: () => { void this.refreshWorkspace(); },

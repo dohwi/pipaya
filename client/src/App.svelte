@@ -78,19 +78,6 @@
 		const ids = app.visibleIds;
 		untrack(() => { app.syncChats(ids); });
 	});
-	// The sidebar's scheduled-task count and clocks: read when the open server connects and again after its task events pause.
-	$effect(() => {
-		void app.schedulesTick;
-		const link = app.link;
-		if (!link?.online) return;
-		return app.schedules.follow(link.id, link.api);
-	});
-	$effect(() => {
-		void app.goalsTick;
-		const link = app.link;
-		if (!link?.online) return;
-		return app.goals.follow(link.id, link.api);
-	});
 	const mobile = ["android", "ios"].includes(notificationPlatform());
 	const group = $derived(viewport.narrow ? undefined : app.activeGroup);
 

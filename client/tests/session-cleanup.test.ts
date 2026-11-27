@@ -14,6 +14,7 @@ import type { PipayaEvent, Session } from "../src/lib/types";
 
 let SidebarState: typeof SidebarModule.SidebarState;
 let handleOpenServerEvent: typeof EventHandlerModule.handleOpenServerEvent;
+let cueBackgroundEvent: typeof EventHandlerModule.cueBackgroundEvent;
 let dir: string;
 
 function makeStorage() {
@@ -55,7 +56,7 @@ beforeAll(async () => {
 	(globalThis as any).localStorage ??= makeStorage().storage;
 	(globalThis as any).sessionStorage ??= makeStorage().storage;
 	({ SidebarState } = await loadCompiled("src/lib/sidebar.svelte.ts", "sidebar"));
-	({ handleOpenServerEvent } = await loadCompiled("src/lib/store/event-handler.ts", "event-handler"));
+	({ handleOpenServerEvent, cueBackgroundEvent } = await loadCompiled("src/lib/store/event-handler.ts", "event-handler"));
 });
 
 afterAll(async () => {
@@ -263,5 +264,27 @@ describe("handleOpenServerEvent lifecycle cleanup callbacks", () => {
 		handleOpenServerEvent(ctx, { type: "group_deleted", sessionId: null, ts: 4, data: { id: "g1" } } as unknown as PipayaEvent);
 		expect(groupsDeleted).toEqual(["g1"]);
 		expect(fullDropped).toEqual(["g1"]);
+	});
+
+	test("cueBackgroundEvent suppresses ok done cue while an active goal is running, but still reports errors", () => {
+		const cues: string[] = [];
+		const announced: string[] = [];
+		const link = { id: "srv-bg", data: { awaiting: {} } } as unknown as Parameters<typeof cueBackgroundEvent>[0];
+		const cb = {
+			cue: (k: "done" | "failed" | "ask") => cues.push(k),
+			announce: (sid: string, k: "done" | "failed", srv: string) => announced.push(`${srv}:${sid}:${k}`),
+			isGoalActive: (sid: string) => sid === "active-goal-session",
+		};
+		cueBackgroundEvent(link, { type: "run_finished", sessionId: "active-goal-session", ts: 1, data: { status: "ok", origin: "goal" } } as unknown as PipayaEvent, cb);
+		expect(cues).toEqual([]);
+		expect(announced).toEqual([]);
+
+		cueBackgroundEvent(link, { type: "run_finished", sessionId: "active-goal-session", ts: 2, data: { status: "error", origin: "goal" } } as unknown as PipayaEvent, cb);
+		expect(cues).toEqual(["failed"]);
+		expect(announced).toEqual(["srv-bg:active-goal-session:failed"]);
+
+		cueBackgroundEvent(link, { type: "run_finished", sessionId: "normal", ts: 3, data: { status: "ok", origin: "user" } } as unknown as PipayaEvent, cb);
+		expect(cues).toEqual(["failed", "done"]);
+		expect(announced).toEqual(["srv-bg:active-goal-session:failed", "srv-bg:normal:done"]);
 	});
 });

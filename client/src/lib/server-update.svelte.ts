@@ -86,10 +86,10 @@ class ServerUpdater {
 		this.restartingPromise = null;
 	}
 
-	/** Background check after connecting (throttled per server); `manual` shows failures. */
-	async check(api: Api, serverId: string, manual = false): Promise<void> {
+	/** Background check after connecting (throttled per server); `manual` shows failures; `force` bypasses the throttle quietly. */
+	async check(api: Api, serverId: string, manual = false, force = false): Promise<void> {
 		if (this.busy) return;
-		if (!manual && this.checkedFor === serverId && Date.now() - this.checkedAt < RECHECK_MS) return;
+		if (!manual && !force && this.checkedFor === serverId && Date.now() - this.checkedAt < RECHECK_MS) return;
 		const g = this.gen;
 		this.checkedFor = serverId;
 		this.checkedAt = Date.now();

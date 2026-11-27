@@ -254,7 +254,7 @@ export class SessionManager {
 		return {
 			list: (all) => s.list(all ? undefined : selfId),
 			create: ({ session, title, prompt, runAt, everyMs }) =>
-				s.create({ sessionId: target(session), title, prompt, ...(runAt !== undefined ? { kind: "once", runAt } : { kind: "interval", everyMs }) }),
+				s.create({ sessionId: target(session), title, prompt, ...(runAt !== undefined ? { kind: "once", runAt } : { kind: "interval", everyMs }) }, { createdBySessionId: selfId }),
 			update: (id, patch) => s.update(id, patch),
 			delete: (id) => {
 				const t = s.get(id);
@@ -262,6 +262,7 @@ export class SessionManager {
 				return t;
 			},
 			run: (id) => s.runNow(id),
+			createdBy: (id) => s.createdBy(id),
 			label: (id) => {
 				if (id === selfId) return "this session";
 				const r = this.store.get(id);

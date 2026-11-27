@@ -66,11 +66,13 @@
 	let error = $state("");
 	let busy = $state(false);
 
-	// Read again when a task changes (schedules_updated) and when the server or the account behind it changes.
+	const online = $derived(app.links[serverId]?.online ?? false);
+
+	// Read again when a task changes (schedules_updated), the server reconnects, or the account behind it changes.
 	$effect(() => {
 		void app.schedulesTick;
 		const a = api;
-		if (!a) return;
+		if (!a || !online) return;
 		untrack(() => { if (!list) loading = true; });
 		return abortable((signal) => a.schedules(undefined, signal), {
 			ok: (r) => {

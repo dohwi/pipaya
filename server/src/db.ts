@@ -364,6 +364,8 @@ export const MIGRATIONS: (string | ((db: Database) => void))[] = [
 			set.run({ id: r.id, name });
 		}
 	},
+	// Persist cross-session schedule creator so ownership survives server restarts and updates.
+	(db) => addColumn(db, "scheduled_tasks", "created_by_session_id", "TEXT"),
 ];
 
 /** Cap WAL file size after checkpointing (64 MiB) so a burst delete never leaves a multi-hundred-MB -wal behind. */
