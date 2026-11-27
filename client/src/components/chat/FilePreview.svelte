@@ -50,7 +50,7 @@
 		const name = target.file.name;
 		const player: HTMLDivElement = videoPlayer(src, {
 			filename: name,
-			download: "fullscreen",
+			download: false,
 			onExpand: () =>
 				app.openImage([
 					{
@@ -198,15 +198,12 @@
 			}
 			return;
 		}
-		let fullUrl: string | null = null;
 		try {
 			const full = await app.api.fetchFile(target.sessionId, target.file.path);
-			fullUrl = URL.createObjectURL(full);
-			await saveFile(fullUrl, target.file.name);
+			await saveFile(full, target.file.name);
 		} catch (e) {
 			app.toast(`${t("저장하지 못했습니다")}: ${errorText(e)}`, "error");
 		} finally {
-			if (fullUrl) URL.revokeObjectURL(fullUrl);
 			saving = false;
 		}
 	}

@@ -164,7 +164,7 @@
 		const name = fileName || undefined;
 		const player: HTMLDivElement = videoPlayer(src, {
 			filename: name,
-			download: "fullscreen",
+			download: false,
 			onExpand: () =>
 				app.openImage([
 					{
@@ -833,15 +833,12 @@
 		const api = app.api;
 		if (!path || !sid || !api || saving) return;
 		saving = true;
-		let fullUrl: string | null = null;
 		try {
 			const full = await api.fetchFile(sid, path);
-			fullUrl = URL.createObjectURL(full);
-			await saveFile(fullUrl, fileName || path);
+			await saveFile(full, fileName || path);
 		} catch (e) {
 			app.toast(`${t("저장하지 못했습니다")}: ${errorText(e)}`, "error");
 		} finally {
-			if (fullUrl) URL.revokeObjectURL(fullUrl);
 			saving = false;
 		}
 	}
@@ -1490,6 +1487,8 @@
 		margin: 0;
 	}
 	.videohost {
+		display: grid;
+		justify-items: center;
 		width: min(960px, 100%);
 	}
 	.videohost :global(video) {
