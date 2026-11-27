@@ -35,7 +35,7 @@
 	import ExtensionPanels from "../extensions/ExtensionPanels.svelte";
 	import SlashMenu from "./SlashMenu.svelte";
 	import { cdArgOf, cdCompletion, cdHint, cdRowsOf, cdTab } from "../../lib/workdir-path";
-	import { allCommands, argumentSuggestions, commandText, isCommandInput, matchCommands, matchFamilyEntries, matchSkills, matchTemplates, parseSlash, SKILL_PREFIX, type SlashCommand } from "../../lib/commands";
+	import { allCommands, argumentSuggestions, commandText, matchCommands, matchFamilyEntries, matchSkills, matchTemplates, parseSlash, SKILL_PREFIX, type SlashCommand } from "../../lib/commands";
 	import { app } from "../../lib/store.svelte";
 	import { getPane } from "../../lib/pane";
 	import { extensions } from "../../lib/extensions/host.svelte";
@@ -324,7 +324,7 @@
 	const argSuggestions = $derived(cdArg === null && /^\/[a-z][a-z0-9-]*[ \t]/i.test(text.slice(0, caret)) ? argumentSuggestions(text) : null);
 	const slashToken = $derived(cdArg === null && !argSuggestions ? slashAt(text, caret) : null);
 	const slashQuery = $derived(slashToken?.query ?? null);
-	const slashScope = $derived(slashToken ? slashScopeOf({ atStart: slashToken.atStart, hasTrailing: slashToken.hasTrailing, attachments: attached.images.length }) : null);
+	const slashScope = $derived(slashToken ? slashScopeOf({ atStart: slashToken.atStart, hasTrailing: slashToken.hasTrailing, attachments: attached.images.length, query: slashToken.query }) : null);
 	const commandList = $derived(slashQuery !== null && slashScope?.commands ? matchCommands(slashQuery) : []);
 	// Skills sit in the same menu after the commands, as `/skill:name`, tagged so they are not mistaken for commands.
 	let skillList = $state<{ name: string; description: string }[]>([]);
@@ -588,13 +588,6 @@
 		else pickSlash(cmd);
 	}
 
-	/** Never leak a mistyped command into a model request. Keep it in the input for correction. */
-	function rejectUnknownCommand(): boolean {
-		if (!isCommandInput(text)) return false;
-		app.toast(t("알 수 없는 명령입니다. /를 입력해 목록을 확인하세요"), "error", pane.id);
-		return true;
-	}
-
 	/**
 	 * After a successful send, forget the input. Sending from a new chat creates a session and switches this pane to it
 	 * mid-await, which stashes the just-sent text under the new-chat key; drop that or the next new chat shows it again.
@@ -620,14 +613,13 @@
 	}
 
 	/**
-	 * Turn the input into what goes to the server, or handle it here: a slash command runs, an unknown one is refused,
-	 * and an extension may veto or rewrite the text. Returns null when there is nothing to send.
+	 * Turn the input into what goes to the server, or handle it here: a known slash command runs, unrecognized `/...`
+	 * inputs stay message text, and an extension may veto or rewrite the text. Returns null when there is nothing to send.
 	 */
 	async function prepare() {
 		const raw = text;
 		const parsed = parseSlash(raw);
 		if (parsed) return void runSlash(parsed.cmd, parsed.arg), null;
-		if (rejectUnknownCommand()) return null;
 		const filtered = await extensions.filterComposer(raw);
 		if ("cancel" in filtered) return void app.toast(filtered.cancel, "error", pane.id), null;
 		return {
@@ -779,12 +771,11 @@
 
 	function enterAction(e: KeyboardEvent | null, combo: string) {
 		const parsed = parseSlash(text);
-		const plan = enterPlan({ running, combo, queueCombo: app.prefs.bindings.queueMessage, shift: !!e?.shiftKey, isCommand: !!parsed, isUnknownCommand: isCommandInput(text) });
+		const plan = enterPlan({ running, combo, queueCombo: app.prefs.bindings.queueMessage, shift: !!e?.shiftKey, isCommand: !!parsed });
 		if (plan === "newline") return;
 		e?.preventDefault();
 		if (plan === "queue") void during("queue");
 		else if (plan === "command") void runSlash(parsed!.cmd, parsed!.arg);
-		else if (plan === "unknown-command") rejectUnknownCommand();
 		else if (plan === "steer") void during("steer");
 		else void submit();
 	}
