@@ -69,7 +69,7 @@ if a.seed:
         import time
         time.sleep(4)
 
-SEED = {"pipaya.servers": json.dumps([{"id": "dev", "name": "dev", "baseUrl": base, "token": tok}]), "pipaya.server": json.dumps("dev")}
+SEED = {"pipaya.servers": json.dumps([{"id": "dev", "name": "dev", "baseUrl": base, "token": tok}]), "pipaya.server": json.dumps("dev"), "pipaya.lang": "ko"}
 
 # The screens and how to reach each one. A step is a selector to click; "key:<Key>" presses a key, "open:<text>" opens a
 # conversation from the sidebar (through the drawer on a narrow window). Settings panes are listed by their nav label.
