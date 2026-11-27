@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from "bun:test";
+import { afterAll, beforeEach, describe, expect, test } from "bun:test";
 import type { StoredMessage } from "../src/lib/api";
 import { setLang } from "../src/lib/i18n";
 import { gridNext, PREVIEW_MAX, previewOfItems, previewOfStored, previewText, shortPath, tabCountText } from "../src/lib/tab-overview";
@@ -16,7 +16,8 @@ const reply = (...texts: string[]): ChatItem => ({
 });
 const stored = (seq: number, message: unknown): StoredMessage => ({ seq, role: (message as { role: string }).role, createdAt: 0, message: message as StoredMessage["message"] });
 
-afterEach(() => setLang("ko"));
+beforeEach(() => setLang("ko"));
+afterAll(() => setLang("en"));
 
 describe("tab count", () => {
 	test("up to 99 as is, then 99+", () => {

@@ -1,5 +1,9 @@
-import { describe, expect, test } from "bun:test";
+import { afterAll, beforeEach, describe, expect, test } from "bun:test";
+import { setLang } from "../src/lib/i18n";
 import { asWorkdir, connectionState, dirKey, edgeOf, groupKey, headMenuEntries, leafName, newKey, newMenuEntries, orderServers, parentPath, rowMenuEntries, shortName, targetId, unreachable, type RowActions, type ServerState } from "../src/lib/sidebar-model";
+
+beforeEach(() => setLang("ko"));
+afterAll(() => setLang("en"));
 
 describe("server state", () => {
 	test("the app's connection state maps onto the sidebar's", () => {

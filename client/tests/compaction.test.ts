@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -7,6 +7,9 @@ import ts from "typescript";
 import { Api, ApiError } from "../src/lib/api";
 import type { ChatState as ChatStateType } from "../src/lib/chat.svelte";
 import type { PipayaEvent } from "../src/lib/types";
+import { setLang } from "../src/lib/i18n";
+
+beforeEach(() => setLang("en"));
 
 let ChatState: typeof ChatStateType;
 let dir: string;

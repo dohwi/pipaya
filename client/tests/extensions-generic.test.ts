@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { afterAll, beforeEach, describe, expect, test } from "bun:test";
 import { compile } from "svelte/compiler";
 import { Glob } from "bun";
 import { join } from "node:path";
@@ -7,6 +7,10 @@ import { parseNavbarItem, navbarId, NAVBAR_LIMITS } from "../src/lib/extensions/
 import { HTTP_MAX_BYTES, HttpReader, copyJson, httpOrigin, httpPath } from "../src/lib/extensions/http";
 import { SANDBOX_HTML } from "../src/lib/extensions/runtime";
 import { parseView, type UINode } from "../src/lib/extensions/ui";
+import { setLang } from "../src/lib/i18n";
+
+beforeEach(() => setLang("ko"));
+afterAll(() => setLang("en"));
 
 const icon = { viewBox: "0 0 24 24", paths: [{ d: "M0 0L24 0 24 24Z", fill: "#10a37f", fillRule: "evenodd" }] };
 const meter = (extra: Record<string, unknown> = {}) => ({ type: "progress", id: "g", label: "Usage", value: 10, ...extra });

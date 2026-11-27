@@ -1,6 +1,10 @@
-import { describe, expect, test } from "bun:test";
+import { afterAll, beforeEach, describe, expect, test } from "bun:test";
 import { ALL_LEVELS, applyMatch, isLastLevel, collectModels, formFromProvider, headerError, ctxLabel, newForm, newRow, shownLevels, slug, snapshot, toggleLevel, type Form, type Row } from "../src/lib/connection-form";
+import { setLang } from "../src/lib/i18n";
 import type { CatalogModel, CustomProvider } from "../src/lib/types";
+
+beforeEach(() => setLang("ko"));
+afterAll(() => setLang("en"));
 
 const filled = (over: Partial<Form> = {}): Form => ({ ...newForm(), name: "Proxy", id: "proxy", baseUrl: "http://x/v1", ...over });
 const row = (over = {}) => ({ ...newRow(), id: "m1", ...over });

@@ -1,7 +1,11 @@
-import { describe, expect, test } from "bun:test";
+import { afterAll, beforeEach, describe, expect, test } from "bun:test";
 import { cleanTable, displayValue, localize, localizeFields, manifestDescription, manifestName, pickLang } from "../src/lib/extensions/translations";
 import { parsePackage, type SettingField } from "../src/lib/extensions/schema";
+import { setLang } from "../src/lib/i18n";
 import { serverFields, serverTitle } from "../src/lib/server-extension";
+
+beforeEach(() => setLang("ko"));
+afterAll(() => setLang("en"));
 
 const table = { en: { "한 시간마다 알림": "Remind every hour", 켬: "On" }, ja: { "한 시간마다 알림": "1時間ごとに通知" } };
 

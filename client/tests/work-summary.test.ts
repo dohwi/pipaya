@@ -1,10 +1,11 @@
-import { afterEach, describe, expect, test } from "bun:test";
+import { afterAll, beforeEach, describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { setLang } from "../src/lib/i18n";
 import type { Step } from "../src/lib/types";
 import { joinAnd, workIcon, workKind, workSummary } from "../src/lib/work-summary";
 
-afterEach(() => setLang("ko"));
+beforeEach(() => setLang("ko"));
+afterAll(() => setLang("en"));
 
 const tool = (name: string, args: Record<string, unknown> = {}): Step => ({ kind: "tool", id: `${name}-${Math.random()}`, name, args });
 const think: Step = { kind: "think", text: "…", done: true };

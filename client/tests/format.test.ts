@@ -1,6 +1,8 @@
-import { describe, expect, test } from "bun:test";
+import { afterAll, describe, expect, test } from "bun:test";
 import { clockMinutes, dayLabel, duration, nextChange, pastChange, dayStart, fileStamp, fullTime, messageTime, pastLabel, shortDate, shortDateTime, timeOfDay } from "../src/lib/format";
 import { setLang } from "../src/lib/i18n";
+
+afterAll(() => setLang("en"));
 
 describe("duration", () => {
 	test("formats localized durations in Korean and English without 60s rollover", () => {

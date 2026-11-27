@@ -7,6 +7,10 @@ import ts from "typescript";
 import { packageDigest } from "../src/lib/extensions/approvals";
 import { fillSettingDefaults, parsePackage, resolveSettings, settingShown, type SettingField } from "../src/lib/extensions/schema";
 import type { ExtensionHost as ExtensionHostType, ExtensionContext, HostAdapter } from "../src/lib/extensions/host.svelte";
+import { setLang } from "../src/lib/i18n";
+
+beforeEach(() => setLang("ko"));
+afterAll(() => setLang("en"));
 
 // ---------------------------------------------------------------- pure schema
 const base = { manifest: { id: "example.cfg", name: "Cfg", version: "1.0.0", sdkVersion: 1, permissions: [] as string[] }, code: "export default {};" };

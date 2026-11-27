@@ -1,7 +1,10 @@
-import { afterEach, expect, test } from "bun:test";
+import { afterAll, afterEach, beforeEach, expect, test } from "bun:test";
 import { JsonTransport } from "../src/lib/extensions/transport";
+import { setLang } from "../src/lib/i18n";
 const original = globalThis.fetch;
+beforeEach(() => setLang("ko"));
 afterEach(() => { globalThis.fetch = original; });
+afterAll(() => setLang("en"));
 test("destination and Bearer token come only from extension settings; arbitrary headers denied", async () => {
   const t = new JsonTransport();
   globalThis.fetch = (async (url, init) => {

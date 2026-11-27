@@ -10,7 +10,7 @@ afterEach(() => {
 	setRemotePacks([]);
 	removeLocalPacks("ext.a");
 	removeLocalPacks("ext.b");
-	setLang("ko");
+	setLang("en");
 });
 
 const ja = { tag: "ja", name: "日本語", messages: { "설정": "設定", "닫기": "閉じる" }, updatedAt: 5 };
@@ -89,7 +89,7 @@ describe("LocalizedError", () => {
 		const e = new LocalizedError(t("저장"));
 		expect(e).toBeInstanceOf(Error);
 		expect(e).toBeInstanceOf(LocalizedError);
-		expect(e.message).toBe("저장");
+		expect(e.message).toBe("Save");
 		expect(new Error("x")).not.toBeInstanceOf(LocalizedError);
 	});
 });
