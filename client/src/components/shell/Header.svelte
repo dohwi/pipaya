@@ -8,6 +8,7 @@
 	import Icon from "../ui/Icon.svelte";
 	import IconButton from "../ui/IconButton.svelte";
 	import InlineRenameField from "../ui/InlineRenameField.svelte";
+	import Pin from "../ui/Pin.svelte";
 	import Segmented from "../ui/Segmented.svelte";
 	import FileIcon from "../workspace/FileIcon.svelte";
 	import TabControls from "./TabControls.svelte";
@@ -218,8 +219,10 @@
 				aria-expanded={app.filesOpen}
 				title={t("파일 뷰어") + filesHint}
 			>
-				<Icon name="folder" />
-				{#if workspaceViewer.changes.length > 0}<span class="fdot" aria-hidden="true"></span>{/if}
+				<span class="fico">
+					<Icon name="folder" />
+					{#if workspaceViewer.changes.length > 0}<Pin tone="warn" size="sm" />{/if}
+				</span>
 			</button>
 		{/if}
 
@@ -246,9 +249,15 @@
 			border-bottom-color: var(--tabbar-line);
 			background: var(--bg-tabbar);
 		}
+		:global(main:has(> [data-part="tabbar"])) > header .fico {
+			--pin-ring: var(--bg-tabbar);
+		}
 		@media (hover: hover) {
 			:global(main:has(> [data-part="tabbar"])) > header .tool:hover {
 				background: var(--bg-tabbar-hover); /* --bg-hover is lighter than the strip's tone on light */
+			}
+			:global(main:has(> [data-part="tabbar"])) > header .tool.files-toggle:hover .fico {
+				--pin-ring: var(--bg-tabbar-hover);
 			}
 		}
 	}
@@ -427,18 +436,19 @@
 	/* Shown only below the desktop sidebar breakpoint (<= 860px), mirroring `.menu` on the left */
 	.tool.files-toggle {
 		display: none;
-		position: relative;
 		flex: none;
 	}
-	.fdot {
-		position: absolute;
-		top: 9px;
-		right: 9px;
-		width: 6px; /* optical 6px indicator matching tab/tree change dots */
-		height: 6px; /* optical 6px indicator matching tab/tree change dots */
-		border-radius: var(--radius-pill);
-		background: var(--warn);
-		pointer-events: none;
+	.fico {
+		position: relative;
+		display: inline-flex;
+		--pin-ring: var(--bg);
+		--pin-top: 2px; /* folder body top sits at y=7.5 (5.9px in 19px); nests the 6px Pin on that top-right corner */
+		--pin-right: -1px; /* folder right edge sits at x=21 (16.6px in 19px); centres the 6px Pin on that edge */
+	}
+	@media (hover: hover) {
+		.tool.files-toggle:hover .fico {
+			--pin-ring: var(--bg-hover);
+		}
 	}
 	.menu {
 		display: none;
@@ -471,10 +481,6 @@
 			/* 12px capsule padding - 3px + 16px (half of 32px button) = 25px from right edge, matching TabCountButton center */
 			margin-right: -3px;
 		}
-		.fdot {
-			top: 9px;
-			right: 5px;
-		}
 	}
 	@media (max-width: 600px) {
 		.tabs {
@@ -485,12 +491,8 @@
 		}
 		.tool.files-toggle {
 			width: 28px; /* overrides the 640px .tool 32px rule (via specificity) to match TabControls' 28px buttons */
-			margin-right: -4px; /* pull the 28px button's 4.5px right glyph inset into the 12px phone capsule gutter */
+			margin-right: -2px; /* 12px capsule padding - 2px + 4.5px svg inset + 1.7px folder right inset = 16.2px, matching the 16px right gutter */
 			border-radius: min(var(--radius-pill), 14px);
-		}
-		.fdot {
-			top: 10px;
-			right: 4px;
 		}
 	}
 </style>

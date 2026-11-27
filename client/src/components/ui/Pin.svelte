@@ -13,18 +13,21 @@
 	 *  ping     sends a ring outwards: it needs the user
 	 *  label    accessible name (omit when the host already says it)
 	 *
-	 * The host can set `--pin-inset` (default -3px; a big tile uses 0 so the count stays inside it) and
+	 * The host can set `--pin-inset` (default -3px; a big tile uses 0 so the count stays inside it),
+	 * `--pin-top` / `--pin-right` (when an asymmetric icon's corner sits off the box edge), and
 	 * `--pin-ring` (the colour behind the host, default the sidebar's).
 	 */
 	let {
 		tone = "neutral",
 		count,
+		size = "md",
 		pulse = false,
 		ping = false,
 		label,
 	}: {
 		tone?: "neutral" | "accent" | "ok" | "warn" | "danger" | "info";
 		count?: number;
+		size?: "md" | "sm";
 		pulse?: boolean;
 		ping?: boolean;
 		label?: string;
@@ -33,6 +36,7 @@
 
 <span
 	class="pin {tone}"
+	class:sm={size === "sm" && count === undefined}
 	class:num={count !== undefined}
 	class:pulse
 	class:ping
@@ -46,8 +50,8 @@
 <style>
 	.pin {
 		position: absolute;
-		top: var(--pin-inset, -3px);
-		right: var(--pin-inset, -3px);
+		top: var(--pin-top, var(--pin-inset, -3px));
+		right: var(--pin-right, var(--pin-inset, -3px));
 		z-index: 1;
 		box-sizing: content-box;
 		width: 8px;
@@ -59,6 +63,11 @@
 		pointer-events: none;
 		--pin-bg: var(--text-faint);
 		--pin-fg: var(--bg-side);
+	}
+	.pin.sm {
+		width: 6px; /* optical 6px dot for compact or low-profile glyphs (e.g. header folder icon) */
+		height: 6px; /* optical 6px dot matching compact change indicators */
+		box-shadow: 0 0 0 1.5px var(--pin-ring, var(--bg-side));
 	}
 	.num {
 		/* one digit is a true circle; wider counts stretch into a pill */
