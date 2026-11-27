@@ -1,7 +1,7 @@
 import { conflict, notFound } from "./errors.ts";
 import { branchOf } from "./git-info.ts";
 import { workDirOf } from "./work-tree.ts";
-import { groupHandle, koreanName, mentioned, nameKey, nextMemberName, sameName } from "./member-names.ts";
+import { groupHandle, mentioned, nameKey, nextMemberName, sameName } from "./member-names.ts";
 import type { QuestionAnswer, QuestionRequest } from "./questions.ts";
 import type { RunOrigin } from "./session-types.ts";
 import type { SessionPatch, SessionRecord, SessionStore, ThinkingLevel } from "./store.ts";
@@ -257,9 +257,10 @@ export class PeerService {
 		return taken;
 	}
 
-	/** A free name for a new session. Names are stored in Korean whatever the UI language (see member-names.ts). */
-	newName(): string {
-		return nextMemberName(this.taken());
+	/** A free codename for a new session (fresh prefix for top-level, parent's prefix for derived sessions). */
+	newName(parentId?: string | null): string {
+		const parentName = parentId ? this.host.store.get(parentId)?.name : undefined;
+		return nextMemberName(this.taken(), parentName);
 	}
 
 	/**
@@ -267,7 +268,7 @@ export class PeerService {
 	 * the names shared before that). Only a session that never had one gets a new one; the check stays as a safety net.
 	 */
 	resumedName(r: SessionRecord): string {
-		return r.name && !this.host.store.activeNames().has(nameKey(r.name)) ? r.name : this.newName();
+		return r.name && !this.host.store.activeNames().has(nameKey(r.name)) ? r.name : this.newName(r.parentId);
 	}
 
 	// ── addressing ──────────────────────────────────────────────────────────
@@ -420,8 +421,8 @@ export class PeerService {
 				const to = (a.newName ?? "").replace(/^@/, "");
 				if (!NAME_RE.test(to)) throw conflict("the new name must be 1-30 letters, digits, - or _");
 				if (!sameName(to, peer.name) && this.taken().has(nameKey(to))) throw conflict(`@${to} is already taken by a session or a group`);
-				this.host.rename(peer.id, koreanName(to));
-				return `Renamed @${peer.name} to @${koreanName(to)}.`;
+				this.host.rename(peer.id, to);
+				return `Renamed @${peer.name} to @${to}.`;
 			}
 			case "set": {
 				const patch: SessionPatch = {};

@@ -1,76 +1,104 @@
 import { describe, expect, test } from "bun:test";
-import { groupHandle, koreanName, nameKey, sameName, MEMBER_NAMES_EN, MEMBER_NAMES_KO, memberAt, mentioned, nameInLang, nextMemberName, romanize } from "../src/member-names.ts";
+import {
+	CODENAME_LETTERS,
+	codenamePrefix,
+	codenamePrefixOf,
+	groupHandle,
+	memberAt,
+	mentioned,
+	nameKey,
+	nextMemberName,
+	sameName,
+} from "../src/member-names.ts";
 
 describe("member names", () => {
-	test("romanizes Hangul syllable by syllable and keeps anything else", () => {
-		expect(romanize("민수")).toBe("Minsu");
-		expect(romanize("abc")).toBe("Abc");
-		expect(MEMBER_NAMES_KO).toHaveLength(500);
-		expect(new Set(MEMBER_NAMES_KO).size).toBe(MEMBER_NAMES_KO.length);
-		expect(MEMBER_NAMES_EN).toHaveLength(MEMBER_NAMES_KO.length);
-		expect(new Set(MEMBER_NAMES_EN.map((n) => n.toLowerCase())).size).toBe(MEMBER_NAMES_EN.length);
+	test("codename alphabet omits confusing I/O and generates Excel-style prefixes", () => {
+		expect(CODENAME_LETTERS).toHaveLength(24);
+		expect(CODENAME_LETTERS).not.toContain("I");
+		expect(CODENAME_LETTERS).not.toContain("O");
+		expect(codenamePrefix(0)).toBe("A");
+		expect(codenamePrefix(7)).toBe("H");
+		expect(codenamePrefix(8)).toBe("J");
+		expect(codenamePrefix(13)).toBe("P");
+		expect(codenamePrefix(23)).toBe("Z");
+		expect(codenamePrefix(24)).toBe("AA");
+		expect(codenamePrefix(25)).toBe("AB");
+		expect(codenamePrefix(47)).toBe("AZ");
+		expect(codenamePrefix(48)).toBe("BA");
+		expect(codenamePrefix(-3)).toBe("A");
 	});
 
-	test("a stored name is always the Korean one, whatever form it was saved in", () => {
-		expect(koreanName("민수")).toBe("민수");
-		expect(koreanName("Minsu")).toBe("민수"); // saved by an older server that renamed on a language switch
-		expect(koreanName("minsu2")).toBe("민수2");
-		expect(koreanName("custom")).toBe("custom");
+	test("codenamePrefixOf extracts uppercase prefixes and rejects non-codenames", () => {
+		expect(codenamePrefixOf("A1")).toBe("A");
+		expect(codenamePrefixOf("a12")).toBe("A");
+		expect(codenamePrefixOf("ab3")).toBe("AB");
+		expect(codenamePrefixOf("")).toBeNull();
+		expect(codenamePrefixOf(null)).toBeNull();
+		expect(codenamePrefixOf(undefined)).toBeNull();
+		expect(codenamePrefixOf("A0")).toBeNull();
+		expect(codenamePrefixOf("I1")).toBeNull();
+		expect(codenamePrefixOf("O2")).toBeNull();
+		expect(codenamePrefixOf("AI1")).toBeNull();
+		expect(codenamePrefixOf("worker")).toBeNull();
+		expect(codenamePrefixOf("A1-extra")).toBeNull();
 	});
 
-	test("hands out the first free name, then cycles through the pool with 1, 2, 3...", () => {
-		expect(nextMemberName(new Set())).toBe(MEMBER_NAMES_KO[0]!);
-		const all = new Set(MEMBER_NAMES_KO.map((n) => n.toLowerCase()));
-		expect(nextMemberName(all)).toBe(`${MEMBER_NAMES_KO[0]}1`);
-		all.add(`${MEMBER_NAMES_KO[0]}1`.toLowerCase());
-		expect(nextMemberName(all)).toBe(`${MEMBER_NAMES_KO[1]}1`);
-		for (const n of MEMBER_NAMES_KO) all.add(`${n}1`.toLowerCase());
-		expect(nextMemberName(all)).toBe(`${MEMBER_NAMES_KO[0]}2`);
-		all.add(`${MEMBER_NAMES_KO[0]}2`.toLowerCase());
-		expect(nextMemberName(all)).toBe(`${MEMBER_NAMES_KO[1]}2`);
+	test("independent sessions take fresh letter prefixes and overflow to AA1, AB1...", () => {
+		const taken = new Set<string>();
+		const first26: string[] = [];
+		for (let i = 0; i < 26; i++) {
+			const name = nextMemberName(taken);
+			first26.push(name);
+			taken.add(name.toLowerCase());
+		}
+		expect(first26.slice(0, 4)).toEqual(["A1", "B1", "C1", "D1"]);
+		expect(first26[7]).toBe("H1");
+		expect(first26[8]).toBe("J1");
+		expect(first26[23]).toBe("Z1");
+		expect(first26[24]).toBe("AA1");
+		expect(first26[25]).toBe("AB1");
 	});
 
-	test("shows a name in the language asked for, numbered ones included, and leaves strangers alone", () => {
-		const ko = MEMBER_NAMES_KO[0]!;
-		const en = MEMBER_NAMES_EN[0]!;
-		expect(nameInLang(ko, "en")).toBe(en);
-		expect(nameInLang(`${ko}2`, "en")).toBe(`${en}2`);
-		expect(nameInLang(ko, "ko")).toBe(ko);
-		expect(nameInLang(ko, "ko-KR")).toBe(ko);
-		expect(nameInLang(ko)).toBe(ko);
-		expect(nameInLang("custom", "en")).toBe("custom");
-		// a name stored in the old romanized form still shows as the Korean one in Korean
-		expect(nameInLang(en, "ko")).toBe(ko);
-		expect(nameInLang(`${en.toLowerCase()}3`, "ko")).toBe(`${ko}3`);
+	test("independent sessions never intrude on a prefix still held by a child, and reclaim fully free prefixes", () => {
+		// A1 was deleted while A2 still exists -> new independent session skips A and takes B1
+		expect(nextMemberName(new Set(["A2"]))).toBe("B1");
+		// Once A is completely gone, a new independent session reclaims A1
+		expect(nextMemberName(new Set(["b1", "c1"]))).toBe("A1");
+		// Group handle colliding with a codename reserves that prefix too
+		expect(nextMemberName(new Set(["a1", "b1"]))).toBe("C1");
+	});
+
+	test("derived sessions inherit their parent's prefix, fill gaps, and grow past 9", () => {
+		expect(nextMemberName(new Set(["a1"]), "A1")).toBe("A2");
+		expect(nextMemberName(new Set(["a1", "a2"]), "a2")).toBe("A3");
+		expect(nextMemberName(new Set(["a1", "a3"]), "A1")).toBe("A2");
+		const nine = new Set(Array.from({ length: 9 }, (_, i) => `a${i + 1}`));
+		expect(nextMemberName(nine, "A1")).toBe("A10");
+		// Non-codename or missing parent falls back to a fresh top-level prefix
+		expect(nextMemberName(new Set(["a1", "worker"]), "worker")).toBe("B1");
+		expect(nextMemberName(new Set(["a1"]), "")).toBe("B1");
+		expect(nextMemberName(new Set(["a1"]), null)).toBe("B1");
+		expect(nextMemberName(new Set(["a1"]), "I1")).toBe("B1");
 	});
 
 	test("a group handle is one token", () => {
 		expect(groupHandle("  my  team ")).toBe("my-team");
 	});
 
-	test("@mentions pick the longest known name and respect word boundaries", () => {
-		expect(memberAt("미나랑", ["미나", "미"])).toBe("미나"); // a Korean particle may follow
-		expect(memberAt("minah", ["mina", "min"])).toBeNull(); // not cut out of a longer ASCII word
-		expect(memberAt("mina.", ["mina"])).toBe("mina");
-		expect(memberAt("MINA", ["mina"])).toBe("mina");
-		expect(mentioned("hi @mina and @bo, @mina again, @nobody", ["mina", "bo"])).toEqual(["mina", "bo"]);
-		expect(mentioned("mail me@mina.com", ["mina"])).toEqual([]); // not at a word start
+	test("@mentions pick the longest known name, match case-insensitively, and respect word boundaries", () => {
+		expect(memberAt("A1한테", ["A1", "B1"])).toBe("A1"); // Korean particle may follow
+		expect(memberAt("a1.", ["A1"])).toBe("A1");
+		expect(memberAt("A10", ["A1", "A10"])).toBe("A10");
+		expect(memberAt("A10", ["A1"])).toBeNull(); // not cut out of a longer ASCII token
+		expect(memberAt("A1x", ["A1"])).toBeNull();
+		expect(mentioned("hi @a1 and @B1, @A1 again, @nobody", ["A1", "B1"])).toEqual(["A1", "B1"]);
+		expect(mentioned("mail me@A1.com", ["A1"])).toEqual([]); // not at a word start
 	});
 
-	test("a name and its romanized twin are one name, whichever language wrote it", () => {
-		expect(nameKey("철수")).toBe(nameKey("Cheolsu"));
-		expect(nameKey("철수2")).toBe(nameKey("cheolsu2"));
-		expect(nameKey("철수")).not.toBe(nameKey("철수2"));
-		expect(sameName("Mina", "미나")).toBe(true);
-		expect(sameName("미나", "가온")).toBe(false);
+	test("nameKey and sameName are case-insensitive", () => {
+		expect(nameKey("A1")).toBe("a1");
+		expect(sameName("A1", "a1")).toBe(true);
+		expect(sameName("A1", "A2")).toBe(false);
 		expect(sameName("builder-1", "Builder-1")).toBe(true);
-	});
-
-	test("@mentions in either script point at the same stored name", () => {
-		expect(memberAt("Mina", ["미나", "가온"])).toBe("미나");
-		expect(memberAt("미나랑", ["미나"])).toBe("미나");
-		expect(memberAt("mina2", ["미나", "미나2"])).toBe("미나2");
-		expect(memberAt("Minah", ["미나"])).toBeNull(); // still not cut out of a longer ASCII word
-		expect(mentioned("hi @Cheolsu and @가온, @철수 again", ["철수", "가온"])).toEqual(["철수", "가온"]);
 	});
 });

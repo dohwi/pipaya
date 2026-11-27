@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { buildApp } from "../src/app.ts";
 import { RETIRED_EXTENSIONS } from "../src/extensions/retired.ts";
-import { nameInLang } from "../src/member-names.ts";
+import { codenamePrefixOf } from "../src/member-names.ts";
 import { ECHO_MODEL, echoProviderBody, startEchoUpstream } from "./support/openai-upstream.ts";
 
 describe("peer sessions: names, peer / peer read and @mentions", () => {
@@ -100,31 +100,34 @@ describe("peer sessions: names, peer / peer read and @mentions", () => {
 		expect(g.name.toLowerCase()).not.toBe(before[c]!.toLowerCase());
 		await api("PATCH", `/sessions/${c}`, { closed: false });
 		expect(await nameOf(c)).toBe(before[c]!); // reopened, it answers to its own name again
-		// a name is stored once, in Korean: the UI language only changes how it is written (see member-names.test.ts)
-		expect(await nameOf(a)).toMatch(/^[가-힣]+\d*$/);
+		// every generated name is an uppercase codename (A1, B1, ...)
+		expect(await nameOf(a)).toMatch(/^[ABCDEFGHJKLMNPQRSTUVWXYZ]+[1-9]\d*$/);
 	});
 
-	test("a romanized spelling of a taken name is taken too, and addresses the same session", async () => {
+	test("codenames are case-insensitive for addressing and collisions, and derived sessions share their parent's prefix", async () => {
 		const [a, b, boss] = [await mk(), await mk(), await mk()];
-		const ko = await nameOf(a); // always Korean
-		const en = nameInLang(ko, "en");
-		expect(en).not.toBe(ko);
-		// renaming b to the English spelling of a's name is a collision
+		const aName = await nameOf(a);
+		const aLower = aName.toLowerCase();
 		const bName = await nameOf(b);
-		await api("POST", `/sessions/${boss}/messages`, { text: `!peer ${JSON.stringify({ action: "rename", name: bName, newName: en })}` });
+		// top-level sessions get distinct prefixes
+		expect(codenamePrefixOf(aName)).not.toBe(codenamePrefixOf(bName));
+		// renaming b to a lowercase variant of a's codename is a collision
+		await api("POST", `/sessions/${boss}/messages`, { text: `!peer ${JSON.stringify({ action: "rename", name: bName, newName: aLower })}` });
 		await idle(boss);
 		expect(await nameOf(b)).toBe(bName); // refused: unchanged
-		// a group cannot take the English spelling either
-		const g = (await api("POST", "/groups", { name: en, layout: split(pane(a), pane(b)) })).json;
-		expect(g.name.toLowerCase()).not.toBe(en.toLowerCase());
-		// peer(action=send) by the English spelling reaches a
-		await api("POST", `/sessions/${boss}/messages`, { text: `!peer ${JSON.stringify({ action: "send", to: en, message: "hi by romaji" })}` });
+		// a group cannot take a case-variant of a session's codename either
+		const g = (await api("POST", "/groups", { name: aLower, layout: split(pane(a), pane(b)) })).json;
+		expect(g.name.toLowerCase()).not.toBe(aLower);
+		// peer(action=send) with lowercase reaches the session
+		await api("POST", `/sessions/${boss}/messages`, { text: `!peer ${JSON.stringify({ action: "send", to: aLower, message: "hi lowercase" })}` });
 		await idle(boss); await Bun.sleep(100); await idle(a);
-		expect(await said(a)).toContain("hi by romaji");
-		// a rename to an English spelling is stored in Korean
-		await api("POST", `/sessions/${boss}/messages`, { text: `!peer ${JSON.stringify({ action: "rename", name: bName, newName: "Cheolsu99" })}` });
-		await idle(boss);
-		expect(await nameOf(b)).toBe("철수99");
+		expect(await said(a)).toContain("hi lowercase");
+		// fork inherits parent's prefix
+		const forked = (await api("POST", `/sessions/${a}/fork`, {})).json;
+		expect(codenamePrefixOf(forked.name)).toBe(codenamePrefixOf(aName));
+		expect(forked.name).not.toBe(aName);
+		await api("DELETE", `/sessions/${forked.id}`);
+		await api("DELETE", `/groups/${g.id}`);
 	});
 
 	test("a group cannot take a session's name", async () => {
@@ -187,6 +190,7 @@ describe("peer sessions: names, peer / peer read and @mentions", () => {
 		expect(kid.title).toBe("built");
 		expect(kid.purpose).toBe("builder");
 		expect(kid.parentId).toBe(boss);
+		expect(codenamePrefixOf(kid.name)).toBe(codenamePrefixOf(await nameOf(boss)));
 		expect(kid.muted).toBeUndefined(); // per-session mute is gone: peer create no longer silences the new session
 		await idle(kid.id);
 		await Bun.sleep(300);

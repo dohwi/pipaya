@@ -42,7 +42,7 @@ export const IdParams = Type.Object({ id: Type.String() });
 const sessionFields = {
 	id: Type.String(),
 	title: Type.String(),
-	name: Type.String({ description: "How other sessions address this one (@name), always in Korean (민수) whatever the UI language; unique among all sessions (a closed one keeps its name). Show it with nameInLang(name, uiLang) (Minsu in English)" }),
+	name: Type.String({ description: "How other sessions address this one (@name): a language-neutral lineage codename (A1, B1, A2, ...), unique among all sessions (a closed one keeps its name)" }),
 	purpose: Type.String({ description: "What this session's agent works on, written by the system model (GET /system-model); empty until then" }),
 	cwd: Type.String({ description: "Absolute path of the working directory" }),
 	activeDir: Type.Optional(Nullable(Type.String({ description: "Absolute path of another git worktree of the cwd's repository the agent moved into and works in now; null while it works in its own. List the session under activeDir ?? cwd" }))),

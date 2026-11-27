@@ -3,7 +3,6 @@
 	import { portal } from "../../lib/dialog";
 	import { t } from "../../lib/i18n";
 	import { panesOf } from "../../lib/layout";
-	import { nameInLang } from "../../lib/member-names";
 	import { hideMentionHover, mentionHover } from "../../lib/mention-hover.svelte";
 	import { modelDisplayName } from "../../lib/model-name";
 	import { surfaceIn, surfaceOut } from "../../lib/motion";
@@ -48,7 +47,7 @@
 			.filter((s): s is NonNullable<typeof s> => !!s)
 			.map((s) => ({
 				id: s.id,
-				name: s.name ? `@${nameInLang(s.name)}` : sessionTitle(s.title),
+				name: s.name ? `@${s.name}` : sessionTitle(s.title),
 				activity: link ? activityOf(link.data, s.id) : "idle",
 			}));
 		return { g, members };
@@ -115,7 +114,7 @@
 					<span class="pill {ACTIVITY_TONE[activity]}">{ACTIVITY_LABEL[activity]}</span>
 				{/if}
 			</div>
-			{@const metaParts = [s.name ? `@${nameInLang(s.name)}` : "", dirShort ? `${dirShort}${branch ? ` (${branch})` : ""}` : "", model].filter(Boolean)}
+			{@const metaParts = [s.name ? `@${s.name}` : "", dirShort ? `${dirShort}${branch ? ` (${branch})` : ""}` : "", model].filter(Boolean)}
 			<div class="meta mono">
 				{#if isRemote}<span class="srv"><Icon name="server" />{serverName}</span>{#if metaParts.length}<span class="sep" aria-hidden="true">·</span>{/if}{/if}
 				<span>{metaParts.join(" · ")}</span>

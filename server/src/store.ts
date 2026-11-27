@@ -225,7 +225,7 @@ export class SessionStore {
 		return rows.map(toRecord);
 	}
 
-	/** `nameKey`s of the open sessions' names (only these answer to them): 철수 and Cheolsu are one key. */
+	/** `nameKey`s of the open sessions' names (only these answer to them), lower-cased. */
 	activeNames(): Set<string> {
 		return new Set((this.db.query("SELECT name FROM sessions WHERE closed = 0 AND name != ''").all() as { name: string }[]).map((r) => nameKey(r.name)));
 	}

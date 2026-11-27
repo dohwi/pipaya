@@ -2,7 +2,7 @@ import { Database } from "bun:sqlite";
 import { chmodSync, existsSync, mkdirSync, readFileSync, statfsSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname } from "node:path";
-import { groupHandle, koreanName, nameKey, nextMemberName } from "./member-names.ts";
+import { groupHandle, nameKey, nextMemberName } from "./member-names.ts";
 
 /** SQLite has no `ADD COLUMN IF NOT EXISTS`, and a database stepped back and reopened runs a migration again: these make a step safe to repeat. */
 const columns = (db: Database, table: string): string[] => (db.query(`PRAGMA table_info(${table})`).all() as { name: string }[]).map((c) => c.name);
@@ -207,19 +207,10 @@ export const MIGRATIONS: (string | ((db: Database) => void))[] = [
 		db.exec("UPDATE sessions SET closed = 1 WHERE archived = 1 AND closed = 0");
 		dropColumn(db, "sessions", "archived");
 	},
-	// v30: session @names are stored once, in Korean, and only shown in another language (민수 / Minsu). Until now the UI
-	// language switch renamed them on the server, so a database holds a mix of both forms; the romanized ones go back to
-	// their Korean twin, which is what the UI now derives anyway.
-	(db) => {
-		const set = db.query("UPDATE sessions SET name = $name WHERE id = $id");
-		for (const r of db.query("SELECT id, name FROM sessions WHERE name != ''").all() as { id: string; name: string }[]) {
-			const name = koreanName(r.name);
-			if (name !== r.name) set.run({ id: r.id, name });
-		}
-	},
-	// v31: 철수 and Cheolsu are one name. Databases that switched language a few times hold both at once among the active
-	// sessions (and v30 turns such a pair into two 철수). The oldest session keeps the name; each later one takes the next
-	// free name. Only the name column of an active session changes: closed sessions give theirs up anyway, nothing is deleted.
+	// v30: previously normalized romanized Korean pool names back to Korean; superseded by the codename migration below.
+	() => {},
+	// v31: deduplicate active sessions whose handles collide case-insensitively. The oldest session keeps the name;
+	// each later one takes the next free codename. Closed sessions are untouched here and deduplicated in a later step.
 	(db) => {
 		const taken = new Set<string>((db.query("SELECT name FROM groups").all() as { name: string }[]).map((g) => nameKey(groupHandle(g.name))));
 		const dupes: string[] = [];
@@ -330,6 +321,49 @@ export const MIGRATIONS: (string | ((db: Database) => void))[] = [
 	 CREATE INDEX IF NOT EXISTS idx_messages_session_role_seq ON messages(session_id, role, seq);
 	 CREATE INDEX IF NOT EXISTS idx_sessions_cwd ON sessions(cwd);
 	 CREATE INDEX IF NOT EXISTS idx_extension_entries_session_id ON extension_entries(session_id, id);`,
+	// Replace legacy Korean person-name handles with language-neutral lineage codenames (A1, B1, A2, ...).
+	// Open sessions are assigned first so the active sidebar starts cleanly at A1, B1, C1...; custom non-Hangul handles stay untouched.
+	(db) => {
+		const legacyKorean = /^[\uac00-\ud7a3]+\d*$/;
+		const rows = db.query("SELECT id, name, parent_id, closed FROM sessions ORDER BY closed ASC, created_at ASC, id ASC").all() as {
+			id: string;
+			name: string;
+			parent_id: string | null;
+			closed: number;
+		}[];
+		const toMigrate = rows.filter((r) => legacyKorean.test(r.name));
+		if (!toMigrate.length) return;
+		const migrateIds = new Set(toMigrate.map((r) => r.id));
+		const taken = new Set<string>(
+			(db.query("SELECT name FROM groups").all() as { name: string }[]).map((g) => nameKey(groupHandle(g.name))),
+		);
+		const resolved = new Map<string, string>();
+		for (const r of rows) {
+			if (!migrateIds.has(r.id) && r.name) {
+				taken.add(nameKey(r.name));
+				resolved.set(r.id, r.name);
+			}
+		}
+		const parentOf = new Map(rows.map((r) => [r.id, r.parent_id]));
+		const ancestorName = (id: string): string | undefined => {
+			const seen = new Set<string>([id]);
+			let cur = parentOf.get(id);
+			while (cur && !seen.has(cur)) {
+				seen.add(cur);
+				const found = resolved.get(cur);
+				if (found) return found;
+				cur = parentOf.get(cur);
+			}
+			return undefined;
+		};
+		const set = db.query("UPDATE sessions SET name = $name WHERE id = $id");
+		for (const r of toMigrate) {
+			const name = nextMemberName(taken, ancestorName(r.id));
+			taken.add(nameKey(name));
+			resolved.set(r.id, name);
+			set.run({ id: r.id, name });
+		}
+	},
 ];
 
 /** Cap WAL file size after checkpointing (64 MiB) so a burst delete never leaves a multi-hundred-MB -wal behind. */

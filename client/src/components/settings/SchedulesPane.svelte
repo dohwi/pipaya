@@ -21,7 +21,6 @@
 	import { keepDraft } from "../../lib/settings-drafts.svelte";
 	import { t } from "../../lib/i18n";
 	import { fullTime, shortDate } from "../../lib/format";
-	import { nameInLang } from "../../lib/member-names";
 	import { reflow, rowIn, rowOut } from "../../lib/motion";
 	import {
 		DEFAULT_HISTORY_DAYS,
@@ -305,7 +304,7 @@
 
 	const sessionLabel = (id: string) => {
 		const s = sessionOf(id);
-		return s ? `${s.title}${s.name ? ` · @${nameInLang(s.name)}` : ""}` : t("닫힌 대화");
+		return s ? `${s.title}${s.name ? ` · @${s.name}` : ""}` : t("닫힌 대화");
 	};
 	/** The time field of a task being scheduled again: it is the one thing to fill in, often below the fold. */
 	const focusWhen = (node: HTMLElement, on: boolean) => {
