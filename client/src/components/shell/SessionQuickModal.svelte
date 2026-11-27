@@ -3,7 +3,6 @@
 	import { t } from "../../lib/i18n";
 	import { sessionTitle } from "../../lib/session-title";
 	import { workDir } from "../../lib/nav";
-	import { nameInLang } from "../../lib/member-names";
 	import { activityOf, ACTIVITY_LABEL } from "../../lib/activity";
 	import { hideMentionHover } from "../../lib/mention-hover.svelte";
 	import Modal from "../ui/Modal.svelte";
@@ -45,7 +44,7 @@
 			mode === "graph" || server !== app.serverId || app.servers.length > 1
 				? (app.servers.find((x) => x.id === server)?.name ?? server)
 				: "",
-			s?.name ? `@${nameInLang(s.name)}` : "",
+			s?.name ? `@${s.name}` : "",
 			isClosed ? t("닫힘") : "",
 			s ? workDir(s).split(/[\\/]/).slice(-2).join("/") : "",
 		]
@@ -59,7 +58,7 @@
 		if (!prevEntry) return "";
 		const ps = app.sessionAny(prevEntry.session, prevEntry.server);
 		if (!ps) return "";
-		return ps.name ? `@${nameInLang(ps.name)}` : sessionTitle(ps.title);
+		return ps.name ? `@${ps.name}` : sessionTitle(ps.title);
 	});
 
 	function goBack() {

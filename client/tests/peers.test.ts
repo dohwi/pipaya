@@ -8,16 +8,16 @@ const group = (name: string, ...ids: string[]) => ({ id: name, name, layout: ids
 
 describe("peers", () => {
 	test("a session label is its @name, with the role in the tooltip", () => {
-		expect(peerLabel(s("a", "미나"))).toEqual({ text: "@미나", title: "@미나" });
-		expect(peerLabel(s("a", "미나", { purpose: "docs" }))?.title).toBe("@미나 · docs");
+		expect(peerLabel(s("a", "A1"))).toEqual({ text: "@A1", title: "@A1" });
+		expect(peerLabel(s("a", "A1", { purpose: "docs" }))?.title).toBe("@A1 · docs");
 		expect(peerLabel(s("a", ""))).toBeUndefined();
 		expect(peerLabel(undefined)).toBeUndefined();
 	});
 
 	test("completions list groups first, then the other active sessions", () => {
-		const list = [s("a", "미나"), s("b", "철수"), s("c", "가온", { closed: true }), s("d", "")];
+		const list = [s("a", "A1"), s("b", "B1"), s("c", "C1", { closed: true }), s("d", "")];
 		const items = peerMentions(list, [group("결제 개편", "a", "b"), group("solo", "a")], "a");
-		expect(items.map((i) => i.insert)).toEqual(["@결제-개편", "@철수"]);
+		expect(items.map((i) => i.insert)).toEqual(["@결제-개편", "@B1"]);
 		expect(items[1]!.desc).toContain("proj/app");
 	});
 
@@ -26,44 +26,31 @@ describe("peers", () => {
 	});
 
 	test("parsePeer reads the sender and the body", () => {
-		expect(parsePeer("[from @지우, another session on this server; answer with peer_send to @지우 only if a reply is needed]\n안녕")).toEqual({ from: "@지우", body: "안녕" });
+		expect(parsePeer("[from @A1, another session on this server; answer with peer_send to @A1 only if a reply is needed]\n안녕")).toEqual({ from: "@A1", body: "안녕" });
 		expect(parsePeer("hello")).toBeNull();
-		const r = parsePeer("[from the server: @도하 finished its run. This is a report you asked for; no reply needed.]\nlast words: \"끝\"\nUse peer(action=read).");
+		const r = parsePeer("[from the server: @B1 finished its run. This is a report you asked for; no reply needed.]\nlast words: \"끝\"\nUse peer(action=read).");
 		expect(r?.server).toBe(true);
-		expect(r?.body).toBe("@도하 finished its run. This is a report you asked for; no reply needed.\nlast words: \"끝\"\nUse peer(action=read).");
+		expect(r?.body).toBe("@B1 finished its run. This is a report you asked for; no reply needed.\nlast words: \"끝\"\nUse peer(action=read).");
 	});
 
 	test("buildMentionIndex resolves active sessions and groups, with sessions taking precedence", () => {
 		const idx = buildMentionIndex(
-			[s("a", "서아"), s("b", "닫힘", { closed: true }), s("c", "")],
-			[group("결제 개편", "a"), group("서아", "a")],
+			[s("a", "A1"), s("b", "B1", { closed: true }), s("c", "")],
+			[group("결제 개편", "a"), group("A1", "a")],
 		);
-		expect(idx.resolve("서아")).toEqual({ kind: "session", id: "a" });
-		expect(idx.resolve("@서아")).toEqual({ kind: "session", id: "a" });
+		expect(idx.resolve("A1")).toEqual({ kind: "session", id: "a" });
+		expect(idx.resolve("@a1")).toEqual({ kind: "session", id: "a" });
 		expect(idx.resolve("@결제-개편")).toEqual({ kind: "group", id: "결제 개편" });
-		expect(idx.resolve("닫힘")).toBeUndefined();
-		expect(idx.names).toContain("서아");
+		expect(idx.resolve("B1")).toBeUndefined();
+		expect(idx.names).toContain("a1");
 		expect(idx.names).toContain("결제-개편");
-	});
-});
-
-import { nameInLang, romanize } from "../src/lib/member-names";
-import { describe as d2, expect as e2, test as t2 } from "bun:test";
-d2("member names follow the UI language at display time", () => {
-	t2("Korean shows the stored name, English its romanization, numbers kept", () => {
-		e2(nameInLang("민수", "ko")).toBe("민수");
-		e2(nameInLang("민수", "ko-KR")).toBe("민수");
-		e2(nameInLang("민수", "en")).toBe("Minsu");
-		e2(nameInLang("철수2", "en")).toBe("Cheolsu2");
-		e2(nameInLang("custom", "en")).toBe("custom");
-		e2(romanize("영희")).toBe("Yeonghui");
 	});
 });
 
 describe("parentLabel", () => {
 	const by = (m: Record<string, { name: string; title: string }>) => (id: string) => m[id];
 	test("names the open session that made this one; nothing for one the user started or whose parent is gone", () => {
-		expect(parentLabel({ parentId: "p" }, by({ p: { name: "minji", title: "x" } }))?.text).toBe("@minji");
+		expect(parentLabel({ parentId: "p" }, by({ p: { name: "A1", title: "x" } }))?.text).toBe("@A1");
 		expect(parentLabel({ parentId: "p" }, by({ p: { name: "", title: "Fork source" } }))?.text).toBe("Fork source");
 		expect(parentLabel({ parentId: null }, by({}))).toBeUndefined();
 		expect(parentLabel({ parentId: "gone" }, by({}))).toBeUndefined();
@@ -73,32 +60,32 @@ describe("parentLabel", () => {
 describe("buildMentionIndex (closed & remote sessions)", () => {
 	test("indexes closed sessions without overriding active sessions or groups, and indexes @server/name remotes", () => {
 		const idx = buildMentionIndex(
-			[s("s1", "서아")],
+			[s("s1", "A1")],
 			[{ id: "g1", name: "팀" }],
 			{
 				closedSessions: [
-					s("c1", "서아", { closed: true }), // clashes with active -> active wins
+					s("c1", "A1", { closed: true }), // clashes with active -> active wins
 					s("c2", "팀", { closed: true }), // clashes with group -> group wins
-					s("c3", "소민", { closed: true }), // closed -> resolved with closed: true
+					s("c3", "B1", { closed: true }), // closed -> resolved with closed: true
 				],
 				remotes: [
 					{
 						serverId: "srv-desktop",
 						handle: "desktop",
-						sessions: [s("r1", "민석")],
+						sessions: [s("r1", "A1")],
 						closedSessions: [
-							s("r2", "민석", { closed: true }), // active remote wins
-							s("r3", "예서", { closed: true }),
+							s("r2", "A1", { closed: true }), // active remote wins
+							s("r3", "C1", { closed: true }),
 						],
 					},
 				],
 			},
 		);
-		expect(idx.resolve("@서아")).toEqual({ kind: "session", id: "s1" });
+		expect(idx.resolve("@A1")).toEqual({ kind: "session", id: "s1" });
 		expect(idx.resolve("@팀")).toEqual({ kind: "group", id: "g1" });
-		expect(idx.resolve("@소민")).toEqual({ kind: "session", id: "c3", closed: true });
-		expect(idx.resolve("@desktop/민석")).toEqual({ kind: "session", id: "r1", server: "srv-desktop" });
-		expect(idx.resolve("@desktop/예서")).toEqual({ kind: "session", id: "r3", server: "srv-desktop", closed: true });
+		expect(idx.resolve("@b1")).toEqual({ kind: "session", id: "c3", closed: true });
+		expect(idx.resolve("@desktop/A1")).toEqual({ kind: "session", id: "r1", server: "srv-desktop" });
+		expect(idx.resolve("@desktop/c1")).toEqual({ kind: "session", id: "r3", server: "srv-desktop", closed: true });
 	});
 });
 

@@ -1,6 +1,5 @@
 /** Sessions that address each other by `@name`: the label, the `@` completions and the sender of a message. Free of components so it can be unit-tested. */
 import { t } from "./i18n";
-import { nameInLang } from "./member-names";
 import { panesOf } from "./layout";
 import type { Group, Session } from "./types";
 
@@ -75,7 +74,7 @@ export function planMentionAction(
 }
 
 export interface MentionIndex {
-	/** All known lowercase handle forms (stored session name, localized romanized form, group handles, and `@server/name`). */
+	/** All known lowercase handle forms (session handles, group handles, and `@server/name`). */
 	names: string[];
 	/** Resolve a handle (with or without leading `@`) to the session or group it names. */
 	resolve: (name: string) => MentionTarget | undefined;
@@ -104,9 +103,7 @@ export function buildMentionIndex(
 	const map = new Map<string, MentionTarget>();
 	for (const s of sessions) {
 		if (s.closed || !s.name) continue;
-		const target: MentionTarget = { kind: "session", id: s.id };
-		map.set(s.name.toLowerCase(), target);
-		map.set(nameInLang(s.name).toLowerCase(), target);
+		map.set(s.name.toLowerCase(), { kind: "session", id: s.id });
 	}
 	for (const g of groups) {
 		const handle = groupHandle(g.name);
@@ -116,30 +113,21 @@ export function buildMentionIndex(
 	}
 	for (const s of opts?.closedSessions ?? []) {
 		if (!s.name) continue;
-		const target: MentionTarget = { kind: "session", id: s.id, closed: true };
-		const rawKey = s.name.toLowerCase();
-		const langKey = nameInLang(s.name).toLowerCase();
-		if (!map.has(rawKey)) map.set(rawKey, target);
-		if (!map.has(langKey)) map.set(langKey, target);
+		const key = s.name.toLowerCase();
+		if (!map.has(key)) map.set(key, { kind: "session", id: s.id, closed: true });
 	}
 	for (const remote of opts?.remotes ?? []) {
 		const prefix = groupHandle(remote.handle).toLowerCase();
 		if (!prefix) continue;
 		for (const s of remote.sessions) {
 			if (s.closed || !s.name) continue;
-			const target: MentionTarget = { kind: "session", id: s.id, server: remote.serverId };
-			const rawKey = `${prefix}/${s.name.toLowerCase()}`;
-			const langKey = `${prefix}/${nameInLang(s.name).toLowerCase()}`;
-			if (!map.has(rawKey)) map.set(rawKey, target);
-			if (!map.has(langKey)) map.set(langKey, target);
+			const key = `${prefix}/${s.name.toLowerCase()}`;
+			if (!map.has(key)) map.set(key, { kind: "session", id: s.id, server: remote.serverId });
 		}
 		for (const s of remote.closedSessions ?? []) {
 			if (!s.name) continue;
-			const target: MentionTarget = { kind: "session", id: s.id, server: remote.serverId, closed: true };
-			const rawKey = `${prefix}/${s.name.toLowerCase()}`;
-			const langKey = `${prefix}/${nameInLang(s.name).toLowerCase()}`;
-			if (!map.has(rawKey)) map.set(rawKey, target);
-			if (!map.has(langKey)) map.set(langKey, target);
+			const key = `${prefix}/${s.name.toLowerCase()}`;
+			if (!map.has(key)) map.set(key, { kind: "session", id: s.id, server: remote.serverId, closed: true });
 		}
 	}
 	return {
@@ -151,7 +139,7 @@ export function buildMentionIndex(
 /** The label shown before a session's title in the sidebar and the pane header. */
 export function peerLabel(s: Pick<Session, "name" | "purpose"> | undefined): { text: string; title: string } | undefined {
 	if (!s?.name) return undefined;
-	const shown = `@${nameInLang(s.name)}`;
+	const shown = `@${s.name}`;
 	return { text: shown, title: s.purpose ? `${shown} · ${s.purpose}` : shown };
 }
 
@@ -162,7 +150,7 @@ export function peerLabel(s: Pick<Session, "name" | "purpose"> | undefined): { t
 export function parentLabel(s: Pick<Session, "parentId"> | undefined, byId: (id: string) => Pick<Session, "name" | "title"> | undefined): { text: string; title: string } | undefined {
 	const p = s?.parentId ? byId(s.parentId) : undefined;
 	if (!p) return undefined;
-	const who = p.name ? `@${nameInLang(p.name)}` : p.title;
+	const who = p.name ? `@${p.name}` : p.title;
 	return { text: who, title: t("{who}가 만든 대화", { who }) };
 }
 
@@ -182,7 +170,7 @@ export function peerMentions(sessions: readonly Session[], groups: readonly Grou
 	for (const s of live) {
 		if (s.id === self) continue;
 		const dir = s.cwd.split("/").slice(-2).join("/");
-		items.push({ insert: `@${nameInLang(s.name)}`, desc: [s.purpose || s.title, dir].filter(Boolean).join(" · "), group: t("대화"), keywords: `${s.title} ${s.purpose}`, except: "" });
+		items.push({ insert: `@${s.name}`, desc: [s.purpose || s.title, dir].filter(Boolean).join(" · "), group: t("대화"), keywords: `${s.title} ${s.purpose}`, except: "" });
 	}
 	return items;
 }

@@ -30,7 +30,7 @@ export interface Config {
 	maxActiveSessions?: number;
 }
 
-/** As many as there are member names, so every active session has its own name. */
+/** Default upper bound on active (open) sessions at once; override with PIPAYA_MAX_SESSIONS. */
 export const DEFAULT_MAX_SESSIONS = 200;
 /** Kept in step with DEFAULT_DEVICE_TOKEN_IDLE_DAYS in device-tokens.ts (config.ts imports nothing from the app). */
 const DEFAULT_DEVICE_TOKEN_IDLE_DAYS = 90;

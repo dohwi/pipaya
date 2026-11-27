@@ -311,7 +311,7 @@ export class SessionManager {
 			serviceTier,
 			id,
 			title: input.title?.trim() || "New session",
-			name: this.peers.newName(),
+			name: this.peers.newName(parentId),
 			purpose: "",
 			cwd,
 			provider,

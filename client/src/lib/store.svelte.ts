@@ -1058,7 +1058,7 @@ class AppStore {
       }
     });
     this.prefs.init();
-    // Session @names are stored once (Korean) and written per UI language at render (lib/member-names), so a switch renames nothing.
+    // Session @names are language-neutral codenames, so switching the UI language never renames anything.
     // Client extensions hear the change too (they may keep text in it).
     let language = getLang();
     const stopLang = onLangChange(() => {
