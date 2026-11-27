@@ -54,7 +54,7 @@ export const SETTINGS_ITEMS: { tab: SettingsTabId; sub?: string; label: string; 
 	{ tab: "general", label: msg("터미널"), words: "terminal font size 글꼴 폰트 글자 크기 maple mono" }, // i18n-ok: search words in either language
 	{ tab: "general", label: msg("앱 단축키 우선"), words: "terminal shortcut priority keybinding 터미널 단축키 우선 먹히지" }, // i18n-ok: search words in either language
 	{ tab: "general", label: msg("업데이트"), words: "update version 버전" }, // i18n-ok: search words in either language
-	{ tab: "keys", label: msg("입력창 기본 편집 단축키 우선"), words: "shortcut input native cursor arrow cmd ctrl edit line start end 입력창 기본 편집 커서 화살표 단축키 네이티브 줄 처음 끝" }, // i18n-ok: search words in either language
+	{ tab: "keys", label: msg("입력창 기본 편집 단축키 우선"), words: "shortcut input terminal native cursor arrow cmd ctrl edit line start end 입력창 터미널 기본 편집 커서 화살표 단축키 네이티브 줄 처음 끝" }, // i18n-ok: search words in either language
 	{ tab: "info", sub: "devices", label: msg("접속 기기"), words: "device phone qr pair mobile 기기 폰 모바일 페어링 연결 링크" }, // i18n-ok: search words in either language
 	{ tab: "models", label: msg("모델 연결"), words: "model provider key api 모델 연결 키 프로바이더" }, // i18n-ok: search words in either language
 	{ tab: "models", label: msg("폴백 모델"), words: "fallback retry zero output model 폴백 모델 대체 우회 재시도 무응답" }, // i18n-ok: search words in either language

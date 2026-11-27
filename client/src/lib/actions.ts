@@ -536,7 +536,7 @@ export function onShortcut(e: KeyboardEvent) {
   if (topLayer()) return;
   // A focused terminal gets its keys (Ctrl+B, Esc, Alt+N...): only Mod+Shift/Alt shortcuts and F-keys reach the app.
   const fromTerminal = inTerminal(e);
-  if (fromTerminal && !appTakesKey(e, app.prefs.bindings, app.prefs.terminal.appKeysFirst)) return;
+  if (fromTerminal && !appTakesKey(e, app.prefs.bindings, app.prefs.terminal.appKeysFirst, app.prefs.nativeInputKeys)) return;
   // Esc stops the agent even while an IME composition is open (Korean/Japanese input leaves isComposing set). A
   // shortcut the app took from a terminal wins over the IME too: a half-composed Korean syllable must not eat it. So does
   // a Ctrl/⌘ combo anywhere: the last Korean syllable typed stays "composing" until the next key, so every shortcut

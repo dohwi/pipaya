@@ -777,6 +777,27 @@ export function isNativeTextEditCombo(combo: string, mac = isMac): boolean {
 }
 
 /**
+ * True when `event` + `combo` matches a real OS text-editing shortcut (verifying physical Meta on macOS
+ * and physical Ctrl on Windows/Linux so Ctrl+Arrow on macOS or Win+Arrow on Windows/Linux never false-triggers).
+ */
+export function isNativeTextEditEvent(
+  event: { ctrlKey: boolean; metaKey: boolean; altKey: boolean; shiftKey: boolean } | undefined,
+  combo: string,
+  mac = isMac,
+): boolean {
+  if (!isNativeTextEditCombo(combo, mac)) return false;
+  if (event && splitCombo(combo).mods.includes("Mod")) {
+    return mac ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey;
+  }
+  return true;
+}
+
+/** Non-Shift OS text-editing shortcuts (cursor/word jump and delete), which also stay with the shell in terminals. */
+export function isTerminalNativeTextEditCombo(combo: string, mac = isMac): boolean {
+  return !splitCombo(combo).mods.includes("Shift") && isNativeTextEditCombo(combo, mac);
+}
+
+/**
  * Whether an app/extension shortcut should yield to native text-editing behaviour inside a focused text input.
  * Yields only when the focused input actually holds text (empty inputs have nothing to move across or delete,
  * so custom navigation/modal-toggle shortcuts still chain cleanly even when an input is auto-focused).
@@ -790,13 +811,7 @@ export function yieldsToNativeTextEdit(o: {
 }): boolean {
   if (o.enabled === false) return false;
   const mac = o.mac ?? isMac;
-  if (!isNativeTextEditCombo(o.combo, mac)) return false;
-  if (o.event && splitCombo(o.combo).mods.includes("Mod")) {
-    // Only the OS's real text-editing modifier counts (⌘ on macOS, Ctrl on Win/Linux — never Ctrl+Arrow on macOS
-    // or Win/Super+Arrow on Win/Linux).
-    const ok = mac ? o.event.metaKey && !o.event.ctrlKey : o.event.ctrlKey && !o.event.metaKey;
-    if (!ok) return false;
-  }
+  if (!isNativeTextEditEvent(o.event, o.combo, mac)) return false;
   const t = o.target;
   if (!t) return false;
   const composer =

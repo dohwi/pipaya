@@ -51,7 +51,7 @@
 <SettingRow label={t("커서 깜빡임")}>
 	<Switch checked={p.cursorBlink} label={t("커서 깜빡임")} onchange={(on) => app.prefs.setTerminal({ cursorBlink: on })} />
 </SettingRow>
-<SettingRow label={t("앱 단축키 우선")} hint={t("터미널 안에서도 앱 단축키가 셸보다 먼저 동작합니다")}>
+<SettingRow label={t("앱 단축키 우선")} hint={t("터미널 안에서도 앱 단축키가 셸보다 먼저 동작합니다. 입력창 기본 편집 단축키 우선이 켜져 있으면 커서·삭제 키는 셸로 전달됩니다")}>
 	<Switch checked={p.appKeysFirst} label={t("앱 단축키 우선")} onchange={(on) => app.prefs.setTerminal({ appKeysFirst: on })} />
 </SettingRow>
 
