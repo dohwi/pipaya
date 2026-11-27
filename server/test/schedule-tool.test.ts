@@ -156,6 +156,69 @@ describe("schedule tool", () => {
 		expect((await tasks(self))[0]!.runAt).toBe(new Date(year, 2, 1, 9, 5).getTime());
 	});
 
+	test("cross-session schedule creator retains update and delete ownership across server restart", async () => {
+		const rdir = mkdtempSync(join(tmpdir(), "pipaya-schedule-tool-restart-"));
+		mkdirSync(join(rdir, "ws"), { recursive: true });
+		const cfg = { host: "0.0.0.0", port: 0, dataDir: rdir, dbPath: join(rdir, "t.db"), token: "t", workspaceRoot: join(rdir, "ws"), logLevel: "silent" as const };
+		const opts = { strictResponses: true, extensionDirs: [], home: join(rdir, "home") };
+		let a1: Awaited<ReturnType<typeof buildApp>> | undefined;
+		let a2: Awaited<ReturnType<typeof buildApp>> | undefined;
+		try {
+			const startApp = async () => {
+				const inst = await buildApp(cfg, opts);
+				await inst.server.listen({ host: "0.0.0.0", port: 0 });
+				const url = `http://127.0.0.1:${(inst.server.server.address() as { port: number }).port}`;
+				const req = async (method: string, path: string, body?: unknown) => {
+					const res = await fetch(url + path, { method, headers: { authorization: "Bearer t", ...(body !== undefined ? { "content-type": "application/json" } : {}) }, body: body !== undefined ? JSON.stringify(body) : undefined });
+					const text = await res.text();
+					return { status: res.status, json: text ? JSON.parse(text) : undefined };
+				};
+				const waitIdle = async (id: string) => { for (let i = 0; i < 400; i++) { if (!(await req("GET", `/sessions/${id}/status`)).json.running) return; await Bun.sleep(25); } };
+				const invoke = async (id: string, args: unknown) => {
+					await req("POST", `/sessions/${id}/messages`, { text: `!schedule ${JSON.stringify(args)}` });
+					await waitIdle(id);
+					const msgs = (await req("GET", `/sessions/${id}/messages`)).json.messages as { message: { role: string; content: { type: string; text?: string }[]; isError?: boolean } }[];
+					const last = msgs.filter((m) => m.message.role === "toolResult").at(-1)!.message;
+					return { text: last.content.map((c) => c.text ?? "").join(""), error: !!last.isError };
+				};
+				return { inst, req, invoke };
+			};
+
+			const first = await startApp();
+			a1 = first.inst;
+			await first.req("PUT", "/configuration/providers/echo", echoProviderBody(upstream.baseUrl));
+			await first.req("PUT", "/configuration/defaults", { provider: "echo", model: ECHO_MODEL.id });
+			const creator = (await first.req("POST", "/sessions", {})).json.id as string;
+			const target = (await first.req("POST", "/sessions", {})).json.id as string;
+			const bystander = (await first.req("POST", "/sessions", {})).json.id as string;
+			const targetName = (await first.req("GET", `/sessions/${target}`)).json.name as string;
+			const created = await first.invoke(creator, { action: "create", prompt: "across restart", everyMinutes: 15, session: targetName });
+			expect(created.error).toBe(false);
+			const taskId = ((await first.req("GET", `/schedules?sessionId=${target}`)).json.schedules as { id: string }[])[0]!.id;
+			await a1.close();
+			a1 = undefined;
+
+			// Restart on the same database: creator still owns it, bystander still cannot touch it.
+			const second = await startApp();
+			a2 = second.inst;
+			const blocked = await second.invoke(bystander, { action: "update", id: taskId, prompt: "nope" });
+			expect(blocked.error).toBe(true);
+			expect(blocked.text).toContain("belongs to another session");
+
+			const okUpdate = await second.invoke(creator, { action: "update", id: taskId, prompt: "still mine" });
+			expect(okUpdate.error).toBe(false);
+			expect(okUpdate.text).toContain("Updated:");
+
+			const okDelete = await second.invoke(creator, { action: "delete", id: taskId });
+			expect(okDelete.error).toBe(false);
+			expect(okDelete.text).toContain("Deleted:");
+		} finally {
+			await a1?.close();
+			await a2?.close();
+			rmSync(rdir, { recursive: true, force: true });
+		}
+	});
+
 	test("is switchable: switched off, the agent does not get it", async () => {
 		expect((await api("GET", "/configuration")).json.tools.toggleable).toContain("schedule");
 		await api("PUT", "/configuration/tools", { disabled: ["schedule"] });

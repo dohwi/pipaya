@@ -187,6 +187,21 @@ export class GoalManager {
 		this.consecutiveLimitAborts.clear();
 	}
 
+	/**
+	 * Called once at server startup: any goal left `active` across a restart, update or crash has no live continuation
+	 * loop running, so pause it honestly instead of leaving a stalled "active" badge (and never auto-resume unattended
+	 * after an unexpected reboot/crash).
+	 */
+	recoverOnBoot(): number {
+		const rows = this.db.query("SELECT session_id FROM session_goals WHERE status = 'active'").all() as { session_id: string }[];
+		if (!rows.length) return 0;
+		const now = this.now();
+		this.db.query("UPDATE session_goals SET status = 'paused', updated_at = $now WHERE status = 'active'").run({ now });
+		for (const r of rows) this.changed(r.session_id, "updated");
+		this.log?.(`goals: paused ${rows.length} active goal(s) left across server restart`);
+		return rows.length;
+	}
+
 	list(sessionId?: string): GoalRecord[] {
 		const rows = sessionId
 			? (this.db.query("SELECT * FROM session_goals WHERE session_id = $sid").all({ sid: sessionId }) as Row[])

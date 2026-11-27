@@ -426,8 +426,9 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 		},
 	);
 	registerRetentionRoutes(server, retention, bus);
+	let bootWarmupDone = false;
 	const scheduler = new Scheduler(db, { session: (id) => store.get(id), isRunning: (id) => sessions.isRunning(id), send: (id, input) => sessions.send(id, input) }, {
-		deferRun: () => updater.isPending,
+		deferRun: () => updater.isPending || !bootWarmupDone,
 		onChange: (c) => bus.publish(null, "schedules_updated", c, { ephemeral: true }),
 		log: (m) => server.log.info(m),
 	});
@@ -546,18 +547,34 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 		vacuumTimer.unref?.();
 		teardown.onClose(() => clearTimeout(vacuumTimer));
 	}
+	// Pause any goals left `active` across a restart, self-update or crash before finalizing interrupted runs:
+	// no continuation loop survives process restart, so pause explicitly (requiring manual resume) instead of
+	// leaving a stalled `active` badge or suppressing unread/failed marks.
+	goals.recoverOnBoot();
 	// Finalize any runs left active by a previous crash / SIGKILL / sudden reboot before scheduled tasks or clients act on them.
 	sessions.recoverInterruptedRuns();
 	teardown.onClose(() => goals.stop());
+	// Read every connection's model list once at startup, in the background, so a fresh start already shows what the upstreams offer.
+	const configRefresh = configuration.refreshStale();
+	// Same for OpenRouter's own catalog: refreshed when it is stale, so the model picker opens on a current list.
+	void configuration.refreshCatalog();
+	// Wait briefly (up to 5 s) for initial MCP connections and stale model catalogs before firing overdue scheduled tasks at boot.
+	let warmupTimer: ReturnType<typeof setTimeout> | undefined;
+	const finishWarmup = () => {
+		if (bootWarmupDone) return;
+		bootWarmupDone = true;
+		if (warmupTimer) { clearTimeout(warmupTimer); warmupTimer = undefined; }
+		scheduler.nudge();
+	};
+	warmupTimer = setTimeout(finishWarmup, 5_000);
+	warmupTimer.unref?.();
+	teardown.onClose(() => { if (warmupTimer) { clearTimeout(warmupTimer); warmupTimer = undefined; } });
+	void Promise.allSettled([mcp.waitInitial(), configRefresh]).then(finishWarmup);
 	scheduler.start();
 	teardown.onClose(() => scheduler.stop());
 	retention.start();
 	teardown.onClose(() => retention.stop());
 	idleSockets.start();
 	teardown.onClose(() => idleSockets.stop());
-	// Read every connection's model list once at startup, in the background, so a fresh start already shows what the upstreams offer.
-	void configuration.refreshStale();
-	// Same for OpenRouter's own catalog: refreshed when it is stale, so the model picker opens on a current list.
-	void configuration.refreshCatalog();
 	return { server, sessions, bus, close: () => teardown.close() };
 }

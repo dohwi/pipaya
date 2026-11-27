@@ -28,8 +28,8 @@
 	/** The conversation's goal: its mark is in the agent badge's corner (AgentBadge), which the pin gives up meanwhile. */
 	const goal = $derived(app.goals.of(n.server.id, x.id));
 	const tip = $derived([label?.title ?? "", sessionTitle(x.title), st !== "idle" ? ACTIVITY_LABEL[st] : "", goal ? `${t("목표")} ${goalLabel(goal.status)} · ${goalUsage(goal)}` : "", parent?.title ?? (x.parentId ? t("분기된 대화") : "")].filter(Boolean).join(" · "));
-	/** Switched-on scheduled tasks of this conversation. Only the open server's list is kept current, so only its rows show it. */
-	const sched = $derived(n.current ? app.schedules.of(n.server.id, x.id) : { count: 0, next: null });
+	/** Switched-on scheduled tasks of this conversation (kept current for every live server). */
+	const sched = $derived(app.schedules.of(n.server.id, x.id));
 	const schedTip = $derived(sched.next === null ? t("예약 {n}개", { n: sched.count }) : `${t("예약 {n}개", { n: sched.count })} · ${t("다음 실행 {when}", { when: liveNext(sched.next) })}`);
 </script>
 

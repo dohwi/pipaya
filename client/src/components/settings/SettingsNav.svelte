@@ -70,7 +70,7 @@
 		void app.configTick;
 		void app.serverExtensionsTick;
 		const id = server?.id;
-		if (!id) { serverSide = null; return; }
+		if (!id || !serverOnline) { serverSide = null; return; }
 		let live = true;
 		app.links[id]?.api.serverExtensions().then((r) => { if (live) serverSide = { id, names: r.extensions.map((x) => ({ name: x.name, title: x.title, ...(x.companion ? { companion: x.companion } : {}) })) }; }).catch(() => { if (live) serverSide = null; });
 		return () => { live = false; };
@@ -80,7 +80,7 @@
 	$effect(() => {
 		void app.mcpTick;
 		const id = server?.id;
-		if (!id) { mcpSide = null; return; }
+		if (!id || !serverOnline) { mcpSide = null; return; }
 		let live = true;
 		app.links[id]?.api.mcp().then((r) => { if (live) mcpSide = { id, rows: r.servers.map((x) => ({ name: x.name, enabled: x.enabled, ready: x.status === "ready", failed: x.status === "error" })) }; }).catch(() => { if (live) mcpSide = null; });
 		return () => { live = false; };

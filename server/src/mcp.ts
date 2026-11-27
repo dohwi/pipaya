@@ -191,6 +191,7 @@ function formatConnectError(base: string, stderrTail: string, config: McpServerC
 export class McpManager {
 	private conns = new Map<string, Conn>();
 	private gen = 0;
+	private initialReady: Promise<void> = Promise.resolve();
 
 	constructor(private db: Database, private onChange: () => void = () => {}) {}
 
@@ -208,6 +209,13 @@ export class McpManager {
 	/** Connect everything that is switched on (in the background; failures show up as a server's error). */
 	start(): void {
 		this.sync(this.config());
+		const pending = [...this.conns.values()].map((c) => c.ready);
+		this.initialReady = pending.length ? Promise.allSettled(pending).then(() => {}) : Promise.resolve();
+	}
+
+	/** Resolves once the initial `start()` connection attempts have settled (ready or error). */
+	waitInitial(): Promise<void> {
+		return this.initialReady;
 	}
 
 	info(): Static<typeof McpInfo> {

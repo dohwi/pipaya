@@ -14,6 +14,7 @@ import type { Group, PipayaEvent, Session, ToolsInfo, WorkdirInfo } from "../typ
 export interface BackgroundCueCallbacks {
   cue: (kind: "done" | "failed" | "ask") => void;
   announce: (sessionId: string, kind: "done" | "failed", serverId: string) => void;
+  isGoalActive?: (sessionId: string) => boolean;
 }
 
 /**
@@ -25,7 +26,7 @@ export function cueBackgroundEvent(link: ServerLink, e: PipayaEvent, cb: Backgro
   const sid = e.sessionId;
   if (!sid) return;
   if (e.type === "run_finished") {
-    const quiet = e.data.origin === "peer" && read<unknown>(`${K.quietPeers}.${link.id}`, null) !== false;
+    const quiet = (e.data.origin === "peer" && read<unknown>(`${K.quietPeers}.${link.id}`, null) !== false) || (e.data.status === "ok" && !!cb.isGoalActive?.(sid));
     if (e.data.status === "aborted" || quiet) return;
     const bad = e.data.status === "error";
     cb.cue(bad ? "failed" : "done");

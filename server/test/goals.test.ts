@@ -231,6 +231,34 @@ describe("GoalManager", () => {
 		clock.advance(1000);
 		expect(sent).toHaveLength(0);
 	});
+
+	test("recoverOnBoot pauses active goals left across restart while leaving other statuses intact", () => {
+		const { goals, db, sessions } = setup();
+		db.query("INSERT INTO sessions (id, title, cwd, provider, model, thinking_level, system_prompt, tools, parent_id, created_at, updated_at, closed, purpose) VALUES ('s2', 't2', '/', 'p', 'm', 'off', '', '[]', NULL, 1, 1, 0, '')").run();
+		db.query("INSERT INTO sessions (id, title, cwd, provider, model, thinking_level, system_prompt, tools, parent_id, created_at, updated_at, closed, purpose) VALUES ('s3', 't3', '/', 'p', 'm', 'off', '', '[]', NULL, 1, 1, 0, '')").run();
+		sessions.s2 = { id: "s2", closed: false };
+		sessions.s3 = { id: "s3", closed: false };
+
+		goals.put("s1", { objective: "Active goal" });
+		goals.put("s2", { objective: "Complete goal" });
+		goals.agentUpdate("s2", "complete");
+		goals.put("s3", { objective: "Blocked goal" });
+		goals.agentUpdate("s3", "blocked");
+		goals.cancelPending("s1");
+
+		const changed: string[] = [];
+		const restarted = new GoalManager(
+			db,
+			{ session: (id) => sessions[id], isRunning: () => false, tokens: () => 0, send: async () => {}, steer: () => false },
+			{ onChange: (c) => changed.push(`${c.sessionId}:${c.action}`) },
+		);
+		expect(restarted.recoverOnBoot()).toBe(1);
+		expect(restarted.get("s1")!.status).toBe("paused");
+		expect(restarted.get("s2")!.status).toBe("complete");
+		expect(restarted.get("s3")!.status).toBe("blocked");
+		expect(changed).toEqual(["s1:updated"]);
+		expect(restarted.recoverOnBoot()).toBe(0);
+	});
 });
 
 describe("goals HTTP routes and lifecycle", () => {
@@ -324,5 +352,55 @@ describe("goals HTTP routes and lifecycle", () => {
 
 		expect(events.map((e) => (e.data as { action: string }).action)).toEqual(["set", "updated", "cleared"]);
 		unsub();
+	});
+
+	test("restarting the server pauses active goals on boot so none remain silently stalled", async () => {
+		const restartDir = mkdtempSync(join(tmpdir(), "pipaya-goals-restart-"));
+		const ws = join(restartDir, "workspace");
+		mkdirSync(ws, { recursive: true });
+		const cfg: Config = {
+			host: "127.0.0.1",
+			port: 0,
+			dataDir: restartDir,
+			dbPath: join(restartDir, "db.sqlite"),
+			workspaceRoot: ws,
+			token,
+			logLevel: "silent",
+		};
+		let a1: App | undefined;
+		let a2: App | undefined;
+		try {
+			a1 = await buildApp(cfg, { home: restartDir, strictResponses: true });
+			await a1.server.inject({
+				method: "PUT",
+				url: "/configuration/providers/fake",
+				headers: auth,
+				payload: {
+					name: "fake",
+					baseUrl: "http://127.0.0.1:9/v1",
+					api: "openai-completions",
+					authRequired: false,
+					models: [{ id: "m1", contextWindow: 100_000, maxTokens: 4_000, reasoning: false, vision: false }],
+				},
+			});
+			const s = await a1.server.inject({ method: "POST", url: "/sessions", headers: auth, payload: { cwd: "." } });
+			expect(s.statusCode).toBe(201);
+			const sid = s.json().id as string;
+			const put = await a1.server.inject({ method: "PUT", url: `/sessions/${sid}/goal`, headers: auth, payload: { objective: "Survive reboot cleanly" } });
+			expect(put.statusCode).toBe(200);
+			expect(put.json().status).toBe("active");
+			await a1.close();
+			a1 = undefined;
+
+			a2 = await buildApp(cfg, { home: restartDir, strictResponses: true });
+			const after = await a2.server.inject({ method: "GET", url: `/goals?sessionId=${sid}`, headers: auth });
+			expect(after.statusCode).toBe(200);
+			expect(after.json().goals).toHaveLength(1);
+			expect(after.json().goals[0].status).toBe("paused");
+		} finally {
+			await a1?.close();
+			await a2?.close();
+			rmSync(restartDir, { recursive: true, force: true });
+		}
 	});
 });

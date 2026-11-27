@@ -21,6 +21,8 @@ export interface ScheduleOps {
 	update(id: string, patch: PatchScheduleInput): ScheduleRecord;
 	delete(id: string): ScheduleRecord;
 	run(id: string): Promise<ScheduleRecord>;
+	/** Session id that created `id` via the agent tool (persisted across restarts), or null. */
+	createdBy?(id: string): string | null;
 	/** `@name` of a session for the result text ("this session" for the caller's own). */
 	label(sessionId: string): string;
 	now(): number;
@@ -70,9 +72,6 @@ const need = <T>(v: T | undefined, what: string, action: Action): T => {
 	return v;
 };
 
-/** Tracks task IDs created by each session (including cross-session schedules) so the creator may update or delete them. */
-const createdBySession = new Map<string, Set<string>>();
-
 const DESCRIPTION = [
 	"Scheduled tasks: a prompt sent automatically to a session once at a set time, or every so often (the user sees the same list in the settings). Pick `action`; each uses only the parameters named here.",
 	"list (all?): this session's tasks with id, timing, next and last run, and the server's current time; all true lists every task on the server.",
@@ -117,7 +116,7 @@ export const scheduleTool: ToolDef = {
 				const assertOwned = (taskId: string) => {
 					if (!ctx?.sessionId) return;
 					const target = ops.list(true).find((t) => t.id === taskId);
-					if (target && target.sessionId !== ctx.sessionId && !createdBySession.get(ctx.sessionId)?.has(taskId)) {
+					if (target && target.sessionId !== ctx.sessionId && ops.createdBy?.(taskId) !== ctx.sessionId) {
 						throw new Error(`schedule "${taskId}" belongs to another session (${ops.label(target.sessionId)}) and cannot be modified or deleted from this session`);
 					}
 				};
@@ -135,11 +134,6 @@ export const scheduleTool: ToolDef = {
 							if (runAt !== undefined && p.everyMinutes !== undefined) throw new Error("a task is either one-time (`at` / `inMinutes`) or repeating (`everyMinutes`), not both");
 							if (runAt === undefined && p.everyMinutes === undefined) throw new Error("schedule create needs `at`, `inMinutes` or `everyMinutes`");
 							const t = ops.create({ session: p.session, title: p.title, prompt, ...(runAt !== undefined ? { runAt } : { everyMs: p.everyMinutes! * 60_000 }) });
-							if (ctx?.sessionId) {
-								let owned = createdBySession.get(ctx.sessionId);
-								if (!owned) { owned = new Set(); createdBySession.set(ctx.sessionId, owned); }
-								owned.add(t.id);
-							}
 							return text(`Scheduled:\n${show(t)}`, { action: a, id: t.id });
 						});
 					}
@@ -164,7 +158,6 @@ export const scheduleTool: ToolDef = {
 							const id = need(p.id, "id", a);
 							assertOwned(id);
 							const t = ops.delete(id);
-							if (ctx?.sessionId) createdBySession.get(ctx.sessionId)?.delete(id);
 							return text(`Deleted:\n${show(t)}`, { action: a, id: t.id });
 						});
 					}
