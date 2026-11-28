@@ -1,7 +1,8 @@
 <script lang="ts">
 	import { app, type ThemePref } from "../../lib/store.svelte";
-	import { formatCombo } from "../../lib/keys";
+	import { formatCombo, isMac } from "../../lib/keys";
 	import { getLangPref, languageName, languages, msg, setLangPref, systemLang, t } from "../../lib/i18n";
+	import type { ReducedMotionPref, RunningEnterMode, SendKeyMode, SessionOpenMode } from "../../lib/ux-prefs";
 	import Icon from "../ui/Icon.svelte";
 	import Button from "../ui/Button.svelte";
 	import Select from "../ui/Select.svelte";
@@ -28,6 +29,31 @@
 			: t("답변 속 도구 호출을 한 줄 요약 대신 모두 펼쳐 보여 줍니다"),
 	);
 	const langOptions = $derived([{ tag: "system", name: t("시스템") }, ...languages()]);
+	const mod = isMac ? "⌘" : "Ctrl";
+	const modEnterLabel = formatCombo("Mod+Enter");
+	const sessionOpenOptions = $derived<{ id: SessionOpenMode; label: string }[]>([
+		{ id: "peek", label: t("미리 보기") },
+		{ id: "open", label: t("바로 이동") },
+	]);
+	const reducedMotionOptions = $derived<{ id: ReducedMotionPref; label: string }[]>([
+		{ id: "system", label: t("시스템") },
+		{ id: "on", label: t("항상") },
+	]);
+	const sendKeyOptions = $derived<{ id: SendKeyMode; label: string }[]>([
+		{ id: "enter", label: "Enter" },
+		{ id: "mod-enter", label: modEnterLabel },
+	]);
+	const runningEnterOptions = $derived<{ id: RunningEnterMode; label: string }[]>([
+		{ id: "steer", label: t("끼워 넣기") },
+		{ id: "queue", label: t("대기열") },
+	]);
+	const queueComboLabel = $derived(formatCombo(app.prefs.bindings.queueMessage ?? ""));
+	const runningEnterHint = $derived.by(() => {
+		const primary = app.prefs.sendKey === "mod-enter" ? modEnterLabel : "Enter";
+		return queueComboLabel
+			? t("작업 중 {key}를 눌렀을 때의 기본 동작입니다. 반대 동작은 {alt}(으)로 실행합니다", { key: primary, alt: queueComboLabel })
+			: t("작업 중 {key}를 눌렀을 때의 기본 동작입니다", { key: primary });
+	});
 </script>
 
 <section class="set-group">
@@ -49,10 +75,35 @@
 	<SettingRow label={t("작업 내역 펼쳐 두기")} hint={workHint}>
 		<Switch checked={app.prefs.expandWork} label={t("작업 내역 펼쳐 두기")} onchange={(on) => app.prefs.setExpandWork(on)} />
 	</SettingRow>
+	<SettingRow label={t("동작 줄이기")} hint={t("그래프 흐름 애니메이션과 화면 전환 효과를 줄입니다")}>
+		<Segmented size="sm" full={false} label={t("동작 줄이기")} value={app.prefs.reducedMotion} onchange={(id) => app.prefs.setReducedMotion(id)} options={reducedMotionOptions} />
+	</SettingRow>
 </section>
 
 <section class="set-group">
-	<div class="section-label">{t("동작")}</div>
+	<div class="section-label">{t("세션 열기")}</div>
+	<SettingRow label={t("@멘션 클릭")} hint={t("대화 속 @세션 태그를 눌렀을 때 동작입니다. 반대 동작은 {mod}+클릭, 닫힌 대화는 항상 기록 미리 보기로 열립니다", { mod })}>
+		<Segmented size="sm" full={false} label={t("@멘션 클릭")} value={app.prefs.mentionClick} onchange={(id) => app.prefs.setMentionClick(id)} options={sessionOpenOptions} />
+	</SettingRow>
+	<SettingRow label={t("그래프에서 세션 클릭")} hint={t("그래프 뷰 카드나 상세 목록에서 세션을 눌렀을 때 동작입니다. 반대 동작은 {mod}+클릭(키보드는 Shift+Enter)", { mod })}>
+		<Segmented size="sm" full={false} label={t("그래프에서 세션 클릭")} value={app.prefs.graphClick} onchange={(id) => app.prefs.setGraphClick(id)} options={sessionOpenOptions} />
+	</SettingRow>
+	<SettingRow label={t("완료 알림 클릭")} hint={t("화면 위 완료·실패 알림을 눌렀을 때 동작입니다. 반대 동작은 {mod}+클릭", { mod })}>
+		<Segmented size="sm" full={false} label={t("완료 알림 클릭")} value={app.prefs.noticeClick} onchange={(id) => app.prefs.setNoticeClick(id)} options={sessionOpenOptions} />
+	</SettingRow>
+	<SettingRow label={t("멘션 미리 보기 카드")} hint={t("@세션 태그에 마우스를 올리면 상태와 최근 내용을 작은 카드로 보여 줍니다")}>
+		<Switch checked={app.prefs.mentionHover} label={t("멘션 미리 보기 카드")} onchange={(on) => app.prefs.setMentionHover(on)} />
+	</SettingRow>
+</section>
+
+<section class="set-group">
+	<div class="section-label">{t("입력")}</div>
+	<SettingRow label={t("보내기 키")} hint={app.prefs.sendKey === "mod-enter" ? t("데스크톱에서 {key}로 보내고, Enter는 줄바꿈으로 사용합니다", { key: modEnterLabel }) : t("데스크톱에서 Enter로 보내고, Shift+Enter로 줄바꿈합니다")}>
+		<Segmented size="sm" full={false} label={t("보내기 키")} value={app.prefs.sendKey} onchange={(id) => app.prefs.setSendKey(id)} options={sendKeyOptions} />
+	</SettingRow>
+	<SettingRow label={t("실행 중 보내기")} hint={runningEnterHint}>
+		<Segmented size="sm" full={false} label={t("실행 중 보내기")} value={app.prefs.runningEnter} onchange={(id) => app.prefs.setRunningEnter(id)} options={runningEnterOptions} />
+	</SettingRow>
 	<SettingRow label={t("길게 눌러 바로 대기열에 넣기")} hint={t("모바일에서 작업 중일 때 전송 버튼을 길게 누르면 선택 창 없이 바로 대기열에 넣습니다. 끄면 끼워 넣기·대기열 선택 창이 열립니다")}>
 		<Switch checked={app.prefs.holdToQueue} label={t("길게 눌러 바로 대기열에 넣기")} onchange={(on) => app.prefs.setHoldToQueue(on)} />
 	</SettingRow>

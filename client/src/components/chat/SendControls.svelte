@@ -23,6 +23,8 @@
 		onsend,
 		onqueue,
 		queueKey = "",
+		steerKey = "Enter",
+		sendKey = "Enter",
 		onsteer,
 		onstop,
 		folded = false,
@@ -38,6 +40,10 @@
 		onqueue: () => void;
 		/** The queue shortcut as shown to the user ("" = unbound). */
 		queueKey?: string;
+		/** The steer shortcut as shown to the user ("" = unbound). */
+		steerKey?: string;
+		/** The idle send shortcut as shown to the user ("" = hidden). */
+		sendKey?: string;
 		onsteer: () => void;
 		onstop: () => void;
 		folded?: boolean;
@@ -189,7 +195,7 @@
 							oncontextmenu={(e) => coarse() && e.preventDefault()}
 							onclick={steerClick}
 							aria-label={t("끼워 넣기")}
-							title={t("진행 중인 작업에 바로 끼워 넣기: 실행 중인 도구가 끝나면 다음 모델 호출 전에 전달됩니다 (Enter)")}
+							title={steerKey ? t("진행 중인 작업에 바로 끼워 넣기: 실행 중인 도구가 끝나면 다음 모델 호출 전에 전달됩니다 ({key})", { key: steerKey }) : t("진행 중인 작업에 바로 끼워 넣기: 실행 중인 도구가 끝나면 다음 모델 호출 전에 전달됩니다")}
 						>
 							<Icon name="bolt" />
 						</button>
@@ -199,7 +205,7 @@
 				</div>
 			{:else}
 				<div class="slot" class:folded={fold} inert={fold}>
-					<button class="send tap" class:on={canSend} onclick={onsend} disabled={!canSend} aria-label={t("보내기")}>
+					<button class="send tap" class:on={canSend} onclick={onsend} disabled={!canSend} aria-label={t("보내기")} title={sendKey ? t("보내기 ({key})", { key: sendKey }) : undefined}>
 						{#if sending}<Spinner />{:else}<Icon name="send" />{/if}
 					</button>
 				</div>

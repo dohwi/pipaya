@@ -27,7 +27,15 @@ const EXIT_SHIFT_RATIO = 0.45;
 /** Phone sheets leave a little slower than `fast`: they cover most of the screen. */
 const SHEET_OUT_FACTOR = 1.35;
 
+let reducedOverride = false;
+
+/** Set the in-app reduced-motion override (`true` forces reduced motion regardless of OS preference). */
+export function setReducedMotionOverride(on: boolean) {
+	reducedOverride = on;
+}
+
 export function reduced(): boolean {
+	if (reducedOverride) return true;
 	return typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
 }
 

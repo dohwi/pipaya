@@ -13,6 +13,7 @@
 	import { callState, roleStats, settingsTarget, splitLive, under, type CallState } from "../../lib/graph-detail";
 	import { graphRuns } from "../../lib/graph-runs.svelte";
 	import { activityOf } from "../../lib/activity";
+	import { isMac } from "../../lib/keys";
 	import type { SubagentInfo } from "../../lib/types";
 	import Modal from "../ui/Modal.svelte";
 	import DialogBody from "../ui/DialogBody.svelte";
@@ -29,15 +30,16 @@
 	 * a chat its quick look, a provider, model or role this dialog for that card. It reads the live graph, so its counts
 	 * move with the view; a card that leaves the graph closes it. (A chat card opens the chat itself: `SessionQuickModal`.)
 	 */
-	let { graph, id, onpick, onpeek, onclose }: {
+	let { graph, id, onpick, onopen, onclose }: {
 		graph: Graph;
 		id: string;
 		/** Show another card here instead (a provider's model, a server's role). */
 		onpick: (id: string) => void;
-		/** Look at a chat (the graph's quick look). */
-		onpeek: (server: string, session: string) => void;
+		/** Open a chat row according to `prefs.graphClick` (inverted when `mod` is held). */
+		onopen: (server: string, session: string, mod: boolean) => void;
 		onclose: () => void;
 	} = $props();
+	const goKey = (e: MouseEvent) => (isMac ? e.metaKey : e.ctrlKey);
 
 	const card = $derived(graph.cards.get(id));
 	$effect(() => {
@@ -203,7 +205,7 @@
 {#snippet chatRow(c: Card)}
 	{@const s = c.session!}
 	<li>
-		<button class="row" onclick={() => onpeek(c.server, s.id)} title={t("빠른 보기")}>
+		<button class="row" onclick={(e) => onopen(c.server, s.id, goKey(e))} title={app.prefs.graphClick === "open" && !s.closed ? t("대화 열기") : t("빠른 보기")}>
 			<span class="mark"><AgentBadge id={s.id} server={c.server} state={c.activity} size={20} /></span>
 			<span class="nm {c.activity}" class:who={!!s.name}>{s.name ? `@${s.name}` : sessionTitle(s.title)}</span>
 			{#if s.name}<span class="sub">{sessionTitle(s.title)}</span>{/if}
@@ -218,8 +220,9 @@
 	{@const act = link ? activityOf(link.data, r.sessionId) : "idle"}
 	{@const ref = splitModelRef(r.model)}
 	{@const mn = refName(r.model)}
+	{@const caller = chatOf(server, r.sessionId)}
 	<li>
-		<button class="row" onclick={() => onpeek(server, r.sessionId)} title={t("빠른 보기")}>
+		<button class="row" onclick={(e) => onopen(server, r.sessionId, goKey(e))} title={app.prefs.graphClick === "open" && !caller?.closed ? t("대화 열기") : t("빠른 보기")}>
 			<span class="mark"><AgentBadge id={r.sessionId} {server} state={act} size={20} /></span>
 			<span class="nm {act}" class:who={!!chatOf(server, r.sessionId)?.name}>{chatName(server, r.sessionId)}</span>
 			<span class="sub model" title={r.model}><ModelLogo conn={link?.conn} icon={iconOf(ref.provider, ref.id)} provider={ref.provider} model={ref.id} size={16} colored /><span class="mn" class:mono={mn === ref.id}>{mn}</span></span>

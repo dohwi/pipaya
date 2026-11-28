@@ -4,6 +4,7 @@
 	import { t } from "../../lib/i18n";
 	import { voice } from "../../lib/voice.svelte";
 	import { formatTime } from "../../lib/voice";
+	import { app } from "../../lib/store.svelte";
 
 	/**
 	 * The composer's toolbar row while it records or transcribes. It takes the place of the attach / model / send row and
@@ -18,7 +19,7 @@
 	const BAR = 3; // px: bar width
 	const PITCH = 7; // px between bar centres: a 3px bar and a 4px gap, so the bars read one by one, not as a stripe
 	const SAMPLE_MS = 60; // one bar per 60ms: the wave crosses a 300px row in about 6s
-	const reduced = typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
+	const reduced = $derived(app.prefs.isReducedMotion);
 
 	function stop() {
 		voice.stop();
@@ -282,5 +283,11 @@
 		.rec-row {
 			animation: none;
 		}
+	}
+	:global(html[data-reduced-motion="true"]) .dot,
+	:global(html[data-reduced-motion="true"]) .ellipsis i,
+	:global(html[data-reduced-motion="true"]) .ghost,
+	:global(html[data-reduced-motion="true"]) .rec-row {
+		animation: none;
 	}
 </style>

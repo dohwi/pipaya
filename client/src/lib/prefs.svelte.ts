@@ -12,6 +12,18 @@ import { applyUiScale, clampScale, stepScale } from "./ui-scale";
 import { DEFAULT_FOOTER, moveFooterItem, sanitizeFooter, type FooterItemId, type FooterPrefs } from "./footer-prefs";
 import { DEFAULT_TERMINAL, sanitizeTerminal, type TerminalPrefs } from "./terminal-prefs";
 import { parseHoldToQueue } from "./send-hold";
+import { setReducedMotionOverride } from "./motion";
+import {
+  parseMentionHover,
+  parseReducedMotionPref,
+  parseRunningEnterMode,
+  parseSendKeyMode,
+  parseSessionOpenMode,
+  type ReducedMotionPref,
+  type RunningEnterMode,
+  type SendKeyMode,
+  type SessionOpenMode,
+} from "./ux-prefs";
 
 export type ThemePref = "system" | "dark" | "light";
 
@@ -68,6 +80,21 @@ export class Preferences {
   expandWork = $state(read<boolean>(K.expandWork, false) === true);
   /** Touch: holding the send button while running queues directly instead of opening the steer/queue chooser. */
   holdToQueue = $state(parseHoldToQueue(read<unknown>(K.holdToQueue, false)));
+  /** Clicking a `@mention` tag peeks in the quick modal or navigates straight to the session. */
+  mentionClick = $state<SessionOpenMode>(parseSessionOpenMode(read<unknown>(K.mentionClick, "peek"), "peek"));
+  /** Clicking a session card/row in graph view peeks in the quick modal or navigates straight to the session. */
+  graphClick = $state<SessionOpenMode>(parseSessionOpenMode(read<unknown>(K.graphClick, "peek"), "peek"));
+  /** Clicking a done/failed notice toast peeks in the quick modal or navigates straight to the session. */
+  noticeClick = $state<SessionOpenMode>(parseSessionOpenMode(read<unknown>(K.noticeClick, "open"), "open"));
+  /** Show the floating preview card on mouse hover over `@mention` chips. */
+  mentionHover = $state<boolean>(parseMentionHover(read<unknown>(K.mentionHover, true)));
+  /** Desktop composer send key ("enter" = Enter, "mod-enter" = Ctrl/⌘+Enter). */
+  sendKey = $state<SendKeyMode>(parseSendKeyMode(read<unknown>(K.sendKey, "enter")));
+  /** Primary send-key behavior while a run is active ("steer" = inject mid-run, "queue" = follow up after). */
+  runningEnter = $state<RunningEnterMode>(parseRunningEnterMode(read<unknown>(K.runningEnter, "steer")));
+  /** In-app reduced motion ("system" follows OS prefers-reduced-motion; "on" forces reduced motion). */
+  reducedMotion = $state<ReducedMotionPref>(parseReducedMotionPref(read<unknown>(K.reducedMotion, "system")));
+  prefersReducedMotion = $state(typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches);
   /** Prefer OS text-editing shortcuts (e.g. ⌘←/→ line jump) inside focused text inputs over custom app shortcuts. */
   nativeInputKeys = $state(read<unknown>(K.nativeInputKeys, true) !== false);
   /** The shortcut editor is capturing keys: global shortcuts stand down. */
@@ -76,10 +103,15 @@ export class Preferences {
   /** Apply the theme now and follow the OS when it is "system". */
   init() {
     this.applyTheme();
+    this.applyReducedMotion();
     applyUiScale(this.uiScale);
     matchMedia("(prefers-color-scheme: dark)").addEventListener("change", (e) => {
       this.prefersDark = e.matches;
       if (this.theme === "system") this.applyTheme();
+    });
+    matchMedia("(prefers-reduced-motion: reduce)").addEventListener("change", (e) => {
+      this.prefersReducedMotion = e.matches;
+      this.applyReducedMotion();
     });
   }
 
@@ -92,10 +124,18 @@ export class Preferences {
     this.footer = sanitizeFooter(read<unknown>(K.footer, null));
     this.expandWork = read<boolean>(K.expandWork, false) === true;
     this.holdToQueue = parseHoldToQueue(read<unknown>(K.holdToQueue, false));
+    this.mentionClick = parseSessionOpenMode(read<unknown>(K.mentionClick, "peek"), "peek");
+    this.graphClick = parseSessionOpenMode(read<unknown>(K.graphClick, "peek"), "peek");
+    this.noticeClick = parseSessionOpenMode(read<unknown>(K.noticeClick, "open"), "open");
+    this.mentionHover = parseMentionHover(read<unknown>(K.mentionHover, true));
+    this.sendKey = parseSendKeyMode(read<unknown>(K.sendKey, "enter"));
+    this.runningEnter = parseRunningEnterMode(read<unknown>(K.runningEnter, "steer"));
+    this.reducedMotion = parseReducedMotionPref(read<unknown>(K.reducedMotion, "system"));
     this.nativeInputKeys = read<unknown>(K.nativeInputKeys, true) !== false;
     this.uiScale = clampScale(read<unknown>(K.uiScale, 100));
     applyUiScale(this.uiScale);
     this.applyTheme();
+    this.applyReducedMotion();
   }
 
   /* ---------- theme ---------- */
@@ -181,6 +221,58 @@ export class Preferences {
   setHoldToQueue(on: boolean) {
     this.holdToQueue = on;
     write(K.holdToQueue, on);
+  }
+
+  /* ---------- session navigation & input UX ---------- */
+
+  setMentionClick(mode: SessionOpenMode) {
+    this.mentionClick = parseSessionOpenMode(mode, "peek");
+    write(K.mentionClick, this.mentionClick);
+  }
+
+  setGraphClick(mode: SessionOpenMode) {
+    this.graphClick = parseSessionOpenMode(mode, "peek");
+    write(K.graphClick, this.graphClick);
+  }
+
+  setNoticeClick(mode: SessionOpenMode) {
+    this.noticeClick = parseSessionOpenMode(mode, "open");
+    write(K.noticeClick, this.noticeClick);
+  }
+
+  setMentionHover(on: boolean) {
+    this.mentionHover = on;
+    write(K.mentionHover, on);
+  }
+
+  setSendKey(mode: SendKeyMode) {
+    this.sendKey = parseSendKeyMode(mode);
+    write(K.sendKey, this.sendKey);
+  }
+
+  setRunningEnter(mode: RunningEnterMode) {
+    this.runningEnter = parseRunningEnterMode(mode);
+    write(K.runningEnter, this.runningEnter);
+  }
+
+  /* ---------- reduced motion ---------- */
+
+  get isReducedMotion(): boolean {
+    return this.reducedMotion === "on" || this.prefersReducedMotion;
+  }
+
+  setReducedMotion(pref: ReducedMotionPref) {
+    this.reducedMotion = parseReducedMotionPref(pref);
+    write(K.reducedMotion, this.reducedMotion);
+    this.applyReducedMotion();
+  }
+
+  private applyReducedMotion() {
+    const force = this.reducedMotion === "on";
+    setReducedMotionOverride(force);
+    if (typeof document === "undefined") return;
+    if (force) document.documentElement.dataset.reducedMotion = "true";
+    else delete document.documentElement.dataset.reducedMotion;
   }
 
   /* ---------- terminal ---------- */

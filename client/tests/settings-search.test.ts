@@ -40,6 +40,22 @@ describe("settings search", () => {
 			expect(find(q).some((h) => h.title === "길게 눌러 바로 대기열에 넣기" && h.target.tab === "general"), q).toBe(true);
 		}
 	});
+	test("session open, input key, hover card, and reduced motion UX settings are searchable", () => {
+		const cases: [string, string[]][] = [
+			["@멘션 클릭", ["멘션", "mention modal", "태그 클릭"]],
+			["그래프에서 세션 클릭", ["그래프", "graph modal", "세션 카드"]],
+			["완료 알림 클릭", ["완료 알림", "toast notice", "토스트"]],
+			["멘션 미리 보기 카드", ["호버", "hover preview", "미리보기 카드"]],
+			["보내기 키", ["보내기 키", "ctrl+enter", "send key"]],
+			["실행 중 보내기", ["실행 중", "running enter", "steer queue"]],
+			["동작 줄이기", ["동작 줄이기", "reduced motion", "애니메이션"]],
+		];
+		for (const [title, queries] of cases) {
+			for (const q of queries) {
+				expect(find(q).some((h) => h.title === title && h.target.tab === "general"), `${title}: ${q}`).toBe(true);
+			}
+		}
+	});
 	test("subagent delegation is found by its name, in English, and by its old name", () => {
 		for (const q of ["서브에이전트", "subagent", "delegate", "도우미"]) expect(find(q).some((h) => h.target.tab === "tools"), q).toBe(true);
 	});

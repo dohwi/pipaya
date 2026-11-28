@@ -29,7 +29,7 @@ export function openMentionMenu(
 			icon: "group",
 			label: t("그룹 열기"),
 			title: "",
-			run: () => app.openMention(target),
+			run: () => app.openMention(target, { direct: false }),
 		});
 	} else {
 		const targetServer = target.server ?? app.serverId;
@@ -45,7 +45,7 @@ export function openMentionMenu(
 					icon: "chat",
 					label: t("기록 미리 보기"),
 					title: "",
-					run: () => app.openMention({ ...target, closed: true }),
+					run: () => app.openMention({ ...target, closed: true }, { direct: false }),
 				});
 			}
 			items.push({
@@ -62,7 +62,7 @@ export function openMentionMenu(
 					icon: "chat",
 					label: t("미리 보기"),
 					title: "",
-					run: () => app.openMention(target),
+					run: () => app.openMention(target, { direct: false }),
 				});
 			}
 			items.push({
@@ -77,7 +77,7 @@ export function openMentionMenu(
 					icon: "chat",
 					label: t("미리 보기"),
 					title: "",
-					run: () => app.openMention(target),
+					run: () => app.openMention(target, { direct: false }),
 				});
 			}
 			items.push({

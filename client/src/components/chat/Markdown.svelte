@@ -175,11 +175,12 @@
 		const hasFiles = !!sessionId && paneServer === app.serverId && (raw.includes("<code>") || /(?:^|[\s>])#[^\s#&]/.test(raw));
 		if (!sig && !hasSkill && !hasPrompt && !hasFiles) return raw;
 		void getLang(); // re-apply tooltips when the UI language switches
+		const mentionMode = app.prefs.mentionClick;
 		const index = untrack(() => mentionIdx);
 		const selfId = sessionId;
 		const selfServerId = paneServer;
 		const labels = {
-			openSession: (name: string) => t("{name} 대화 미리 보기", { name }),
+			openSession: (name: string) => (mentionMode === "open" ? t("{name} 대화 열기", { name }) : t("{name} 대화 미리 보기", { name })),
 			openClosedSession: (name: string) => t("{name} 닫힌 대화 보기", { name }),
 			openGroup: (name: string) => t("{name} 그룹 열기", { name }),
 			selfSession: t("현재 대화"),
@@ -525,7 +526,7 @@
 			const mention = el.closest<HTMLButtonElement>("button[data-mention-id]");
 			if (mention) {
 				hideMentionHover();
-				app.openMention(mentionTargetFrom(mention), { direct: e.ctrlKey || e.metaKey });
+				app.openMention(mentionTargetFrom(mention), { mod: e.ctrlKey || e.metaKey });
 				return;
 			}
 			const skill = el.closest<HTMLButtonElement>("button[data-skill]");

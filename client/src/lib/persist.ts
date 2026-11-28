@@ -26,6 +26,13 @@ export const K = {
   uiScale: "pipaya.uiscale", // whole-app zoom in percent, 50-200 (100 = normal)
   expandWork: "pipaya.work.expand", // work boxes (a reply's tool calls) open by default: true | false
   holdToQueue: "pipaya.touch.holdToQueue", // mobile: long-press the send button while running to queue directly instead of opening the menu: true | false
+  mentionClick: "pipaya.click.mention", // @mention click action: "peek" | "open"
+  graphClick: "pipaya.click.graph", // graph session click action: "peek" | "open"
+  noticeClick: "pipaya.click.notice", // done/failed toast notice click action: "peek" | "open"
+  mentionHover: "pipaya.hover.mention", // show floating hover preview card on @mentions: true | false
+  sendKey: "pipaya.input.sendKey", // desktop composer send key: "enter" | "mod-enter"
+  runningEnter: "pipaya.input.runningEnter", // primary send-key action while agent is running: "steer" | "queue"
+  reducedMotion: "pipaya.motion.reduced", // in-app reduced motion: "system" | "on"
   keys: "pipaya.keys", // shortcut overrides: { <action>: combo | "" }
   nativeInputKeys: "pipaya.keys.nativeInput", // prefer OS text-editing shortcuts (Cmd/Ctrl+Arrow, etc.) in text fields: true | false
   settingsFold: "pipaya.settings.fold", // settings sections folded or unfolded by the user: { <tabId>: true (folded) | false }

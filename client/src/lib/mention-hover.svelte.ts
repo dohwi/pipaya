@@ -69,6 +69,7 @@ class MentionHoverStore {
 
 	show(el: HTMLElement, target: MentionTarget, label: string) {
 		if (typeof window === "undefined") return;
+		if (!app.prefs.mentionHover) return;
 		if (window.matchMedia && !window.matchMedia("(hover: hover)").matches) return;
 		if (this.hideTimer !== undefined) {
 			clearTimeout(this.hideTimer);

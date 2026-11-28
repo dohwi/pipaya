@@ -312,8 +312,8 @@
 							type="button"
 							class="jump-tok mention"
 							class:closed={peerResolved.target.kind === "session" && peerResolved.target.closed}
-							aria-label={peerResolved.target.kind === "group" ? t("{name} 그룹 열기", { name: `@${peerResolved.handle}` }) : peerResolved.target.closed ? t("{name} 닫힌 대화 보기", { name: `@${peerResolved.handle}` }) : t("{name} 대화 미리 보기", { name: `@${peerResolved.handle}` })}
-							onclick={(e) => { hideMentionHover(); app.openMention(peerResolved.target, { direct: e.ctrlKey || e.metaKey }); }}
+							aria-label={peerResolved.target.kind === "group" ? t("{name} 그룹 열기", { name: `@${peerResolved.handle}` }) : peerResolved.target.closed ? t("{name} 닫힌 대화 보기", { name: `@${peerResolved.handle}` }) : app.prefs.mentionClick === "open" ? t("{name} 대화 열기", { name: `@${peerResolved.handle}` }) : t("{name} 대화 미리 보기", { name: `@${peerResolved.handle}` })}
+							onclick={(e) => { hideMentionHover(); app.openMention(peerResolved.target, { mod: e.ctrlKey || e.metaKey }); }}
 							oncontextmenu={(e) => openMentionMenu(e, peerResolved.target, { label: `@${peerResolved.handle}`, currentSessionId: pane.id })}
 							onpointerenter={(e) => { if (e.pointerType === "mouse") showMentionHover(e.currentTarget, peerResolved.target, `@${peerResolved.handle}`); }}
 							onpointerleave={(e) => { if (e.pointerType === "mouse") scheduleMentionHoverHide(); }}
@@ -554,8 +554,8 @@
 									type="button"
 									class="codebar-file mention mono"
 									class:closed={peerResolved.target.kind === "session" && peerResolved.target.closed}
-									aria-label={peerResolved.target.kind === "group" ? t("{name} 그룹 열기", { name: `@${peerResolved.handle}` }) : peerResolved.target.closed ? t("{name} 닫힌 대화 보기", { name: `@${peerResolved.handle}` }) : t("{name} 대화 미리 보기", { name: `@${peerResolved.handle}` })}
-									onclick={(e) => { hideMentionHover(); app.openMention(peerResolved.target, { direct: e.ctrlKey || e.metaKey }); }}
+									aria-label={peerResolved.target.kind === "group" ? t("{name} 그룹 열기", { name: `@${peerResolved.handle}` }) : peerResolved.target.closed ? t("{name} 닫힌 대화 보기", { name: `@${peerResolved.handle}` }) : app.prefs.mentionClick === "open" ? t("{name} 대화 열기", { name: `@${peerResolved.handle}` }) : t("{name} 대화 미리 보기", { name: `@${peerResolved.handle}` })}
+									onclick={(e) => { hideMentionHover(); app.openMention(peerResolved.target, { mod: e.ctrlKey || e.metaKey }); }}
 									oncontextmenu={(e) => openMentionMenu(e, peerResolved.target, { label: `@${peerResolved.handle}`, currentSessionId: pane.id })}
 									onpointerenter={(e) => { if (e.pointerType === "mouse") showMentionHover(e.currentTarget, peerResolved.target, `@${peerResolved.handle}`); }}
 									onpointerleave={(e) => { if (e.pointerType === "mouse") scheduleMentionHoverHide(); }}
