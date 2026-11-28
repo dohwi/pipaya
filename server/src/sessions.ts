@@ -19,7 +19,7 @@ import { streamAtTier } from "./served-tier.ts";
 import type { ServiceTier } from "./openrouter-catalog.ts";
 import { attachTouchedFiles, completeSummaryWithShrinkRetry, contextTokens, effectiveContextTokens, estimateTokens, KEEP_RECENT_TOKENS, pickCut, SUMMARY_MAX_TOKENS, summaryMessage, thresholdFor, type CompactionSettings } from "./compaction.ts";
 import { THINKING_LEVELS, type DelegateCall, type SessionPatch, type SessionRecord, type SessionStore, type ThinkingLevel } from "./store.ts";
-import type { McpManager } from "./mcp.ts";
+import { MCP_SEARCH_TOOL, type McpManager } from "./mcp.ts";
 import { ALWAYS_TOOLS, buildTools, DEFAULT_TOOLS, DELEGATE_TOOL, isInside, modelList, PEER_TOOLS, TOOL_DEFS, WORKDIR_TOOL, type ReadTrackEntry, type ToolContext, type ToolDef } from "./tools.ts";
 import { isGone, workDirOf } from "./work-tree.ts";
 import { SessionWorkdirs } from "./session-workdirs.ts";
@@ -90,6 +90,8 @@ export class SessionManager {
 	readonly peers: PeerService;
 	/** Session ids of every group, wired by the app once the group manager exists. */
 	private groupSource: () => GroupRef[] = () => [];
+	/** Per-session deferred MCP tools loaded via `mcp_search`, in stable load order (survives idle eviction, cleared on delete). */
+	private loadedMcpTools = new Map<string, Set<string>>();
 
 	setGroupSource(fn: () => GroupRef[]): void {
 		this.groupSource = fn;
@@ -237,7 +239,68 @@ export class SessionManager {
 
 	/** Called when the server's MCP tool set changes so active runs pick up added/removed MCP tools on their next turn. */
 	notifyMcpToolsChanged(): void {
+		if (this.mcp) {
+			for (const set of this.loadedMcpTools.values()) {
+				this.mcp.pruneStaleLoadedTools(set);
+			}
+		}
 		for (const live of this.live.values()) live.toolsDirty = true;
+	}
+
+	/**
+	 * Returns a session's loaded MCP tool names, lazily hydrating from persisted `mcp_search` tool results in SQLite on
+	 * first access so loaded tools survive server restarts and partial forks.
+	 */
+	private getLoadedMcpTools(sessionId: string): Set<string> {
+		let set = this.loadedMcpTools.get(sessionId);
+		if (set) return set;
+		set = new Set<string>();
+		for (const row of this.store.toolResults(sessionId, MCP_SEARCH_TOOL)) {
+			const details = (row.message as { details?: { loaded?: unknown } }).details;
+			if (Array.isArray(details?.loaded)) {
+				for (const name of details.loaded) {
+					if (typeof name === "string" && name) set.add(name);
+				}
+			}
+		}
+		if (this.mcp && set.size) this.mcp.pruneStaleLoadedTools(set);
+		this.loadedMcpTools.set(sessionId, set);
+		return set;
+	}
+
+	/** MCP tool names exposed to a session: all active tools below threshold, or `mcp_search` + session-loaded tools in deferred mode. */
+	private sessionMcpToolNames(sessionId?: string): string[] {
+		if (!this.mcp) return [];
+		if (!this.mcp.isDeferred()) return this.mcp.toolNames();
+		const loaded = sessionId && sessionId !== "preview" ? this.getLoadedMcpTools(sessionId) : undefined;
+		if (!loaded?.size) return [MCP_SEARCH_TOOL];
+		const active = new Set(this.mcp.toolNames());
+		const exposed: string[] = [MCP_SEARCH_TOOL];
+		for (const name of loaded) {
+			if (active.has(name)) exposed.push(name);
+		}
+		return exposed;
+	}
+
+	/** Adds requested canonical MCP tool names to a session's loaded set and marks the live agent dirty if any new tool was added. */
+	private loadSessionMcpTools(sessionId: string, names: readonly string[]): { loaded: string[]; alreadyLoaded: string[] } {
+		if (!names.length || sessionId === "preview") return { loaded: [], alreadyLoaded: [] };
+		const set = this.getLoadedMcpTools(sessionId);
+		const loaded: string[] = [];
+		const alreadyLoaded: string[] = [];
+		for (const name of names) {
+			if (set.has(name)) {
+				alreadyLoaded.push(name);
+			} else {
+				set.add(name);
+				loaded.push(name);
+			}
+		}
+		if (loaded.length) {
+			const live = this.live.get(sessionId);
+			if (live) live.toolsDirty = true;
+		}
+		return { loaded, alreadyLoaded };
 	}
 
 	/** What `schedule` may do, on behalf of session `selfId`. */
@@ -370,7 +433,7 @@ export class SessionManager {
 			skills: skills.map(({ name, description, path, scope }) => ({ name, description, path, scope })),
 			state: snapshot ? "applied" : "preview",
 			capturedAt: snapshot?.capturedAt ?? null,
-			toolSpecs: this.toolSpecs(base.tools, workDirOf(record)),
+			toolSpecs: this.toolSpecs(base.tools, workDirOf(record), record.id),
 			systemPrompts: this.systemPromptList(record.provider, record.model, auth.anthropicOAuth),
 			readFiles: aggregateReadFiles(record.cwd, this.store.toolResults(id, "read")),
 			...(cacheStats && cacheStats.turns > 0 ? { cache: { ...cacheStats } } : {}),
@@ -390,7 +453,7 @@ export class SessionManager {
 			skills: skills.map(({ name, description, path, scope }) => ({ name, description, path, scope })),
 			state: "preview",
 			capturedAt: null,
-			toolSpecs: this.toolSpecs(tools, cwd),
+			toolSpecs: this.toolSpecs(tools, cwd, "preview"),
 			systemPrompts: this.systemPromptList(),
 			readFiles: [],
 		};
@@ -730,6 +793,10 @@ export class SessionManager {
 			src.id,
 		);
 		const copied = this.store.copyMessages(id, copy.id, atSeq);
+		if (atSeq === undefined) {
+			const srcLoaded = this.loadedMcpTools.get(id);
+			if (srcLoaded?.size) this.loadedMcpTools.set(copy.id, new Set(srcLoaded));
+		}
 		if (src.activeDir) this.store.setActiveDir(copy.id, src.activeDir); // the copy goes on in the worktree its history moved to
 		this.bus.publish(copy.id, "session_forked", { from: id, atSeq: atSeq ?? null, messages: copied });
 		this.ext?.notify("session_fork", { sessionId: copy.id, from: id }, copy.id);
@@ -1674,11 +1741,11 @@ export class SessionManager {
 
 	/** The tools a session's agent gets; tools the user switched off in the settings are left out. */
 	private sessionTools(id: string, names: string[], cwd: string, readTracker?: Map<string, ReadTrackEntry>) {
-		return buildTools(enabledTools(this.toolPlan(names)), cwd, [], this.toolContext(id, readTracker, cwd), this.toolDefs());
+		return buildTools(enabledTools(this.toolPlan(names, id)), cwd, [], this.toolContext(id, readTracker, cwd), this.sessionToolDefs(id));
 	}
 
-	private toolPlan(names: string[]) {
-		return planTools({ chosen: names, always: [...PEER_TOOLS, DELEGATE_TOOL, ...ALWAYS_TOOLS, ...(this.scheduler ? [SCHEDULE_TOOL] : []), ...(this.goals ? [GOAL_TOOL] : []), ...(this.mcp ? [MCP_TOOL] : []), ...(this.ext?.alwaysTools() ?? []), ...(this.mcp?.toolNames() ?? [])], disabled: this.disabledTools(), image: this.imageModel?.resolve() ? IMAGE_TOOL : undefined });
+	private toolPlan(names: string[], sessionId?: string) {
+		return planTools({ chosen: names, always: [...PEER_TOOLS, DELEGATE_TOOL, ...ALWAYS_TOOLS, ...(this.scheduler ? [SCHEDULE_TOOL] : []), ...(this.goals ? [GOAL_TOOL] : []), ...(this.mcp ? [MCP_TOOL] : []), ...(this.ext?.alwaysTools() ?? []), ...this.sessionMcpToolNames(sessionId)], disabled: this.disabledTools(), image: this.imageModel?.resolve() ? IMAGE_TOOL : undefined });
 	}
 
 	/** The text the system adds beyond the session prompt, tools and AGENTS.md, for the context view. */
@@ -1688,8 +1755,8 @@ export class SessionManager {
 		return systemPromptEntries(m ? { provider: m.provider, api: m.api } : null, { hasExtensions: !!this.ext, extensionHooks: hooks, anthropicOAuth });
 	}
 
-	private toolSpecs(names: string[], cwd: string): ContextTool[] {
-		return describeTools(this.toolPlan(names), this.toolDefs(), cwd, this.toolContext("preview", undefined, cwd));
+	private toolSpecs(names: string[], cwd: string, sessionId = "preview"): ContextTool[] {
+		return describeTools(this.toolPlan(names, sessionId), this.sessionToolDefs(sessionId), cwd, this.toolContext("preview", undefined, cwd));
 	}
 
 	private spillDir(sessionId: string): string | undefined {
@@ -2014,6 +2081,20 @@ export class SessionManager {
 		return this.imageModel?.resolve() && !defs[IMAGE_TOOL] ? { ...defs, [IMAGE_TOOL]: imageTool(this.registry, this.imageModel) } : defs;
 	}
 
+	/** Session-scoped tool definitions, adding `mcp_search` when active MCP tools are in deferred mode. */
+	private sessionToolDefs(sessionId?: string): Record<string, ToolDef> {
+		const defs = this.toolDefs();
+		if (!this.mcp?.isDeferred() || defs[MCP_SEARCH_TOOL]) return defs;
+		const sid = sessionId ?? "preview";
+		return {
+			...defs,
+			[MCP_SEARCH_TOOL]: this.mcp.searchToolDef({
+				getLoaded: () => (sid === "preview" ? new Set<string>() : this.getLoadedMcpTools(sid)),
+				load: (names) => this.loadSessionMcpTools(sid, names),
+			}),
+		};
+	}
+
 	/** Per-run system prompt tweaks, cache-safe pruning, ephemeral goal note, and the `context` hook (never stored). */
 	private async transformContext(sessionId: string, messages: AgentMessage[]): Promise<AgentMessage[]> {
 		const live = this.live.get(sessionId);
@@ -2245,10 +2326,20 @@ export class SessionManager {
 		live.toolsDirty = false;
 		const snap = this.store.context(sessionId);
 		if (!snap) return undefined;
-		const defs = this.toolDefs();
+		const defs = this.sessionToolDefs(sessionId);
 		const prevNames = live.agent.state.tools.map((t) => t.name);
+		// If a running session switches mid-run from direct mode into deferred mode, preserve any active MCP tools it was
+		// already exposing so an in-flight turn does not suddenly lose tools it is actively using.
+		if (live.running && this.mcp?.isDeferred() && !prevNames.includes(MCP_SEARCH_TOOL)) {
+			const active = new Set(this.mcp.toolNames());
+			const prevMcp = prevNames.filter((n) => active.has(n));
+			if (prevMcp.length) {
+				const set = this.getLoadedMcpTools(sessionId);
+				for (const n of prevMcp) set.add(n);
+			}
+		}
 		// Compare defined tool names only (parameter-only schema changes take effect on the next idle rebuild).
-		const nextNames = enabledTools(this.toolPlan(snap.tools)).filter((n) => Boolean(defs[n]));
+		const nextNames = enabledTools(this.toolPlan(snap.tools, sessionId)).filter((n) => Boolean(defs[n]));
 		if (prevNames.length === nextNames.length && prevNames.every((n, i) => n === nextNames[i])) return undefined;
 		const tools = this.sessionTools(sessionId, snap.tools, live.toolsDir, live.readTracker);
 		live.agent.state.tools = tools;
@@ -2340,6 +2431,7 @@ export class SessionManager {
 		if (all) {
 			this.delegates.forget(id);
 			this.peers.forget(id);
+			this.loadedMcpTools.delete(id);
 			const prefix = `${id}\0`;
 			for (const k of this.recentSends.keys()) if (k.startsWith(prefix)) this.recentSends.delete(k);
 		}
