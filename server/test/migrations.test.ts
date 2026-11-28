@@ -84,8 +84,8 @@ describe("migrations", () => {
 		// Reserve B1 via a group so open_other skips B and gets C1
 		db.query("INSERT INTO groups (id, name, layout, created_at, updated_at) VALUES ('g1', 'B1', '{}', 1, 1)").run();
 
-		// Legacy codename migration (v45, one step before v46 `created_by_session_id`).
-		const step = MIGRATIONS[MIGRATIONS.length - 2]!;
+		// Legacy codename migration (v45, index 44).
+		const step = MIGRATIONS[44]!;
 		expect(typeof step).toBe("function");
 		if (typeof step !== "string") step(db);
 		const names = () => Object.fromEntries((db.query("SELECT id, name FROM sessions").all() as { id: string; name: string }[]).map((r) => [r.id, r.name]));

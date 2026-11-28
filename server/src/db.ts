@@ -366,6 +366,13 @@ export const MIGRATIONS: (string | ((db: Database) => void))[] = [
 	},
 	// Persist cross-session schedule creator so ownership survives server restarts and updates.
 	(db) => addColumn(db, "scheduled_tasks", "created_by_session_id", "TEXT"),
+	// Cache stdio MCP server tool schemas keyed by server name and SHA-256 config hash for lazy startup on boot.
+	`CREATE TABLE IF NOT EXISTS mcp_tool_cache (
+		server_name TEXT PRIMARY KEY,
+		config_hash TEXT NOT NULL,
+		tools_json  TEXT NOT NULL,
+		updated_at  INTEGER NOT NULL
+	);`,
 ];
 
 /** Cap WAL file size after checkpointing (64 MiB) so a burst delete never leaves a multi-hundred-MB -wal behind. */
