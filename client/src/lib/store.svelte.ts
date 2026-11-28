@@ -2610,6 +2610,7 @@ class AppStore {
       }
       const chat = this.chatOf(to);
       if (!chat) return false;
+      chat.clearSuggestions();
 
       // During a compaction the model context is being rewritten: wait in the queue and go out right after it.
       if (chat.compacting && !chat.running) {

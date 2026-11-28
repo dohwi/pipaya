@@ -64,6 +64,8 @@ export interface SystemModelTasks {
 	sessionName: boolean;
 	/** Suggest a descriptive name for a newly created split-window group */
 	groupName: boolean;
+	/** Suggest 2-3 likely follow-up prompts below each completed assistant reply (absent on older servers) */
+	followUpSuggestions?: boolean;
 }
 export interface SystemModelSettings {
 	/** The light model that runs background system tasks; null = off */
@@ -383,6 +385,8 @@ export interface SessionDetail extends Session {
 		/** Absent on servers from before this field. */
 		queuedMessages?: { mode: "steer" | "follow_up"; text: string; deferred?: boolean }[];
 		lastError: string | null;
+		/** System-model suggested follow-up prompts for the latest completed reply (absent when none or on older servers). */
+		followUpSuggestions?: string[];
 	};
 	usage: Usage;
 }

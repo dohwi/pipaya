@@ -462,7 +462,13 @@ export async function buildApp(cfg: Config, opts: BuildOptions = {}): Promise<Ap
 	bus.subscribe((e) => { if (e.type === "session_deleted") goals.onSessionDeleted((e.data as { id: string }).id); });
 	registerGoalRoutes(server, goals);
 	sessions.setGoals(goals);
-	registerSystemModelRoutes(server, systemModel, bus, () => sessions.describeAll());
+	registerSystemModelRoutes(
+		server,
+		systemModel,
+		bus,
+		() => sessions.describeAll(),
+		(enabled) => sessions.syncFollowUpSuggestions(enabled),
+	);
 	registerFallbackModelRoutes(server, fallbackModel, bus);
 	registerImageModelRoutes(server, imageModel, bus);
 	// Realtime voice input: its own address and key (Settings > Voice), so any OpenAI-compatible Realtime server works.

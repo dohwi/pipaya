@@ -58,6 +58,8 @@ export interface SessionStatus {
 	lastError: string | null;
 	/** A manual or automatic compaction is writing its summary. */
 	compacting: boolean;
+	/** System-model suggested follow-up prompts for the latest completed reply. */
+	followUpSuggestions?: string[];
 }
 
 export interface CompactionOutcome {

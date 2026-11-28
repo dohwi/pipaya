@@ -13,6 +13,7 @@
 	import { tick, untrack } from "svelte";
 	import Icon from "../ui/Icon.svelte";
 	import Message from "./Message.svelte";
+	import FollowUpSuggestions from "./FollowUpSuggestions.svelte";
 	import WorkBox from "./WorkBox.svelte";
 	import type { ChatState } from "../../lib/chat.svelte";
 	import type { AssistantItem, ChatItem, EntryItem, NoticeItem, UserItem } from "../../lib/types";
@@ -449,6 +450,21 @@
 						<Message item={u.item} working={u.item.key === lastUserKey} elapsed={elapsedOf[n]} />
 					{:else}
 						<Message item={u.items[u.items.length - 1]!} turn={u.items} last={end} live={end && chat.running} />
+						{#if end && canContinue && !waitingFirst && !chat.awaitingQuestion && chat.suggestions.length > 0 && u.items[u.items.length - 1]?.stopReason === "stop"}
+							<FollowUpSuggestions
+								suggestions={chat.suggestions}
+								disabled={app.isSending(pane.id)}
+								onpick={(text, fillOnly) => {
+									if (fillOnly) {
+										if (pane.id && !pane.focused) void app.openSession(pane.id);
+										app.prefill = text;
+									} else {
+										chat.clearSuggestions();
+										void app.send(text, undefined, pane.id);
+									}
+								}}
+							/>
+						{/if}
 					{/if}
 					{#if end && u.kind === "user" && hasUnansweredPrompt(u.item, canContinue, app.isSending(pane.id), chat.settled)}
 						<div class="notice-row">

@@ -24,6 +24,7 @@ import { ALWAYS_TOOLS, buildTools, DEFAULT_TOOLS, DELEGATE_TOOL, isInside, model
 import { isGone, workDirOf } from "./work-tree.ts";
 import { SessionWorkdirs } from "./session-workdirs.ts";
 import { SessionDescriber } from "./session-describer.ts";
+import { SessionSuggester } from "./session-suggestions.ts";
 import { GOAL_TOOL } from "./goal-tool.ts";
 import type { GoalManager } from "./goals.ts";
 import { MCP_TOOL } from "./mcp-tool.ts";
@@ -76,8 +77,9 @@ export class SessionManager {
 	/** Accepted sends keyed by `sessionId\0clientRequestId` so retries after a lost ACK do not duplicate prompts. */
 	private recentSends = new Map<string, { accepted: PromptMode; at: number }>();
 	private inflightSends = new Map<string, Promise<{ accepted: PromptMode }>>();
-	/** Background title/role generation and git worktree operations. */
+	/** Background title/role generation, follow-up suggestions, and git worktree operations. */
 	private describer: SessionDescriber;
+	private suggester: SessionSuggester;
 	private workdirOps: SessionWorkdirs;
 	/** `delegate` use per session: calls in the current run and subagents running right now. */
 	private delegates = new DelegateLimits();
@@ -139,6 +141,18 @@ export class SessionManager {
 			takenNames: () => this.peers.taken(),
 			isClosing: () => this.closing,
 			updateSession: (id, patch) => this.update(id, patch, { automatic: true }),
+		});
+		this.suggester = new SessionSuggester({
+			store,
+			registry,
+			systemModel,
+			isClosing: () => this.closing,
+			isSessionIdle: (id) => {
+				const l = this.live.get(id);
+				return !l?.running && !l?.compacting && !l?.deferred?.length;
+			},
+			hasPendingQuestions: (id) => (this.questions?.list(id).length ?? 0) > 0,
+			publish: (sessionId, payload) => this.bus.publish(sessionId, "follow_up_suggestions", payload, { ephemeral: true }),
 		});
 		this.workdirOps = new SessionWorkdirs({
 			store,
@@ -462,15 +476,21 @@ export class SessionManager {
 	status(id: string): SessionStatus {
 		this.get(id);
 		const live = this.live.get(id);
+		const pendingQuestions = this.questions?.list(id).length ?? 0;
+		const followUpSuggestions =
+			!live?.running && !live?.compacting && pendingQuestions === 0
+				? this.suggester.get(id, this.store.nextSeq(id) - 1)
+				: [];
 		return {
 			running: live?.running ?? false,
 			pendingToolCalls: live ? [...live.agent.state.pendingToolCalls] : [],
-			pendingQuestions: this.questions?.list(id).length ?? 0,
+			pendingQuestions,
 			streamingMessage: (live?.running && live.agent.state.streamingMessage) || null,
 			queued: (live?.agent.hasQueuedMessages() ?? false) || !!live?.deferred?.length,
 			queuedMessages: this.queuedOf(id),
 			lastError: live?.agent.state.errorMessage ?? null,
 			compacting: !!live?.compacting,
+			...(followUpSuggestions.length ? { followUpSuggestions } : {}),
 		};
 	}
 
@@ -515,6 +535,7 @@ export class SessionManager {
 		if (live.compacting) throw conflict("this session is already being compacted");
 		if (live.running && reason === "manual") throw conflict("the session is working; compact after it finishes");
 		if (this.questions?.list(id).length) throw conflict("the session is waiting for an answer; respond first");
+		this.suggester.clear(id, { notify: true });
 		if (!this.compaction) throw new HttpError(501, "compaction_not_supported", "compaction is not available on this server");
 
 		const stored = this.store.projection(id);
@@ -689,6 +710,7 @@ export class SessionManager {
 		const live = this.live.get(id);
 		if (patch.closed) {
 			if (live?.running) this.abortRun(id, live, "close"); // closing stops the work
+			this.suggester.clear(id, { notify: true });
 			this.goals?.onSessionClosed(id);
 		}
 		if (live) {
@@ -767,6 +789,7 @@ export class SessionManager {
 			}
 		}
 		this.describer.abort(id);
+		this.suggester.clear(id, { forgetBackoff: true });
 		this.dispose(id);
 		this.clearSessionMemory(id, true);
 		const spillDir = this.spillDir(id);
@@ -933,6 +956,7 @@ export class SessionManager {
 		}
 
 		if (live.running) throw conflict('session is busy; send with mode "steer" or "follow_up"');
+		this.suggester.clear(id);
 		const first = this.store.nextSeq(id) === 0;
 		const shortTitle = autoTitle(inputTitle ?? input.text);
 		if (record.title === "New session" && first && origin !== "goal") this.update(id, { title: shortTitle }, { automatic: true });
@@ -957,6 +981,12 @@ export class SessionManager {
 	/** Gives a role to the active sessions that have talked but have none yet (after a system model is set, and at start). */
 	describeAll(): void {
 		this.describer.describeAll();
+	}
+
+	/** Clears cached/in-flight follow-up suggestions when disabled, or resets backoff when re-enabled / model changes. */
+	syncFollowUpSuggestions(enabled: boolean): void {
+		if (!enabled) this.suggester.clearAll();
+		else this.suggester.resetBackoff();
 	}
 
 	/** `input` hooks, built-in `/prompt:` templates and `/command` handling. A swallowed message is never sent to the model. */
@@ -1075,6 +1105,7 @@ export class SessionManager {
 
 	abort(id: string): boolean {
 		this.get(id);
+		this.suggester.clear(id, { notify: true });
 		const live = this.live.get(id);
 		if (!live) return false;
 		let did = false;
@@ -1141,6 +1172,7 @@ export class SessionManager {
 		clearInterval(this.sweeper);
 		this.closing = true;
 		this.describer.abortAll();
+		this.suggester.abortAll();
 		for (const id of this.live.keys()) this.ext?.notify("session_shutdown", { sessionId: id }, id);
 		for (const [id, live] of [...this.live]) {
 			live.compacting?.abort();
@@ -1228,8 +1260,8 @@ export class SessionManager {
 
 	/** Wait until every active run has settled (used on shutdown and in tests). */
 	async idle(): Promise<void> {
-		while (this.pendingRuns.size > 0 || this.describer.hasPending()) {
-			await Promise.all([...this.pendingRuns, ...this.describer.pendingJobs()]);
+		while (this.pendingRuns.size > 0 || this.describer.hasPending() || this.suggester.hasPending()) {
+			await Promise.all([...this.pendingRuns, ...this.describer.pendingJobs(), ...this.suggester.pendingJobs()]);
 		}
 		await Promise.all([...this.live.values()].map((l) => l.agent.waitForIdle()));
 	}
@@ -1242,6 +1274,7 @@ export class SessionManager {
 	 * from the event alone.
 	 */
 	private run(id: string, live: Live, mode: string, origin: RunOrigin, start: () => Promise<void>, pendingPrompt?: AgentMessage, droppedSeq?: number, recallCandidate?: RecallCandidate): void {
+		this.suggester.clear(id);
 		this.peers.resetRun(id);
 		this.delegates.resetRun(id);
 		live.running = true;
@@ -1377,6 +1410,17 @@ export class SessionManager {
 				if (this.closing) {
 					this.dispose(id);
 					return;
+				}
+				if (
+					status === "ok" &&
+					settledOrigin === "user" &&
+					!live.deferred?.length &&
+					!this.goals?.isActive(id) &&
+					!(this.questions?.list(id).length) &&
+					last?.role === "assistant" &&
+					last.stopReason === "stop"
+				) {
+					this.suggester.generate(id, this.store.nextSeq(id) - 1);
 				}
 				// Commands and messages queued behind them go on now (not after a stop: dropQueued emptied them above).
 				const next = this.drainDeferred(id, live, status);
@@ -2427,6 +2471,7 @@ export class SessionManager {
 	private clearSessionMemory(id: string, all = false): void {
 		this.stopped.delete(id);
 		this.describer.clear(id);
+		this.suggester.clear(id, { forgetBackoff: all });
 		this.workdirOps.clearNote(id);
 		if (all) {
 			this.delegates.forget(id);
@@ -2454,5 +2499,6 @@ export class SessionManager {
 			}
 		}
 		this.describer.pruneFailed(now);
+		this.suggester.pruneFailed(now);
 	}
 }

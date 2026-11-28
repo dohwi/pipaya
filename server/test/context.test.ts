@@ -188,7 +188,7 @@ describe("context API and application", () => {
 			expect(specs.find((t) => t.name === "read")!.parameters).toMatchObject({ type: "object" });
 			// The system's own wording is listed too, each entry with when it applies and its text.
 			const prompts = preview.systemPrompts as { id: string; kind: string; when: string; text: string; active: boolean; bytes: number }[];
-			expect(prompts.map((p) => p.id)).toEqual(expect.arrayContaining(["sdk-claude-code", "runtime-peer-message", "runtime-compaction-summary", "helper-compaction", "helper-describe", "helper-group-name"]));
+			expect(prompts.map((p) => p.id)).toEqual(expect.arrayContaining(["sdk-claude-code", "runtime-peer-message", "runtime-compaction-summary", "helper-compaction", "helper-describe", "helper-group-name", "helper-follow-up-suggestions"]));
 			expect(prompts.every((p) => p.when && p.text && p.bytes === Buffer.byteLength(p.text))).toBe(true);
 			expect(prompts.find((p) => p.id === "helper-compaction")!.text).toContain("You compress the earlier part");
 			expect(prompts.find((p) => p.id === "runtime-peer-message")!.text).toContain("peer");
