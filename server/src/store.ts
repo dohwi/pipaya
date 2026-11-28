@@ -274,6 +274,19 @@ export class SessionStore {
 		return (this.db.query("SELECT watcher_id FROM peer_watch WHERE target_id = $target").all({ target }) as { watcher_id: string }[]).map((r) => r.watcher_id);
 	}
 
+	/** Open sessions that `watcher` is currently watching for end/question reports. */
+	watching(watcher: string): string[] {
+		return (
+			this.db
+				.query(
+					`SELECT w.target_id FROM peer_watch w
+					 JOIN sessions s ON s.id = w.target_id AND s.closed = 0
+					 WHERE w.watcher_id = $watcher`,
+				)
+				.all({ watcher }) as { target_id: string }[]
+		).map((r) => r.target_id);
+	}
+
 	activeCount(): number {
 		return (this.db.query("SELECT COUNT(*) AS n FROM sessions WHERE closed = 0").get() as { n: number }).n;
 	}

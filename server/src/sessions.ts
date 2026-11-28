@@ -166,7 +166,7 @@ export class SessionManager {
 			store,
 			groups: () => this.groupSource(),
 			isRunning: (id) => this.isRunning(id),
-			deliver: (id, text, mode) => this.send(id, { text, mode, origin: "peer" }),
+			deliver: (id, text, mode, busyMode) => this.send(id, { text, mode, busyMode, origin: "peer" }),
 			rename: (id, name) => void this.update(id, { name }),
 			abort: (id) => this.abort(id),
 			onRunFinished: (fn) => {
@@ -709,6 +709,12 @@ export class SessionManager {
 
 		const live = this.live.get(id);
 		if (patch.closed) {
+			this.peers.onClosed(id);
+			if (live?.deferred?.length) {
+				const dropped = live.deferred.splice(0);
+				for (const d of dropped) this.bus.publish(id, "message_dequeued", { mode: "follow_up", text: d.text, deferred: true });
+			}
+			live?.compacting?.abort();
 			if (live?.running) this.abortRun(id, live, "close"); // closing stops the work
 			this.suggester.clear(id, { notify: true });
 			this.goals?.onSessionClosed(id);
@@ -834,7 +840,8 @@ export class SessionManager {
 			text: string;
 			images?: ImageContent[];
 			files?: { name: string; data: string }[];
-			mode?: PromptMode;
+			mode?: PromptMode | "auto";
+			busyMode?: "steer" | "follow_up";
 			origin?: RunOrigin;
 			command?: { name: "compact"; instructions?: string };
 			clientRequestId?: string;
@@ -879,52 +886,56 @@ export class SessionManager {
 	private async sendInner(
 		id: string,
 		record: SessionRecord,
-		input: { text: string; images?: ImageContent[]; files?: { name: string; data: string }[]; mode?: PromptMode; origin?: RunOrigin; command?: { name: "compact"; instructions?: string } },
+		input: { text: string; images?: ImageContent[]; files?: { name: string; data: string }[]; mode?: PromptMode | "auto"; busyMode?: "steer" | "follow_up"; origin?: RunOrigin; command?: { name: "compact"; instructions?: string } },
 	): Promise<{ accepted: "prompt" | "steer" | "follow_up" }> {
 		if (record.closed) throw conflict("session is closed; resume it first (PATCH closed=false)");
 		this.assertChatModel(record.provider, record.model);
-		const mode = input.mode ?? "prompt";
+		const requestedMode = input.mode ?? "prompt";
+		const isAuto = requestedMode === "auto";
+		const busyMode: "steer" | "follow_up" = input.busyMode ?? "follow_up";
+		const preMode: PromptMode = isAuto ? (this.live.get(id)?.running ? busyMode : "prompt") : requestedMode;
 		if (input.command) {
 			// A command is never a prompt: the server holds it and runs it when the run ends, in order with the other follow-ups.
-			if (mode !== "follow_up") throw badRequest('a command can only be queued with mode "follow_up"');
-			this.assertJoinable(id, mode);
+			if (requestedMode !== "follow_up") throw badRequest('a command can only be queued with mode "follow_up"');
+			this.assertJoinable(id, requestedMode);
 			const live = this.live.get(id)!;
 			const instructions = input.command.instructions?.trim() || undefined;
 			(live.deferred ??= []).push({ kind: "compact", text: input.text, ...(instructions ? { instructions } : {}) });
-			this.bus.publish(id, "message_queued", { mode, text: input.text, deferred: true });
-			return { accepted: mode };
+			this.bus.publish(id, "message_queued", { mode: requestedMode, text: input.text, deferred: true });
+			return { accepted: requestedMode };
 		}
 		const rawText = input.text;
-		const pre = await this.preprocess(id, input.text, mode, workDirOf(record));
-		if (pre.handled) return { accepted: mode };
+		const pre = await this.preprocess(id, input.text, preMode, workDirOf(record));
+		if (pre.handled) return { accepted: preMode };
 		input = { ...input, text: pre.text };
 		const extraParts = pre.parts;
 		const inputTitle = pre.title;
 		// A prompt sent during a manual compaction waits for it to finish instead of being rejected.
 		const compacting = this.live.get(id);
-		if (mode === "prompt" && compacting?.compacting && !compacting.running) {
+		if ((requestedMode === "prompt" || isAuto) && compacting?.compacting && !compacting.running) {
 			const job = compacting.compacting;
 			await compacting.compactSettled;
 			// Stopping the compaction stops what waited for it too: the sender keeps the text instead of it going out later.
-			if (job.signal.aborted) throw conflict("the compaction it waited for was stopped; send it again", { reason: "stopped" });
+			if (!isAuto && job.signal.aborted) throw conflict("the compaction it waited for was stopped; send it again", { reason: "stopped" });
 		}
-		if (mode !== "prompt") this.assertJoinable(id, mode);
-		if (mode === "prompt" && this.live.get(id)?.running) throw conflict('session is busy; send with mode "steer" or "follow_up"');
+		if (!isAuto) {
+			if (requestedMode !== "prompt") this.assertJoinable(id, requestedMode);
+			if (requestedMode === "prompt" && this.live.get(id)?.running) throw conflict('session is busy; send with mode "steer" or "follow_up"');
+		}
 		await this.refreshChatModels();
-		const live = this.ensureLive(record);
+		let fresh = this.store.get(id);
+		if (!fresh) throw notFound("session");
+		if (fresh.closed) throw conflict("session is closed; resume it first (PATCH closed=false)");
+		let live = this.ensureLive(fresh);
 
 		const content: ({ type: "text"; text: string } | ImageContent)[] = [{ type: "text", text: input.text }, ...extraParts];
 		const moved = this.workdirOps.takeNote(id);
 		if (moved) content.push({ type: "text", text: `${HINT_OPEN}${moved}</pipaya-hint>` });
 		for (const hint of this.peers.hints(id, input.text)) content.push({ type: "text", text: hint });
 		if (input.origin === "schedule") content.push({ type: "text", text: SCHEDULE_NOTE });
-		if (input.origin === "goal") {
-			if (mode !== "steer") content.push({ type: "text", text: GOAL_NOTE });
-		} else {
-			this.goals?.cancelPending(id);
-		}
+		if (input.origin !== "goal") this.goals?.cancelPending(id);
 		if (this.skills) {
-			const callable = this.skills.callable(record.cwd, id);
+			const callable = this.skills.callable(fresh.cwd, id);
 			for (const name of mentionedSkills(input.text, callable.map((s) => s.name))) {
 				const skill = callable.find((s) => s.name === name)!;
 				const body = readSkillText(skill.path);
@@ -933,18 +944,45 @@ export class SessionManager {
 		}
 		if (input.images?.length) {
 			content.push(...input.images);
-			const saved = await saveInlineImages(workDirOf(record), input.images);
+			const saved = await saveInlineImages(workDirOf(fresh), input.images);
 			if (saved.length) content.push({ type: "text", text: inlineImagesHint(saved) });
 		}
 		if (input.files?.length) {
-			const saved = await saveUploads(workDirOf(record), input.files);
+			const saved = await saveUploads(workDirOf(fresh), input.files);
 			content.push({ type: "text", text: filesNote(saved) });
 		}
-		const message: AgentMessage = { role: "user", content, timestamp: Date.now() };
+		// In auto mode, if the target is mid-abort or mid-compaction, wait for it to settle before deciding mode.
+		if (isAuto) {
+			for (let tries = 0; tries < 20; tries++) {
+				if (live.running && live.stopCause && live.settled) {
+					await live.settled;
+				} else if (live.compacting && !live.running && live.compactSettled) {
+					await live.compactSettled;
+				} else {
+					break;
+				}
+				const rechecked = this.store.get(id);
+				if (!rechecked) throw notFound("session");
+				if (rechecked.closed) throw conflict("session is closed; resume it first (PATCH closed=false)");
+				fresh = rechecked;
+				live = this.ensureLive(fresh);
+			}
+		}
+		// Re-check closed/deleted after all awaits — zero awaits remain before queueing or starting run().
+		fresh = this.store.get(id);
+		if (!fresh) throw notFound("session");
+		if (fresh.closed) throw conflict("session is closed; resume it first (PATCH closed=false)");
+		live = this.ensureLive(fresh);
+
 		const origin: RunOrigin = input.origin ?? "user";
+		const mode: PromptMode = isAuto
+			? (live.running && !live.stopCause ? busyMode : (!live.running && live.deferred?.length ? "follow_up" : "prompt"))
+			: requestedMode;
+		if (origin === "goal" && mode !== "steer") content.push({ type: "text", text: GOAL_NOTE });
+		const message: AgentMessage = { role: "user", content, timestamp: Date.now() };
 
 		if (mode === "steer" || mode === "follow_up") {
-			this.assertJoinable(id, mode); // again: the uploads above took a while, the run may have ended or been stopped
+			if (!isAuto) this.assertJoinable(id, mode); // again: the uploads above took a while, the run may have ended or been stopped
 			// A person joining a run that another session started makes it a run for the person; a peer never takes it back.
 			if (origin === "user") live.origin = "user";
 			sentText.set(message, input.text);
@@ -959,7 +997,7 @@ export class SessionManager {
 		this.suggester.clear(id);
 		const first = this.store.nextSeq(id) === 0;
 		const shortTitle = autoTitle(inputTitle ?? input.text);
-		if (record.title === "New session" && first && origin !== "goal") this.update(id, { title: shortTitle }, { automatic: true });
+		if (fresh.title === "New session" && first && origin !== "goal") this.update(id, { title: shortTitle }, { automatic: true });
 		if (origin !== "goal") this.describer.describe(id, first ? input.text : undefined, input.text, shortTitle, origin);
 		this.run(id, live, "prompt", origin, async () => {
 			await this.autoCompact(id);
@@ -1154,12 +1192,13 @@ export class SessionManager {
 				return;
 			}
 			this.store.clearActiveRun(id);
-			this.goals?.onRunFinished(id, { status: "aborted", error: FORCE_STOP_ERROR, cause: "force", origin: live.origin });
+			const origin = this.peers.settleRun(id, live.origin, "aborted");
+			this.goals?.onRunFinished(id, { status: "aborted", error: FORCE_STOP_ERROR, cause: "force", origin });
 			this.bus.publish(id, "run_finished", {
 				status: "aborted",
 				error: FORCE_STOP_ERROR,
 				durationMs: Date.now() - live.runStartedAt,
-				origin: live.origin,
+				origin,
 				usage: this.store.usage(id),
 				cause: "force",
 			});
@@ -1435,12 +1474,13 @@ export class SessionManager {
 				if (rec) {
 					try { this.finalizeErrorTurn(id, rec, live, reason, reason); } catch { /* still clear active_runs and publish run_finished */ }
 					try { this.store.clearActiveRun(id); } catch { /* ignore */ }
-					this.goals?.onRunFinished(id, { status: "error", error: reason, cause: live.stopCause, origin: live.origin });
+					const settledOrigin = this.peers.settleRun(id, live.origin, "error");
+					this.goals?.onRunFinished(id, { status: "error", error: reason, cause: live.stopCause, origin: settledOrigin });
 					this.bus.publish(id, "run_finished", {
 						status: "error",
 						error: reason,
 						durationMs: Date.now() - live.runStartedAt,
-						origin: live.origin,
+						origin: settledOrigin,
 						usage: this.store.usage(id),
 						...(live.stopCause ? { cause: live.stopCause } : {}),
 					});
@@ -1511,6 +1551,8 @@ export class SessionManager {
 	private async drainDeferred(id: string, live: Live, status: "ok" | "error" | "aborted"): Promise<void> {
 		if (status === "aborted") return;
 		while (live.deferred?.length && !live.running && !this.closing && this.live.get(id) === live) {
+			const rec = this.store.get(id);
+			if (!rec || rec.closed) return;
 			const head = live.deferred[0]!;
 			if (head.kind === "compact") {
 				live.deferred.shift();
@@ -1526,7 +1568,8 @@ export class SessionManager {
 			const batch: Extract<Deferred, { kind: "message" }>[] = [];
 			while (live.deferred[0]?.kind === "message") batch.push(live.deferred.shift() as Extract<Deferred, { kind: "message" }>);
 			const [first, ...rest] = batch as [Extract<Deferred, { kind: "message" }>, ...Extract<Deferred, { kind: "message" }>[]];
-			this.run(id, live, "prompt", first.origin, async () => {
+			const origin: RunOrigin = batch.some((m) => m.origin === "user") ? "user" : batch.some((m) => m.origin === "schedule") ? "schedule" : first.origin;
+			this.run(id, live, "prompt", origin, async () => {
 				for (const r of rest) live.agent.followUp(r.message);
 				await this.autoCompact(id);
 				if (live.stopCause === "user" && live.recallCandidate) return;
@@ -2220,6 +2263,10 @@ export class SessionManager {
 		switch (event.type) {
 			case "message_update":
 				pub("message_update", { message: undefined, event: slimAssistantEvent(event.assistantMessageEvent) }, { ephemeral: true });
+				return;
+			case "tool_execution_start":
+				if (event.toolName !== "peer") this.peers.noteWork(sessionId);
+				pub(event.type, event);
 				return;
 			case "tool_execution_update":
 				pub("tool_execution_update", { toolCallId: event.toolCallId, toolName: event.toolName, partialResult: event.partialResult }, { ephemeral: true });
