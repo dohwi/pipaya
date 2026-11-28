@@ -1,3 +1,5 @@
+import { splitQuote } from "./quote";
+
 /**
  * Text logic of the composer, kept free of components so it can be unit-tested: which mention the caret is in
  * (#file or #imageN, @mention), replacing that token with a pick, and the highlight layer drawn under the textarea.
@@ -289,6 +291,42 @@ export function dropImageToken(text: string, gone: number): string {
 export function mergeReturned(current: string, imagesBefore: number, back: { text: string; images: number }): string {
 	const shifted = imagesBefore ? back.text.replace(IMG_TOKEN, (m, n) => (Number(n) >= 1 && Number(n) <= back.images ? `#image${Number(n) + imagesBefore}` : m)) : back.text;
 	return current.trim() ? `${shifted.replace(/\s+$/, "")}\n${current}` : shifted;
+}
+
+export type RestoredReply = { text: string; who?: string };
+export type RestoredItem = {
+	text: string;
+	images: number;
+	reply?: RestoredReply | null;
+	replyBody?: string;
+};
+
+/**
+ * Combine one or more restored messages (already sorted in written order) ahead of the current composer draft,
+ * shifting `#imageN` tokens past any already-attached images and restoring `reply` only when the composer has
+ * none set (so a new reply the user started is never overwritten).
+ */
+export function applyRestoredMessages(
+	currentText: string,
+	currentImages: number,
+	currentReply: RestoredReply | null,
+	list: readonly RestoredItem[],
+): { text: string; reply: RestoredReply | null } {
+	let nextReply = currentReply;
+	let back = "";
+	let pictures = 0;
+	for (const m of list) {
+		let itemText = m.text;
+		if (m.reply && !nextReply) {
+			nextReply = { ...m.reply };
+			itemText = m.replyBody ?? splitQuote(m.text).rest;
+		}
+		const own = mergeReturned("", pictures, { text: itemText, images: m.images });
+		if (own.trim()) back = back ? `${back.replace(/\s+$/, "")}\n${own}` : own;
+		pictures += m.images;
+	}
+	const nextText = back ? mergeReturned(currentText, currentImages, { text: back, images: pictures }) : currentText;
+	return { text: nextText, reply: nextReply };
 }
 
 const SKILL_TOKEN_RE = /(?:^|\s)\/skill:([a-z0-9]+(?:-[a-z0-9]+)*)(?![A-Za-z0-9_/-])/g;

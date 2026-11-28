@@ -2551,6 +2551,8 @@ class AppStore {
     to: string | null = this.activeId,
     files: UploadFile[] = [],
     clientRequestId?: string,
+    reply?: { text: string; who?: string } | null,
+    replyBody?: string,
   ): Promise<boolean> {
     const link = this.link;
     const api = link?.api;
@@ -2607,13 +2609,18 @@ class AppStore {
 
       // During a compaction the model context is being rewritten: wait in the queue and go out right after it.
       if (chat.compacting && !chat.running) {
-        chat.held.push({ text, images, files, at: Date.now() });
+        chat.held.push({ text, images, files, at: Date.now(), ...(reply ? { reply, replyBody } : {}) });
         chat.requestBottom();
         return true;
       }
 
       const mode: SendMode = chat.running ? "follow_up" : "prompt";
-      if (mode === "prompt" && !seeded) chat.addOptimisticUser(text, images, files.map((f) => ({ path: "", name: f.name, size: f.size, mimeType: f.mimeType })));
+      let ownPrompt: Outgoing | null = null;
+      if (mode === "prompt") {
+        if (!seeded) chat.addOptimisticUser(text, images, files.map((f) => ({ path: "", name: f.name, size: f.size, mimeType: f.mimeType })));
+        ownPrompt = { text, images, files, at: Date.now(), pending: true, ...(reply ? { reply, replyBody } : {}) };
+        chat.activePrompt = ownPrompt;
+      }
       chat.requestBottom();
       try {
         await api.send(chat.id, text, mode, images.length ? images : undefined, files.length ? files : undefined, {
@@ -2621,7 +2628,19 @@ class AppStore {
           signal: tx.abort.signal,
           ...(hasAttachments ? { onProgress: tx.onProgress } : {}),
         });
+        if (ownPrompt) {
+          ownPrompt.pending = false;
+          // Aborted and recalled before the HTTP response came back: the composer still holds it, so keep it there.
+          if (ownPrompt.returned) {
+            this.toast(t("중지해서 보내지 않은 메시지를 입력창에 돌려놓았습니다"), "info", chat.id);
+            return false;
+          }
+        }
       } catch (e) {
+        if (ownPrompt) {
+          ownPrompt.pending = false;
+          if (chat.activePrompt === ownPrompt) chat.activePrompt = null;
+        }
         if (mode === "prompt") chat.dropOptimisticUser();
         throw e;
       }
@@ -2644,7 +2663,9 @@ class AppStore {
     if (chat.compacting || !chat.held.length) return;
     const list = chat.held.splice(0);
     for (const [i, h] of list.entries()) {
-      const ok = i === 0 ? await this.send(h.text, h.images, chat.id, h.files) : await this.queue(h.text, h.images, chat.id, h.files);
+      const ok = i === 0
+        ? await this.send(h.text, h.images, chat.id, h.files, undefined, h.reply, h.replyBody)
+        : await this.queue(h.text, h.images, chat.id, h.files, undefined, h.reply, h.replyBody);
       if (!ok) return void chat.restored.push(...list.slice(i));
     }
   }
@@ -2662,6 +2683,8 @@ class AppStore {
     to: string | null,
     files: UploadFile[] = [],
     clientRequestId?: string,
+    reply?: { text: string; who?: string } | null,
+    replyBody?: string,
   ): Promise<boolean> {
     const chat = this.chatOf(to);
     const link = this.link;
@@ -2676,7 +2699,7 @@ class AppStore {
     const tx = this.beginSend(link.id, chat.id, hasAttachments, estimatedTotal);
     chat.requestBottom();
     // Kept until delivered: a stop drops it on the server, and then it goes back to the input with its attachments.
-    const own: Outgoing = { text, images, files, at: Date.now(), pending: true };
+    const own: Outgoing = { text, images, files, at: Date.now(), pending: true, ...(reply ? { reply, replyBody } : {}) };
     chat.mine.push(own);
     const notSent = () => (this.toast(t("작업이 중지되어 보내지 않았습니다"), "error", chat.id), false);
     try {
@@ -2700,7 +2723,7 @@ class AppStore {
         // The run ended a moment ago: start a new one. Release our sending slot first so `send` can take it.
         tx.dispose();
         for (let i = 0; i < 40 && this.isSending(to); i++) await new Promise((r) => setTimeout(r, 50));
-        return this.send(text, images, to, files, clientRequestId);
+        return this.send(text, images, to, files, clientRequestId, reply, replyBody);
       }
       this.probeIfNetwork(link, e);
       this.fail(e, failMsg, chat.id);
@@ -2710,10 +2733,10 @@ class AppStore {
     }
   }
 
-  steer = (text: string, images: ImageBlock[] = [], to = this.activeId, files: UploadFile[] = [], clientRequestId?: string) =>
-    this.during("steer", text, images, t("끼워 넣지 못했습니다"), to, files, clientRequestId);
-  queue = (text: string, images: ImageBlock[] = [], to = this.activeId, files: UploadFile[] = [], clientRequestId?: string) =>
-    this.during("follow_up", text, images, t("대기열에 추가하지 못했습니다"), to, files, clientRequestId);
+  steer = (text: string, images: ImageBlock[] = [], to = this.activeId, files: UploadFile[] = [], clientRequestId?: string, reply?: { text: string; who?: string } | null, replyBody?: string) =>
+    this.during("steer", text, images, t("끼워 넣지 못했습니다"), to, files, clientRequestId, reply, replyBody);
+  queue = (text: string, images: ImageBlock[] = [], to = this.activeId, files: UploadFile[] = [], clientRequestId?: string, reply?: { text: string; who?: string } | null, replyBody?: string) =>
+    this.during("follow_up", text, images, t("대기열에 추가하지 못했습니다"), to, files, clientRequestId, reply, replyBody);
 
   /** Open a file preview (null = closed) */
   filePreview = $state<{ sessionId: string; file: FileRef } | null>(null);
@@ -2796,7 +2819,11 @@ class AppStore {
     const link = this.link;
     if (!link || !id) return;
     // Messages held back for a compaction being stopped would otherwise go out the moment it ends.
-    this.chatOf(id)?.restoreHeld();
+    const chat = this.chatOf(id);
+    if (chat) {
+      chat.restoreHeld();
+      chat.abortRequested = true;
+    }
     try {
       await link.api.abort(id);
     } catch (e) {

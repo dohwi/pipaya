@@ -102,3 +102,12 @@ export function isEmptyFailedReply(message: unknown): boolean {
 	if (!Array.isArray(m.content)) return true;
 	return !m.content.some((b) => b?.type === "toolCall" || (typeof b?.text === "string" && b.text.trim()) || (typeof b?.thinking === "string" && b.thinking.trim()));
 }
+
+/** True when an assistant message has produced visible text or started at least one tool call (thinking alone does not count). */
+export function hasAssistantOutputOrTools(message: unknown): boolean {
+	const m = message as { role?: string; content?: unknown } | null | undefined;
+	if (m?.role !== "assistant" || !Array.isArray(m.content)) return false;
+	return m.content.some(
+		(b) => b?.type === "toolCall" || (b?.type === "text" && typeof b.text === "string" && b.text.trim().length > 0),
+	);
+}

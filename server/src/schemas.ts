@@ -573,6 +573,10 @@ export const EVENTS: EventDef[] = [
 			origin: Type.Optional(Type.Union([Type.Literal("user"), Type.Literal("peer"), Type.Literal("schedule"), Type.Literal("goal")], { description: "Who the run was for; peer = agent-to-agent traffic, which the quietPeers notification policy keeps silent; schedule = a scheduled task (notifies like user); goal = automatic continuation of a session goal (silent while active, notifies on final stop). The last hop of an agent-to-agent chain a user run started (A → B → A, A passes nothing more on) ends as user, so it notifies" })),
 			usage: Usage,
 			cause: Type.Optional(Type.Union([Type.Literal("user"), Type.Literal("limit"), Type.Literal("close"), Type.Literal("shutdown"), Type.Literal("restart"), Type.Literal("force")], { description: "Who stopped the run from outside; absent when it ended by itself (or in an older record)" })),
+			recalledPrompt: Type.Optional(Type.Object({
+				text: Type.String(),
+				fromSeq: Nullable(Type.Integer()),
+			}, { description: "Present when a direct user prompt was aborted before any assistant text or tool call and rolled back from the transcript so the client can restore it to the composer" })),
 		}),
 	},
 	{ type: "agent_start", persisted: true, description: "pi-agent-core lifecycle", data: Type.Object({}) },
