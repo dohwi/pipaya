@@ -20,7 +20,7 @@
 	import type { ImageBlock } from "../../lib/types";
 	import { baseName, MAX_IMAGES, previewKind, uploadFileToDraft } from "../../lib/files";
 	import { WORKSPACE_FILE_MIME } from "../../lib/workspace-edits";
-	import { dropImageToken, extractSkillNames, insertToken, mentionAt, mergeReturned, replaceMention, slashAt, tokenizeComposer, type Mention } from "../../lib/composer-text";
+	import { applyRestoredMessages, dropImageToken, extractSkillNames, insertToken, mentionAt, replaceMention, slashAt, tokenizeComposer, type Mention } from "../../lib/composer-text";
 	import ComposerEditor from "./ComposerEditor.svelte";
 	import IconButton from "../ui/IconButton.svelte";
 	import ModelPicker from "../models/ModelPicker.svelte";
@@ -226,17 +226,17 @@
 		const list = back.splice(0).sort((a, b) => (a.at ?? 0) - (b.at ?? 0));
 		untrack(() => {
 			// In the order they were sent, as one block ahead of what is typed; each one's #imageN follows the pictures before it.
-			let back = "";
-			let pictures = 0;
-			for (const m of list) {
-				const own = mergeReturned("", pictures, { text: placeholderless(m), images: m.images.length });
-				if (own.trim()) back = back ? `${back.replace(/\s+$/, "")}\n${own}` : own;
-				pictures += m.images.length;
-			}
-			if (back) {
-				text = mergeReturned(text, attached.images.length, { text: back, images: pictures });
+			const merged = applyRestoredMessages(
+				text,
+				attached.images.length,
+				reply,
+				list.map((m) => ({ text: placeholderless(m), images: m.images.length, reply: m.reply, replyBody: m.replyBody })),
+			);
+			if (merged.text !== text) {
+				text = merged.text;
 				caret = text.length;
 			}
+			reply = merged.reply;
 			attached.load(
 				[...attached.images, ...list.flatMap((m) => m.images).map((b) => ({ id: uid(), name: "image", preview: `data:${b.mimeType};base64,${b.data}`, data: b.data, mimeType: b.mimeType }))],
 				[...attached.files, ...list.flatMap((m) => m.files).map((f) => uploadFileToDraft(f))],
@@ -630,10 +630,13 @@
 		if (parsed) return void runSlash(parsed.cmd, parsed.arg), null;
 		const filtered = await extensions.filterComposer(raw);
 		if ("cancel" in filtered) return void app.toast(filtered.cancel, "error", pane.id), null;
+		const replyCopy = reply ? { ...reply } : null;
 		return {
 			key: pane.id,
 			sentText: raw,
-			body: (reply ? makeQuote(reply.text, reply.who) : "") + filtered.text,
+			body: (replyCopy ? makeQuote(replyCopy.text, replyCopy.who) : "") + filtered.text,
+			reply: replyCopy,
+			replyBody: replyCopy ? filtered.text : undefined,
 			images: attached.images.map((a) => ({ type: "image" as const, data: a.data, mimeType: a.mimeType })),
 			files: attached.files.map(({ name, data, size, mimeType }) => ({ name, data, size, mimeType })),
 		};
@@ -661,7 +664,7 @@
 			const out = await prepare();
 			if (!out) return;
 			const reqId = requestIdFor(out);
-			if (await app.send(out.body, out.images, out.key, out.files, reqId)) {
+			if (await app.send(out.body, out.images, out.key, out.files, reqId, out.reply, out.replyBody)) {
 				retryKey = null;
 				clearSent(out.key, out.sentText);
 			}
@@ -682,8 +685,8 @@
 			if (!out) return;
 			const reqId = requestIdFor(out);
 			const ok = await (kind === "steer"
-				? app.steer(out.body, out.images, out.key, out.files, reqId)
-				: app.queue(out.body, out.images, out.key, out.files, reqId));
+				? app.steer(out.body, out.images, out.key, out.files, reqId, out.reply, out.replyBody)
+				: app.queue(out.body, out.images, out.key, out.files, reqId, out.reply, out.replyBody));
 			if (ok) {
 				retryKey = null;
 				clearSent(out.key, out.sentText);

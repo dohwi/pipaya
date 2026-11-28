@@ -38,7 +38,7 @@ import { IMAGE_TOOL, imageTool, type ImageModelSettings } from "./image-generati
 import { fitImagesInContext } from "./image-guard.ts";
 import { stripOversizedToolResultImages, stripToolMessageImages, stripToolResultImages } from "./tool-images.ts";
 import { describeTools, enabledTools, planTools } from "./tool-plan.ts";
-import { afterTurn, FORCE_STOP_ERROR, isEmptyFailedReply, RESTART_RUN_ERROR, RESTART_TOOL_ERROR, runawayReason, SHUTDOWN_RUN_ERROR, SHUTDOWN_TOOL_ERROR, type RunStopCause } from "./run-guard.ts";
+import { afterTurn, FORCE_STOP_ERROR, hasAssistantOutputOrTools, isEmptyFailedReply, RESTART_RUN_ERROR, RESTART_TOOL_ERROR, runawayReason, SHUTDOWN_RUN_ERROR, SHUTDOWN_TOOL_ERROR, type RunStopCause } from "./run-guard.ts";
 import { capSubagentOutput, chooseModel, DelegateLimits, finalText, freeRole, repeatedToolSignature, runDelegateWithinDeadline, subagentReport, subagentReportReserveMs, subagentUsage, loadSubagents, SUBAGENT_NAME, SUBAGENT_TIMEOUT_MS, SUBAGENT_WRAP_UP, subagentSystem, type SubagentDef, type SubagentLimit } from "./subagents.ts";
 import { COMPLETION_RETRY, completeWithUpstreamRetry, DEFAULT_UPSTREAM_RETRY, isZeroOutputError, retryReason, sleepAbortable, withUpstreamRetry } from "./upstream-retry.ts";
 import { recoverWithFallback, retryDroppedMidStream } from "./stream-runner.ts";
@@ -48,7 +48,7 @@ import type { GuardSettings } from "./guard.ts";
 import { runPromptTemplate } from "./templates.ts";
 
 import { DEFAULT_DELEGATE_POLICY, type DelegatePolicyValue } from "./configuration.ts";
-import { DEFAULT_SYSTEM_PROMPT, FORCE_STOP_MS, IDLE_EVICT_MS, MAX_REPEATED_CALLS, MAX_RUN_TURNS, promptKey, SHUTDOWN_STOP_MS, type CompactionOutcome, type CreateSessionInput, type Deferred, type Live, type PromptMode, type RunOrigin, type SessionStatus } from "./session-types.ts";
+import { DEFAULT_SYSTEM_PROMPT, FORCE_STOP_MS, IDLE_EVICT_MS, MAX_REPEATED_CALLS, MAX_RUN_TURNS, promptKey, SHUTDOWN_STOP_MS, type CompactionOutcome, type CreateSessionInput, type Deferred, type Live, type PromptMode, type RecallCandidate, type RunOrigin, type SessionStatus } from "./session-types.ts";
 import { agentQueue, GOAL_NOTE, interruptedAssistantMessage, interruptedToolResult, noteBlock, queuedIn, queuedText, rewriteShutdownToolText, SCHEDULE_NOTE, sentText, slimAssistantEvent, unresolvedToolCalls, withoutNotes, type Waiting } from "./session-helpers.ts";
 export { DEFAULT_SYSTEM_PROMPT } from "./session-types.ts";
 export { GOAL_OPEN, NOTE_OPEN, noteBlock, SCHEDULE_OPEN } from "./session-helpers.ts";
@@ -793,6 +793,7 @@ export class SessionManager {
 			this.bus.publish(id, "message_queued", { mode, text: input.text, deferred: true });
 			return { accepted: mode };
 		}
+		const rawText = input.text;
 		const pre = await this.preprocess(id, input.text, mode, workDirOf(record));
 		if (pre.handled) return { accepted: mode };
 		input = { ...input, text: pre.text };
@@ -860,6 +861,7 @@ export class SessionManager {
 		if (origin !== "goal") this.describer.describe(id, first ? input.text : undefined, input.text, shortTitle, origin);
 		this.run(id, live, "prompt", origin, async () => {
 			await this.autoCompact(id);
+			if (live.stopCause === "user" && live.recallCandidate) return;
 			live.runSystem = undefined;
 			if (this.ext?.has("before_agent_start")) {
 				await this.ext.emit("before_agent_start", { sessionId: id, text: input.text }, id, (r) => {
@@ -867,9 +869,10 @@ export class SessionManager {
 					if (r.appendSystemPrompt) live.runSystem = { ...live.runSystem, append: `${live.runSystem?.append ?? ""}\n\n${r.appendSystemPrompt}` };
 					if (r.message) (message.content as { type: string; text?: string }[]).push({ type: "text", text: r.message });
 				});
+				if (live.stopCause === "user" && live.recallCandidate) return;
 			}
 			await live.agent.prompt(message);
-		}, message);
+		}, message, undefined, origin === "user" ? { message, text: rawText, userSeq: null } : undefined);
 		return { accepted: "prompt" };
 	}
 
@@ -1160,7 +1163,7 @@ export class SessionManager {
 	 * watcher) started it, "user" otherwise. It is stamped on run_started and run_finished so notifications can be decided
 	 * from the event alone.
 	 */
-	private run(id: string, live: Live, mode: string, origin: RunOrigin, start: () => Promise<void>, pendingPrompt?: AgentMessage, droppedSeq?: number): void {
+	private run(id: string, live: Live, mode: string, origin: RunOrigin, start: () => Promise<void>, pendingPrompt?: AgentMessage, droppedSeq?: number, recallCandidate?: RecallCandidate): void {
 		this.peers.resetRun(id);
 		this.delegates.resetRun(id);
 		live.running = true;
@@ -1178,6 +1181,7 @@ export class SessionManager {
 		live.limitReason = undefined;
 		live.forceStopped = false;
 		live.pendingPrompt = pendingPrompt;
+		live.recallCandidate = recallCandidate;
 		let releaseCutLoose = () => {};
 		const cutLoosePromise = new Promise<void>((r) => { releaseCutLoose = r; });
 		live.cutLoose = releaseCutLoose;
@@ -1272,6 +1276,7 @@ export class SessionManager {
 					}
 				}
 
+				const recalledPrompt = this.recallAbortedPrompt(id, live, shutdownStop, limited);
 				const last = live.agent.state.messages[live.agent.state.messages.length - 1];
 				const failed = last?.role === "assistant" && (last.stopReason === "error" || last.stopReason === "aborted");
 				const status: "ok" | "error" | "aborted" = shutdownStop ? "error" : intentionalAbort ? "aborted" : !failed && !error ? "ok" : "error";
@@ -1289,6 +1294,7 @@ export class SessionManager {
 					origin: settledOrigin,
 					usage: this.store.usage(id),
 					...(live.stopCause ? { cause: live.stopCause } : {}),
+					...(recalledPrompt ? { recalledPrompt } : {}),
 				});
 				if (this.closing) {
 					this.dispose(id);
@@ -1319,6 +1325,7 @@ export class SessionManager {
 				}
 				if (this.closing) this.dispose(id);
 			} finally {
+				live.recallCandidate = undefined;
 				releaseCutLoose();
 			}
 		})();
@@ -1400,8 +1407,9 @@ export class SessionManager {
 			this.run(id, live, "prompt", first.origin, async () => {
 				for (const r of rest) live.agent.followUp(r.message);
 				await this.autoCompact(id);
+				if (live.stopCause === "user" && live.recallCandidate) return;
 				await live.agent.prompt(first.message);
-			}, first.message);
+			}, first.message, undefined, first.origin === "user" ? { message: first.message, text: first.text, userSeq: null } : undefined);
 			return;
 		}
 	}
@@ -1501,6 +1509,44 @@ export class SessionManager {
 		}
 		const next = live.agent.state.messages[live.agent.state.messages.length - 1];
 		return !!next && next.role !== "assistant" && next.role !== "system";
+	}
+
+	/**
+	 * When a direct user prompt is aborted by the user before the assistant has produced any visible text or
+	 * started a tool call (nothing or thinking-only), roll the prompt (and any empty/thinking-only aborted reply)
+	 * back from memory and SQLite so clients can return it to the composer.
+	 */
+	private recallAbortedPrompt(
+		id: string,
+		live: Live,
+		shutdownStop: boolean,
+		limited: boolean,
+	): { text: string; fromSeq: number | null } | undefined {
+		const candidate = live.recallCandidate;
+		if (!candidate || live.stopCause !== "user" || shutdownStop || limited || live.forceStopped) return undefined;
+		const messages = live.agent.state.messages;
+		if (candidate.userSeq === null) {
+			// Aborted before the prompt ever reached `message_end` (e.g. during `autoCompact` or `before_agent_start`).
+			if (messages.lastIndexOf(candidate.message) >= 0) return undefined;
+			live.pendingPrompt = undefined;
+			return { text: candidate.text, fromSeq: null };
+		}
+		const idx = messages.lastIndexOf(candidate.message);
+		if (idx < 0) return undefined;
+		const tail = messages.slice(idx + 1);
+		if (tail.length > 1) return undefined;
+		if (live.nextSeq !== candidate.userSeq + 1 + tail.length) return undefined;
+		if (tail.length === 1) {
+			const reply = tail[0]!;
+			if (reply.role !== "assistant") return undefined;
+			const abortedOrEmptyErr = reply.stopReason === "aborted" || (reply.stopReason === "error" && isEmptyFailedReply(reply));
+			if (!abortedOrEmptyErr || hasAssistantOutputOrTools(reply)) return undefined;
+		}
+		this.store.deleteMessagesFrom(id, candidate.userSeq);
+		live.nextSeq = candidate.userSeq;
+		live.agent.state.messages = messages.slice(0, idx);
+		live.pendingPrompt = undefined;
+		return { text: candidate.text, fromSeq: candidate.userSeq };
 	}
 
 	/** Throws the half-written reply away (`continue()` then replaces it, without asking the model to repeat itself). */
@@ -2074,6 +2120,9 @@ export class SessionManager {
 					}
 				}
 				const seq = live.nextSeq++;
+				if (live.recallCandidate && event.message === live.recallCandidate.message) {
+					live.recallCandidate.userSeq = seq;
+				}
 				// Remember the reasoning strength this reply was written with (the session's setting can change later).
 				const st = live.agent.state;
 				if (event.message.role === "assistant" && st.model?.reasoning && st.thinkingLevel && st.thinkingLevel !== "off") {

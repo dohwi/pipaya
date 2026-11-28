@@ -128,6 +128,7 @@ export class SessionStore {
 	private stmtAppendMessage: Statement;
 	private stmtReplaceMessage: Statement;
 	private stmtDeleteLastMessage: Statement;
+	private stmtDeleteMessagesFrom: Statement;
 	private stmtNextSeq: Statement;
 	private stmtMessagesTail: Statement;
 	private stmtMessagesPrevUser: Statement;
@@ -149,6 +150,7 @@ export class SessionStore {
 		this.stmtAppendMessage = db.query("INSERT INTO messages (session_id, seq, role, data, created_at) VALUES ($sid, $seq, $role, $data, $t)");
 		this.stmtReplaceMessage = db.query("UPDATE messages SET role = $role, data = $data WHERE session_id = $sid AND seq = $seq");
 		this.stmtDeleteLastMessage = db.query("DELETE FROM messages WHERE session_id = $sid AND seq = (SELECT MAX(seq) FROM messages WHERE session_id = $sid)");
+		this.stmtDeleteMessagesFrom = db.query("DELETE FROM messages WHERE session_id = $sid AND seq >= $fromSeq");
 		this.stmtNextSeq = db.query("SELECT COALESCE(MAX(seq), -1) + 1 AS n FROM messages WHERE session_id = $sid");
 		this.stmtMessagesTail = db.query("SELECT seq, role, data, created_at FROM messages WHERE session_id = $sid AND seq > $after AND seq < $before ORDER BY seq DESC LIMIT $n");
 		this.stmtMessagesPrevUser = db.query("SELECT MAX(seq) AS s FROM messages WHERE session_id = $sid AND role = 'user' AND seq > $after AND seq < $first");
@@ -392,6 +394,10 @@ export class SessionStore {
 
 	deleteLastMessage(sessionId: string): void {
 		this.stmtDeleteLastMessage.run({ sid: sessionId });
+	}
+
+	deleteMessagesFrom(sessionId: string, fromSeq: number): void {
+		this.stmtDeleteMessagesFrom.run({ sid: sessionId, fromSeq });
 	}
 
 	nextSeq(sessionId: string): number {

@@ -6,7 +6,7 @@ import { compileModule } from "svelte/compiler";
 import ts from "typescript";
 import type { Api } from "../src/lib/api";
 import type { ChatState as ChatStateType } from "../src/lib/chat.svelte";
-import { mergeReturned } from "../src/lib/composer-text";
+import { applyRestoredMessages, mergeReturned } from "../src/lib/composer-text";
 import type { PipayaEvent } from "../src/lib/types";
 
 let ChatState: typeof ChatStateType;
@@ -129,5 +129,123 @@ describe("mergeReturned", () => {
 	});
 	test("renumbers its own #imageN after the pictures already attached", () => {
 		expect(mergeReturned("see #image1", 1, { text: "look #image1 and #image2", images: 2 })).toBe("look #image2 and #image3\nsee #image1");
+	});
+});
+
+describe("early abort prompt recall", () => {
+	const file = { name: "notes.txt", data: "aGVsbG8=", size: 5, mimeType: "text/plain" };
+
+	test("rolls back user + thinking-only assistant and restores text, attachments, and reply", () => {
+		const c = chat();
+		// Prior completed turn (seq 0, 1) must remain untouched.
+		c.apply(event("message_end", { seq: 0, message: { role: "user", content: [{ type: "text", text: "old" }] } }));
+		c.apply(event("message_end", { seq: 1, message: { role: "assistant", stopReason: "stop", content: [{ type: "text", text: "ok" }] } }));
+
+		c.addOptimisticUser("> prev\n\nnew prompt", [img], [{ path: "", name: file.name, size: file.size, mimeType: file.mimeType }]);
+		c.activePrompt = {
+			text: "> prev\n\nnew prompt",
+			images: [img],
+			files: [file],
+			at: 10,
+			reply: { text: "prev", who: "N1" },
+			replyBody: "new prompt",
+		};
+		c.apply(event("run_started", { mode: "prompt", origin: "user" }));
+		c.apply(event("message_end", { seq: 2, message: { role: "user", content: [{ type: "text", text: "> prev\n\nnew prompt" }] } }));
+		c.apply(event("message_start", { message: { role: "assistant" } }));
+		c.apply(event("message_update", { event: { type: "thinking_delta", contentIndex: 0, delta: "hmm" } }));
+		c.apply(event("message_end", { seq: 3, message: { role: "assistant", stopReason: "aborted", content: [{ type: "thinking", thinking: "hmm" }] } }));
+		c.apply(event("run_finished", { status: "aborted", error: null, durationMs: 1, origin: "user", cause: "user", usage: {}, recalledPrompt: { text: "> prev\n\nnew prompt", fromSeq: 2 } }));
+
+		expect(c.items.map((x) => (x.kind === "user" || x.kind === "assistant" ? [x.kind, x.seq] : [x.kind, null]))).toEqual([
+			["user", 0],
+			["assistant", 1],
+		]);
+		expect(c.restored).toHaveLength(1);
+		expect(JSON.parse(JSON.stringify(c.restored[0]))).toMatchObject({
+			text: "> prev\n\nnew prompt",
+			images: [img],
+			files: [file],
+			reply: { text: "prev", who: "N1" },
+			replyBody: "new prompt",
+		});
+
+		// Subsequent message reusing seq 2 is accepted (lastSeq was rolled back to 1).
+		c.apply(event("message_end", { seq: 2, message: { role: "user", content: [{ type: "text", text: "resent" }] } }));
+		expect(c.items).toHaveLength(3);
+		expect(c.items[2]).toMatchObject({ kind: "user", seq: 2 });
+	});
+
+	test("handles abort before message_end (fromSeq: null) by dropping optimistic user bubble", () => {
+		const c = chat();
+		c.addOptimisticUser("early", [], []);
+		c.activePrompt = { text: "early", images: [], files: [], at: 1 };
+		c.apply(event("run_started", { mode: "prompt", origin: "user" }));
+		c.apply(event("run_finished", { status: "aborted", error: null, durationMs: 1, origin: "user", cause: "user", usage: {}, recalledPrompt: { text: "early", fromSeq: null } }));
+
+		expect(c.items).toEqual([]);
+		expect(c.restored.map((m) => m.text)).toEqual(["early"]);
+	});
+
+	test("marks pending activePrompt as returned instead of double-restoring", () => {
+		const c = chat();
+		const own = { text: "in-flight", images: [], files: [], at: 1, pending: true };
+		c.activePrompt = own;
+		c.apply(event("run_started", { mode: "prompt", origin: "user" }));
+		c.apply(event("run_finished", { status: "aborted", error: null, durationMs: 1, origin: "user", cause: "user", usage: {}, recalledPrompt: { text: "in-flight", fromSeq: 0 } }));
+
+		expect(own.returned).toBe(true);
+		expect(c.restored).toEqual([]);
+	});
+
+	test("orders recalled prompt before simultaneously dropped steer/follow_up messages", () => {
+		const c = chat();
+		c.activePrompt = { text: "initial", images: [], files: [], at: 10 };
+		c.apply(event("run_started", { mode: "prompt", origin: "user" }));
+		c.apply(event("message_end", { seq: 0, message: { role: "user", content: [{ type: "text", text: "initial" }] } }));
+		c.mine.push({ text: "steer-msg", images: [], files: [], at: 20 }, { text: "follow-msg", images: [], files: [], at: 30 });
+		c.apply(event("message_queued", { mode: "steer", text: "steer-msg" }));
+		c.apply(event("message_queued", { mode: "follow_up", text: "follow-msg" }));
+		c.apply(event("message_dequeued", { mode: "steer", text: "steer-msg", reason: "stopped" }));
+		c.apply(event("message_dequeued", { mode: "follow_up", text: "follow-msg", reason: "stopped" }));
+		c.apply(event("run_finished", { status: "aborted", error: null, durationMs: 1, origin: "user", cause: "user", usage: {}, recalledPrompt: { text: "initial", fromSeq: 0 } }));
+
+		expect(c.items).toEqual([]);
+		expect(c.restored.map((m) => m.text)).toEqual(["initial", "steer-msg", "follow-msg"]);
+	});
+
+	test("other clients roll back transcript without polluting composer; reloaded tab that clicked abort still recovers text", () => {
+		const observer = chat();
+		observer.apply(event("run_started", { mode: "prompt", origin: "user" }));
+		observer.apply(event("message_end", { seq: 0, message: { role: "user", content: [{ type: "text", text: "other device" }] } }));
+		observer.apply(event("run_finished", { status: "aborted", error: null, durationMs: 1, origin: "user", cause: "user", usage: {}, recalledPrompt: { text: "other device", fromSeq: 0 } }));
+		expect(observer.items).toEqual([]);
+		expect(observer.restored).toEqual([]);
+
+		const reloaded = chat();
+		reloaded.apply(event("run_started", { mode: "prompt", origin: "user" }));
+		reloaded.apply(event("message_end", { seq: 0, message: { role: "user", content: [{ type: "text", text: "after reload" }] } }));
+		reloaded.abortRequested = true;
+		reloaded.apply(event("run_finished", { status: "aborted", error: null, durationMs: 1, origin: "user", cause: "user", usage: {}, recalledPrompt: { text: "after reload", fromSeq: 0 } }));
+		expect(reloaded.items).toEqual([]);
+		expect(reloaded.restored.map((m) => m.text)).toEqual(["after reload"]);
+	});
+});
+
+describe("applyRestoredMessages", () => {
+	test("restores text and reply badge cleanly when composer is empty", () => {
+		const res = applyRestoredMessages("", 0, null, [
+			{ text: "> Alice: hi\n\nmy answer", images: 0, reply: { text: "hi", who: "Alice" }, replyBody: "my answer" },
+		]);
+		expect(res).toEqual({ text: "my answer", reply: { text: "hi", who: "Alice" } });
+	});
+
+	test("preserves existing draft text and existing reply without overwriting", () => {
+		const existingReply = { text: "other", who: "Bob" };
+		const res = applyRestoredMessages("drafting #image1", 1, existingReply, [
+			{ text: "> Alice: hi\n\nrecalled #image1", images: 1, reply: { text: "hi", who: "Alice" }, replyBody: "recalled #image1" },
+		]);
+		expect(res.reply).toEqual(existingReply);
+		expect(res.text).toBe("> Alice: hi\n\nrecalled #image2\ndrafting #image1");
 	});
 });

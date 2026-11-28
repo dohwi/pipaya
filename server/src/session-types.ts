@@ -74,6 +74,15 @@ export interface CacheStats {
 	hitRate: number;
 }
 
+export interface RecallCandidate {
+	/** The exact user message object submitted to start this run. */
+	message: AgentMessage;
+	/** Original prompt text before server hints/preprocessing notes were appended. */
+	text: string;
+	/** Sequence number assigned once persisted via `message_end`; null while still pending. */
+	userSeq: number | null;
+}
+
 export interface Live {
 	agent: Agent;
 	nextSeq: number;
@@ -112,6 +121,8 @@ export interface Live {
 	cutLoose?: () => void;
 	/** Initial prompt message not yet persisted to `messages` (while `autoCompact` / `before_agent_start` runs). */
 	pendingPrompt?: AgentMessage;
+	/** Direct user prompt that started this run, eligible for rollback on an early user abort. */
+	recallCandidate?: RecallCandidate;
 	/** Who stopped the current run from outside (first one wins); undefined when it ends by itself. */
 	stopCause?: RunStopCause;
 	/** The run-limit message, set together with stopCause "limit". */

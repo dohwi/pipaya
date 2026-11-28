@@ -28,7 +28,17 @@ import type {
  * input still holds it, so a stop then marks it `returned` instead of handing it back a second time). `byHand` when the
  * user took it back out of the queue (the input takes it without the "stopped" notice).
  */
-export type Outgoing = { text: string; images: ImageBlock[]; files: UploadFile[]; at?: number; pending?: boolean; returned?: boolean; byHand?: boolean };
+export type Outgoing = {
+	text: string;
+	images: ImageBlock[];
+	files: UploadFile[];
+	at?: number;
+	pending?: boolean;
+	returned?: boolean;
+	byHand?: boolean;
+	reply?: { text: string; who?: string } | null;
+	replyBody?: string;
+};
 
 /** Concatenate the text parts of a content array (or pass a string through). */
 export function textOf(content: unknown): string {
@@ -179,6 +189,13 @@ export class ChatState {
 	 * stop that drops it (`message_dequeued` reason stopped) can hand it back instead of losing it. Matched by text.
 	 */
 	mine: Outgoing[] = [];
+	/**
+	 * The direct user prompt this client just sent to start the active run, kept with its attachments and reply
+	 * metadata until `run_finished` so an early user abort (`recalledPrompt`) can hand it back to the composer.
+	 */
+	activePrompt: Outgoing | null = null;
+	/** Set when this client clicked Stop / pressed Esc on the active run; lets a reloaded tab still recover server-recalled text. */
+	abortRequested = false;
 	/** Messages that were not sent because their run was stopped: the composer of this session takes them back once. */
 	restored = $state<Outgoing[]>([]);
 	/** Dropped by a stop while the run still winds down: handed back together when it ends (one notice, written order). */
@@ -615,6 +632,44 @@ export class ChatState {
 		}
 	}
 
+	/**
+	 * The server rolled back the prompt that started this run because the user aborted before any assistant text
+	 * or tool call. Remove the rolled-back user message (and any empty/thinking-only assistant reply or optimistic
+	 * bubble) from the tail and roll `lastSeq` back so the next prompt can reuse that seq cleanly.
+	 */
+	private rollbackRecalledPrompt(fromSeq: number | null): void {
+		if (fromSeq === null) {
+			let droppedUser = false;
+			for (let i = this.items.length - 1; i >= 0; i--) {
+				const item = this.items[i]!;
+				if (item.kind === "assistant" && item.seq === null) {
+					this.items.splice(i, 1);
+					continue;
+				}
+				if (!droppedUser && item.kind === "user" && item.seq === null) {
+					this.items.splice(i, 1);
+					droppedUser = true;
+					break;
+				}
+				if ((item.kind === "user" || item.kind === "assistant") && item.seq !== null) break;
+			}
+			return;
+		}
+		for (let i = this.items.length - 1; i >= 0; i--) {
+			const item = this.items[i]!;
+			if (item.kind === "assistant" && (item.seq === null || item.seq >= fromSeq)) {
+				this.items.splice(i, 1);
+				continue;
+			}
+			if (item.kind === "user" && (item.seq === null || item.seq >= fromSeq)) {
+				this.items.splice(i, 1);
+				continue;
+			}
+			if ((item.kind === "user" || item.kind === "assistant") && item.seq !== null && item.seq < fromSeq) break;
+		}
+		if (this.lastSeq >= fromSeq) this.lastSeq = fromSeq - 1;
+	}
+
 	private ensureStream(): AssistantItem {
 		let item = this.streamItem();
 		if (!item) {
@@ -713,6 +768,7 @@ export class ChatState {
 				this.running = true;
 				this.settled = false;
 				this.stopped = false;
+				this.abortRequested = false;
 				this.runStartedAt = Date.now();
 				if (d.mode === "retry") this.prepareRetry(typeof d.droppedSeq === "number" ? d.droppedSeq : undefined);
 				break;
@@ -736,6 +792,20 @@ export class ChatState {
 					if (run.state === "running" || run.state === "awaiting_input" || run.state === "pending") run.state = "skipped";
 				}
 				this.queued = applyQueueEvent(this.queued, "run_finished", d);
+				const recalled = d.recalledPrompt as { text?: string; fromSeq?: number | null } | undefined;
+				const ownPrompt = this.activePrompt;
+				const requestedAbort = this.abortRequested;
+				this.activePrompt = null;
+				this.abortRequested = false;
+				if (recalled && typeof recalled.text === "string") {
+					this.rollbackRecalledPrompt(typeof recalled.fromSeq === "number" ? recalled.fromSeq : null);
+					if (ownPrompt && ownPrompt.text === recalled.text) {
+						if (ownPrompt.pending) ownPrompt.returned = true;
+						else this.dropped.push(ownPrompt);
+					} else if (requestedAbort) {
+						this.dropped.push({ text: recalled.text, images: [], files: [], at: 0 });
+					}
+				}
 				this.giveBack();
 				// Only what the server still holds for after the run can be delivered later.
 				this.mine = this.mine.filter((m) => m.pending || this.queued.some((q) => q.text === m.text));
