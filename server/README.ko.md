@@ -74,7 +74,7 @@ Bun은 서버 작업 디렉터리의 `.env`를 읽습니다. `.env.example`을 �
 | POST | `/sessions` | 선택 `{title,cwd,provider,model,thinkingLevel,systemPrompt,tools}`. `cwd`는 서버의 존재하는 절대 경로이거나 기본 작업 디렉터리 기준 상대 경로(없으면 생성) |
 | POST | `/sessions/:id/compact` | 선택 `{customInstructions}`. 오래된 메시지를 요약해 모델이 요약을 대신 보게 합니다(저장된 대화 기록은 그대로). 실행 중이거나 기록이 짧으면 409, 요약 모델 실패 시 502 |
 | GET/PUT | `/compaction` | `{auto, model, thresholdPercent}`. 컨텍스트가 모델 창의 `thresholdPercent`%(30–95, 기본 90)에 이르면 프롬프트 전에 자동 압축합니다. `model`은 `{provider, model, thinkingLevel?}` 또는 `null`(세션 모델 그대로 사용) |
-| GET/PUT | `/system-model` | `{model}`: 메시지 후 백그라운드에서 세션 이름과 `purpose`(역할)를 쓰는 가벼운 모델. `{provider, model, thinkingLevel?}` 또는 `null`(끄기, 제목은 첫 메시지를 줄여 씀) |
+| GET/PUT | `/system-model` | `{model, tasks?, refreshEvery?}`: 백그라운드에서 세션 제목·`purpose`(역할)·선택 `@name`·그룹 이름을 쓰는 가벼운 모델. `model`은 `{provider, model, thinkingLevel?}` 또는 `null`(끄기), `refreshEvery`(`0` = 끄기)는 사용자 메시지 N회마다 자동 작성된 제목·역할 갱신 여부 확인 |
 | GET | `/sessions?limit=&before=&beforeId=&closed=` | 세션 목록. 다음 페이지는 `nextBefore`와 `nextBeforeId`를 함께 전달 |
 | GET/PATCH/DELETE | `/sessions/:id` | 세션 조회/수정/삭제. PATCH는 `closed`도 받습니다 |
 | POST | `/sessions/:id/messages` | `{text,mode?,images?}`; 비동기 `202` |

@@ -70,6 +70,8 @@ export interface SystemModelSettings {
 	model: ModelChoice | null;
 	/** Per-task toggles (may be absent on older servers) */
 	tasks?: SystemModelTasks;
+	/** Re-check auto-generated title and purpose every N user messages; 0 = off (may be absent on older servers) */
+	refreshEvery?: number;
 }
 export interface SystemModelSettingsInfo { settings: SystemModelSettings; defaults: SystemModelSettings }
 export interface FallbackModelSettings {

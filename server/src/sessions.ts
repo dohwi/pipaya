@@ -136,7 +136,7 @@ export class SessionManager {
 			systemModel,
 			takenNames: () => this.peers.taken(),
 			isClosing: () => this.closing,
-			updateSession: (id, patch) => this.update(id, patch),
+			updateSession: (id, patch) => this.update(id, patch, { automatic: true }),
 		});
 		this.workdirOps = new SessionWorkdirs({
 			store,
@@ -582,7 +582,7 @@ export class SessionManager {
 		return this.update(id, patch);
 	}
 
-	update(id: string, patch: SessionPatch): SessionRecord {
+	update(id: string, patch: SessionPatch, options?: { automatic?: boolean }): SessionRecord {
 		const current = this.get(id);
 		if (patch.model !== undefined && patch.provider === undefined) patch = { ...patch, ...this.splitSpec(undefined, patch.model, current.provider) };
 		const clean: SessionPatch = { ...patch };
@@ -611,6 +611,17 @@ export class SessionManager {
 		}
 		const updated = this.store.update(id, clean);
 		if (!updated) throw notFound("session");
+		if (!options?.automatic) {
+			const titleChanged = clean.title !== undefined && clean.title !== current.title;
+			const purposeChanged = clean.purpose !== undefined && clean.purpose !== current.purpose;
+			if (titleChanged || purposeChanged) {
+				this.describer.markManual(id, {
+					title: titleChanged,
+					purpose: purposeChanged && clean.purpose !== "",
+					purposeCleared: purposeChanged && clean.purpose === "",
+				});
+			}
+		}
 
 		const live = this.live.get(id);
 		if (patch.closed) {
@@ -857,7 +868,7 @@ export class SessionManager {
 		if (live.running) throw conflict('session is busy; send with mode "steer" or "follow_up"');
 		const first = this.store.nextSeq(id) === 0;
 		const shortTitle = autoTitle(inputTitle ?? input.text);
-		if (record.title === "New session" && first && origin !== "goal") this.update(id, { title: shortTitle });
+		if (record.title === "New session" && first && origin !== "goal") this.update(id, { title: shortTitle }, { automatic: true });
 		if (origin !== "goal") this.describer.describe(id, first ? input.text : undefined, input.text, shortTitle, origin);
 		this.run(id, live, "prompt", origin, async () => {
 			await this.autoCompact(id);
@@ -2129,6 +2140,9 @@ export class SessionManager {
 					(event.message as { thinkingLevel?: string }).thinkingLevel = st.thinkingLevel;
 				}
 				this.store.appendMessage(sessionId, seq, event.message);
+				if (event.message.role === "user" && live.origin !== "goal") {
+					this.describer.maybeRefresh(sessionId);
+				}
 				if (event.message.role === "assistant" && event.message.stopReason !== "error" && event.message.stopReason !== "aborted") {
 					const u = (event.message as { usage?: { input?: number; cacheRead?: number; cacheWrite?: number } }).usage;
 					const turnInput = (u?.input ?? 0) + (u?.cacheRead ?? 0) + (u?.cacheWrite ?? 0);

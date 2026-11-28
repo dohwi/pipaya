@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Segmented from "../ui/Segmented.svelte";
 	import SettingRow from "../ui/SettingRow.svelte";
 	import Switch from "../ui/Switch.svelte";
 	import { t } from "../../lib/i18n";
@@ -13,10 +14,12 @@
 		sessionName: false,
 		groupName: true,
 	};
+	const REFRESH_PRESETS = [0, 5, 10, 20] as const;
 
 	/**
 	 * The light model the server uses for its own background jobs, plus per-task toggles deciding which jobs it runs
-	 * (session title, session role, session `@name`, and split group name). Hidden when the settings cannot be read.
+	 * (session title, session role, session `@name`, and split group name) and optional periodic refresh of
+	 * auto-written title/purpose. Hidden when the settings cannot be read.
 	 */
 	let { serverId, models, providers }: { serverId: string; models: ModelInfo[]; providers: ProviderInfo[] } = $props();
 
@@ -27,16 +30,39 @@
 	);
 	const settings = $derived(setting.settings);
 	const supportsTasks = $derived(settings?.tasks !== undefined);
+	const supportsRefresh = $derived(settings?.refreshEvery !== undefined);
 	const tasks = $derived<SystemModelTasks>({ ...FALLBACK_TASKS, ...(settings?.tasks ?? {}) });
+	const refreshEvery = $derived(settings?.refreshEvery ?? 0);
 	const anyTask = $derived(tasks.sessionTitle || tasks.sessionPurpose || tasks.sessionName || tasks.groupName);
+	const canRefresh = $derived(Boolean(settings?.model) && (tasks.sessionTitle || tasks.sessionPurpose));
+	const refreshOptions = $derived.by(() => {
+		const values: number[] = [...REFRESH_PRESETS];
+		if (refreshEvery > 0 && !values.includes(refreshEvery)) {
+			values.push(refreshEvery);
+			values.sort((a, b) => a - b);
+		}
+		const disabled = setting.busy || !canRefresh;
+		return values.map((n) => ({
+			id: String(n),
+			label: n === 0 ? t("끄기") : t("{n}개마다", { n }),
+			disabled,
+		}));
+	});
 	const info = $derived(settings?.model ? models.find((m) => m.provider === settings!.model!.provider && m.id === settings!.model!.model) : undefined);
 	/** The saved model's connection exists but has no usable key (its models are then missing from the list). */
 	const noKey = $derived(Boolean(settings?.model) && providers.some((p) => p.id === settings!.model!.provider && !p.configured));
 	const own = $derived(serverId === app.serverId); // favourites are the open server's
 
+	const saveSettings = (next: { model: SystemModelSettings["model"]; tasks?: SystemModelTasks; refreshEvery?: number }) => {
+		const body: SystemModelSettings = { model: next.model };
+		if (supportsTasks) body.tasks = next.tasks ?? tasks;
+		if (supportsRefresh) body.refreshEvery = next.refreshEvery ?? refreshEvery;
+		void setting.save(body);
+	};
+
 	const toggleTask = (key: keyof SystemModelTasks, on: boolean) => {
 		if (!settings) return;
-		void setting.save({ model: settings.model, tasks: { ...tasks, [key]: on } });
+		saveSettings({ model: settings.model, tasks: { ...tasks, [key]: on } });
 	};
 </script>
 
@@ -58,7 +84,7 @@
 			disabled={setting.busy}
 			invalid={Boolean(s.model) && (noKey || !info || !info.configured)}
 			label={t("시스템 모델")}
-			onpick={(c) => void setting.save(supportsTasks ? { model: c, tasks } : { model: c })}
+			onpick={(c) => saveSettings({ model: c })}
 		/>
 		<p class="hint note">
 			{#if !s.model}
@@ -89,6 +115,24 @@
 				</SettingRow>
 			</div>
 		{/if}
+		{#if supportsRefresh}
+			<div class="refresh">
+				<SettingRow
+					label={t("중간 자동 갱신")}
+					hint={t("설정한 메시지 수마다 작업 방향이 바뀌었을 때만 대화 제목과 역할을 갱신합니다 (직접 바꾼 값과 @이름은 유지)")}
+					dim={!canRefresh}
+				>
+					<Segmented
+						size="sm"
+						full={false}
+						label={t("중간 자동 갱신")}
+						value={String(refreshEvery)}
+						onchange={(id) => saveSettings({ model: s.model, refreshEvery: Number(id) })}
+						options={refreshOptions}
+					/>
+				</SettingRow>
+			</div>
+		{/if}
 		{#if setting.error}<p class="hint note" role="alert">{setting.error}</p>{/if}
 	</section>
 {/if}
@@ -105,7 +149,8 @@
 	.bad {
 		color: var(--danger);
 	}
-	.tasks {
+	.tasks,
+	.refresh {
 		display: flex;
 		flex-direction: column;
 		gap: 12px;
