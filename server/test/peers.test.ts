@@ -316,7 +316,7 @@ describe("PeerService.forget", () => {
 	test("clears per-session sends, chains and reported entries on deletion", async () => {
 		const { PeerService } = await import("../src/peers.ts");
 		const svc = new PeerService({
-			store: {} as any,
+			store: { watchers: () => [], watching: () => [], unwatch: () => {} } as any,
 			deliver: async () => {},
 			create: async () => ({} as any),
 			update: () => {},

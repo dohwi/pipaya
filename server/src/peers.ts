@@ -103,8 +103,8 @@ export interface PeerHost {
 	store: SessionStore;
 	groups(): GroupRef[];
 	isRunning(id: string): boolean;
-	/** Queue a user message: `follow_up` while the session works, otherwise `prompt`. */
-	deliver(id: string, text: string, mode: "prompt" | "steer" | "follow_up"): Promise<unknown>;
+	/** Queue a user message: `auto` picks `follow_up` (or `busyMode`) if running at delivery time, otherwise `prompt`. */
+	deliver(id: string, text: string, mode: "prompt" | "steer" | "follow_up" | "auto", busyMode?: "steer" | "follow_up"): Promise<{ accepted: "prompt" | "steer" | "follow_up" } | void>;
 	/** Change a session's name and tell the clients. */
 	rename(id: string, name: string): void;
 	/** Stop a session's current run; false when there was nothing to stop. */
@@ -134,6 +134,9 @@ export interface PeerHost {
 export class PeerService {
 	/** `peer(action=send)` calls in each session's current run. */
 	private sends = new Map<string, number>();
+
+	/** Sessions that `id` directly messaged via `peer(action=send)` during its current run; avoids duplicate normal-completion reports. */
+	private repliedTo = new Map<string, Set<string>>();
 
 	/** Questions already reported to a watcher (`sessionId:toolCallId`), so a restart or replay cannot report one twice. */
 	private reported = new Set<string>();
@@ -167,7 +170,7 @@ export class PeerService {
 	private tell(watcher: string, body: string): void {
 		const r = this.host.store.get(watcher);
 		if (!r || r.closed) return;
-		void this.host.deliver(watcher, body, this.host.isRunning(watcher) ? "follow_up" : "prompt").catch(() => {});
+		void this.host.deliver(watcher, body, "auto").catch(() => {});
 	}
 
 	/** A watched session asks its user something and waits: nobody would notice, so the watchers hear it now (and may answer with peer(action=answer)). */
@@ -178,12 +181,14 @@ export class PeerService {
 		for (const k of this.reported) {
 			if (k.startsWith(prefix) && !activeIds.has(k) && k !== `${id}:${q.toolCallId}`) this.reported.delete(k);
 		}
+		const target = this.host.store.get(id);
+		if (!target || target.closed) return;
 		const watching = this.host.store.watchers(id);
 		if (!watching.length) return;
 		const key = `${id}:${q.toolCallId}`;
 		if (this.reported.has(key)) return;
 		this.reported.add(key);
-		const name = this.host.store.get(id)?.name ?? "session";
+		const name = target.name ?? "session";
 		const items = q.items?.length ? q.items : [{ question: q.question, options: q.options, recommended: q.recommended, multiple: q.multiple, allowFreeText: q.allowFreeText }];
 		const lines = items.map((it, i) => `${items.length > 1 ? `${i + 1}. ` : ""}${oneLine(it.question, 500)}${it.options?.length ? ` [options: ${it.options.join(" | ")}]` : ""}${it.recommended ? ` (recommended: ${it.recommended})` : ""}${it.multiple ? " (several may be picked: one per line)" : it.allowFreeText ? "" : " (pick one option)"}`);
 		const body = `[from the server: @${name} is waiting for an answer and does nothing until it gets one. No reply to this message needed.]\n${lines.join("\n")}\nAnswer it with peer(action=answer) (name: ${name}) if you can decide with what you know; if it needs the user's judgment, ask the user instead.`;
@@ -193,17 +198,35 @@ export class PeerService {
 	/** A watched session ended its run: tell each watcher once. The report asks for no reply, so it cannot start a loop. */
 	private finished(id: string, result: { status?: string; error?: string | null }): void {
 		const watching = this.host.store.watchers(id);
+		const replied = this.repliedTo.get(id);
+		this.repliedTo.delete(id);
 		if (!watching.length) return;
 		this.host.store.unwatch(id);
+		const target = this.host.store.get(id);
+		if (!target || target.closed) return;
 		const b = this.brief(id);
-		const name = b?.name ?? this.host.store.get(id)?.name ?? "session";
-		const state = result.status === "ok" || !result.status ? "finished its run" : `ended its run (${result.status}${result.error ? `: ${oneLine(result.error, 200)}` : ""})`;
+		const name = b?.name ?? target.name ?? "session";
+		const ok = result.status === "ok" || !result.status;
+		const state = ok ? "finished its run" : `ended its run (${result.status}${result.error ? `: ${oneLine(result.error, 200)}` : ""})`;
 		const body = `[from the server: @${name} ${state}. This is a report you asked for; no reply needed.]${b?.branch ? `\nbranch: ${b.branch}` : ""}${b?.last ? `\nlast words: "${oneLine(b.last, 400)}"` : ""}\nUse peer(action=read) for more, peer(action=send) for follow-up work, peer(action=close) when it is done.`;
 		for (const w of watching) {
-			const r = this.host.store.get(w);
-			if (!r || r.closed) continue;
-			void this.host.deliver(w, body, this.host.isRunning(w) ? "follow_up" : "prompt").catch(() => {});
+			if (ok && replied?.has(w)) continue;
+			this.tell(w, body);
 		}
+	}
+
+	/** True while `watcherId` still watches at least one open session that has not already sent a final direct reply to it this run. */
+	private hasPendingWatches(watcherId: string): boolean {
+		const targets = this.host.store.watching(watcherId);
+		for (const targetId of targets) {
+			if (!this.repliedTo.get(targetId)?.has(watcherId)) return true;
+		}
+		return false;
+	}
+
+	/** Called when a session runs a non-peer tool: any earlier peer(send) was a progress update, not its final reply. */
+	noteWork(id: string): void {
+		this.repliedTo.delete(id);
 	}
 
 	/**
@@ -214,35 +237,51 @@ export class PeerService {
 
 	/**
 	 * A run of `id` ends; returns the origin its `run_finished` should carry. A user run that passes work on (A → B)
-	 * opens a chain; the peer runs that follow (B → A → B …) stay "peer" while they pass work on; the first peer run of
-	 * that session which passes nothing on is the chain's result, which the person waits for, so it ends as "user" and
-	 * notifies. Sessions whose user run passed nothing on (B) stay quiet. Call before the next run resets `sends`.
+	 * opens a chain; the peer runs that follow (B → A → B …) stay "peer" while they pass work on or still have watched
+	 * workers running; the first peer run of that session which passes nothing on and has no pending watches left is the
+	 * chain's result, which the person waits for, so it ends as "user" and notifies. Sessions whose user run passed
+	 * nothing on (B) stay quiet. Call before the next run resets `sends`.
 	 */
 	settleRun(id: string, origin: RunOrigin, status: string): RunOrigin {
 		if (status === "aborted") return origin; // a stopped run is silent anyway and decides nothing about the chain
 		const sent = (this.sends.get(id) ?? 0) > 0;
+		const pending = this.hasPendingWatches(id);
 		if (origin !== "peer") {
-			if (sent) this.chains.add(id);
+			if (sent || pending) this.chains.add(id);
 			else this.chains.delete(id);
 			return origin;
 		}
-		if (sent || !this.chains.has(id)) return origin;
+		if (sent || pending || !this.chains.has(id)) return origin;
 		this.chains.delete(id);
 		return "user";
 	}
 
-	/** Starts a new run of this session: its send allowance is full again. */
+	/** Starts a new run of this session: its send allowance and direct-reply tracking reset. */
 	resetRun(id: string): void {
 		this.sends.delete(id);
+		this.repliedTo.delete(id);
+	}
+
+	/** Clears watch rows, per-run state, and stale watcher chains when a session is closed. */
+	onClosed(id: string): void {
+		const watchers = this.host.store.watchers(id);
+		this.host.store.unwatch(id);
+		this.sends.delete(id);
+		this.chains.delete(id);
+		this.repliedTo.delete(id);
+		const prefix = `${id}:`;
+		for (const k of this.reported) if (k.startsWith(prefix)) this.reported.delete(k);
+		for (const w of watchers) {
+			if (this.chains.has(w) && !this.hasPendingWatches(w) && !this.host.isRunning(w)) {
+				this.chains.delete(w);
+			}
+		}
 	}
 
 	/** Drops per-session in-memory bookkeeping when a session is permanently deleted. */
 	forget(id: string): void {
-		this.sends.delete(id);
-		this.chains.delete(id);
+		this.onClosed(id);
 		this.createLocks.delete(id);
-		const prefix = `${id}:`;
-		for (const k of this.reported) if (k.startsWith(prefix)) this.reported.delete(k);
 	}
 
 	// ── names ───────────────────────────────────────────────────────────────
@@ -310,14 +349,24 @@ export class PeerService {
 		const done = await Promise.all(targets.map(async (t) => {
 			const busy = this.host.isRunning(t.id);
 			const had = this.host.store.watchers(t.id).includes(selfId);
-			if (opts.notify) this.host.store.watch(t.id, selfId);
+			if (opts.notify) {
+				this.host.store.watch(t.id, selfId);
+				this.repliedTo.get(t.id)?.delete(selfId);
+			}
+			let replied = this.repliedTo.get(selfId);
+			const hadReplied = replied?.has(t.id) ?? false;
+			if (!replied) { replied = new Set(); this.repliedTo.set(selfId, replied); }
+			replied.add(t.id);
+			let res: { accepted: "prompt" | "steer" | "follow_up" } | void;
 			try {
-				await this.host.deliver(t.id, body, busy ? (opts.mode ?? "follow_up") : "prompt");
+				res = await this.host.deliver(t.id, body, "auto", opts.mode);
 			} catch (e) {
 				if (opts.notify && !had) this.host.store.unwatch(t.id, selfId);
+				if (!hadReplied) this.repliedTo.get(selfId)?.delete(t.id);
 				throw e;
 			}
-			return `@${t.name}${busy ? (opts.mode === "steer" ? " (busy; steered into its current run)" : " (busy; waits for its turn to end)") : ""}`;
+			const accepted = res?.accepted ?? (busy ? (opts.mode ?? "follow_up") : "prompt");
+			return `@${t.name}${accepted === "steer" ? " (busy; steered into its current run)" : accepted === "follow_up" ? " (busy; waits for its turn to end)" : ""}`;
 		}));
 		return `Sent to ${group ? `group @${name}: ` : ""}${done.join(", ")}. They work on their own; ${opts.notify ? "you get one report when each ends its run" : "use peer(action=read) to check on them later"}.`;
 	}
@@ -339,6 +388,7 @@ export class PeerService {
 	/** `peer(action=abort)`: stop the current run of another session. */
 	abort(selfId: string, name: string): string {
 		const peer = this.find(selfId, name.replace(/^@/, ""));
+		if (this.host.isRunning(peer.id)) this.host.store.unwatch(peer.id, selfId);
 		return this.host.abort(peer.id) ? `Stopped @${peer.name}.` : `@${peer.name} was not working.`;
 	}
 
@@ -394,8 +444,9 @@ export class PeerService {
 		const peer = action === "resume" ? this.findAny(selfId, name) : this.find(selfId, name.replace(/^@/, ""));
 		switch (action) {
 			case "close":
+				if (this.host.isRunning(peer.id)) throw conflict(`@${peer.name} is still working; stop it with peer(action=abort) first`);
 				this.host.update(peer.id, { closed: true });
-				return `Closed @${peer.name} (its work is stopped; resume it later with action resume, it keeps its name).`;
+				return `Closed @${peer.name} (resume it later with action resume, it keeps its name).`;
 			case "resume":
 				if (!peer.closed) return `@${peer.name} is already open.`;
 				this.host.update(peer.id, { closed: false });
