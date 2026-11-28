@@ -74,7 +74,7 @@ Register endpoints and models through `/configuration/providers/:id` (or the cli
 | POST | `/sessions` | Optional `{title,cwd,provider,model,thinkingLevel,systemPrompt,tools}`. `cwd` is an absolute existing directory anywhere on the server, or relative to the default working directory (created if missing) |
 | POST | `/sessions/:id/compact` | Optional `{customInstructions}`. Summarizes older messages; the model then sees the summary instead of them (the stored transcript is unchanged). 409 while running or too short, 502 if the summary model fails |
 | GET/PUT | `/compaction` | `{auto, model, thresholdPercent}`. Auto-compaction runs before a prompt once the context reaches `thresholdPercent` (30–95, default 90) of the model window. `model` is `{provider, model, thinkingLevel?}` or `null` = use the session's own model for the summary |
-| GET/PUT | `/system-model` | `{model}`: the light model that names sessions and writes their `purpose` (role) in the background after a message. `{provider, model, thinkingLevel?}` or `null` = off (titles are the first message cut short) |
+| GET/PUT | `/system-model` | `{model, tasks?, refreshEvery?}`: the light model that writes session titles, `purpose` (role), optional `@name`, and group names in the background. `model` is `{provider, model, thinkingLevel?}` or `null` = off; `refreshEvery` (`0` = off) re-checks auto-written title/purpose every N user messages |
 | GET | `/sessions?limit=&before=&beforeId=&closed=` | Sessions; pass `nextBefore` and `nextBeforeId` together for the next page |
 | GET/PATCH/DELETE | `/sessions/:id` | Read/update/delete a session; PATCH also accepts `closed` |
 | POST | `/sessions/:id/messages` | `{text,mode?,images?}`; async `202` |

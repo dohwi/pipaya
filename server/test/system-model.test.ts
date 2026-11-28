@@ -5,15 +5,23 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { buildApp, type App } from "../src/app.ts";
 import type { Config } from "../src/config.ts";
+import { openDb } from "../src/db.ts";
 import { codenamePrefixOf } from "../src/member-names.ts";
+import { SessionDescriber } from "../src/session-describer.ts";
+import { SessionStore } from "../src/store.ts";
 import {
+	DEFAULT_REFRESH_EVERY,
 	DEFAULT_SYSTEM_MODEL_TASKS,
+	describeRefreshRequest,
+	describeRefreshSystemPrompt,
 	describeRequest,
 	describeSystemPrompt,
 	groupNameRequest,
 	parseDescription,
 	parseGroupName,
+	parseRefreshDescription,
 	sanitizeSessionName,
+	SystemModelSettings,
 	uniqueSessionName,
 } from "../src/system-model.ts";
 import { ECHO_MODEL, echoProviderBody, startEchoUpstream, type EchoUpstream } from "./support/openai-upstream.ts";
@@ -93,13 +101,52 @@ describe("parseDescription and session names", () => {
 		expect(r).toContain("Latest user message:\nlater");
 		expect(describeRequest("/w", "same", "same")).not.toContain("Latest");
 	});
+	test("refresh prompt, request, and parser handle null keep-as-is and multi-JSON replies", () => {
+		const titleOnly = describeRefreshSystemPrompt({ title: true });
+		expect(titleOnly).toContain('"title": "..." | null');
+		expect(titleOnly).not.toContain('"purpose"');
+		const req = describeRefreshRequest({
+			cwd: "/w",
+			currentTitle: "Old title",
+			currentPurpose: "Old purpose",
+			first: "start work",
+			recent: ["step 2", "pivot to billing"],
+		});
+		expect(req).toContain("Current title: Old title");
+		expect(req).toContain("Current purpose: Old purpose");
+		expect(req).toContain("First user message:\nstart work");
+		expect(req).toContain("1. step 2\n2. pivot to billing");
+		expect(describeRefreshRequest({ cwd: "/w", first: "only", recent: ["only"] })).not.toContain("Recent user messages");
+
+		expect(parseRefreshDescription('{"title": null, "purpose": null}')).toEqual({ title: null, purpose: null });
+		expect(parseRefreshDescription('```json\n{"title": "Billing webhook.", "purpose": null}\n```')).toEqual({
+			title: "Billing webhook",
+			purpose: null,
+		});
+		// Multiple JSON blocks (e.g. quoted earlier JSON or echo upstream) pick the last valid object
+		expect(
+			parseRefreshDescription('Earlier "quote {"title": "Old", "purpose": "old"}\nLatest: {"title": "New", "purpose": null}'),
+		).toEqual({ title: "New", purpose: null });
+		// Unbalanced opening brace in prose before the real JSON still parses
+		expect(parseRefreshDescription('Note { see below: {"title": "Recovered", "purpose": null}')).toEqual({
+			title: "Recovered",
+			purpose: null,
+		});
+		expect(parseRefreshDescription('{"title": "   "}', { title: true })).toEqual({ title: null });
+		expect(parseRefreshDescription("not json")).toBeNull();
+		expect(parseRefreshDescription('{"other": "value"}')).toBeNull();
+		expect(parseRefreshDescription('{"title": 123}', { title: true })).toBeNull();
+	});
 });
 
 describe("system model", () => {
 	test("is off by default with default task toggles, saves a model, rejects unknown ones", async () => {
-		const expected = { model: null, tasks: DEFAULT_SYSTEM_MODEL_TASKS() };
+		const expected = { model: null, tasks: DEFAULT_SYSTEM_MODEL_TASKS(), refreshEvery: DEFAULT_REFRESH_EVERY };
 		expect((await api("GET", "/system-model")).json).toEqual({ settings: expected, defaults: expected });
 		expect((await api("PUT", "/system-model", { model: { provider: "echo", model: "nope" } })).status).toBe(400);
+		expect((await api("PUT", "/system-model", { model: null, refreshEvery: -1 })).status).toBe(400);
+		expect((await api("PUT", "/system-model", { model: null, refreshEvery: 101 })).status).toBe(400);
+		expect((await api("PUT", "/system-model", { model: null, refreshEvery: 2.5 })).status).toBe(400);
 		expect((await api("PUT", "/system-model", {})).status).toBe(400);
 	});
 
@@ -293,6 +340,192 @@ describe("system model", () => {
 		const loaded = (await api("GET", "/system-model")).json.settings;
 		expect(loaded.model).toEqual({ provider: "echo", model: LIGHT.id });
 		expect(loaded.tasks).toEqual({ sessionTitle: true, sessionPurpose: true, sessionName: true, groupName: true });
+		expect(loaded.refreshEvery).toBe(0);
+
+		// Invalid refreshEvery values in DB (negative, > max, float) fall back to 0 without losing model/tasks
+		for (const badRefresh of [-5, 101, 2.5, "5"]) {
+			const rawDb2 = new Database(join(dir, "db.sqlite"), { strict: true });
+			try {
+				rawDb2.query("INSERT INTO settings (key, data) VALUES ('system_model', $data) ON CONFLICT(key) DO UPDATE SET data = $data").run({
+					data: JSON.stringify({ model: { provider: "echo", model: LIGHT.id }, tasks: { sessionTitle: true }, refreshEvery: badRefresh }),
+				});
+			} finally {
+				rawDb2.close();
+			}
+			expect((await api("GET", "/system-model")).json.settings.refreshEvery).toBe(0);
+		}
+	});
+
+	test("periodic refresh updates auto-written title/purpose every N user messages while protecting manual edits and @name", async () => {
+		// Configure refreshEvery = 3 with title, purpose, and sessionName enabled
+		const put = await api("PUT", "/system-model", {
+			model: { provider: "echo", model: LIGHT.id },
+			tasks: { sessionTitle: true, sessionPurpose: true, sessionName: true, groupName: false },
+			refreshEvery: 3,
+		});
+		expect(put.status).toBe(200);
+		expect(put.json.settings.refreshEvery).toBe(3);
+		await settle();
+
+		// Omitting refreshEvery preserves the saved interval
+		const keep = await api("PUT", "/system-model", { model: { provider: "echo", model: LIGHT.id } });
+		expect(keep.json.settings.refreshEvery).toBe(3);
+		await settle();
+
+		const id = await newSession();
+		upstream.requests.length = 0;
+		// Message 1: initial describe sets title, purpose, and @name
+		await api("POST", `/sessions/${id}/messages`, { text: '{"title": "Auth bug", "purpose": "fix login flow", "name": "auth-bug"}' });
+		await settle();
+		let s = (await api("GET", `/sessions/${id}`)).json;
+		expect(s.title).toBe("Auth bug");
+		expect(s.purpose).toBe("fix login flow");
+		expect(s.name).toBe("auth-bug");
+		expect(upstream.requests.filter((r) => r.body.model === LIGHT.id)).toHaveLength(1);
+
+		// Messages 2 and 3: below refreshEvery=3 -> zero system-model calls
+		upstream.requests.length = 0;
+		await api("POST", `/sessions/${id}/messages`, { text: "checking logs" });
+		await settle();
+		await api("POST", `/sessions/${id}/messages`, { text: "still debugging auth" });
+		await settle();
+		expect(upstream.requests.filter((r) => r.body.model === LIGHT.id)).toHaveLength(0);
+
+		// Message 4 (3 messages after initial): triggers refresh; updates title & purpose, keeps @name stable
+		upstream.requests.length = 0;
+		await api("POST", `/sessions/${id}/messages`, { text: '{"title": "Billing refactor", "purpose": "migrate billing webhooks", "name": "billing-new"}' });
+		await settle();
+		s = (await api("GET", `/sessions/${id}`)).json;
+		expect(s.title).toBe("Billing refactor");
+		expect(s.purpose).toBe("migrate billing webhooks");
+		expect(s.name).toBe("auth-bug"); // @name never mutates on periodic refresh
+		const refreshCalls = upstream.requests.filter((r) => r.body.model === LIGHT.id);
+		expect(refreshCalls).toHaveLength(1);
+		expect(refreshCalls[0]!.body.messages[0].content).toContain("review a coding-agent session");
+		expect(refreshCalls[0]!.body.messages[1].content).toContain("Current title: Auth bug");
+		expect(refreshCalls[0]!.body.messages[1].content).toContain("Current purpose: fix login flow");
+
+		// Messages 5 and 6: below next threshold -> zero system-model calls
+		upstream.requests.length = 0;
+		await api("POST", `/sessions/${id}/messages`, { text: "adding webhook tests" });
+		await settle();
+		await api("POST", `/sessions/${id}/messages`, { text: "running test suite" });
+		await settle();
+		expect(upstream.requests.filter((r) => r.body.model === LIGHT.id)).toHaveLength(0);
+
+		// Message 7: model returns null (no topic shift) -> keeps labels, emits no session_updated, advances counter
+		const updatedEvents: unknown[] = [];
+		const unsub = app.bus.subscribe((e) => {
+			if (e.sessionId === id && e.type === "session_updated") updatedEvents.push(e);
+		});
+		try {
+			upstream.requests.length = 0;
+			await api("POST", `/sessions/${id}/messages`, { text: '{"title": null, "purpose": null}' });
+			await settle();
+		} finally {
+			unsub();
+		}
+		expect(upstream.requests.filter((r) => r.body.model === LIGHT.id)).toHaveLength(1);
+		expect(updatedEvents).toHaveLength(0);
+		s = (await api("GET", `/sessions/${id}`)).json;
+		expect(s.title).toBe("Billing refactor");
+		expect(s.purpose).toBe("migrate billing webhooks");
+
+		// Message 8: counter advanced on null response -> zero calls
+		upstream.requests.length = 0;
+		await api("POST", `/sessions/${id}/messages`, { text: "another follow-up" });
+		await settle();
+		expect(upstream.requests.filter((r) => r.body.model === LIGHT.id)).toHaveLength(0);
+
+		// No-op PATCH sending the same title/purpose does not lock them out of periodic refresh
+		await api("PATCH", `/sessions/${id}`, { title: "Billing refactor", purpose: "migrate billing webhooks" });
+
+		// Manual title rename locks title while purpose remains eligible for refresh (even across memory clear)
+		await api("PATCH", `/sessions/${id}`, { title: "Pinned manually" });
+		await api("POST", `/sessions/${id}/messages`, { text: "step 9" });
+		await settle();
+		upstream.requests.length = 0;
+		// Message 10 (3 messages after #7): only purpose is requested and updated; manual title stays untouched
+		await api("POST", `/sessions/${id}/messages`, { text: '{"title": "Should not overwrite", "purpose": "docs and release prep"}' });
+		await settle();
+		s = (await api("GET", `/sessions/${id}`)).json;
+		expect(s.title).toBe("Pinned manually");
+		expect(s.purpose).toBe("docs and release prep");
+		const purposeOnlyCalls = upstream.requests.filter((r) => r.body.model === LIGHT.id);
+		expect(purposeOnlyCalls).toHaveLength(1);
+		expect(purposeOnlyCalls[0]!.body.messages[0].content).not.toContain('"title"');
+		expect(purposeOnlyCalls[0]!.body.messages[0].content).toContain('"purpose"');
+
+		// Manually editing purpose too means neither field is auto-managed -> zero refresh calls
+		await api("PATCH", `/sessions/${id}`, { purpose: "Pinned role" });
+		upstream.requests.length = 0;
+		for (const msg of ["m11", "m12", '{"title": "Nope", "purpose": "Nope"}']) {
+			await api("POST", `/sessions/${id}/messages`, { text: msg });
+			await settle();
+		}
+		expect(upstream.requests.filter((r) => r.body.model === LIGHT.id)).toHaveLength(0);
+		s = (await api("GET", `/sessions/${id}`)).json;
+		expect(s.title).toBe("Pinned manually");
+		expect(s.purpose).toBe("Pinned role");
+
+		// Clearing purpose allows regeneration and re-enables auto-refresh for purpose
+		await api("PATCH", `/sessions/${id}`, { purpose: "" });
+		upstream.requests.length = 0;
+		await api("POST", `/sessions/${id}/messages`, { text: '{"purpose": "regenerated role"}' });
+		await settle();
+		expect((await api("GET", `/sessions/${id}`)).json.purpose).toBe("regenerated role");
+		expect(upstream.requests.filter((r) => r.body.model === LIGHT.id)).toHaveLength(1);
+
+		// Setting refreshEvery back to 0 (falsy) turns periodic refresh off
+		const off = await api("PUT", "/system-model", { model: { provider: "echo", model: LIGHT.id }, refreshEvery: 0 });
+		expect(off.json.settings.refreshEvery).toBe(0);
+		await settle();
+		upstream.requests.length = 0;
+		for (const msg of ["off1", "off2", '{"purpose": "should not refresh"}']) {
+			await api("POST", `/sessions/${id}/messages`, { text: msg });
+			await settle();
+		}
+		expect(upstream.requests.filter((r) => r.body.model === LIGHT.id)).toHaveLength(0);
+		expect((await api("GET", `/sessions/${id}`)).json.purpose).toBe("regenerated role");
+	});
+
+	test("periodic refresh respects task toggles and keeps explicit creation titles untouched", async () => {
+		await api("PUT", "/system-model", {
+			model: { provider: "echo", model: LIGHT.id },
+			tasks: { sessionTitle: true, sessionPurpose: false, sessionName: false, groupName: false },
+			refreshEvery: 2,
+		});
+		await settle();
+
+		// Session created with explicit title -> never overwritten initially or on refresh
+		const customId = (await api("POST", "/sessions", { cwd: ws, title: "Explicit Session" })).json.id as string;
+		upstream.requests.length = 0;
+		for (const msg of ['{"title": "Nope 1"}', "msg 2", '{"title": "Nope 2"}']) {
+			await api("POST", `/sessions/${customId}/messages`, { text: msg });
+			await settle();
+		}
+		expect(upstream.requests.filter((r) => r.body.model === LIGHT.id)).toHaveLength(0);
+		expect((await api("GET", `/sessions/${customId}`)).json.title).toBe("Explicit Session");
+
+		// Session with only sessionTitle enabled refreshes only title (never writes purpose)
+		const titleOnlyId = await newSession();
+		await api("POST", `/sessions/${titleOnlyId}/messages`, { text: '{"title": "Start topic", "purpose": "ignored"}' });
+		await settle();
+		expect((await api("GET", `/sessions/${titleOnlyId}`)).json.title).toBe("Start topic");
+		expect((await api("GET", `/sessions/${titleOnlyId}`)).json.purpose).toBe("");
+		await api("POST", `/sessions/${titleOnlyId}/messages`, { text: "second message" });
+		await settle();
+		upstream.requests.length = 0;
+		await api("POST", `/sessions/${titleOnlyId}/messages`, { text: '{"title": "Updated topic", "purpose": "still ignored"}' });
+		await settle();
+		const s = (await api("GET", `/sessions/${titleOnlyId}`)).json;
+		expect(s.title).toBe("Updated topic");
+		expect(s.purpose).toBe("");
+		expect(upstream.requests.filter((r) => r.body.model === LIGHT.id)).toHaveLength(1);
+
+		// Reset refreshEvery to 0 so subsequent tests start clean
+		await api("PUT", "/system-model", { model: { provider: "echo", model: LIGHT.id }, refreshEvery: 0 });
+		await settle();
 	});
 
 	test("groupName toggle controls automatic split-group naming", async () => {
@@ -330,6 +563,120 @@ describe("system model", () => {
 		expect(upstream.requests.filter((r) => r.body.model === LIGHT.id).length).toBeGreaterThanOrEqual(1);
 		const updated = (await api("GET", "/groups")).json.groups.find((x: { id: string }) => x.id === gOn.id);
 		expect(updated.name).not.toBe("Group 2");
+	});
+	test("periodic refresh handles in-flight manual rename, mid-flight delete, and count rewind safely", async () => {
+		const unitDir = mkdtempSync(join(tmpdir(), "pipaya-describer-unit-"));
+		const db = openDb(join(unitDir, "db.sqlite"));
+		try {
+			const store = new SessionStore(db);
+			const model = { provider: "mock", id: "light", name: "Light", contextWindow: 8192, maxTokens: 1024, reasoning: false, vision: false };
+			let resolveCall!: (replyText: string) => void;
+			let markStarted!: () => void;
+			let callStarted = new Promise<void>((r) => {
+				markStarted = r;
+			});
+			let callCount = 0;
+			const registry = {
+				models: {
+					getModel: (p: string, id: string) => (p === "mock" && id === "light" ? model : undefined),
+					checkAuth: async () => true,
+					completeSimple: () => {
+						callCount++;
+						markStarted();
+						return new Promise((resolve) => {
+							resolveCall = (text: string) =>
+								resolve({
+									role: "assistant",
+									content: [{ type: "text", text }],
+									stopReason: "stop",
+								});
+						});
+					},
+				},
+			} as any;
+			const nextCall = () => {
+				callStarted = new Promise<void>((r) => {
+					markStarted = r;
+				});
+			};
+			const sysModel = new SystemModelSettings(db, registry);
+			sysModel.set({
+				model: { provider: "mock", model: "light" },
+				tasks: { sessionTitle: true, sessionPurpose: true, sessionName: false, groupName: false },
+				refreshEvery: 2,
+			});
+
+			const describer = new SessionDescriber({
+				store,
+				registry,
+				systemModel: sysModel,
+				isClosing: () => false,
+				updateSession: (id, patch) => store.update(id, patch),
+			});
+
+			const makeSession = (id: string, title: string, name: string, purpose: string) => {
+				const now = Date.now();
+				store.create({
+					id,
+					title,
+					name,
+					purpose,
+					cwd: unitDir,
+					provider: "mock",
+					model: "light",
+					thinkingLevel: "off",
+					systemPrompt: "",
+					tools: [],
+					parentId: null,
+					closed: false,
+					createdAt: now,
+					updatedAt: now,
+				});
+				return id;
+			};
+
+			// Seed session A with auto-written title/purpose at userMessageCount = 1
+			const sessA = makeSession("s-a", "Auto title", "A1", "auto purpose");
+			store.appendMessage(sessA, 0, { role: "user", content: "first prompt", timestamp: 1 });
+			store.appendMessage(sessA, 1, { role: "user", content: "second prompt", timestamp: 2 });
+			store.setDescribeState(sessA, { titleAuto: true, purposeAuto: true, lastUserCount: 1 });
+
+			// Trigger refresh on 3rd prompt (delta = 2 >= refreshEvery = 2), then manually rename title mid-flight
+			const jobA = describer.describe(sessA, undefined, "third prompt");
+			expect(jobA).toBeDefined();
+			await callStarted;
+			expect(callCount).toBe(1);
+			store.update(sessA, { title: "User renamed mid-flight" });
+			describer.markManual(sessA, { title: true });
+			resolveCall('{"title": "Stale auto title", "purpose": "updated purpose"}');
+			await jobA;
+			expect(store.get(sessA)?.title).toBe("User renamed mid-flight");
+			expect(store.get(sessA)?.purpose).toBe("updated purpose");
+			expect(store.describeState(sessA)).toEqual({ titleAuto: false, purposeAuto: true, lastUserCount: 3 });
+
+			// Rewind: if messages drop below lastUserCount, describe/maybeRefresh resets lastUserCount cleanly without firing
+			store.setDescribeState(sessA, { titleAuto: false, purposeAuto: true, lastUserCount: 10 });
+			expect(describer.maybeRefresh(sessA)).toBeUndefined();
+			expect(store.describeState(sessA).lastUserCount).toBe(2);
+
+			// Session deleted mid-flight: resolves cleanly without throwing FK errors
+			const sessB = makeSession("s-b", "Auto B", "B1", "purpose B");
+			store.appendMessage(sessB, 0, { role: "user", content: "msg 1", timestamp: 1 });
+			store.appendMessage(sessB, 1, { role: "user", content: "msg 2", timestamp: 2 });
+			store.appendMessage(sessB, 2, { role: "user", content: "msg 3", timestamp: 3 });
+			store.setDescribeState(sessB, { titleAuto: true, purposeAuto: true, lastUserCount: 1 });
+			nextCall();
+			const jobB = describer.maybeRefresh(sessB);
+			expect(jobB).toBeDefined();
+			await callStarted;
+			store.delete(sessB);
+			resolveCall('{"title": "After delete", "purpose": "after delete"}');
+			await jobB;
+			expect(store.get(sessB)).toBeUndefined();
+		} finally {
+			db.close();
+			rmSync(unitDir, { recursive: true, force: true });
+		}
 	});
 });
 

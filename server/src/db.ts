@@ -373,6 +373,13 @@ export const MIGRATIONS: (string | ((db: Database) => void))[] = [
 		tools_json  TEXT NOT NULL,
 		updated_at  INTEGER NOT NULL
 	);`,
+	// Tracks which session labels were auto-written by the system model and the user-message count at the last describe/refresh.
+	`CREATE TABLE IF NOT EXISTS session_describe_state (
+		session_id      TEXT PRIMARY KEY REFERENCES sessions(id) ON DELETE CASCADE,
+		title_auto      INTEGER NOT NULL DEFAULT 0,
+		purpose_auto    INTEGER NOT NULL DEFAULT 0,
+		last_user_count INTEGER NOT NULL DEFAULT 0
+	);`,
 ];
 
 /** Cap WAL file size after checkpointing (64 MiB) so a burst delete never leaves a multi-hundred-MB -wal behind. */

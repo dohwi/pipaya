@@ -105,6 +105,12 @@ export interface StoredMessage {
 	message: AgentMessage;
 }
 
+export interface SessionDescribeState {
+	titleAuto: boolean;
+	purposeAuto: boolean;
+	lastUserCount: number;
+}
+
 export interface UsageTotals {
 	input: number;
 	output: number;
@@ -135,6 +141,11 @@ export class SessionStore {
 	private stmtMessagesLead: Statement;
 	private stmtMessagesAll: Statement;
 	private stmtLastMessages: Statement;
+	private stmtUserMessageCount: Statement;
+	private stmtFirstUserMessage: Statement;
+	private stmtRecentUserMessages: Statement;
+	private stmtDescribeStateGet: Statement;
+	private stmtDescribeStateSet: Statement;
 	private stmtLatestCompaction: Statement;
 	private stmtLatestAssistantText: Statement;
 	private stmtUsageMain: Statement;
@@ -157,6 +168,18 @@ export class SessionStore {
 		this.stmtMessagesLead = db.query("SELECT seq, role, data, created_at FROM messages WHERE session_id = $sid AND seq >= $from AND seq < $first ORDER BY seq");
 		this.stmtMessagesAll = db.query("SELECT seq, role, data, created_at FROM messages WHERE session_id = $sid AND seq > $after ORDER BY seq LIMIT $limit");
 		this.stmtLastMessages = db.query("SELECT seq, role, data, created_at FROM messages WHERE session_id = $sid ORDER BY seq DESC LIMIT $n");
+		this.stmtUserMessageCount = db.query("SELECT COUNT(*) AS n FROM messages WHERE session_id = $sid AND role = 'user'");
+		this.stmtFirstUserMessage = db.query("SELECT seq, role, data, created_at FROM messages WHERE session_id = $sid AND role = 'user' ORDER BY seq ASC LIMIT 1");
+		this.stmtRecentUserMessages = db.query("SELECT seq, role, data, created_at FROM messages WHERE session_id = $sid AND role = 'user' ORDER BY seq DESC LIMIT $n");
+		this.stmtDescribeStateGet = db.query("SELECT title_auto, purpose_auto, last_user_count FROM session_describe_state WHERE session_id = $sid");
+		this.stmtDescribeStateSet = db.query(
+			`INSERT INTO session_describe_state (session_id, title_auto, purpose_auto, last_user_count)
+			 VALUES ($sid, $titleAuto, $purposeAuto, $lastUserCount)
+			 ON CONFLICT(session_id) DO UPDATE SET
+			   title_auto = excluded.title_auto,
+			   purpose_auto = excluded.purpose_auto,
+			   last_user_count = excluded.last_user_count`,
+		);
 		this.stmtLatestCompaction = db.query("SELECT upto_seq, summary, tokens_before, created_at FROM session_compactions WHERE session_id = $sid ORDER BY id DESC LIMIT 1");
 		this.stmtLatestAssistantText = db.query("SELECT data FROM messages WHERE session_id = $sid AND role = 'assistant' ORDER BY seq DESC LIMIT 6");
 		this.stmtUsageMain = db.query(
@@ -403,6 +426,37 @@ export class SessionStore {
 	nextSeq(sessionId: string): number {
 		const row = this.stmtNextSeq.get({ sid: sessionId }) as { n: number };
 		return row.n;
+	}
+
+	userMessageCount(sessionId: string): number {
+		const row = this.stmtUserMessageCount.get({ sid: sessionId }) as { n: number };
+		return row.n;
+	}
+
+	firstUserMessage(sessionId: string): StoredMessage | undefined {
+		const row = this.stmtFirstUserMessage.get({ sid: sessionId }) as MessageRow | null;
+		return row ? toStored(row) : undefined;
+	}
+
+	/** Up to `limit` newest user messages, returned oldest-first. */
+	recentUserMessages(sessionId: string, limit: number): StoredMessage[] {
+		const rows = this.stmtRecentUserMessages.all({ sid: sessionId, n: limit }) as MessageRow[];
+		return rows.reverse().map(toStored);
+	}
+
+	describeState(sessionId: string): SessionDescribeState {
+		const row = this.stmtDescribeStateGet.get({ sid: sessionId }) as { title_auto: number; purpose_auto: number; last_user_count: number } | null;
+		if (!row) return { titleAuto: false, purposeAuto: false, lastUserCount: 0 };
+		return { titleAuto: row.title_auto === 1, purposeAuto: row.purpose_auto === 1, lastUserCount: row.last_user_count };
+	}
+
+	setDescribeState(sessionId: string, state: SessionDescribeState): void {
+		this.stmtDescribeStateSet.run({
+			sid: sessionId,
+			titleAuto: state.titleAuto ? 1 : 0,
+			purposeAuto: state.purposeAuto ? 1 : 0,
+			lastUserCount: Math.max(0, Math.floor(state.lastUserCount)),
+		});
 	}
 
 	messages(sessionId: string, opts: { after?: number; limit?: number; tail?: number; before?: number; wholeTurn?: boolean } = {}): StoredMessage[] {

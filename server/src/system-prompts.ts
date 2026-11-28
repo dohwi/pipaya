@@ -1,7 +1,7 @@
 import { SUMMARY_PREFIX, SUMMARY_REQUEST_TEMPLATE, SUMMARY_SYSTEM } from "./compaction.ts";
 import { withBytes, type SystemPromptEntry } from "./context.ts";
 import { HINT_OPEN, PEER_MESSAGE_TEMPLATE, READ_NOTE } from "./peers.ts";
-import { DESCRIBE_SYSTEM, GROUP_NAME_SYSTEM } from "./system-model.ts";
+import { DESCRIBE_REFRESH_SYSTEM, DESCRIBE_SYSTEM, GROUP_NAME_SYSTEM } from "./system-model.ts";
 
 /** What decides which provider-specific wording applies to a session's model. */
 export interface PromptModel {
@@ -97,6 +97,15 @@ export function systemPromptEntries(model: PromptModel | null, opts: { hasExtens
 			title: "Session title, purpose, and @name",
 			when: "A separate call to the system model after a session's first message (only for fields enabled in system model settings)",
 			text: `${DESCRIBE_SYSTEM}\n\n--- request ---\nWorking directory: \${cwd}\n\nFirst user message:\n\${text}\n\nLatest user message:\n\${text}\n\nReply with the JSON object now.`,
+			active: true,
+		},
+		{
+			id: "helper-describe-refresh",
+			delivery: "separate" as const,
+			kind: "helper" as const,
+			title: "Periodic session title and purpose refresh",
+			when: "A separate call to the system model every N user messages when periodic refresh is enabled (only for auto-generated title/purpose)",
+			text: `${DESCRIBE_REFRESH_SYSTEM}\n\n--- request ---\nWorking directory: \${cwd}\n\nCurrent title: \${title}\nCurrent purpose: \${purpose}\n\nFirst user message:\n\${first}\n\nRecent user messages (oldest to newest):\n1. \${message}\n\nReply with the JSON object now.`,
 			active: true,
 		},
 		{

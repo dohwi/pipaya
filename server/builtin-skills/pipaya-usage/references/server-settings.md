@@ -29,7 +29,7 @@ For writes, pass `-X PUT -H "Content-Type: application/json" -d '{...}'`. Always
 | `PUT` | `/configuration/workdir` | `{ path: string \| null }` — default working directory for new sessions (`null` resets to fallback) |
 | `PUT` | `/configuration/tools` | `{ disabled: string[] }` — disable toggleable tools (`glob`, `ask_user`, `peer`, `delegate`, `schedule`, `goal`, `mcp`, plus switchable tools like `generate_image`). Locked tools (`read`, `write`, `edit`, `ls`, `grep`, `bash`, `workdir`) return `400`. |
 | `PUT` | `/configuration/delegate` | `{ roles?: "defined" \| "any", policy: "defined" \| "allowlist" \| "any", models: string[], maxConcurrent: number, maxCalls: number, maxTurns: number }` (limits: `maxConcurrent` 1–8, `maxCalls` 1–50, `maxTurns` 1–50) |
-| `GET` / `PUT` | `/system-model` | `{ model: { provider, model, thinkingLevel? } \| null }` — helper model for session titles, purpose, and group names |
+| `GET` / `PUT` | `/system-model` | `{ model: { provider, model, thinkingLevel? } \| null, tasks?: { sessionTitle, sessionPurpose, sessionName, groupName }, refreshEvery?: number }` — helper model for session titles, purpose, `@name`, group names, and optional periodic title/purpose refresh (`0` = off) |
 | `GET` / `PUT` | `/fallback-model` | `{ model: { provider, model, thinkingLevel? } \| null }` — automatic fallback model |
 | `GET` / `PUT` | `/image-model` | `{ model: { provider, model } \| null }` — enables/configures the `generate_image` tool |
 | `GET` / `PUT` | `/model-roles` | `{ roles: Record<string, { provider, model }> }` — named LLM roles for one-shot completions |
