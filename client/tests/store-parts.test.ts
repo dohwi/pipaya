@@ -230,6 +230,86 @@ describe("sidebar shared part", () => {
 			(globalThis as any).localStorage = prevStorage;
 		}
 	});
+
+	test("git project names stay separate from folder names across edits, sync, and forgetServer", () => {
+		const prevStorage = (globalThis as any).localStorage;
+		const bag: Record<string, string> = {};
+		(globalThis as any).localStorage = {
+			getItem: (k: string) => bag[k] ?? null,
+			setItem: (k: string, v: string) => { bag[k] = v; },
+			removeItem: (k: string) => { delete bag[k]; },
+		};
+		try {
+			const sb = new SidebarState();
+			const edits: string[] = [];
+			sb.onEdit = (id) => edits.push(id);
+
+			// Clearing an unset name is a no-op; prototype keys never resolve
+			sb.setProjectName("s1", "/repo/app", "   ");
+			expect(edits).toEqual([]);
+			expect(sb.projectName("s1", "toString")).toBeUndefined();
+			expect(sb.projectName("toString", "/repo/app")).toBeUndefined();
+			expect(sb.shared("s1")).toBeUndefined();
+
+			// Setting a git project name does not touch dirName for the same path
+			sb.setProjectName("s1", "/repo/app", "  파이파야 앱  ");
+			expect(sb.projectName("s1", "/repo/app")).toBe("파이파야 앱");
+			expect(sb.dirName("s1", "/repo/app")).toBeUndefined();
+			expect(edits).toEqual(["s1"]);
+			// Shared payload is defined even when projectNames is the only non-empty field
+			expect(JSON.parse(JSON.stringify(sb.shared("s1")))).toEqual({
+				pinnedDirs: [],
+				pinnedTabs: [],
+				dirOrder: [],
+				tabOrder: [],
+				dirNames: {},
+				groupDir: {},
+				projectNames: { "/repo/app": "파이파야 앱" },
+			});
+
+			// Setting the same trimmed value is a no-op
+			sb.setProjectName("s1", "/repo/app", "파이파야 앱");
+			expect(edits).toEqual(["s1"]);
+
+			// Renaming the main checkout folder itself does not overwrite the project name
+			sb.setDirName("s1", "/repo/app", "메인 체크아웃");
+			expect(sb.dirName("s1", "/repo/app")).toBe("메인 체크아웃");
+			expect(sb.projectName("s1", "/repo/app")).toBe("파이파야 앱");
+
+			// Falsy-looking name "0" is kept; blank clears and omits projectNames from shared()
+			sb.setProjectName("s1", "/repo/app", "0");
+			expect(sb.projectName("s1", "/repo/app")).toBe("0");
+			sb.setProjectName("s1", "/repo/app", "");
+			expect(sb.projectName("s1", "/repo/app")).toBeUndefined();
+			expect(sb.dirName("s1", "/repo/app")).toBe("메인 체크아웃");
+			expect(sb.shared("s1")?.projectNames).toBeUndefined();
+
+			// Sync (applyShared) updates one server only, sanitizes invalid values, and does not trigger onEdit
+			sb.setProjectName("s2", "/other", "Other");
+			const beforeSync = edits.length;
+			sb.applyShared("s1", { projectNames: { "/repo/app": "서버 이름", "/bad": 123 } });
+			expect(edits.length).toBe(beforeSync);
+			expect(sb.projectName("s1", "/repo/app")).toBe("서버 이름");
+			expect(sb.projectName("s1", "/bad")).toBeUndefined();
+			expect(sb.projectName("s2", "/other")).toBe("Other");
+
+			sb.applyShared("s1", { projectNames: "bad" });
+			expect(sb.projectName("s1", "/repo/app")).toBeUndefined();
+			expect(sb.projectName("s2", "/other")).toBe("Other");
+
+			// Reloading from localStorage preserves remaining server project names
+			const reloaded = new SidebarState();
+			expect(reloaded.projectName("s2", "/other")).toBe("Other");
+
+			// forgetServer removes only that server's project names
+			reloaded.setProjectName("s1", "/repo/app", "Temp");
+			reloaded.forgetServer("s1");
+			expect(reloaded.projectName("s1", "/repo/app")).toBeUndefined();
+			expect(reloaded.projectName("s2", "/other")).toBe("Other");
+		} finally {
+			(globalThis as any).localStorage = prevStorage;
+		}
+	});
 });
 
 describe("feedback", () => {

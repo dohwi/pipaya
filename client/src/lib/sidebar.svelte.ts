@@ -44,9 +44,10 @@ export interface SidebarShared {
   tabOrder: string[];
   dirNames: Record<string, string>;
   groupDir: Record<string, string>;
-  /** Sent only when set: a server from before projects rejects a sidebar value with fields it does not know */
+  /** Sent only when set: older servers reject a sidebar value with fields they do not know */
   projects?: ManualProject[];
   ungrouped?: string[];
+  projectNames?: Record<string, string>;
 }
 const strs = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : []);
 const projectList = (v: unknown): ManualProject[] =>
@@ -98,8 +99,10 @@ export class SidebarState {
   dirOrder = $state<Record<string, string[]>>(read<Record<string, string[]>>(K.dirOrder, {}));
   /** Folders pinned per server: they stay listed with no tabs in them. */
   pinned = $state<Record<string, string[]>>(read<Record<string, string[]>>(K.pinnedDirs, {}));
-  /** Names given to pinned folders per server, shown in place of the path's tail (the path still sits beside it). Dropped on unpin. */
+  /** Names given to folders per server, shown in place of the folder's default label. */
   dirNames = $state<Record<string, Record<string, string>>>(read<Record<string, Record<string, string>>>(K.dirNames, {}));
+  /** Names given to git repository projects per server (keyed by repo root), kept apart from folder names so renaming a project does not rename its main checkout row. */
+  projectNames = $state<Record<string, Record<string, string>>>(read<Record<string, Record<string, string>>>(K.projectNames, {}));
   /** Tabs pinned per server: they sit at the top of their folder, in their own order. A split tab is pinned as a whole. */
   pinnedTabs = $state<Record<string, string[]>>(read<Record<string, string[]>>(K.pinnedTabs, {}));
   /** Order of the tabs (group / session / terminal ids) set by dragging, per server; ranks tabs within their directory. */
@@ -245,12 +248,34 @@ export class SidebarState {
     return this.dirNames[serverId]?.[path];
   }
 
-  /** Name a pinned folder; a blank name goes back to the default label. */
+  /** Name a folder; a blank name goes back to the default label. */
   setDirName(serverId: string, path: string, name: string) {
     const { [path]: _, ...rest } = this.dirNames[serverId] ?? {};
     const next = name.trim() ? { ...rest, [path]: name.trim() } : rest;
     this.dirNames = { ...this.dirNames, [serverId]: next };
     write(K.dirNames, this.dirNames);
+    this.onEdit(serverId);
+  }
+
+  projectName(serverId: string, root: string): string | undefined {
+    const map = Object.hasOwn(this.projectNames, serverId) ? this.projectNames[serverId] : undefined;
+    return map && Object.hasOwn(map, root) ? map[root] : undefined;
+  }
+
+  /** Name a git repository project; a blank name goes back to the repository's default label. */
+  setProjectName(serverId: string, root: string, name: string) {
+    const trimmed = name.trim();
+    const cur = Object.hasOwn(this.projectNames, serverId) ? this.projectNames[serverId]! : {};
+    const prev = Object.hasOwn(cur, root) ? cur[root] : undefined;
+    if ((trimmed || undefined) === prev) return;
+    const { [root]: _, ...rest } = cur;
+    const next = trimmed ? { ...rest, [root]: trimmed } : rest;
+    if (Object.keys(next).length) this.projectNames = { ...this.projectNames, [serverId]: next };
+    else {
+      const { [serverId]: __, ...allRest } = this.projectNames;
+      this.projectNames = allRest;
+    }
+    write(K.projectNames, this.projectNames);
     this.onEdit(serverId);
   }
 
@@ -411,9 +436,11 @@ export class SidebarState {
     };
     const projects = this.projects[serverId] ?? [];
     const ungrouped = this.ungrouped[serverId] ?? [];
+    const projectNames = Object.hasOwn(this.projectNames, serverId) ? this.projectNames[serverId]! : {};
     if (projects.length) o.projects = projects;
     if (ungrouped.length) o.ungrouped = ungrouped;
-    const empty = !o.pinnedDirs.length && !o.pinnedTabs.length && !o.dirOrder.length && !o.tabOrder.length && !Object.keys(o.dirNames).length && !Object.keys(o.groupDir).length && !projects.length && !ungrouped.length;
+    if (Object.keys(projectNames).length) o.projectNames = projectNames;
+    const empty = !o.pinnedDirs.length && !o.pinnedTabs.length && !o.dirOrder.length && !o.tabOrder.length && !Object.keys(o.dirNames).length && !Object.keys(o.groupDir).length && !projects.length && !ungrouped.length && !Object.keys(projectNames).length;
     return empty ? undefined : o;
   }
 
@@ -425,6 +452,12 @@ export class SidebarState {
     this.dirOrder = { ...this.dirOrder, [serverId]: strs(o.dirOrder) };
     this.tabOrder = { ...this.tabOrder, [serverId]: strs(o.tabOrder) };
     this.dirNames = { ...this.dirNames, [serverId]: strMap(o.dirNames) };
+    const nextProjectNames = strMap(o.projectNames);
+    if (Object.keys(nextProjectNames).length) this.projectNames = { ...this.projectNames, [serverId]: nextProjectNames };
+    else {
+      const { [serverId]: _, ...rest } = this.projectNames;
+      this.projectNames = rest;
+    }
     this.groupDir = { ...this.groupDir, [serverId]: strMap(o.groupDir) };
     const prevProjects = this.projects[serverId] ?? [];
     const nextProjects = projectList(o.projects);
@@ -438,6 +471,7 @@ export class SidebarState {
     write(K.dirOrder, this.dirOrder);
     write(K.tabOrder, this.tabOrder);
     write(K.dirNames, this.dirNames);
+    write(K.projectNames, this.projectNames);
     write(K.groupDir, this.groupDir);
   }
 
@@ -466,6 +500,8 @@ export class SidebarState {
     if (cPinned) { this.pinned = pinned; write(K.pinnedDirs, this.pinned); }
     const [dirNames, cDirNames] = dropFromRecord(this.dirNames);
     if (cDirNames) { this.dirNames = dirNames; write(K.dirNames, this.dirNames); }
+    const [projectNames, cProjectNames] = dropFromRecord(this.projectNames);
+    if (cProjectNames) { this.projectNames = projectNames; write(K.projectNames, this.projectNames); }
     const [pinnedTabs, cPinnedTabs] = dropFromRecord(this.pinnedTabs);
     if (cPinnedTabs) { this.pinnedTabs = pinnedTabs; write(K.pinnedTabs, this.pinnedTabs); }
     const [tabOrder, cTabOrder] = dropFromRecord(this.tabOrder);

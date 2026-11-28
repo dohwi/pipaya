@@ -44,7 +44,8 @@ export const K = {
   groupDir: "pipaya.groupdir", // folder a group is listed under, fixed once seen: { <serverId>: { <groupId>: cwd } }
   pinnedTabs: "pipaya.pinnedtabs", // tabs pinned to the top of their folder: { <serverId>: [groupId | sessionId | terminalId, ...] }
   pinnedDirs: "pipaya.pinneddirs", // folders pinned to the sidebar, kept even with no tabs: { <serverId>: [cwd, ...] }
-  dirNames: "pipaya.dirnames", // names given to pinned folders, shown instead of the path's tail: { <serverId>: { <cwd>: name } }
+  dirNames: "pipaya.dirnames", // names given to folders, shown instead of the path's tail: { <serverId>: { <cwd>: name } }
+  projectNames: "pipaya.projectnames", // names given to git repository projects, kept apart from folder names: { <serverId>: { <root>: name } }
   dirOrder: "pipaya.dirorder", // sidebar directory order set by dragging: { <serverId>: [cwd, ...] }
   projects: "pipaya.projects", // hand-made sidebar projects: { <serverId>: [{ id, name, dirs: [cwd, ...] }, ...] }
   hints: "pipaya.hints.seen", // one-time touch hints already shown on this device: ["mic-hold", "steer-hold", ...]

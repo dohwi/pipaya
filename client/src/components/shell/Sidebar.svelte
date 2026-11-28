@@ -482,7 +482,7 @@
 	};
 	/** A project's label: the name the user gave it, else the repository folder's short name. */
 	const projectName = (n: Node, root: string) =>
-		isManualRoot(root) ? (app.sidebar.overrides(n.server.id).projects?.find((p) => `manual:${p.id}` === root)?.name ?? "") : (app.sidebar.dirName(n.server.id, root) ?? shortName(root, n.home));
+		isManualRoot(root) ? (app.sidebar.overrides(n.server.id).projects?.find((p) => `manual:${p.id}` === root)?.name ?? "") : (app.sidebar.projectName(n.server.id, root) ?? shortName(root, n.home));
 	/**
 	 * "프로젝트로 묶기…": pick a project (or another folder, which starts a new project with this one) to list folder `path`
 	 * under. A picker rather than dragging, so it works the same on touch.
@@ -538,14 +538,14 @@
 		return () => menuId === id && rowMenu?.close();
 	}
 	const projectRename = new InlineRename();
-	/** Save a project's new name: a hand-made one keeps it in its own entry, a repository's like a folder's name. */
+	/** Save a project's new name: hand-made projects keep it in their own entry, repository projects in `projectNames` (separate from folder names). */
 	function commitProjectRename(n: Node, root: string) {
 		const key = projectKey(n.server.id, root);
 		if (!projectRename.is(key)) return;
 		const name = projectRename.draft;
 		projectRename.cancel();
 		if (isManualRoot(root)) app.sidebar.renameProject(n.server.id, root.slice("manual:".length), name);
-		else app.sidebar.setDirName(n.server.id, root, name);
+		else app.sidebar.setProjectName(n.server.id, root, name);
 	}
 	// What the rows below share, handed down once instead of through a dozen props each.
 	setSidebarCtx({

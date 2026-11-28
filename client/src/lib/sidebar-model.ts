@@ -219,7 +219,7 @@ export function headMenuEntries(os: string | undefined, folded: boolean, act: He
 /** What a project header's context menu does. */
 export interface ProjectActions extends NewActions {
 	toggle(): void;
-	/** Rename it (hand-made projects only: a repository's project is named by its folder) */
+	/** Rename the project (hand-made projects keep it in their entry, git projects in `projectNames`) */
 	rename?(): void;
 	/** Undo a hand-made project, its folders going back to the automatic grouping */
 	dissolve?(): void;
