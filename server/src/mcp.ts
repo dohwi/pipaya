@@ -1,4 +1,5 @@
 import type { Database } from "bun:sqlite";
+import { createHash } from "node:crypto";
 import type { AgentTool, AgentToolResult } from "@earendil-works/pi-agent-core";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
@@ -18,6 +19,8 @@ const CALL_TIMEOUT_MS = 120_000;
 export const MAX_RESULT_CHARS = 50_000;
 const MAX_SERVERS = 50;
 const MAX_TOOLS_PER_SERVER = 200;
+const MAX_CACHED_TOOLS_JSON_CHARS = 512_000;
+const CACHED_TOOL_NAME_RE = /^mcp_[a-zA-Z0-9_-]{1,60}$/;
 export const MAX_TOTAL_MCP_TOOLS = 128;
 export const MAX_MCP_IMAGE_RAW_BYTES = 10 * 1024 * 1024;
 const MAX_STDERR_CHARS = 2000;
@@ -102,6 +105,80 @@ interface Conn {
 	resolveReady: () => void;
 	config: McpServerConfig;
 	replacedByReconnect?: boolean;
+	lazyStarting?: Promise<void>;
+}
+
+/** Deterministic SHA-256 hash of a stdio MCP server's launch & filter config (never stores plaintext env/secrets). */
+export function computeStdioConfigHash(c: McpServerConfig): string {
+	const sortedEnv = c.env
+		? Object.keys(c.env).sort().map((k) => [k, c.env![k]])
+		: [];
+	const payload = JSON.stringify({
+		v: 1,
+		name: c.name,
+		transport: c.transport,
+		command: c.command ?? "",
+		args: c.args ?? [],
+		env: sortedEnv,
+		inheritEnv: Boolean(c.inheritEnv),
+		allowTools: c.allowTools ?? null,
+		denyTools: c.denyTools ?? null,
+	});
+	return createHash("sha256").update(payload).digest("hex");
+}
+
+function isRemoteTool(v: unknown): v is RemoteTool {
+	if (!v || typeof v !== "object" || Array.isArray(v)) return false;
+	const o = v as Record<string, unknown>;
+	return typeof o.name === "string"
+		&& CACHED_TOOL_NAME_RE.test(o.name)
+		&& typeof o.tool === "string"
+		&& o.tool.length > 0
+		&& typeof o.description === "string"
+		&& !!o.schema
+		&& typeof o.schema === "object"
+		&& !Array.isArray(o.schema)
+		&& (o.schema as Record<string, unknown>).type === "object";
+}
+
+function parseCachedToolsJson(raw: string): RemoteTool[] | null {
+	if (raw.length > MAX_CACHED_TOOLS_JSON_CHARS) return null;
+	const parsed: unknown = JSON.parse(raw, (key, value) => (key === "__proto__" ? undefined : value));
+	if (!Array.isArray(parsed) || parsed.length === 0 || parsed.length > MAX_TOOLS_PER_SERVER) return null;
+	const tools: RemoteTool[] = [];
+	for (const item of parsed) {
+		if (!isRemoteTool(item)) return null;
+		tools.push({
+			name: item.name,
+			tool: item.tool,
+			description: item.description,
+			schema: item.schema,
+		});
+	}
+	return tools;
+}
+
+function buildRemoteTools(
+	c: McpServerConfig,
+	listedTools: Awaited<ReturnType<Client["listTools"]>>["tools"],
+): RemoteTool[] {
+	const allow = c.allowTools !== undefined ? new Set(c.allowTools) : null;
+	const deny = c.denyTools?.length ? new Set(c.denyTools) : null;
+	const used = new Set<string>();
+	return listedTools
+		.slice(0, MAX_TOOLS_PER_SERVER)
+		.map((t) => {
+			const base = `mcp_${clean(c.name)}_${clean(t.name)}`.slice(0, 64);
+			let name = base;
+			for (let i = 2; used.has(name); i++) name = `${base.slice(0, 60)}_${i}`;
+			used.add(name);
+			return { name, tool: t.name, description: t.description ?? t.title ?? "", schema: { ...(t.inputSchema as Record<string, unknown>), type: "object" } };
+		})
+		.filter((t) => {
+			if (allow && !allow.has(t.tool) && !allow.has(t.name)) return false;
+			if (deny && (deny.has(t.tool) || deny.has(t.name))) return false;
+			return true;
+		});
 }
 
 /** Returns true when a Streamable HTTP MCP error signals an unknown or expired server session (HTTP 404). */
@@ -116,10 +193,10 @@ function abortError(signal: AbortSignal): Error {
 	return err;
 }
 
-async function waitForReady(conn: Conn, signal?: AbortSignal): Promise<void> {
+async function waitForPromise(promise: Promise<void>, signal?: AbortSignal): Promise<void> {
 	if (signal?.aborted) throw abortError(signal);
 	if (!signal) {
-		await conn.ready;
+		await promise;
 		return;
 	}
 	let onAbort: (() => void) | undefined;
@@ -127,7 +204,7 @@ async function waitForReady(conn: Conn, signal?: AbortSignal): Promise<void> {
 		await new Promise<void>((resolve, reject) => {
 			onAbort = () => reject(abortError(signal));
 			signal.addEventListener("abort", onAbort, { once: true });
-			conn.ready.then(resolve);
+			promise.then(resolve, reject);
 		});
 	} finally {
 		if (onAbort) signal.removeEventListener("abort", onAbort);
@@ -206,11 +283,50 @@ export class McpManager {
 		}
 	}
 
-	/** Connect everything that is switched on (in the background; failures show up as a server's error). */
+	/** Connect everything that is switched on (in the background; failures show up as a server's error). Stdio servers with a valid SQLite tool cache start lazily on first tool call. */
 	start(): void {
-		this.sync(this.config());
+		this.sync(this.config(), undefined, undefined, true);
 		const pending = [...this.conns.values()].map((c) => c.ready);
 		this.initialReady = pending.length ? Promise.allSettled(pending).then(() => {}) : Promise.resolve();
+	}
+
+	private loadToolCache(c: McpServerConfig): RemoteTool[] | null {
+		if (c.transport !== "stdio") return null;
+		try {
+			const row = this.db.query("SELECT config_hash, tools_json FROM mcp_tool_cache WHERE server_name = $name").get({ name: c.name }) as { config_hash: string; tools_json: string } | null;
+			if (!row || row.config_hash !== computeStdioConfigHash(c)) return null;
+			return parseCachedToolsJson(row.tools_json);
+		} catch {
+			return null;
+		}
+	}
+
+	private saveToolCache(c: McpServerConfig, tools: RemoteTool[]): void {
+		if (c.transport !== "stdio") return;
+		if (tools.length === 0) {
+			this.deleteToolCache(c.name);
+			return;
+		}
+		try {
+			this.db.query(
+				"INSERT INTO mcp_tool_cache (server_name, config_hash, tools_json, updated_at) VALUES ($name, $hash, $tools, $at) ON CONFLICT(server_name) DO UPDATE SET config_hash = $hash, tools_json = $tools, updated_at = $at",
+			).run({
+				name: c.name,
+				hash: computeStdioConfigHash(c),
+				tools: JSON.stringify(tools),
+				at: Date.now(),
+			});
+		} catch {
+			// Cache persistence is best-effort and must never tear down an active MCP connection.
+		}
+	}
+
+	private deleteToolCache(name: string): void {
+		try {
+			this.db.query("DELETE FROM mcp_tool_cache WHERE server_name = $name").run({ name });
+		} catch {
+			// Best-effort cache cleanup.
+		}
 	}
 
 	/** Resolves once the initial `start()` connection attempts have settled (ready or error). */
@@ -287,6 +403,10 @@ export class McpManager {
 			return c;
 		});
 		this.db.query("INSERT INTO settings (key, data) VALUES ($k, $d) ON CONFLICT(key) DO UPDATE SET data = $d").run({ k: SETTING_KEY, d: JSON.stringify(next) });
+		const stdioNames = new Set(next.filter((c) => c.transport === "stdio").map((c) => c.name));
+		for (const prev of old.values()) {
+			if (!stdioNames.has(prev.name)) this.deleteToolCache(prev.name);
+		}
 		this.sync(next, old);
 		return this.info();
 	}
@@ -381,7 +501,7 @@ export class McpManager {
 		return this.info();
 	}
 
-	private sync(cfg: McpServerConfig[], old?: Map<string, McpServerConfig>, force?: string): void {
+	private sync(cfg: McpServerConfig[], old?: Map<string, McpServerConfig>, force?: string, useCache = false): void {
 		const names = new Set(cfg.map((c) => c.name));
 		for (const name of [...this.conns.keys()]) if (!names.has(name)) this.drop(name);
 		for (const c of cfg) {
@@ -389,9 +509,31 @@ export class McpManager {
 			const forced = force === "" || force === c.name;
 			if (this.conns.has(c.name) && unchanged && !forced) continue;
 			this.drop(c.name);
-			if (c.enabled) this.connect(c);
+			if (!c.enabled) continue;
+			if (useCache && !forced && c.transport === "stdio") {
+				const cached = this.loadToolCache(c);
+				if (cached !== null) {
+					this.connectCached(c, cached);
+					continue;
+				}
+			}
+			this.connect(c);
 		}
 		this.onChange();
+	}
+
+	private connectCached(c: McpServerConfig, tools: RemoteTool[]): Conn {
+		const conn: Conn = {
+			status: "ready",
+			stderrTail: "",
+			tools,
+			gen: ++this.gen,
+			ready: Promise.resolve(),
+			resolveReady: () => {},
+			config: c,
+		};
+		this.conns.set(c.name, conn);
+		return conn;
 	}
 
 	private drop(name: string): void {
@@ -439,34 +581,86 @@ export class McpManager {
 				void client.close().catch(() => {});
 				return;
 			}
-			const allow = c.allowTools !== undefined ? new Set(c.allowTools) : null;
-			const deny = c.denyTools?.length ? new Set(c.denyTools) : null;
-			const used = new Set<string>();
-			conn.tools = listed.tools
-				.slice(0, MAX_TOOLS_PER_SERVER)
-				.map((t) => {
-					const base = `mcp_${clean(c.name)}_${clean(t.name)}`.slice(0, 64);
-					let name = base;
-					for (let i = 2; used.has(name); i++) name = `${base.slice(0, 60)}_${i}`;
-					used.add(name);
-					return { name, tool: t.name, description: t.description ?? t.title ?? "", schema: { ...(t.inputSchema as Record<string, unknown>), type: "object" } };
-				})
-				.filter((t) => {
-					if (allow && !allow.has(t.tool) && !allow.has(t.name)) return false;
-					if (deny && (deny.has(t.tool) || deny.has(t.name))) return false;
-					return true;
-				});
+			conn.tools = buildRemoteTools(c, listed.tools);
 			conn.status = "ready";
+			this.saveToolCache(c, conn.tools);
 		} catch (e) {
+			void client.close().catch(() => {});
 			if (!current()) return;
 			conn.status = "error";
 			conn.error = formatConnectError(e instanceof Error ? e.message : String(e), conn.stderrTail, c);
 			conn.tools = [];
-			void client.close().catch(() => {});
+			if (c.transport === "stdio") this.deleteToolCache(c.name);
 		} finally {
 			conn.resolveReady();
 		}
 		this.onChange();
+	}
+
+	private async runLazyConnect(c: McpServerConfig, conn: Conn): Promise<void> {
+		const current = () => this.conns.get(c.name) === conn;
+		const client = new Client({ name: "pipaya", version: "1.0.0" });
+		let connected = false;
+		try {
+			const transport = new StdioClientTransport({ command: c.command!, args: c.args ?? [], env: buildMcpStdioEnv(c), stderr: "pipe" });
+			if (transport.stderr) {
+				transport.stderr.on("data", (chunk: Buffer | string) => {
+					const piece = typeof chunk === "string" ? chunk : chunk.toString("utf8");
+					const next = redactSecrets(conn.stderrTail + piece, c);
+					conn.stderrTail = next.length > MAX_STDERR_CHARS ? next.slice(-MAX_STDERR_CHARS) : next;
+				});
+			}
+			conn.client = client;
+			client.onclose = () => {
+				if (connected && current() && conn.status === "ready" && conn.client === client) {
+					conn.status = "error";
+					conn.error = formatConnectError("Connection closed", conn.stderrTail, c);
+					conn.tools = [];
+					conn.client = undefined;
+					this.onChange();
+				}
+			};
+			await client.connect(transport, { timeout: CONNECT_TIMEOUT_MS });
+			const listed = await client.listTools(undefined, { timeout: CONNECT_TIMEOUT_MS });
+			if (!current()) {
+				void client.close().catch(() => {});
+				return;
+			}
+			connected = true;
+			const prevJson = JSON.stringify(conn.tools);
+			conn.tools = buildRemoteTools(c, listed.tools);
+			this.saveToolCache(c, conn.tools);
+			if (JSON.stringify(conn.tools) !== prevJson) this.onChange();
+		} catch (e) {
+			void client.close().catch(() => {});
+			if (!current()) return;
+			conn.client = undefined;
+			conn.status = "error";
+			conn.error = formatConnectError(e instanceof Error ? e.message : String(e), conn.stderrTail, c);
+			conn.tools = [];
+			this.deleteToolCache(c.name);
+			this.onChange();
+		}
+	}
+
+	private async ensureLazyConnected(server: string, conn: Conn, signal?: AbortSignal): Promise<Conn> {
+		if (signal?.aborted) throw abortError(signal);
+		if (!conn.lazyStarting) {
+			const p = this.runLazyConnect(conn.config, conn);
+			conn.lazyStarting = p;
+			void p.finally(() => {
+				if (conn.lazyStarting === p) conn.lazyStarting = undefined;
+			});
+		}
+		await waitForPromise(conn.lazyStarting, signal);
+		if (signal?.aborted) throw abortError(signal);
+		if (this.conns.get(server) !== conn) throw new Error(`MCP server "${server}" is not connected`);
+		if (!conn.client || conn.status !== "ready") {
+			throw conn.error
+				? new Error(`MCP server "${server}" failed to start: ${conn.error}`)
+				: new Error(`MCP server "${server}" is not connected`);
+		}
+		return conn;
 	}
 
 	/** Tools of the connected servers, in deterministic config/sorted order, capped globally at MAX_TOTAL_MCP_TOOLS. */
@@ -530,7 +724,7 @@ export class McpManager {
 			target = this.connect(stale.config);
 			if (stale.client) void stale.client.close().catch(() => {});
 		}
-		await waitForReady(target, signal);
+		await waitForPromise(target.ready, signal);
 		if (signal?.aborted) throw abortError(signal);
 		if (this.conns.get(server) !== target) throw new Error(`MCP server "${server}" is not connected`);
 		if (!target.client || target.status !== "ready") {
@@ -546,10 +740,13 @@ export class McpManager {
 		let conn = this.conns.get(server);
 		while (conn?.status === "connecting") {
 			const cur = conn;
-			await waitForReady(cur, signal);
+			await waitForPromise(cur.ready, signal);
 			if (signal?.aborted) throw abortError(signal);
 			conn = this.conns.get(server);
 			if (conn === cur) break;
+		}
+		if (conn && conn.status === "ready" && (conn.lazyStarting || (!conn.client && conn.config.transport === "stdio"))) {
+			conn = await this.ensureLazyConnected(server, conn, signal);
 		}
 		if (!conn?.client || conn.status !== "ready") throw new Error(`MCP server "${server}" is not connected`);
 		let res: unknown;

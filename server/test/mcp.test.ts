@@ -1,12 +1,12 @@
 import { StreamableHTTPError } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { describe, expect, test } from "bun:test";
-import { mkdtempSync, realpathSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { buildApp } from "../src/app.ts";
 import type { Config } from "../src/config.ts";
 import { openDb } from "../src/db.ts";
-import { isHttpSessionExpiredError, MASK, McpManager } from "../src/mcp.ts";
+import { computeStdioConfigHash, isHttpSessionExpiredError, MASK, McpManager } from "../src/mcp.ts";
 import { startMcpHttp, startStatefulMcpHttp } from "./support/mcp-http-server.ts";
 
 const SERVER = join(import.meta.dir, "support", "mcp-echo-server.ts");
@@ -456,4 +456,417 @@ describe("MCP over HTTP auto-reconnect", () => {
 			remote.stop();
 		}
 	}, 15_000);
+});
+
+describe("MCP stdio tool cache & lazy startup", () => {
+	function readPids(logFile: string): number[] {
+		if (!existsSync(logFile)) return [];
+		return readFileSync(logFile, "utf8")
+			.trim()
+			.split("\n")
+			.filter(Boolean)
+			.map((s) => Number(s));
+	}
+
+	function isAlive(pid: number): boolean {
+		try {
+			process.kill(pid, 0);
+			return true;
+		} catch {
+			return false;
+		}
+	}
+
+	test("caches stdio tool schemas with SHA-256 hash (no plaintext secrets) and boots lazily without spawning", async () => {
+		const root = realpathSync(mkdtempSync(join(tmpdir(), "pipaya-mcp-cache-")));
+		const startLog = join(root, "starts.log");
+		const db = openDb(join(root, "app.db"));
+		const secret = "SUPER-SECRET-TOKEN-987654";
+		const mgr1 = new McpManager(db);
+		let mgr2: McpManager | undefined;
+		try {
+			mgr1.add({
+				name: "echo",
+				enabled: true,
+				transport: "stdio",
+				command: process.execPath,
+				args: [SERVER],
+				env: { PREFIX: secret, MCP_START_LOG: startLog },
+			});
+			await mgr1.waitFor("echo", 15_000);
+			expect(mgr1.info().servers[0]?.status).toBe("ready");
+			expect(readPids(startLog)).toHaveLength(1);
+
+			// Inspect SQLite cache row: hash is 64-hex SHA-256 and plaintext secret is never stored.
+			const row = db.query("SELECT server_name, config_hash, tools_json FROM mcp_tool_cache WHERE server_name = 'echo'").get() as {
+				server_name: string;
+				config_hash: string;
+				tools_json: string;
+			} | null;
+			expect(row).not.toBeNull();
+			expect(row!.config_hash).toMatch(/^[a-f0-9]{64}$/);
+			expect(row!.config_hash).not.toContain(secret);
+			expect(row!.tools_json).not.toContain(secret);
+
+			await mgr1.close();
+
+			// Reboot: new McpManager loads tools from SQLite cache without spawning a child process.
+			mgr2 = new McpManager(db);
+			mgr2.start();
+			await mgr2.waitInitial();
+
+			expect(readPids(startLog)).toHaveLength(1);
+			expect(mgr2.info()).toMatchObject({ ready: 1, tools: 1 });
+			expect(mgr2.info().servers[0]).toMatchObject({
+				name: "echo",
+				status: "ready",
+				tools: [{ name: "mcp_echo_echo", tool: "echo" }],
+			});
+			expect(mgr2.toolNames()).toEqual(["mcp_echo_echo"]);
+		} finally {
+			await mgr2?.close();
+			await mgr1.close();
+			db.close();
+			rmSync(root, { recursive: true, force: true });
+		}
+	}, 20_000);
+
+	test("first callTool triggers single-flight lazy startup for concurrent callers and respects AbortSignal", async () => {
+		const root = realpathSync(mkdtempSync(join(tmpdir(), "pipaya-mcp-lazy-")));
+		const startLog = join(root, "starts.log");
+		const db = openDb(join(root, "app.db"));
+		const mgr1 = new McpManager(db);
+		let mgr2: McpManager | undefined;
+		try {
+			mgr1.add({
+				name: "echo",
+				enabled: true,
+				transport: "stdio",
+				command: process.execPath,
+				args: [SERVER],
+				env: { PREFIX: "lazy:", MCP_START_LOG: startLog, MCP_START_DELAY_MS: "150" },
+			});
+			await mgr1.waitFor("echo", 15_000);
+			expect(readPids(startLog)).toHaveLength(1);
+			await mgr1.close();
+
+			// Boot from cache (no new spawn).
+			mgr2 = new McpManager(db);
+			mgr2.start();
+			await mgr2.waitInitial();
+			expect(readPids(startLog)).toHaveLength(1);
+
+			const tool = mgr2.toolDefs().mcp_echo_echo!.create("/", [], {});
+
+			// Pre-aborted signal must not trigger lazy startup.
+			const preAborted = new AbortController();
+			preAborted.abort("cancelled-early");
+			await expect(tool.execute("c0", { text: "skip" }, preAborted.signal)).rejects.toThrow("cancelled-early");
+			expect(readPids(startLog)).toHaveLength(1);
+
+			// Two concurrent calls: one aborts mid-startup while the other completes; only ONE process spawns.
+			const midAbort = new AbortController();
+			const abortedCall = tool.execute("c1-abort", { text: "abort-me" }, midAbort.signal);
+			const okCall = tool.execute("c1-ok", { text: "one" }, undefined);
+			const okCall2 = tool.execute("c2-ok", { text: "two" }, undefined);
+			await Bun.sleep(30);
+			midAbort.abort("cancelled-mid-start");
+
+			await expect(abortedCall).rejects.toThrow("cancelled-mid-start");
+			const [r1, r2] = await Promise.all([okCall, okCall2]);
+			expect(r1.content[0]).toEqual({ type: "text", text: "lazy:one" });
+			expect(r2.content[0]).toEqual({ type: "text", text: "lazy:two" });
+			expect(readPids(startLog)).toHaveLength(2);
+
+			// Subsequent call reuses the already-running process.
+			const r3 = await tool.execute("c3", { text: "three" }, undefined);
+			expect(r3.content[0]).toEqual({ type: "text", text: "lazy:three" });
+			expect(readPids(startLog)).toHaveLength(2);
+		} finally {
+			await mgr2?.close();
+			await mgr1.close();
+			db.close();
+			rmSync(root, { recursive: true, force: true });
+		}
+	}, 20_000);
+
+	test("config changes (command, args, env, inheritEnv) invalidate cache and reconnect eagerly", async () => {
+		const root = realpathSync(mkdtempSync(join(tmpdir(), "pipaya-mcp-inval-")));
+		const startLog = join(root, "starts.log");
+		const db = openDb(join(root, "app.db"));
+		const baseCfg = {
+			name: "echo",
+			enabled: true,
+			transport: "stdio" as const,
+			command: process.execPath,
+			args: [SERVER],
+			env: { PREFIX: "v1:", MCP_START_LOG: startLog },
+		};
+		// Verify config hash changes for every launch/filter field.
+		const hBase = computeStdioConfigHash(baseCfg);
+		expect(computeStdioConfigHash({ ...baseCfg, command: "/other/bin" })).not.toBe(hBase);
+		expect(computeStdioConfigHash({ ...baseCfg, args: [SERVER, "--flag"] })).not.toBe(hBase);
+		expect(computeStdioConfigHash({ ...baseCfg, env: { ...baseCfg.env, PREFIX: "v2:" } })).not.toBe(hBase);
+		expect(computeStdioConfigHash({ ...baseCfg, inheritEnv: true })).not.toBe(hBase);
+		expect(computeStdioConfigHash({ ...baseCfg, allowTools: ["echo"] })).not.toBe(hBase);
+		expect(computeStdioConfigHash({ ...baseCfg, denyTools: ["echo"] })).not.toBe(hBase);
+		// Key order in env must not change the hash.
+		expect(computeStdioConfigHash({ ...baseCfg, env: { MCP_START_LOG: startLog, PREFIX: "v1:" } })).toBe(hBase);
+
+		const mgr1 = new McpManager(db);
+		let mgr2: McpManager | undefined;
+		try {
+			mgr1.add(baseCfg);
+			await mgr1.waitFor("echo", 15_000);
+			expect(readPids(startLog)).toHaveLength(1);
+			await mgr1.close();
+
+			// Simulate offline config edit in SQLite (env changed) before reboot.
+			const updated = [{ ...baseCfg, env: { PREFIX: "v2:", MCP_START_LOG: startLog } }];
+			db.query("UPDATE settings SET data = $d WHERE key = 'mcp_servers'").run({ d: JSON.stringify(updated) });
+
+			mgr2 = new McpManager(db);
+			mgr2.start();
+			await mgr2.waitInitial();
+
+			// Cache hash mismatched -> eagerly spawned on boot and refreshed cache hash.
+			expect(readPids(startLog)).toHaveLength(2);
+			const row = db.query("SELECT config_hash FROM mcp_tool_cache WHERE server_name = 'echo'").get() as { config_hash: string };
+			expect(row.config_hash).toBe(computeStdioConfigHash(updated[0]!));
+
+			const tool = mgr2.toolDefs().mcp_echo_echo!.create("/", [], {});
+			expect((await tool.execute("c1", { text: "ok" }, undefined)).content[0]).toEqual({ type: "text", text: "v2:ok" });
+		} finally {
+			await mgr2?.close();
+			await mgr1.close();
+			db.close();
+			rmSync(root, { recursive: true, force: true });
+		}
+	}, 20_000);
+
+	test("explicit reload bypasses cache, spawns fresh process, and refreshes cached tools", async () => {
+		const root = realpathSync(mkdtempSync(join(tmpdir(), "pipaya-mcp-reload-")));
+		const startLog = join(root, "starts.log");
+		const extraToolFile = join(root, "enable-ping");
+		const db = openDb(join(root, "app.db"));
+		const mgr1 = new McpManager(db);
+		let mgr2: McpManager | undefined;
+		try {
+			mgr1.add({
+				name: "echo",
+				enabled: true,
+				transport: "stdio",
+				command: process.execPath,
+				args: [SERVER],
+				env: { MCP_START_LOG: startLog, MCP_EXTRA_TOOL_FILE: extraToolFile },
+			});
+			await mgr1.waitFor("echo", 15_000);
+			expect(mgr1.toolNames()).toEqual(["mcp_echo_echo"]);
+			expect(readPids(startLog)).toHaveLength(1);
+			await mgr1.close();
+
+			// Server now exposes an extra tool, but reboot still loads stale cache without spawning.
+			writeFileSync(extraToolFile, "1");
+			mgr2 = new McpManager(db);
+			mgr2.start();
+			await mgr2.waitInitial();
+			expect(readPids(startLog)).toHaveLength(1);
+			expect(mgr2.toolNames()).toEqual(["mcp_echo_echo"]);
+
+			// Explicit reload ignores cache, spawns fresh process, and updates SQLite cache.
+			mgr2.reload("echo");
+			await mgr2.waitFor("echo", 15_000);
+			expect(readPids(startLog)).toHaveLength(2);
+			expect(mgr2.toolNames()).toEqual(["mcp_echo_echo", "mcp_echo_ping"]);
+
+			const row = db.query("SELECT tools_json FROM mcp_tool_cache WHERE server_name = 'echo'").get() as { tools_json: string };
+			expect(row.tools_json).toContain("mcp_echo_ping");
+		} finally {
+			await mgr2?.close();
+			await mgr1.close();
+			db.close();
+			rmSync(root, { recursive: true, force: true });
+		}
+	}, 20_000);
+
+	test("lazy startup failure propagates redacted error, transitions to error state, and recovers on reload", async () => {
+		const root = realpathSync(mkdtempSync(join(tmpdir(), "pipaya-mcp-fail-")));
+		const startLog = join(root, "starts.log");
+		const failFile = join(root, "fail-now");
+		const secret = "SECRET-ERR-VALUE-123";
+		const db = openDb(join(root, "app.db"));
+		const mgr1 = new McpManager(db);
+		let mgr2: McpManager | undefined;
+		try {
+			mgr1.add({
+				name: "echo",
+				enabled: true,
+				transport: "stdio",
+				command: process.execPath,
+				args: [SERVER],
+				env: { PREFIX: secret, MCP_START_LOG: startLog, MCP_FAIL_FILE: failFile },
+			});
+			await mgr1.waitFor("echo", 15_000);
+			expect(readPids(startLog)).toHaveLength(1);
+			await mgr1.close();
+
+			// Next startup will fail when lazily spawned.
+			writeFileSync(failFile, "1");
+			mgr2 = new McpManager(db);
+			mgr2.start();
+			await mgr2.waitInitial();
+			expect(mgr2.info().servers[0]?.status).toBe("ready");
+			expect(readPids(startLog)).toHaveLength(1);
+
+			const tool = mgr2.toolDefs().mcp_echo_echo!.create("/", [], {});
+			let caught: Error | undefined;
+			try {
+				await tool.execute("c1", { text: "boom" }, undefined);
+			} catch (e) {
+				caught = e as Error;
+			}
+			expect(caught).toBeDefined();
+			expect(caught!.message).toContain('MCP server "echo" failed to start');
+			expect(caught!.message).not.toContain(secret);
+
+			// State recovered cleanly to error with no stale tools.
+			const info = mgr2.info();
+			expect(info.servers[0]?.status).toBe("error");
+			expect(info.servers[0]?.error).toBeTruthy();
+			expect(info.servers[0]?.error).not.toContain(secret);
+			expect(mgr2.toolNames()).toEqual([]);
+
+			// Once fixed, reload recovers back to ready.
+			rmSync(failFile, { force: true });
+			mgr2.reload("echo");
+			await mgr2.waitFor("echo", 15_000);
+			expect(mgr2.info().servers[0]?.status).toBe("ready");
+			const recovered = mgr2.toolDefs().mcp_echo_echo!.create("/", [], {});
+			expect((await recovered.execute("c2", { text: "ok" }, undefined)).content[0]).toEqual({ type: "text", text: `${secret}ok` });
+		} finally {
+			await mgr2?.close();
+			await mgr1.close();
+			db.close();
+			rmSync(root, { recursive: true, force: true });
+		}
+	}, 20_000);
+
+	test("disable or remove during in-flight lazy startup cleans up child process without leak", async () => {
+		const root = realpathSync(mkdtempSync(join(tmpdir(), "pipaya-mcp-drop-")));
+		const startLog = join(root, "starts.log");
+		const db = openDb(join(root, "app.db"));
+		const mgr1 = new McpManager(db);
+		let mgr2: McpManager | undefined;
+		try {
+			// 1) Disable mid-lazy-startup
+			mgr1.add({
+				name: "echo",
+				enabled: true,
+				transport: "stdio",
+				command: process.execPath,
+				args: [SERVER],
+				env: { MCP_START_LOG: startLog, MCP_START_DELAY_MS: "400" },
+			});
+			await mgr1.waitFor("echo", 15_000);
+			expect(readPids(startLog)).toHaveLength(1);
+			await mgr1.close();
+
+			mgr2 = new McpManager(db);
+			mgr2.start();
+			await mgr2.waitInitial();
+
+			const tool = mgr2.toolDefs().mcp_echo_echo!.create("/", [], {});
+			const pendingDisable = tool.execute("c1", { text: "abort" }, undefined);
+			// Wait until the lazy child process has started and logged its PID.
+			await until(async () => readPids(startLog).length, (n) => n >= 2);
+			const pid1 = readPids(startLog)[1]!;
+
+			mgr2.patch("echo", { enabled: false });
+			await expect(pendingDisable).rejects.toThrow(/not connected/);
+			expect(mgr2.info().servers[0]?.status).toBe("off");
+			expect(mgr2.toolNames()).toEqual([]);
+
+			// Verify child process exited (no leak).
+			const exited1 = await until(async () => !isAlive(pid1), (dead) => dead);
+			expect(exited1).toBe(true);
+
+			// 2) Re-enable, reboot from cache, and remove mid-lazy-startup
+			mgr2.patch("echo", { enabled: true });
+			await mgr2.waitFor("echo", 15_000);
+			await mgr2.close();
+
+			mgr2 = new McpManager(db);
+			mgr2.start();
+			await mgr2.waitInitial();
+			const countBeforeRemove = readPids(startLog).length;
+
+			const tool2 = mgr2.toolDefs().mcp_echo_echo!.create("/", [], {});
+			const pendingRemove = tool2.execute("c2", { text: "remove" }, undefined);
+			await until(async () => readPids(startLog).length, (n) => n > countBeforeRemove);
+			const pid2 = readPids(startLog)[countBeforeRemove]!;
+
+			mgr2.remove("echo");
+			await expect(pendingRemove).rejects.toThrow(/not connected/);
+			expect(mgr2.info().servers).toHaveLength(0);
+
+			// Cache row is deleted when server is removed.
+			const row = db.query("SELECT server_name FROM mcp_tool_cache WHERE server_name = 'echo'").get();
+			expect(row).toBeNull();
+
+			const exited2 = await until(async () => !isAlive(pid2), (dead) => dead);
+			expect(exited2).toBe(true);
+		} finally {
+			await mgr2?.close();
+			await mgr1.close();
+			db.close();
+			rmSync(root, { recursive: true, force: true });
+		}
+	}, 25_000);
+
+	test("empty or tampered cache rows fall back to eager startup and refresh cache", async () => {
+		const root = realpathSync(mkdtempSync(join(tmpdir(), "pipaya-mcp-corrupt-")));
+		const startLog = join(root, "starts.log");
+		const db = openDb(join(root, "app.db"));
+		const cfg = {
+			name: "echo",
+			enabled: true,
+			transport: "stdio" as const,
+			command: process.execPath,
+			args: [SERVER],
+			env: { MCP_START_LOG: startLog },
+		};
+		const mgr1 = new McpManager(db);
+		let mgr2: McpManager | undefined;
+		let mgr3: McpManager | undefined;
+		try {
+			mgr1.add(cfg);
+			await mgr1.waitFor("echo", 15_000);
+			expect(readPids(startLog)).toHaveLength(1);
+			await mgr1.close();
+
+			// 1) Empty tool list in cache must be treated as a cache miss (eager connect).
+			db.query("UPDATE mcp_tool_cache SET tools_json = '[]' WHERE server_name = 'echo'").run();
+			mgr2 = new McpManager(db);
+			mgr2.start();
+			await mgr2.waitInitial();
+			expect(readPids(startLog)).toHaveLength(2);
+			expect(mgr2.toolNames()).toEqual(["mcp_echo_echo"]);
+			await mgr2.close();
+
+			// 2) Tampered tool name (prototype pollution attempt) must be treated as a cache miss.
+			const tampered = JSON.stringify([{ name: "__proto__", tool: "echo", description: "", schema: { type: "object" } }]);
+			db.query("UPDATE mcp_tool_cache SET tools_json = $j WHERE server_name = 'echo'").run({ j: tampered });
+			mgr3 = new McpManager(db);
+			mgr3.start();
+			await mgr3.waitInitial();
+			expect(readPids(startLog)).toHaveLength(3);
+			expect(mgr3.toolNames()).toEqual(["mcp_echo_echo"]);
+		} finally {
+			await mgr3?.close();
+			await mgr2?.close();
+			await mgr1.close();
+			db.close();
+			rmSync(root, { recursive: true, force: true });
+		}
+	}, 20_000);
 });
