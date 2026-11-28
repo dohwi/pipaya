@@ -51,6 +51,13 @@
 	</SettingRow>
 </section>
 
+<section class="set-group">
+	<div class="section-label">{t("동작")}</div>
+	<SettingRow label={t("길게 눌러 바로 대기열에 넣기")} hint={t("모바일에서 작업 중일 때 전송 버튼을 길게 누르면 선택 창 없이 바로 대기열에 넣습니다. 끄면 끼워 넣기·대기열 선택 창이 열립니다")}>
+		<Switch checked={app.prefs.holdToQueue} label={t("길게 눌러 바로 대기열에 넣기")} onchange={(on) => app.prefs.setHoldToQueue(on)} />
+	</SettingRow>
+</section>
+
 <section class="set-group"><NotificationSettings /></section>
 <section class="set-group">
 	<div class="section-label">{t("알림음")}</div>

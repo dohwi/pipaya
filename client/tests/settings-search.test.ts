@@ -35,6 +35,11 @@ describe("settings search", () => {
 		const hit = find("zoom").find((h) => h.key.startsWith("item:"));
 		expect(hit).toMatchObject({ title: "화면 배율", target: { tab: "general" } });
 	});
+	test("mobile hold-to-queue setting is searchable in Korean and English", () => {
+		for (const q of ["대기열", "follow-up", "길게", "hold queue"]) {
+			expect(find(q).some((h) => h.title === "길게 눌러 바로 대기열에 넣기" && h.target.tab === "general"), q).toBe(true);
+		}
+	});
 	test("subagent delegation is found by its name, in English, and by its old name", () => {
 		for (const q of ["서브에이전트", "subagent", "delegate", "도우미"]) expect(find(q).some((h) => h.target.tab === "tools"), q).toBe(true);
 	});

@@ -25,6 +25,7 @@ export const K = {
   footer: "pipaya.footer", // footer items: { order, hidden, layout, align }
   uiScale: "pipaya.uiscale", // whole-app zoom in percent, 50-200 (100 = normal)
   expandWork: "pipaya.work.expand", // work boxes (a reply's tool calls) open by default: true | false
+  holdToQueue: "pipaya.touch.holdToQueue", // mobile: long-press the send button while running to queue directly instead of opening the menu: true | false
   keys: "pipaya.keys", // shortcut overrides: { <action>: combo | "" }
   nativeInputKeys: "pipaya.keys.nativeInput", // prefer OS text-editing shortcuts (Cmd/Ctrl+Arrow, etc.) in text fields: true | false
   settingsFold: "pipaya.settings.fold", // settings sections folded or unfolded by the user: { <tabId>: true (folded) | false }
