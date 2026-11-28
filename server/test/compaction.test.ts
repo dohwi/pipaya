@@ -230,6 +230,129 @@ describe("POST /sessions/:id/compact", () => {
 		}
 	});
 
+	test("a context-overflow error during summary generation shrinks the transcript and succeeds", async () => {
+		await api("PUT", "/compaction", { auto: false, model: null });
+		const id = await newSession();
+		await say(id, `first-${"a".repeat(1800)}`);
+		await say(id, `second-${"b".repeat(1800)}`);
+		await say(id, "third");
+		const real = app.sessions as any;
+		const original = real.registry.models.completeSimple;
+		const seenLengths: number[] = [];
+		real.registry.models.completeSimple = async (m: unknown, ctx: { messages: { content: string }[] }, opts: unknown) => {
+			seenLengths.push(String(ctx.messages[0]?.content ?? "").length);
+			if (seenLengths.length === 1) {
+				return {
+					stopReason: "error",
+					errorMessage: "prompt is too long: 120000 tokens > 100000 maximum",
+					content: [],
+					usage: {},
+				};
+			}
+			return original.call(real.registry.models, m, ctx, opts);
+		};
+		try {
+			const r = await api("POST", `/sessions/${id}/compact`, {});
+			expect(r.status).toBe(200);
+			expect(seenLengths).toHaveLength(2);
+			expect(seenLengths[1]!).toBeLessThan(seenLengths[0]!);
+		} finally {
+			real.registry.models.completeSimple = original;
+		}
+	});
+
+	test("a length-truncated summary retries with a shrunk transcript and concise instruction, and fails if length persists", async () => {
+		await api("PUT", "/compaction", { auto: false, model: null });
+		const id = await newSession();
+		await say(id, `first-${"x".repeat(1800)}`);
+		await say(id, `second-${"y".repeat(1800)}`);
+		await say(id, "third");
+		const real = app.sessions as any;
+		const original = real.registry.models.completeSimple;
+
+		// Case 1: persistent stopReason=length -> fails with 502 + compaction_failed, does not save truncated summary.
+		let persistentAttempts = 0;
+		real.registry.models.completeSimple = async () => {
+			persistentAttempts++;
+			return {
+				stopReason: "length",
+				content: [{ type: "text", text: "truncated partial summary" }],
+				usage: { input: 100, output: 4096, cacheRead: 0, cacheWrite: 0, totalTokens: 4196, cost: { total: 0 } },
+			};
+		};
+		try {
+			const r = await api("POST", `/sessions/${id}/compact`, {});
+			expect(r.status).toBe(502);
+			expect(persistentAttempts).toBeGreaterThan(1);
+			const failed = app.bus.history({ sessionId: id, after: 0, limit: 500 }).filter((e) => e.type === "compaction_failed");
+			expect(failed.length).toBeGreaterThanOrEqual(1);
+			expect((failed.at(-1)!.data as any).errorMessage).toContain("truncated");
+			expect(real.store.projection(id).summary).toBeNull();
+		} finally {
+			real.registry.models.completeSimple = original;
+		}
+
+		// Case 2: stopReason=length once -> shrinks and succeeds on retry.
+		const prompts: string[] = [];
+		real.registry.models.completeSimple = async (m: unknown, ctx: { messages: { content: string }[] }, opts: unknown) => {
+			prompts.push(String(ctx.messages[0]?.content ?? ""));
+			if (prompts.length === 1) {
+				return {
+					stopReason: "length",
+					content: [{ type: "text", text: "truncated once" }],
+					usage: { input: 100, output: 4096, cacheRead: 0, cacheWrite: 0, totalTokens: 4196, cost: { total: 0 } },
+				};
+			}
+			return original.call(real.registry.models, m, ctx, opts);
+		};
+		try {
+			const r = await api("POST", `/sessions/${id}/compact`, {});
+			expect(r.status).toBe(200);
+			expect(prompts).toHaveLength(2);
+			expect(prompts[1]!.length).toBeLessThan(prompts[0]!.length);
+			expect(prompts[1]).toContain("truncated at the output token limit");
+		} finally {
+			real.registry.models.completeSimple = original;
+		}
+	});
+
+	test("aborting during a compaction overflow stops immediately without shrink-retrying", async () => {
+		await api("PUT", "/compaction", { auto: false, model: null });
+		const id = await newSession();
+		await say(id, `first-${"z".repeat(1800)}`);
+		await say(id, `second-${"w".repeat(1800)}`);
+		await say(id, "third");
+		const real = app.sessions as any;
+		const original = real.registry.models.completeSimple;
+		let attempts = 0;
+		let release!: () => void;
+		const gate = new Promise<void>((r) => { release = r; });
+		real.registry.models.completeSimple = async () => {
+			attempts++;
+			await gate;
+			return {
+				stopReason: "error",
+				errorMessage: "prompt is too long: 120000 tokens > 100000 maximum",
+				content: [],
+				usage: {},
+			};
+		};
+		try {
+			const compact = api("POST", `/sessions/${id}/compact`, {});
+			while (!real.live.get(id)?.compacting) await new Promise((r) => setTimeout(r, 5));
+			await api("POST", `/sessions/${id}/abort`);
+			release();
+			const r = await compact;
+			expect(r.status).toBe(409);
+			expect(attempts).toBe(1);
+			const failed = app.bus.history({ sessionId: id, after: 0, limit: 500 }).filter((e) => e.type === "compaction_failed");
+			expect(failed).toHaveLength(1);
+			expect((failed[0]!.data as any).aborted).toBe(true);
+		} finally {
+			real.registry.models.completeSimple = original;
+		}
+	});
+
 	test("persistent zero-output error on a large context triggers one compaction and continues", async () => {
 		await api("PUT", "/compaction", { auto: true, model: null, thresholdPercent: 95 });
 		const id = await newSession();
