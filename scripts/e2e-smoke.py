@@ -345,8 +345,12 @@ def run_flows(a, out, client_url, api_base, token, api, console, work):
             expect(composer().locator('.tok.image svg.ic')).to_have_count(1)
             composer().press("End")
             composer().type(" look")
+            # Regression: Home before a leading atomic chip then End must reach the end of the line, not stay stuck before the chip.
+            composer().press("Home")
+            composer().press("End")
+            composer().type("!")
             page.reload()
-            expect(composer()).to_have_attribute("data-value", re.compile(r"#image1\s+look"))
+            expect(composer()).to_have_attribute("data-value", re.compile(r"#image1\s+look!"))
             expect(composer().locator('.tok.image svg.ic')).to_have_count(1)
             expect(thumb).to_be_visible()
             expect(page.get_by_role("img", name="dot.png")).to_have_js_property("naturalWidth", 1)

@@ -18,6 +18,40 @@ export function historyKey(e: { key: string; shiftKey: boolean; altKey: boolean;
 	return e.key === "ArrowUp" || e.key === "ArrowDown";
 }
 
+export type EdgeNavTarget = "line-start" | "line-end" | "doc-start" | "doc-end";
+
+export interface EdgeNavAction {
+	target: EdgeNavTarget;
+	extend: boolean;
+}
+
+/**
+ * Line- and document-edge navigation shortcuts (`Home`/`End`, `Ctrl+Home`/`End`, and macOS `⌘←`/`⌘→`/`⌘↑`/`⌘↓`).
+ * Chromium and WebKit mishandle native line-boundary movement around `contenteditable="false"` inline-flex token chips
+ * (e.g. `End` getting stuck before a leading `@mention` chip, or `Home` jumping to the previous line after a chip).
+ */
+export function edgeNavKey(
+	e: { key: string; shiftKey: boolean; altKey: boolean; ctrlKey: boolean; metaKey: boolean; isComposing: boolean; keyCode?: number },
+	composing: boolean,
+	mac: boolean,
+): EdgeNavAction | null {
+	if (composing || e.isComposing || e.keyCode === 229 || e.altKey) return null;
+	if ((e.key === "Home" || e.key === "End") && !e.metaKey) {
+		if (e.ctrlKey) {
+			if (mac) return null;
+			return { target: e.key === "Home" ? "doc-start" : "doc-end", extend: e.shiftKey };
+		}
+		return { target: e.key === "Home" ? "line-start" : "line-end", extend: e.shiftKey };
+	}
+	if (mac && e.metaKey && !e.ctrlKey) {
+		if (e.key === "ArrowLeft") return { target: "line-start", extend: e.shiftKey };
+		if (e.key === "ArrowRight") return { target: "line-end", extend: e.shiftKey };
+		if (e.key === "ArrowUp") return { target: "doc-start", extend: e.shiftKey };
+		if (e.key === "ArrowDown") return { target: "doc-end", extend: e.shiftKey };
+	}
+	return null;
+}
+
 /** What an Enter press (already known not to be mid-composition and not on a touch device) does. */
 export type EnterPlan = "queue" | "newline" | "command" | "steer" | "send";
 

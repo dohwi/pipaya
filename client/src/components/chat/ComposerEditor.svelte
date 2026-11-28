@@ -1,7 +1,20 @@
 <script lang="ts">
 	import { caretOnFirstVisualLine, caretOnLastVisualLine } from "../../lib/caret-line";
 	import type { ComposerPart } from "../../lib/composer-text";
-	import { domMatchesParts, getEditorSelection, readEditorText, renderEditorDom, setEditorSelection, tokenBoundaryOffset } from "../../lib/composer/editor-dom";
+	import {
+		domMatchesParts,
+		getEditorSelection,
+		moveEditorEdge,
+		readEditorText,
+		renderEditorDom,
+		setEditorSelection,
+		tokenBoundaryOffset,
+		type WrapAffinity,
+	} from "../../lib/composer/editor-dom";
+	import { edgeNavKey } from "../../lib/composer/input-keys";
+	import { isMac } from "../../lib/keys";
+
+	const MODIFIER_KEYS = new Set(["Shift", "Control", "Meta", "Alt"]);
 
 	let {
 		text = $bindable(""),
@@ -38,6 +51,7 @@
 	let el: HTMLDivElement | undefined = $state();
 	let composing = $state(false);
 	let pendingSelection: { start: number; end: number } | null = null;
+	let wrapAffinity: WrapAffinity | null = null;
 
 	/** Reconcile token chips into the DOM whenever `parts` changes outside an active IME composition. */
 	$effect(() => {
@@ -48,8 +62,10 @@
 		const saved = pendingSelection ?? (hadFocus ? getEditorSelection(target) : null);
 		if (!domMatchesParts(target, nextParts)) {
 			renderEditorDom(target, nextParts);
+			wrapAffinity = null;
 			if (hadFocus && saved) setEditorSelection(target, saved.start, saved.end);
 		} else if (hadFocus && pendingSelection) {
+			wrapAffinity = null;
 			setEditorSelection(target, pendingSelection.start, pendingSelection.end);
 		}
 		pendingSelection = null;
@@ -72,6 +88,7 @@
 	export function setSelection(start: number, end = start) {
 		const clampedStart = Math.max(0, Math.min(start, text.length));
 		const clampedEnd = Math.max(0, Math.min(end, text.length));
+		wrapAffinity = null;
 		pendingSelection = { start: clampedStart, end: clampedEnd };
 		if (el && !composing && domMatchesParts(el, parts)) {
 			setEditorSelection(el, clampedStart, clampedEnd);
@@ -104,6 +121,7 @@
 
 	function handleInput() {
 		if (!el) return;
+		wrapAffinity = null;
 		text = readEditorText(el);
 		oninput?.();
 	}
@@ -111,6 +129,18 @@
 	function handleKeyDown(e: KeyboardEvent) {
 		onkeydown?.(e);
 		if (e.defaultPrevented) return;
+		if (!readonly && el) {
+			const edge = edgeNavKey(e, composing, isMac);
+			if (edge) {
+				const res = moveEditorEdge(el, edge.target, edge.extend, wrapAffinity);
+				if (res.handled) {
+					wrapAffinity = res.affinity;
+					e.preventDefault();
+					return;
+				}
+			}
+		}
+		if (!MODIFIER_KEYS.has(e.key)) wrapAffinity = null;
 		// Normalise newline Enter (Shift+Enter on desktop, Enter on touch) to a clean "\n" instead of browser <div>/<br> quirks.
 		if (e.key === "Enter" && !composing && !e.isComposing && !readonly) {
 			e.preventDefault();
@@ -120,6 +150,7 @@
 
 	function handleCompositionStart() {
 		composing = true;
+		wrapAffinity = null;
 		oncompositionstart?.();
 	}
 
@@ -159,13 +190,17 @@
 	function handleMouseDown(e: MouseEvent) {
 		if (!el || readonly) return;
 		const chip = (e.target as HTMLElement | null)?.closest<HTMLElement>("[data-token]");
-		if (!chip || !el.contains(chip)) return;
+		if (!chip || !el.contains(chip)) {
+			wrapAffinity = null;
+			return;
+		}
 		e.preventDefault();
 		el.focus();
 		const rect = chip.getBoundingClientRect();
 		const side = e.clientX < rect.left + rect.width / 2 ? "before" : "after";
 		const pos = tokenBoundaryOffset(el, chip, side);
 		setEditorSelection(el, pos, pos);
+		wrapAffinity = { pos, side: side === "before" ? "start" : "end" };
 		onclick?.();
 	}
 </script>

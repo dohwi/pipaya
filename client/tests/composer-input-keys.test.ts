@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { enterPlan, hangulCommit, historyKey, lastPromptOf, menuAria, sentPrompts } from "../src/lib/composer/input-keys";
 import { Ime } from "../src/lib/composer/ime";
+import { edgeNavKey, enterPlan, hangulCommit, historyKey, lastPromptOf, menuAria, sentPrompts } from "../src/lib/composer/input-keys";
 
 const plan = (o: Partial<Parameters<typeof enterPlan>[0]> = {}) => enterPlan({ running: false, combo: "Enter", queueCombo: "Alt+Enter", shift: false, isCommand: false, ...o });
 
@@ -73,6 +73,42 @@ describe("historyKey", () => {
 		for (const o of [{ shiftKey: true }, { altKey: true }, { ctrlKey: true }, { metaKey: true }, { isComposing: true }, { key: "Enter" }]) expect(historyKey(key(o), false, true)).toBe(false);
 		expect(historyKey(key(), true, true)).toBe(false);
 		expect(historyKey(key(), false, false)).toBe(false);
+	});
+});
+
+describe("edgeNavKey", () => {
+	const key = (o: object = {}) => ({ key: "End", shiftKey: false, altKey: false, ctrlKey: false, metaKey: false, isComposing: false, ...o });
+
+	test("Home/End map to visual line edges on both platforms (with optional Shift)", () => {
+		expect(edgeNavKey(key({ key: "Home" }), false, false)).toEqual({ target: "line-start", extend: false });
+		expect(edgeNavKey(key({ key: "End" }), false, false)).toEqual({ target: "line-end", extend: false });
+		expect(edgeNavKey(key({ key: "Home", shiftKey: true }), false, false)).toEqual({ target: "line-start", extend: true });
+		expect(edgeNavKey(key({ key: "End", shiftKey: true }), false, true)).toEqual({ target: "line-end", extend: true });
+	});
+
+	test("Ctrl+Home/End map to document edges only on non-Mac", () => {
+		expect(edgeNavKey(key({ key: "Home", ctrlKey: true }), false, false)).toEqual({ target: "doc-start", extend: false });
+		expect(edgeNavKey(key({ key: "End", ctrlKey: true, shiftKey: true }), false, false)).toEqual({ target: "doc-end", extend: true });
+		expect(edgeNavKey(key({ key: "Home", ctrlKey: true }), false, true)).toBeNull();
+		expect(edgeNavKey(key({ key: "End", ctrlKey: true }), false, true)).toBeNull();
+	});
+
+	test("Meta+Arrow maps to line/document edges only on Mac", () => {
+		expect(edgeNavKey(key({ key: "ArrowLeft", metaKey: true }), false, true)).toEqual({ target: "line-start", extend: false });
+		expect(edgeNavKey(key({ key: "ArrowRight", metaKey: true, shiftKey: true }), false, true)).toEqual({ target: "line-end", extend: true });
+		expect(edgeNavKey(key({ key: "ArrowUp", metaKey: true }), false, true)).toEqual({ target: "doc-start", extend: false });
+		expect(edgeNavKey(key({ key: "ArrowDown", metaKey: true, shiftKey: true }), false, true)).toEqual({ target: "doc-end", extend: true });
+		expect(edgeNavKey(key({ key: "ArrowRight", metaKey: true }), false, false)).toBeNull();
+	});
+
+	test("ignores IME, Alt combos, Meta+Home/End, and non-edge keys", () => {
+		expect(edgeNavKey(key(), true, false)).toBeNull();
+		expect(edgeNavKey(key({ isComposing: true }), false, false)).toBeNull();
+		expect(edgeNavKey(key({ altKey: true }), false, false)).toBeNull();
+		expect(edgeNavKey(key({ metaKey: true }), false, true)).toBeNull();
+		expect(edgeNavKey(key({ key: "ArrowRight", metaKey: true, ctrlKey: true }), false, true)).toBeNull();
+		expect(edgeNavKey(key({ key: "ArrowRight", ctrlKey: true }), false, false)).toBeNull();
+		expect(edgeNavKey(key({ key: "a" }), false, false)).toBeNull();
 	});
 });
 

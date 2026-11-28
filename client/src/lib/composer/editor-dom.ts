@@ -6,6 +6,7 @@
 import type { ComposerPart } from "../composer-text";
 import { formatFileLine, splitFilePath, splitFileRef } from "../files";
 import { ICON_PATHS, type IconName } from "../icons";
+import type { EdgeNavTarget } from "./input-keys";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 const ZWS = /\u200b/g;
@@ -223,6 +224,364 @@ export function tokenBoundaryOffset(root: HTMLElement, chip: HTMLElement, side: 
 	if (idx < 0) return readEditorText(root).length;
 	const before = pointToOffset(root, root, idx);
 	return side === "before" ? before : before + (chip.dataset.token ?? "").length;
+}
+
+/**
+ * Remembers which side of an internal soft-wrap boundary a caret landed on (downstream `"start"` of the lower visual
+ * line vs upstream `"end"` of the upper visual line), since programmatic DOM Ranges cannot set Blink's internal affinity.
+ */
+export interface WrapAffinity {
+	pos: number;
+	side: "start" | "end";
+}
+
+function setDirectionalSelection(root: HTMLElement, anchor: number, focus: number): void {
+	const sel = root.ownerDocument.getSelection();
+	if (!sel) return;
+	const a = offsetToPoint(root, Math.max(0, anchor));
+	const b = focus === anchor ? a : offsetToPoint(root, Math.max(0, focus));
+	if (focus !== anchor && typeof sel.setBaseAndExtent === "function") {
+		sel.setBaseAndExtent(a.node, a.offset, b.node, b.offset);
+		return;
+	}
+	const [lo, hi] = anchor <= focus ? [a, b] : [b, a];
+	const range = root.ownerDocument.createRange();
+	range.setStart(lo.node, lo.offset);
+	range.setEnd(hi.node, hi.offset);
+	sel.removeAllRanges();
+	sel.addRange(range);
+}
+
+type HardLineItem =
+	| { kind: "text"; node: Text; start: number; end: number }
+	| { kind: "token"; node: HTMLElement; start: number; end: number };
+
+interface HardLine {
+	start: number;
+	end: number;
+	items: HardLineItem[];
+}
+
+interface VisualLine {
+	start: number;
+	end: number;
+	y: number;
+}
+
+function findHardLine(root: HTMLElement, focusPos: number): HardLine {
+	const kids = root.childNodes;
+	let acc = 0;
+	let lineStart = 0;
+	let items: HardLineItem[] = [];
+	for (let i = 0; i < kids.length; i++) {
+		const child = kids[i]!;
+		if (isSentinelBr(child)) break;
+		if (isBr(child)) {
+			if (focusPos <= acc) return { start: lineStart, end: acc, items };
+			acc += 1;
+			lineStart = acc;
+			items = [];
+		} else if (child.nodeType === 3) {
+			const len = cleanText(child.nodeValue ?? "").length;
+			items.push({ kind: "text", node: child as Text, start: acc, end: acc + len });
+			acc += len;
+		} else if (isTokenEl(child)) {
+			const len = (child.dataset.token ?? "").length;
+			items.push({ kind: "token", node: child, start: acc, end: acc + len });
+			acc += len;
+		}
+	}
+	return { start: lineStart, end: acc, items };
+}
+
+function snapCharStart(raw: string, i: number): number {
+	if (i > 0 && i < raw.length) {
+		const lo = raw.charCodeAt(i);
+		const hi = raw.charCodeAt(i - 1);
+		if (lo >= 0xdc00 && lo <= 0xdfff && hi >= 0xd800 && hi <= 0xdbff) return i - 1;
+	}
+	return i;
+}
+
+function stepCharEnd(raw: string, i: number): number {
+	if (i + 1 < raw.length) {
+		const hi = raw.charCodeAt(i);
+		const lo = raw.charCodeAt(i + 1);
+		if (hi >= 0xd800 && hi <= 0xdbff && lo >= 0xdc00 && lo <= 0xdfff) return i + 2;
+	}
+	return i + 1;
+}
+
+function charMidY(range: Range, node: Text, raw: string, idx: number): number | null {
+	const s = snapCharStart(raw, idx);
+	const e = stepCharEnd(raw, s);
+	range.setStart(node, s);
+	range.setEnd(node, e);
+	const rects = range.getClientRects();
+	for (let i = 0; i < rects.length; i++) {
+		const r = rects[i]!;
+		if (r.height > 0) return (r.top + r.bottom) / 2;
+	}
+	const box = range.getBoundingClientRect();
+	return box.height > 0 ? (box.top + box.bottom) / 2 : null;
+}
+
+function textNodeYBounds(range: Range, node: Text, rawLen: number): { min: number; max: number } | null {
+	if (rawLen <= 0) return null;
+	range.setStart(node, 0);
+	range.setEnd(node, rawLen);
+	const rects = range.getClientRects();
+	let min = Infinity;
+	let max = -Infinity;
+	for (let i = 0; i < rects.length; i++) {
+		const r = rects[i]!;
+		if (r.height <= 0) continue;
+		const y = (r.top + r.bottom) / 2;
+		if (y < min) min = y;
+		if (y > max) max = y;
+	}
+	return min <= max ? { min, max } : null;
+}
+
+function splitWrappedTextNode(doc: Document, node: Text, baseOffset: number, fallbackY: number, tol: number): VisualLine[] {
+	const raw = node.nodeValue ?? "";
+	if (!raw.length) return [];
+	const hasZws = raw.includes("\u200b");
+	const plainAt = (i: number) => (hasZws ? cleanText(raw.slice(0, i)).length : i);
+	const range = doc.createRange();
+	const runs: VisualLine[] = [];
+	let pos = 0;
+	let prevY = fallbackY;
+
+	while (pos < raw.length) {
+		let lineY = charMidY(range, node, raw, pos);
+		if (lineY === null) {
+			for (let probe = stepCharEnd(raw, pos); probe < raw.length; probe = stepCharEnd(raw, probe)) {
+				lineY = charMidY(range, node, raw, probe);
+				if (lineY !== null) break;
+			}
+			if (lineY === null) lineY = prevY;
+		}
+		prevY = lineY;
+
+		let lo = pos;
+		let hi = raw.length - 1;
+		let best = pos;
+		while (lo <= hi) {
+			const mid = snapCharStart(raw, (lo + hi) >> 1);
+			let y = charMidY(range, node, raw, mid);
+			if (y === null) {
+				for (let p = stepCharEnd(raw, mid); p <= hi; p = stepCharEnd(raw, p)) {
+					y = charMidY(range, node, raw, p);
+					if (y !== null) break;
+				}
+			}
+			if (y === null || Math.abs(y - lineY) <= tol) {
+				best = mid;
+				lo = stepCharEnd(raw, mid);
+			} else {
+				hi = mid - 1;
+			}
+		}
+
+		const nextPos = stepCharEnd(raw, best);
+		runs.push({ start: baseOffset + plainAt(pos), end: baseOffset + plainAt(nextPos), y: lineY });
+		pos = nextPos;
+	}
+	return runs;
+}
+
+function measureVisualLines(root: HTMLElement, line: HardLine): VisualLine[] {
+	if (line.items.length === 0) return [{ start: line.start, end: line.end, y: 0 }];
+	const doc = root.ownerDocument;
+	const view = doc.defaultView;
+	const lh = (view ? Number.parseFloat(view.getComputedStyle(root).lineHeight) : Number.NaN) || 24;
+	const tol = lh * 0.5;
+	const probeRange = doc.createRange();
+
+	// Fast check: if all items on this hard line share one visual line (or layout is unmeasured, e.g. happy-dom), skip splitting.
+	let minY = Infinity;
+	let maxY = -Infinity;
+	const bounds: Array<{ min: number; max: number } | null> = [];
+	for (const item of line.items) {
+		let b: { min: number; max: number } | null = null;
+		if (item.kind === "token") {
+			const r = item.node.getBoundingClientRect();
+			if (r.height > 0) {
+				const y = (r.top + r.bottom) / 2;
+				b = { min: y, max: y };
+			}
+		} else {
+			b = textNodeYBounds(probeRange, item.node, (item.node.nodeValue ?? "").length);
+		}
+		bounds.push(b);
+		if (b) {
+			if (b.min < minY) minY = b.min;
+			if (b.max > maxY) maxY = b.max;
+		}
+	}
+	if (minY > maxY || maxY - minY <= tol) {
+		return [{ start: line.start, end: line.end, y: minY <= maxY ? (minY + maxY) / 2 : 0 }];
+	}
+
+	// Hard line soft-wraps: build per-visual-line runs and merge adjacent runs sharing the same visual row.
+	const runs: VisualLine[] = [];
+	let lastY = minY;
+	for (let i = 0; i < line.items.length; i++) {
+		const item = line.items[i]!;
+		const b = bounds[i];
+		if (item.kind === "token") {
+			const y = b ? b.min : lastY;
+			lastY = y;
+			runs.push({ start: item.start, end: item.end, y });
+		} else {
+			if (item.start === item.end) continue;
+			if (!b || b.max - b.min <= tol) {
+				const y = b ? (b.min + b.max) / 2 : lastY;
+				lastY = y;
+				runs.push({ start: item.start, end: item.end, y });
+			} else {
+				const split = splitWrappedTextNode(doc, item.node, item.start, lastY, tol);
+				for (const r of split) {
+					lastY = r.y;
+					runs.push(r);
+				}
+			}
+		}
+	}
+	if (runs.length === 0) return [{ start: line.start, end: line.end, y: minY }];
+
+	const merged: VisualLine[] = [runs[0]!];
+	for (let i = 1; i < runs.length; i++) {
+		const cur = runs[i]!;
+		const prev = merged[merged.length - 1]!;
+		if (Math.abs(cur.y - prev.y) <= tol) {
+			prev.end = cur.end;
+		} else {
+			merged.push({ ...cur });
+		}
+	}
+	return merged;
+}
+
+function pickVisualLineIndex(
+	root: HTMLElement,
+	sel: Selection,
+	visualLines: readonly VisualLine[],
+	focusPos: number,
+	wrapHint: WrapAffinity | null,
+): number {
+	const last = visualLines.length - 1;
+	if (last <= 0) return 0;
+	if (focusPos <= visualLines[0]!.start) return 0;
+	if (focusPos >= visualLines[last]!.end) return last;
+
+	for (let i = 0; i <= last; i++) {
+		const v = visualLines[i]!;
+		if (focusPos > v.start && focusPos < v.end) return i;
+		if (focusPos === v.end && i < last && focusPos === visualLines[i + 1]!.start) {
+			if (wrapHint && wrapHint.pos === focusPos) {
+				return wrapHint.side === "start" ? i + 1 : i;
+			}
+			if (sel.focusNode && root.contains(sel.focusNode)) {
+				const r = root.ownerDocument.createRange();
+				r.setStart(sel.focusNode, sel.focusOffset);
+				r.collapse(true);
+				const cr = r.getClientRects()[0] ?? r.getBoundingClientRect();
+				if (cr && cr.height > 0) {
+					const cy = (cr.top + cr.bottom) / 2;
+					return Math.abs(cy - visualLines[i + 1]!.y) < Math.abs(cy - v.y) ? i + 1 : i;
+				}
+				if (sel.focusNode === root) {
+					const nextChild = root.childNodes[sel.focusOffset];
+					if (nextChild && isTokenEl(nextChild)) {
+						const chipRect = nextChild.getBoundingClientRect();
+						if (chipRect.height > 0) {
+							const cy = (chipRect.top + chipRect.bottom) / 2;
+							return Math.abs(cy - visualLines[i + 1]!.y) < Math.abs(cy - v.y) ? i + 1 : i;
+						}
+					}
+				}
+			}
+			return i;
+		}
+	}
+	return last;
+}
+
+function scrollCaretIntoView(root: HTMLElement, focusPos: number): void {
+	if (root.scrollHeight <= root.clientHeight) return;
+	const rootRect = root.getBoundingClientRect();
+	if (rootRect.height <= 0) return;
+	const pt = offsetToPoint(root, Math.max(0, focusPos));
+	let caretRect: DOMRect | null = null;
+	if (pt.node === root) {
+		const adj = root.childNodes[pt.offset] ?? root.childNodes[pt.offset - 1];
+		if (adj && adj.nodeType === 1) {
+			const r = (adj as HTMLElement).getBoundingClientRect();
+			if (r.height > 0) caretRect = r;
+		}
+	}
+	if (!caretRect) {
+		const r = root.ownerDocument.createRange();
+		r.setStart(pt.node, pt.offset);
+		r.collapse(true);
+		const cr = r.getClientRects()[0] ?? r.getBoundingClientRect();
+		if (cr && cr.height > 0) caretRect = cr;
+	}
+	if (!caretRect) return;
+	if (caretRect.top < rootRect.top) {
+		root.scrollTop -= rootRect.top - caretRect.top;
+	} else if (caretRect.bottom > rootRect.bottom) {
+		root.scrollTop += caretRect.bottom - rootRect.bottom;
+	}
+}
+
+/**
+ * Move (or Shift-extend) the selection to a visual line or document edge inside `root`.
+ * Runs only when `root` has a flat normalised child list containing at least one `[data-token]` chip; returns
+ * `{ handled: false, affinity: null }` otherwise so plain-text editors keep native browser behaviour.
+ */
+export function moveEditorEdge(
+	root: HTMLElement,
+	target: EdgeNavTarget,
+	extend: boolean,
+	wrapHint: WrapAffinity | null = null,
+): { handled: boolean; affinity: WrapAffinity | null } {
+	if (!root.querySelector("[data-token]")) return { handled: false, affinity: null };
+	const sel = root.ownerDocument.getSelection();
+	if (!sel || sel.rangeCount === 0 || !sel.focusNode || !sel.anchorNode) return { handled: false, affinity: null };
+	if (!root.contains(sel.focusNode) || !root.contains(sel.anchorNode)) return { handled: false, affinity: null };
+	for (let i = 0; i < root.childNodes.length; i++) {
+		const child = root.childNodes[i]!;
+		if (child.nodeType !== 3 && !isTokenEl(child) && !isBr(child)) return { handled: false, affinity: null };
+	}
+
+	const anchorPos = pointToOffset(root, sel.anchorNode, sel.anchorOffset);
+	const focusPos = sel.isCollapsed ? anchorPos : pointToOffset(root, sel.focusNode, sel.focusOffset);
+
+	if (target === "doc-start" || target === "doc-end") {
+		const nextPos = target === "doc-start" ? 0 : readEditorText(root).length;
+		setDirectionalSelection(root, extend ? anchorPos : nextPos, nextPos);
+		root.scrollTop = target === "doc-start" ? 0 : root.scrollHeight;
+		return { handled: true, affinity: null };
+	}
+
+	const hardLine = findHardLine(root, focusPos);
+	const visualLines = measureVisualLines(root, hardLine);
+	const idx = pickVisualLineIndex(root, sel, visualLines, focusPos, wrapHint);
+	const cur = visualLines[idx]!;
+	const nextPos = target === "line-start" ? cur.start : cur.end;
+	setDirectionalSelection(root, extend ? anchorPos : nextPos, nextPos);
+	scrollCaretIntoView(root, nextPos);
+
+	const affinity: WrapAffinity | null =
+		target === "line-start" && idx > 0
+			? { pos: nextPos, side: "start" }
+			: target === "line-end" && idx < visualLines.length - 1
+				? { pos: nextPos, side: "end" }
+				: null;
+	return { handled: true, affinity };
 }
 
 type ExpectedNode =
