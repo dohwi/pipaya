@@ -205,8 +205,9 @@ export function resolveDirDrop(opts: DirResolveOpts): BlockDrop | null {
 
 /**
  * Pull `dragPath` out of `srcProj` so it stands alone as a top-level folder.
- * If it was in a hand-made project and would immediately snap back into an automatic git project with sibling folders,
- * mark it `ungrouped` too so it actually lands outside.
+ * If it was in a hand-made project and would immediately snap back into any project (either an automatic git project
+ * with sibling folders or a hand-made project via repository worktree inheritance), mark it `ungrouped` too so it
+ * actually lands outside.
  */
 export function leaveToStandalone(
 	over: ProjectOverrides,
@@ -216,10 +217,10 @@ export function leaveToStandalone(
 	repos: RepoMap,
 ): Required<ProjectOverrides> {
 	const next = leaveProject(over, dragPath, !srcProj.manual);
-	if (srcProj.manual && repos[dragPath]?.root) {
+	if (srcProj.manual) {
 		const preview = projectBlocks(flattenBlocks(blocks), repos, next);
-		const snappedIntoGit = preview.some((b) => b.kind === "project" && !b.manual && b.dirs.some((d) => d.path === dragPath));
-		if (snappedIntoGit && !next.ungrouped.includes(dragPath)) {
+		const stillInProject = preview.some((b) => b.kind === "project" && b.dirs.some((d) => d.path === dragPath));
+		if (stillInProject && !next.ungrouped.includes(dragPath)) {
 			return { projects: next.projects, ungrouped: [...next.ungrouped, dragPath] };
 		}
 	}
@@ -233,7 +234,14 @@ function joinIntoProject(
 	at?: { path: string; after: boolean },
 ): { overrides: Required<ProjectOverrides>; revealRoot?: string } {
 	if (isManualRoot(dstProj.root)) {
-		return { overrides: joinProject(ctx.overrides, dragPath, { root: dstProj.root, at }) };
+		return {
+			overrides: joinProject(ctx.overrides, dragPath, {
+				root: dstProj.root,
+				at,
+				visibleOrder: at ? dstProj.dirs.map((d) => d.path) : undefined,
+			}),
+			revealRoot: dstProj.root,
+		};
 	}
 	const dragGitRoot = ctx.repos[dragPath]?.root ?? null;
 	if (dragGitRoot === dstProj.root) {
@@ -327,7 +335,14 @@ export function applyDirDrop(ctx: DirDropContext, dragPath: string, drop: BlockD
 		if (dstProj.manual) {
 			// Manual projects take their internal folder order from `overrides.projects[i].dirs`, so leaving `dirOrder`
 			// untouched keeps the project block anchored in place relative to surrounding top-level folders.
-			const overrides = reorderProjectDir(ctx.overrides, dstProj.root.slice("manual:".length), dragPath, targetPath, after);
+			const overrides = reorderProjectDir(
+				ctx.overrides,
+				dstProj.root.slice("manual:".length),
+				dragPath,
+				targetPath,
+				after,
+				dstProj.dirs.map((d) => d.path),
+			);
 			if (!overrides) return null;
 			return { overrides };
 		}

@@ -2,9 +2,17 @@
  * What git says about a folder, read from the files under `.git` without starting git (it may not be installed, and a
  * sidebar asking about every folder must not spawn a process per folder). Anything unreadable is simply "not a repository".
  */
-import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, realpathSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, dirname, isAbsolute, join, resolve } from "node:path";
+
+const real = (p: string) => {
+	try {
+		return realpathSync(p);
+	} catch {
+		return resolve(p);
+	}
+};
 
 /** How far up from a folder `.git` is looked for. */
 const MAX_DEPTH = 12;
@@ -16,6 +24,8 @@ export interface RepoInfo {
 	top: string;
 	/** The checked-out branch, null when HEAD is detached */
 	branch: string | null;
+	/** True for the repository's main checkout (including standalone submodules); false for linked worktrees */
+	main?: boolean;
 }
 
 /** The `.git` of the nearest repository holding `cwd`: the folder it sits in, and the git directory it points at. */
@@ -56,16 +66,19 @@ export function repoOf(cwd: string, home = homedir()): RepoInfo | null {
 		const g = findGit(cwd);
 		if (!g) return null;
 		let root = g.dir;
+		let isMain = true;
 		if (g.linked) {
 			// a worktree's git directory says where the shared one is (`commondir`); a submodule's has none and stands alone
 			const common = join(g.gitDir, "commondir");
 			if (existsSync(common)) {
 				const shared = resolve(g.gitDir, readFileSync(common, "utf8").trim());
 				root = basename(shared) === ".git" ? dirname(shared) : shared; // a bare repository has no working tree: its own path
+				isMain = false;
 			}
 		}
-		if (resolve(root) === resolve(home)) return null;
-		return { root, top: g.dir, branch: headBranch(g.gitDir) };
+		root = real(root);
+		if (root === real(home)) return null;
+		return { root, top: g.dir, branch: headBranch(g.gitDir), main: isMain };
 	} catch {
 		return null;
 	}

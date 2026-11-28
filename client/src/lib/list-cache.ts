@@ -84,7 +84,16 @@ export function fromCache(raw: unknown, fp: string, now: number): ListCache | nu
 
 function validRepos(v: unknown): v is Record<string, RepoInfo | null> {
 	if (!v || typeof v !== "object" || Array.isArray(v)) return false;
-	return Object.values(v).every((r) => r === null || (!!r && typeof r === "object" && typeof (r as RepoInfo).root === "string" && typeof (r as RepoInfo).top === "string" && ((r as RepoInfo).branch === null || typeof (r as RepoInfo).branch === "string")));
+	return Object.values(v).every(
+		(r) =>
+			r === null ||
+			(!!r &&
+				typeof r === "object" &&
+				typeof (r as RepoInfo).root === "string" &&
+				typeof (r as RepoInfo).top === "string" &&
+				((r as RepoInfo).branch === null || typeof (r as RepoInfo).branch === "string") &&
+				((r as RepoInfo).main === undefined || typeof (r as RepoInfo).main === "boolean")),
+	);
 }
 
 const keyOf = (serverId: string) => `${LIST_CACHE_KEY}.${serverId}`;

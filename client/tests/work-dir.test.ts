@@ -2,6 +2,7 @@ import { describe, expect, it } from "bun:test";
 import { pane, splitAt } from "../src/lib/layout";
 import { sidebarDirs, workDir } from "../src/lib/nav";
 import { projectBlocks } from "../src/lib/projects";
+import { pinDirOrder } from "../src/lib/sidebar.svelte";
 import { rowMenuEntries } from "../src/lib/sidebar-model";
 import type { TerminalInfo } from "../src/lib/terminal";
 import type { Group, Session } from "../src/lib/types";
@@ -33,6 +34,26 @@ describe("sessions that moved into a worktree", () => {
 		const g = { id: "g", name: "g", layout: splitAt(splitAt(pane("b"), "b", "c", "right"), "c", "d", "right"), createdAt: 1 } as unknown as Group;
 		const dirs = sidebarDirs([...sessions, s("d", "/w/app", "/w/app-x")], [g], []);
 		expect(dirs.find((d) => d.tabs.some((t) => t.id === "g"))?.path).toBe("/w/app-x");
+	});
+
+	it("inherit their home folder's dirOrder slot when first appearing and pin before the next placed folder", () => {
+		const moved = [s("a", "/w/first"), s("b", "/w/studio", "/w/studio-wt"), s("c", "/w/last"), s("d", "/w/brand-new")];
+		const dirOrder = ["/w/first", "/w/logo", "/w/studio", "/w/last"];
+		const dirs = sidebarDirs(moved, [], [], { dirOrder });
+		expect(dirs.map((d) => d.path)).toEqual(["/w/first", "/w/studio-wt", "/w/last", "/w/brand-new"]);
+
+		expect(pinDirOrder(dirOrder, dirs.map((d) => d.path))).toEqual(["/w/first", "/w/logo", "/w/studio", "/w/studio-wt", "/w/last", "/w/brand-new"]);
+		// Consecutive unseen folders before a placed folder preserve their relative order
+		expect(pinDirOrder(["/w/a", "/w/b"], ["/w/a", "/w/wt1", "/w/wt2", "/w/b", "/w/new1", "/w/new2"])).toEqual([
+			"/w/a",
+			"/w/wt1",
+			"/w/wt2",
+			"/w/b",
+			"/w/new1",
+			"/w/new2",
+		]);
+		// Already pinned list returns null (no-op)
+		expect(pinDirOrder(["/w/first", "/w/last"], ["/w/first", "/w/last"])).toBeNull();
 	});
 });
 

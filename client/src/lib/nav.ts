@@ -32,6 +32,24 @@ export const tabPanes = (t: Tab): string[] => (t.kind === "group" ? t.members.ma
 /** How many panes (conversations and terminals) a directory lists, counting each member of a group. */
 export const dirPaneCount = (d: DirBlock): number => d.tabs.reduce((n, t) => n + tabPanes(t).length, 0);
 
+/** The conversations inside a tab list (lone sessions plus session panes inside split groups). */
+export function tabSessions(tabs: readonly Tab[]): Session[] {
+	const out: Session[] = [];
+	for (const tab of tabs) {
+		if (tab.kind === "session") {
+			if (tab.session) out.push(tab.session);
+		} else if (tab.kind === "group") {
+			for (const m of tab.members) {
+				if ("activeDir" in m) out.push(m);
+			}
+		}
+	}
+	return out;
+}
+
+/** The conversations listed inside a directory block. */
+export const dirSessions = (d: DirBlock): Session[] => tabSessions(d.tabs);
+
 export interface BlockOpts {
 	/** search on conversations */
 	match?: (s: Session) => boolean;
@@ -112,18 +130,23 @@ export function sidebarDirs(sessions: readonly Session[], groups: readonly Group
 	for (const p of o.keep ?? []) if (!by.has(p)) by.set(p, { tabs: [], first: Number.MAX_SAFE_INTEGER });
 	const dirRank = new Map<string, number>();
 	(o.dirOrder ?? []).forEach((p, i) => { if (!dirRank.has(p)) dirRank.set(p, i); });
-	const rank = (p: string) => dirRank.get(p) ?? -1;
+	const rankOf = (path: string, tabs: readonly Tab[]): [number, number] => {
+		const direct = dirRank.get(path);
+		if (direct !== undefined) return [direct, 0];
+		// A worktree not placed in `dirOrder` yet keeps its home folder's slot (right after it) instead of sinking to the bottom.
+		let inherited = Number.POSITIVE_INFINITY;
+		for (const m of tabSessions(tabs)) {
+			if (m.activeDir === path && typeof m.cwd === "string") {
+				const homeRank = dirRank.get(m.cwd);
+				if (homeRank !== undefined && homeRank < inherited) inherited = homeRank;
+			}
+		}
+		return inherited < Number.POSITIVE_INFINITY ? [inherited, 1] : [Number.POSITIVE_INFINITY, 2];
+	};
 	return [...by.entries()]
-		.sort(([pa, a], [pb, b]) => {
-			const ra = rank(pa);
-			const rb = rank(pb);
-			if (ra >= 0 && rb >= 0) return ra - rb;
-			if (ra >= 0) return -1;
-			if (rb >= 0) return 1;
-			// not placed by hand: stable, the longer a directory has been open the higher it sits (new ones stack at the bottom)
-			return a.first - b.first;
-		})
-		.map(([path, d]) => ({ path, tabs: d.tabs }));
+		.map(([path, d]) => ({ path, d, rank: rankOf(path, d.tabs) }))
+		.sort((a, b) => a.rank[0] - b.rank[0] || a.rank[1] - b.rank[1] || a.d.first - b.d.first)
+		.map(({ path, d }) => ({ path, tabs: d.tabs }));
 }
 
 /** The tab showing pane `id` (a session or terminal id, or a group id), if any. */

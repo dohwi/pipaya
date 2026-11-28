@@ -4,7 +4,7 @@
  * and a repository with a single folder open, stay plain folder rows. The server says which repository a folder is in
  * (`POST /fs/repos`, read from `.git` without starting git); a server from before that lists every folder on its own.
  */
-import type { DirBlock } from "./nav";
+import { dirSessions, type DirBlock } from "./nav";
 import { tilde } from "./format";
 import { SEP, shortName } from "./sidebar-model";
 
@@ -15,6 +15,8 @@ export interface RepoInfo {
 	top: string;
 	/** The checked-out branch; null when HEAD is detached */
 	branch: string | null;
+	/** True for the repository's main checkout (including standalone submodules); false for linked worktrees */
+	main?: boolean;
 }
 
 /** Folder path -> its repository (null: not in one). A folder not looked up yet is missing. */
@@ -61,44 +63,123 @@ export function cleanManualProjects(projects: readonly ManualProject[]): ManualP
 }
 
 /**
+ * Fallback while `/fs/repos` has not answered for a newly moved worktree yet: if a session inside `d` moved here via
+ * `workdir move` (`activeDir === d.path`), inherit its home folder's hand-made project so the worktree never flashes
+ * outside the project before repo metadata arrives.
+ */
+function homeManualOfDir(
+	d: DirBlock,
+	manualOf: ReadonlyMap<string, ManualProject>,
+	manualByRepoRoot: ReadonlyMap<string, ManualProject>,
+	repos: RepoMap,
+): { project: ManualProject; anchor: string } | null {
+	for (const s of dirSessions(d)) {
+		if (typeof s.activeDir !== "string" || s.activeDir !== d.path || typeof s.cwd !== "string" || !s.cwd) continue;
+		const direct = manualOf.get(s.cwd);
+		if (direct) return { project: direct, anchor: s.cwd };
+		const root = repos[s.cwd]?.root;
+		if (root) {
+			const inherited = manualByRepoRoot.get(root) ?? manualOf.get(root);
+			if (inherited) return { project: inherited, anchor: s.cwd };
+		}
+	}
+	return null;
+}
+
+/**
  * Group `dirs` (already in sidebar order) into projects, in this order of precedence:
- *  1. a project the user made (`over.projects`, at least two folders): its folders, in the order listed there, under
- *     its name. When fewer than two of its folders are listed now it collapses to a plain folder row while keeping the
- *     stored grouping (and holding its member apart from its repository's automatic project) until another folder returns.
+ *  1. a project the user made (`over.projects`, at least two stored folders): its explicit folders plus any other
+ *     working tree sharing a git repository with one of its folders (unless explicitly placed elsewhere or in
+ *     `over.ungrouped`). A hand-made project keeps its header even when only one of its folders is currently visible.
  *  2. the git repository of the folder, unless the user took the folder out (`over.ungrouped`); the main checkout leads.
  *     A repository with one folder listed is not a project.
  *  3. otherwise the folder alone.
  * A project takes the place of its first folder.
  */
 export function projectBlocks(dirs: readonly DirBlock[], repos: RepoMap, over: ProjectOverrides = {}): SidebarBlock[] {
+	const cleaned = cleanManualProjects(over.projects ?? []);
 	const manualOf = new Map<string, ManualProject>();
-	for (const p of cleanManualProjects(over.projects ?? [])) for (const d of p.dirs) if (!manualOf.has(d)) manualOf.set(d, p);
+	const manualByRepoRoot = new Map<string, ManualProject>();
+	for (const p of cleaned) {
+		for (const d of p.dirs) {
+			if (!manualOf.has(d)) manualOf.set(d, p);
+			const repoRoot = repos[d]?.root ?? null;
+			if (repoRoot && !manualByRepoRoot.has(repoRoot)) manualByRepoRoot.set(repoRoot, p);
+		}
+	}
 	const out = new Set(over.ungrouped ?? []);
-	const gitRoot = (path: string) => (manualOf.has(path) || out.has(path) ? null : (repos[path]?.root ?? null));
+	const resolvedManual = new Map<string, { project: ManualProject; anchor: string | null } | null>();
+	const manualFor = (d: DirBlock): { project: ManualProject; anchor: string | null } | null => {
+		if (resolvedManual.has(d.path)) return resolvedManual.get(d.path)!;
+		const direct = manualOf.get(d.path);
+		if (direct) {
+			const hit = { project: direct, anchor: d.path };
+			resolvedManual.set(d.path, hit);
+			return hit;
+		}
+		if (out.has(d.path)) {
+			resolvedManual.set(d.path, null);
+			return null;
+		}
+		const info = repos[d.path];
+		if (info) {
+			const inherited = manualByRepoRoot.get(info.root) ?? manualOf.get(info.root) ?? null;
+			const hit = inherited ? { project: inherited, anchor: null } : null;
+			resolvedManual.set(d.path, hit);
+			return hit;
+		}
+		if (info === undefined) {
+			const hit = homeManualOfDir(d, manualOf, manualByRepoRoot, repos);
+			resolvedManual.set(d.path, hit);
+			return hit;
+		}
+		resolvedManual.set(d.path, null);
+		return null;
+	};
+	const gitRoot = (d: DirBlock) => (manualFor(d) || out.has(d.path) ? null : (repos[d.path]?.root ?? null));
 	const byRoot = new Map<string, DirBlock[]>();
 	for (const d of dirs) {
-		const m = manualOf.get(d.path);
-		const root = m ? manualRoot(m.id) : gitRoot(d.path);
+		const m = manualFor(d)?.project ?? null;
+		const root = m ? manualRoot(m.id) : gitRoot(d);
 		if (root) byRoot.set(root, [...(byRoot.get(root) ?? []), d]);
 	}
 	const blocks: SidebarBlock[] = [];
 	const placed = new Set<string>();
 	for (const d of dirs) {
-		const m = manualOf.get(d.path);
-		const root = m ? manualRoot(m.id) : gitRoot(d.path);
+		const m = manualFor(d)?.project ?? null;
+		const root = m ? manualRoot(m.id) : gitRoot(d);
 		const members = root ? byRoot.get(root)! : null;
-		if (!root || !members || members.length < 2) {
+		if (!root || !members || (!m && members.length < 2)) {
 			blocks.push({ kind: "dir", dir: d });
 			continue;
 		}
 		if (placed.has(root)) continue;
 		placed.add(root);
 		if (m) {
-			const rank = (p: string) => m.dirs.indexOf(p);
-			blocks.push({ kind: "project", root, dirs: [...members].sort((a, b) => rank(a.path) - rank(b.path)), manual: true });
+			const sortKey = (x: DirBlock, orig: number): [number, number, number] => {
+				const direct = m.dirs.indexOf(x.path);
+				if (direct >= 0) return [direct, 0, orig];
+				const repoRoot = repos[x.path]?.root ?? null;
+				let anchorIdx = repoRoot ? m.dirs.findIndex((p) => p === repoRoot || repos[p]?.root === repoRoot) : -1;
+				if (anchorIdx < 0) {
+					const homeAnchor = resolvedManual.get(x.path)?.anchor ?? null;
+					if (homeAnchor) {
+						const homeRoot = repos[homeAnchor]?.root ?? null;
+						anchorIdx = m.dirs.findIndex((p) => p === homeAnchor || (homeRoot !== null && (p === homeRoot || repos[p]?.root === homeRoot)));
+					}
+				}
+				return [anchorIdx >= 0 ? anchorIdx : m.dirs.length, 1, orig];
+			};
+			const keyed = members.map((x, orig) => ({ x, k: sortKey(x, orig) }));
+			keyed.sort((a, b) => a.k[0] - b.k[0] || a.k[1] - b.k[1] || a.k[2] - b.k[2]);
+			blocks.push({ kind: "project", root, dirs: keyed.map((e) => e.x), manual: true });
 		} else {
-			const main = members.filter((x) => x.path === root);
-			blocks.push({ kind: "project", root, dirs: [...main, ...members.filter((x) => x.path !== root)] });
+			const isMain = (x: DirBlock) => {
+				const r = repos[x.path];
+				return r?.main !== undefined ? r.main && x.path === r.top : x.path === root;
+			};
+			const main = members.filter(isMain);
+			blocks.push({ kind: "project", root, dirs: [...main, ...members.filter((x) => !isMain(x))] });
 		}
 	}
 	return blocks;
@@ -112,7 +193,7 @@ export type JoinTarget =
 			root: string;
 			/**
 			 * When adding an unrelated folder to a git project, promote its currently visible members into a hand-made
-			 * project (intentional: future worktrees of that repository will not auto-join the hand-made project).
+			 * project (subsequent worktrees of its repositories inherit the hand-made project automatically).
 			 */
 			members?: readonly string[];
 			name?: string;
@@ -121,6 +202,8 @@ export type JoinTarget =
 			gitRoot?: string | null;
 			/** Optional insertion slot inside the project's folder list. */
 			at?: { path: string; after: boolean };
+			/** Current visible folder order of the target project, so `at` works even on inherited worktrees. */
+			visibleOrder?: readonly string[];
 	  }
 	| {
 			with: string;
@@ -154,22 +237,26 @@ export function joinProject(over: ProjectOverrides, path: string, target: JoinTa
 	if ("root" in target && isManualRoot(target.root) && !target.at) {
 		const id = target.root.slice("manual:".length);
 		if (base.some((p) => p.id === id && p.dirs.includes(path))) {
-			return { projects: base, ungrouped: ungrouped0 };
+			return { projects: base, ungrouped: ungrouped0.filter((d) => d !== path) };
 		}
 	}
 	const projects = base.map((p) => ({ ...p, dirs: p.dirs.filter((d) => d !== path) }));
-	let ungrouped = ungrouped0;
+	const ungrouped = ungrouped0.filter((d) => d !== path);
 	if ("root" in target) {
 		if (isManualRoot(target.root)) {
 			const id = target.root.slice("manual:".length);
-			for (const p of projects) if (p.id === id) p.dirs = insertDir(p.dirs, path, target.at);
+			for (const p of projects) {
+				if (p.id !== id) continue;
+				const baseDirs = target.at && target.visibleOrder && !p.dirs.includes(target.at.path) && target.visibleOrder.includes(target.at.path)
+					? materializeInherited(p.dirs, target.at.path, target.visibleOrder)
+					: p.dirs;
+				p.dirs = insertDir(baseDirs, path, target.at);
+			}
 		} else if (target.members?.length && target.id && target.name && target.gitRoot !== target.root) {
 			const members = target.members.filter((d, i, a) => d !== path && a.indexOf(d) === i);
 			const memberSet = new Set(members);
 			for (const p of projects) p.dirs = p.dirs.filter((d) => !memberSet.has(d));
 			projects.push({ id: target.id, name: target.name, dirs: insertDir(members, path, target.at) });
-		} else {
-			ungrouped = ungrouped.filter((d) => d !== path); // back into its repository's project
 		}
 	} else {
 		const host = projects.find((p) => p.dirs.includes(target.with));
@@ -182,15 +269,55 @@ export function joinProject(over: ProjectOverrides, path: string, target: JoinTa
 	return { projects: cleanManualProjects(projects), ungrouped };
 }
 
+/** Insert an inherited folder into `dirs` at the slot matching its current position in `visibleOrder`. */
+function materializeInherited(dirs: readonly string[], path: string, visibleOrder: readonly string[]): string[] {
+	if (dirs.includes(path)) return [...dirs];
+	const visIdx = visibleOrder.indexOf(path);
+	const out = [...dirs];
+	for (let i = visIdx - 1; i >= 0; i--) {
+		const at = out.indexOf(visibleOrder[i]!);
+		if (at >= 0) {
+			out.splice(at + 1, 0, path);
+			return out;
+		}
+	}
+	for (let i = visIdx + 1; i < visibleOrder.length; i++) {
+		const at = out.indexOf(visibleOrder[i]!);
+		if (at >= 0) {
+			out.splice(at, 0, path);
+			return out;
+		}
+	}
+	out.push(path);
+	return out;
+}
+
 /** Reorder `path` before or after `target` within a hand-made project's folder list. Null when nothing changes. */
-export function reorderProjectDir(over: ProjectOverrides, projectId: string, path: string, target: string, after: boolean): Required<ProjectOverrides> | null {
+export function reorderProjectDir(
+	over: ProjectOverrides,
+	projectId: string,
+	path: string,
+	target: string,
+	after: boolean,
+	visibleOrder?: readonly string[],
+): Required<ProjectOverrides> | null {
 	if (path === target) return null;
 	const src = over.projects ?? [];
 	const idx = src.findIndex((p) => p.id === projectId);
 	if (idx < 0) return null;
 	const cur = src[idx]!.dirs;
-	const from = cur.indexOf(path);
-	if (from < 0 || !cur.includes(target)) return null;
+	const hasBoth = cur.includes(path) && cur.includes(target);
+	if (!hasBoth) {
+		if (!visibleOrder || !visibleOrder.includes(path) || !visibleOrder.includes(target)) return null;
+		const visWithout = visibleOrder.filter((d) => d !== path);
+		const visTo = visWithout.indexOf(target) + (after ? 1 : 0);
+		if (visTo === visibleOrder.indexOf(path)) return null;
+		const baseDirs = materializeInherited(cur, target, visibleOrder);
+		const nextDirs = insertDir(baseDirs, path, { path: target, after });
+		const projects = src.map((p, i) => (i === idx ? { ...p, dirs: nextDirs } : { ...p, dirs: [...p.dirs] }));
+		const ungrouped = (over.ungrouped ?? []).filter((d) => d !== path && d !== target);
+		return { projects, ungrouped };
+	}
 	const nextDirs = insertDir(cur, path, { path: target, after });
 	if (nextDirs.length === cur.length && nextDirs.every((d, i) => d === cur[i])) return null;
 	const projects = src.map((p, i) => (i === idx ? { ...p, dirs: nextDirs } : { ...p, dirs: [...p.dirs] }));

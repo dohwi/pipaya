@@ -36,6 +36,46 @@ export function reorder(visible: string[], key: string, target: string, after: b
   return list;
 }
 
+/**
+ * Freeze newly visible folders into `prev` (`dirOrder`): each unseen path is inserted right before the next
+ * already-placed visible folder (so a worktree appearing inside a project or right after its home folder keeps that
+ * slot instead of sinking to the bottom), or appended at the end when no placed folder follows it. Null if unchanged.
+ */
+export function pinDirOrder(prev: readonly string[], visible: readonly string[]): string[] | null {
+  const have = new Set(prev);
+  if (!visible.some((p) => !have.has(p))) return null;
+  const seen = new Set<string>();
+  const uniqVisible: string[] = [];
+  for (const p of visible) {
+    if (seen.has(p)) continue;
+    seen.add(p);
+    uniqVisible.push(p);
+  }
+  const before = new Map<string, string[]>();
+  const tail: string[] = [];
+  let nextPlaced: string | null = null;
+  for (let i = uniqVisible.length - 1; i >= 0; i--) {
+    const p = uniqVisible[i]!;
+    if (have.has(p)) {
+      nextPlaced = p;
+    } else if (nextPlaced !== null) {
+      const bucket = before.get(nextPlaced);
+      if (bucket) bucket.push(p);
+      else before.set(nextPlaced, [p]);
+    } else {
+      tail.push(p);
+    }
+  }
+  const next: string[] = [];
+  for (const p of prev) {
+    const ins = before.get(p);
+    if (ins) for (let i = ins.length - 1; i >= 0; i--) next.push(ins[i]!);
+    next.push(p);
+  }
+  for (let i = tail.length - 1; i >= 0; i--) next.push(tail[i]!);
+  return next;
+}
+
 /** The part of the sidebar that follows the server (pins, folder names, hand-set order); folding and width stay on the device. */
 export interface SidebarShared {
   pinnedDirs: string[];
@@ -398,13 +438,11 @@ export class SidebarState {
     this.onEdit(serverId);
     }
     // sets, not `includes` per entry: this runs on every list change, with the whole session list as `tabs`
-    const d = this.dirOrder[serverId] ?? [];
-    const haveDirs = new Set(d);
-    const newDirs = dirs.filter((p) => !haveDirs.has(p));
-    if (newDirs.length) {
-      this.dirOrder = { ...this.dirOrder, [serverId]: [...d, ...newDirs] };
+    const nextDirs = pinDirOrder(this.dirOrder[serverId] ?? [], dirs);
+    if (nextDirs) {
+      this.dirOrder = { ...this.dirOrder, [serverId]: nextDirs };
       write(K.dirOrder, this.dirOrder);
-    this.onEdit(serverId);
+      this.onEdit(serverId);
     }
     const t = this.tabOrder[serverId] ?? [];
     const haveTabs = new Set(t);

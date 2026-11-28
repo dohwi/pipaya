@@ -49,8 +49,18 @@ describe("list cache", () => {
 		const repos = { [lists.sessions[0]!.cwd]: { root: "/r", top: "/r", branch: "main" }, "/pinned": { root: "/r", top: "/r", branch: "main" }, "/gone": null };
 		const c = toCache(fp, lists, null, 1000, undefined, repos);
 		expect(Object.keys(c.repos ?? {})).toEqual([lists.sessions[0]!.cwd]);
-		const withPinned = toCache(fp, lists, null, 1000, undefined, repos, ["/pinned", ""]);
-		expect(Object.keys(withPinned.repos ?? {}).sort()).toEqual(["/pinned", lists.sessions[0]!.cwd].sort());
+		const withExtra = toCache(fp, lists, null, 1000, undefined, repos, ["/pinned", "/w/manual-empty", ""]);
+		expect(Object.keys(withExtra.repos ?? {}).sort()).toEqual(["/pinned", lists.sessions[0]!.cwd].sort());
+		const withManualRepo = toCache(
+			fp,
+			lists,
+			null,
+			1000,
+			undefined,
+			{ ...repos, "/w/manual-empty": { root: "/w/manual-empty", top: "/w/manual-empty", branch: "main" } },
+			["/pinned", "/w/manual-empty"],
+		);
+		expect(withManualRepo.repos?.["/w/manual-empty"]).toEqual({ root: "/w/manual-empty", top: "/w/manual-empty", branch: "main" });
 		const bad = fromCache({ ...c, repos: { "/x": { root: 1 } } }, fp, 1000);
 		expect(bad?.sessions.length).toBe(lists.sessions.length);
 		expect(bad?.repos).toBeUndefined();

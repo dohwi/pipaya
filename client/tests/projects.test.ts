@@ -62,14 +62,16 @@ describe("hand-made projects", () => {
 	const dirs = [dir("/w/app", "a"), dir("/w/app-x", "x"), dir("/w/api", "b"), dir("/w/web", "c")];
 	const roots = (bs: ReturnType<typeof projectBlocks>) => bs.map((b) => (b.kind === "dir" ? b.dir.path : `${b.root}[${b.dirs.map((d) => d.path).join(",")}]`));
 
-	test("a hand-made project wins over the repository, keeps its order, and collapses to a plain folder when only one member is visible", () => {
+	test("a hand-made project wins over the repository, keeps its order, stays a project with one visible member, and inherits sibling worktrees", () => {
 		const over = { projects: [{ id: "c", name: "회사", dirs: ["/w/web", "/w/api"] }] };
 		expect(roots(projectBlocks(dirs, repos, over))).toEqual(["/w/app[/w/app,/w/app-x]", "manual:c[/w/web,/w/api]"]);
-		// Only one member visible: renders as a plain folder row instead of a 1-folder project wrapper
-		expect(roots(projectBlocks([dir("/w/web")], repos, over))).toEqual(["/w/web"]);
-		// A collapsed manual member stays apart from its git repository's automatic project until the project is dissolved
+		// Even with only one visible member, a hand-made project keeps its header instead of collapsing
+		expect(roots(projectBlocks([dir("/w/web")], repos, over))).toEqual(["manual:c[/w/web]"]);
+		// A worktree of a repository owned by a hand-made project inherits that project instead of splitting away
 		const split = { projects: [{ id: "m", name: "임시", dirs: ["/w/app-x", "/w/hidden"] }] };
-		expect(roots(projectBlocks([dir("/w/app", "a"), dir("/w/app-x", "x")], repos, split))).toEqual(["/w/app", "/w/app-x"]);
+		expect(roots(projectBlocks([dir("/w/app", "a"), dir("/w/app-x", "x")], repos, split))).toEqual(["manual:m[/w/app-x,/w/app]"]);
+		// Explicitly ungrouping a sibling keeps it standalone while the hand-made project stays intact
+		expect(roots(projectBlocks([dir("/w/app", "a"), dir("/w/app-x", "x")], repos, { ...split, ungrouped: ["/w/app"] }))).toEqual(["/w/app", "manual:m[/w/app-x]"]);
 		// Legacy 1-dir, intra-project duplicate, or cross-project overlapping manual entries are cleaned (first valid project wins)
 		expect(cleanManualProjects([{ id: "one", name: "One", dirs: ["/w/web"] }, { id: "dup", name: "Dup", dirs: ["/w/web", "/w/web"] }])).toEqual([]);
 		expect(
@@ -124,6 +126,92 @@ describe("hand-made projects", () => {
 		expect(reorderProjectDir(o, "p", "/a", "/b", false)).toBeNull();
 		expect(reorderProjectDir(o, "p", "/a", "/a", true)).toBeNull();
 		expect(reorderProjectDir(o, "missing", "/a", "/b", true)).toBeNull();
+		// Materializes an inherited worktree into `dirs` when reordered using visibleOrder
+		const inherited = { projects: [{ id: "p", name: "duckgul", dirs: ["/w/logo", "/w/studio"] }], ungrouped: [] };
+		expect(reorderProjectDir(inherited, "p", "/w/studio-wt", "/w/logo", false, ["/w/logo", "/w/studio-wt"])?.projects[0]?.dirs).toEqual(["/w/studio-wt", "/w/logo", "/w/studio"]);
+		expect(reorderProjectDir(inherited, "p", "/w/logo", "/w/studio-wt", true, ["/w/logo", "/w/studio-wt"])?.projects[0]?.dirs).toEqual(["/w/studio-wt", "/w/logo", "/w/studio"]);
+		// Adjacent no-op with inherited folder returns null
+		expect(reorderProjectDir(inherited, "p", "/w/logo", "/w/studio-wt", false, ["/w/logo", "/w/studio-wt"])).toBeNull();
+	});
+
+	test("worktree inheritance keeps mixed plain-dir + git-repo manual projects intact across workdir move/back and reload", () => {
+		const duckRepos: RepoMap = {
+			"/w/duckgul/logo": null,
+			"/w/duckgul/studio": repo("/w/duckgul/studio", "/w/duckgul/studio", "main"),
+			"/w/duckgul/studio/client": repo("/w/duckgul/studio", "/w/duckgul/studio", "main"),
+			"/w/duckgul/studio-wt1": repo("/w/duckgul/studio", "/w/duckgul/studio-wt1", "feat/mfa"),
+			"/w/duckgul/studio-wt2": repo("/w/duckgul/studio", "/w/duckgul/studio-wt2", "feat/auth"),
+			"/w/duckgul/docs": null,
+		};
+		const over = { projects: [{ id: "dg", name: "duckgul", dirs: ["/w/duckgul/logo", "/w/duckgul/studio", "/w/duckgul/docs"] }] };
+
+		// 1) Session moves from studio -> studio-wt1; studio now has 0 tabs (hidden), wt1 stays in duckgul at studio's slot
+		expect(roots(projectBlocks([dir("/w/duckgul/logo", "s1"), dir("/w/duckgul/docs", "s3"), dir("/w/duckgul/studio-wt1", "s2")], duckRepos, over))).toEqual([
+			"manual:dg[/w/duckgul/logo,/w/duckgul/studio-wt1,/w/duckgul/docs]",
+		]);
+
+		// 2) Only the moved worktree remains open (logo and docs closed): manual project header still stays intact
+		expect(roots(projectBlocks([dir("/w/duckgul/studio-wt1", "s2")], duckRepos, over))).toEqual(["manual:dg[/w/duckgul/studio-wt1]"]);
+
+		// 3) Multiple worktrees open while studio is hidden: single manual header, never splits into a second git project
+		expect(roots(projectBlocks([dir("/w/duckgul/logo", "s1"), dir("/w/duckgul/studio-wt1", "s2"), dir("/w/duckgul/studio-wt2", "s4")], duckRepos, over))).toEqual([
+			"manual:dg[/w/duckgul/logo,/w/duckgul/studio-wt1,/w/duckgul/studio-wt2]",
+		]);
+
+		// 4) Subfolder stored in manual project (studio/client) still pulls worktree top into the same project
+		const subOver = { projects: [{ id: "dg", name: "duckgul", dirs: ["/w/duckgul/logo", "/w/duckgul/studio/client"] }] };
+		expect(roots(projectBlocks([dir("/w/duckgul/logo", "s1"), dir("/w/duckgul/studio-wt1", "s2")], duckRepos, subOver))).toEqual([
+			"manual:dg[/w/duckgul/logo,/w/duckgul/studio-wt1]",
+		]);
+
+		// 5) Before /fs/repos responds for the new worktree (repos[wt] === undefined), activeDir->cwd fallback avoids flashing outside
+		const movedSession = { kind: "session", id: "s2", session: { id: "s2", cwd: "/w/duckgul/studio", activeDir: "/w/duckgul/studio-wt1" } } as never;
+		const partialRepos: RepoMap = { "/w/duckgul/logo": null, "/w/duckgul/studio": duckRepos["/w/duckgul/studio"] };
+		expect(roots(projectBlocks([dir("/w/duckgul/logo", "s1"), { path: "/w/duckgul/studio-wt1", tabs: [movedSession] }], partialRepos, over))).toEqual([
+			"manual:dg[/w/duckgul/logo,/w/duckgul/studio-wt1]",
+		]);
+
+		// 6) Explicit placement in another manual project wins over inheritance; first manual project wins for other worktrees
+		const twoProjects = {
+			projects: [
+				{ id: "p1", name: "duckgul", dirs: ["/w/duckgul/logo", "/w/duckgul/studio"] },
+				{ id: "p2", name: "other", dirs: ["/w/duckgul/docs", "/w/duckgul/studio-wt1"] },
+			],
+		};
+		expect(
+			roots(
+				projectBlocks(
+					[dir("/w/duckgul/logo", "s1"), dir("/w/duckgul/docs", "s3"), dir("/w/duckgul/studio-wt1", "s2"), dir("/w/duckgul/studio-wt2", "s4")],
+					duckRepos,
+					twoProjects,
+				),
+			),
+		).toEqual(["manual:p1[/w/duckgul/logo,/w/duckgul/studio-wt2]", "manual:p2[/w/duckgul/docs,/w/duckgul/studio-wt1]"]);
+
+		// 7) Joining an ungrouped worktree into a manual project clears its ungrouped mark
+		const rejoined = joinProject({ ...over, ungrouped: ["/w/duckgul/studio-wt1"] }, "/w/duckgul/studio-wt1", { root: "manual:dg" });
+		expect(rejoined.ungrouped).toEqual([]);
+		expect(rejoined.projects[0]!.dirs).toContain("/w/duckgul/studio-wt1");
+
+		// 8) Symlinked main checkout (path !== canonical root, main: true) still leads its automatic git project
+		const symRepos: RepoMap = {
+			"/link/app-x": { root: "/real/app", top: "/link/app-x", branch: "feat/x", main: false },
+			"/link/app": { root: "/real/app", top: "/link/app", branch: "main", main: true },
+		};
+		expect(roots(projectBlocks([dir("/link/app-x", "x"), dir("/link/app", "a")], symRepos))).toEqual(["/real/app[/link/app,/link/app-x]"]);
+
+		// 9) Creating a manual project with an ungrouped target preserves target.with's ungrouped status if dissolved later
+		const madeWithUngrouped = joinProject({ ungrouped: ["/w/duckgul/studio-wt1"] }, "/w/duckgul/docs", { with: "/w/duckgul/studio-wt1", id: "p3", name: "tmp" });
+		expect(madeWithUngrouped.ungrouped).toEqual(["/w/duckgul/studio-wt1"]);
+		expect(roots(projectBlocks([dir("/w/duckgul/studio-wt1", "s2"), dir("/w/duckgul/docs", "s3")], duckRepos, madeWithUngrouped))).toEqual([
+			"manual:p3[/w/duckgul/studio-wt1,/w/duckgul/docs]",
+		]);
+		const dissolved = dissolveProject(madeWithUngrouped, "p3");
+		expect(roots(projectBlocks([dir("/w/duckgul/studio", "s0"), dir("/w/duckgul/studio-wt1", "s2"), dir("/w/duckgul/docs", "s3")], duckRepos, dissolved))).toEqual([
+			"/w/duckgul/studio",
+			"/w/duckgul/studio-wt1",
+			"/w/duckgul/docs",
+		]);
 	});
 });
 

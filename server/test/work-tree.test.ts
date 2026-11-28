@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { buildApp, type App } from "../src/app.ts";
@@ -88,6 +88,16 @@ describe("working trees", () => {
 		expect(workTargets(join(wt, "server")).map((t) => [t.path, t.home])).toEqual([[wt, true], [main, false]]);
 		expect(workTargets(main, (d) => d === main)).toHaveLength(1);
 		expect(workTargets(plain)).toEqual([]);
+	});
+	test("workTargets preserves the session's symlinked home path instead of switching to the real root", () => {
+		const linkRoot = join(dir, "wt-link");
+		symlinkSync(dir, linkRoot);
+		const viaLinkMain = join(linkRoot, "app");
+		expect(workTargets(viaLinkMain)).toEqual([
+			{ path: viaLinkMain, branch: "main", home: true },
+			{ path: wt, branch: "feat/x", home: false },
+		]);
+		expect(resolveMove(viaLinkMain, join(viaLinkMain, "client"))).toBeNull();
 	});
 	test("resolveMove names the other working tree's top, null for its own, and refuses anything else", () => {
 		expect(resolveMove(main, join(wt, "server/src"))).toBe(wt);
