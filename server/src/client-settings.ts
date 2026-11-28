@@ -27,7 +27,7 @@ const VALIDATORS: Partial<Record<ClientSettingKey, (value: unknown) => string | 
 	sidebar: (v) => {
 		if (!v || typeof v !== "object" || Array.isArray(v)) return "sidebar must be an object";
 		const lists = ["pinnedDirs", "pinnedTabs", "dirOrder", "tabOrder", "ungrouped"];
-		const maps = ["dirNames", "groupDir"];
+		const maps = ["dirNames", "groupDir", "projectNames"];
 		const o = v as Record<string, unknown>;
 		if (Object.keys(o).some((k) => !lists.includes(k) && !maps.includes(k) && k !== "projects")) return "sidebar has an unknown field";
 		// hand-made projects: [{ id, name, dirs: [path, ...] }, ...]
