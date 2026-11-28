@@ -20,6 +20,7 @@ import type { ServiceTier } from "./openrouter-catalog.ts";
 import { attachTouchedFiles, completeSummaryWithShrinkRetry, contextTokens, effectiveContextTokens, estimateTokens, KEEP_RECENT_TOKENS, pickCut, SUMMARY_MAX_TOKENS, summaryMessage, thresholdFor, type CompactionSettings } from "./compaction.ts";
 import { THINKING_LEVELS, type DelegateCall, type SessionPatch, type SessionRecord, type SessionStore, type ThinkingLevel } from "./store.ts";
 import { MCP_SEARCH_TOOL, type McpManager } from "./mcp.ts";
+import { BackgroundBashManager } from "./bg-bash.ts";
 import { ALWAYS_TOOLS, buildTools, DEFAULT_TOOLS, DELEGATE_TOOL, isInside, modelList, PEER_TOOLS, TOOL_DEFS, WORKDIR_TOOL, type ReadTrackEntry, type ToolContext, type ToolDef } from "./tools.ts";
 import { isGone, workDirOf } from "./work-tree.ts";
 import { SessionWorkdirs } from "./session-workdirs.ts";
@@ -94,6 +95,8 @@ export class SessionManager {
 	private groupSource: () => GroupRef[] = () => [];
 	/** Per-session deferred MCP tools loaded via `mcp_search`, in stable load order (survives idle eviction, cleared on delete). */
 	private loadedMcpTools = new Map<string, Set<string>>();
+	/** Per-session background bash jobs; cleaned up on session delete and server shutdown. */
+	private bgBash = new BackgroundBashManager();
 
 	setGroupSource(fn: () => GroupRef[]): void {
 		this.groupSource = fn;
@@ -717,6 +720,7 @@ export class SessionManager {
 			live?.compacting?.abort();
 			if (live?.running) this.abortRun(id, live, "close"); // closing stops the work
 			this.suggester.clear(id, { notify: true });
+			this.bgBash.stopSession(id);
 			this.goals?.onSessionClosed(id);
 		}
 		if (live) {
@@ -796,6 +800,7 @@ export class SessionManager {
 		}
 		this.describer.abort(id);
 		this.suggester.clear(id, { forgetBackoff: true });
+		this.bgBash.stopSession(id, { permanent: true });
 		this.dispose(id);
 		this.clearSessionMemory(id, true);
 		const spillDir = this.spillDir(id);
@@ -1212,6 +1217,7 @@ export class SessionManager {
 		this.closing = true;
 		this.describer.abortAll();
 		this.suggester.abortAll();
+		this.bgBash.shutdown();
 		for (const id of this.live.keys()) this.ext?.notify("session_shutdown", { sessionId: id }, id);
 		for (const [id, live] of [...this.live]) {
 			live.compacting?.abort();
@@ -1886,7 +1892,8 @@ export class SessionManager {
 				},
 				readTracker: readTracker ?? this.live.get(sessionId)?.readTracker,
 				spillDir: this.spillDir(sessionId),
-			} : {}),
+				bgBash: this.bgBash.forSession(sessionId),
+			} : { bgBash: null }),
 			delegate: (_toolCallId, input, signal, progress) => this.delegate(sessionId, input, signal, progress),
 			delegateRoles: () => this.delegatePolicy().roles,
 			delegateModels: () => this.delegatePolicy(),
@@ -1989,6 +1996,7 @@ export class SessionManager {
 			canSeeImages: () => model.input.includes("image"),
 			imageLimits: () => model.inputLimits?.images?.resize,
 			spillDir: this.spillDir(sessionId),
+			bgBash: null,
 		}, defs2);
 		const cap = Math.min(def.maxTurns, pol.maxTurns);
 		const tier = this.subagentTier(rec, provider, modelId);
