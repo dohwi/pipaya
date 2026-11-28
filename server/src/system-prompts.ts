@@ -1,7 +1,7 @@
 import { SUMMARY_PREFIX, SUMMARY_REQUEST_TEMPLATE, SUMMARY_SYSTEM } from "./compaction.ts";
 import { withBytes, type SystemPromptEntry } from "./context.ts";
 import { HINT_OPEN, PEER_MESSAGE_TEMPLATE, READ_NOTE } from "./peers.ts";
-import { DESCRIBE_REFRESH_SYSTEM, DESCRIBE_SYSTEM, GROUP_NAME_SYSTEM } from "./system-model.ts";
+import { DESCRIBE_REFRESH_SYSTEM, DESCRIBE_SYSTEM, FOLLOW_UP_SYSTEM, GROUP_NAME_SYSTEM } from "./system-model.ts";
 
 /** What decides which provider-specific wording applies to a session's model. */
 export interface PromptModel {
@@ -115,6 +115,15 @@ export function systemPromptEntries(model: PromptModel | null, opts: { hasExtens
 			title: "Group name",
 			when: "A separate call to the system model when a split group needs a name (only when a system model and the group name toggle are on)",
 			text: `${GROUP_NAME_SYSTEM}\n\n--- request ---\nSessions in the group:\n1. folder: …; title: …; role: …\n\nReply with the group name now.`,
+			active: true,
+		},
+		{
+			id: "helper-follow-up-suggestions",
+			delivery: "separate" as const,
+			kind: "helper" as const,
+			title: "Follow-up prompt suggestions",
+			when: "A separate call to the system model after a completed user turn (only when a system model and the follow-up suggestions toggle are on)",
+			text: `${FOLLOW_UP_SYSTEM}\n\n--- request ---\n<user_message>\n\${userPrompt}\n</user_message>\n\n<assistant_reply>\n\${assistantReply}\n</assistant_reply>\n\nReply with the JSON object now.`,
 			active: true,
 		},
 	].map(withBytes);

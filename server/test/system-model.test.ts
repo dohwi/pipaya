@@ -8,6 +8,7 @@ import type { Config } from "../src/config.ts";
 import { openDb } from "../src/db.ts";
 import { codenamePrefixOf } from "../src/member-names.ts";
 import { SessionDescriber } from "../src/session-describer.ts";
+import { SessionSuggester } from "../src/session-suggestions.ts";
 import { SessionStore } from "../src/store.ts";
 import {
 	DEFAULT_REFRESH_EVERY,
@@ -16,8 +17,10 @@ import {
 	describeRefreshSystemPrompt,
 	describeRequest,
 	describeSystemPrompt,
+	followUpRequest,
 	groupNameRequest,
 	parseDescription,
+	parseFollowUpSuggestions,
 	parseGroupName,
 	parseRefreshDescription,
 	sanitizeSessionName,
@@ -228,12 +231,12 @@ describe("system model", () => {
 			tasks: { sessionTitle: false, sessionPurpose: false, sessionName: true, groupName: false },
 		});
 		expect(put1.status).toBe(200);
-		expect(put1.json.settings.tasks).toEqual({ sessionTitle: false, sessionPurpose: false, sessionName: true, groupName: false });
+		expect(put1.json.settings.tasks).toEqual({ sessionTitle: false, sessionPurpose: false, sessionName: true, groupName: false, followUpSuggestions: false });
 		await settle();
 
 		// Omitting tasks preserves existing flags
 		const put2 = await api("PUT", "/system-model", { model: { provider: "echo", model: LIGHT.id } });
-		expect(put2.json.settings.tasks).toEqual({ sessionTitle: false, sessionPurpose: false, sessionName: true, groupName: false });
+		expect(put2.json.settings.tasks).toEqual({ sessionTitle: false, sessionPurpose: false, sessionName: true, groupName: false, followUpSuggestions: false });
 		await settle();
 
 		const id1 = await newSession();
@@ -339,7 +342,7 @@ describe("system model", () => {
 		}
 		const loaded = (await api("GET", "/system-model")).json.settings;
 		expect(loaded.model).toEqual({ provider: "echo", model: LIGHT.id });
-		expect(loaded.tasks).toEqual({ sessionTitle: true, sessionPurpose: true, sessionName: true, groupName: true });
+		expect(loaded.tasks).toEqual({ sessionTitle: true, sessionPurpose: true, sessionName: true, groupName: true, followUpSuggestions: false });
 		expect(loaded.refreshEvery).toBe(0);
 
 		// Invalid refreshEvery values in DB (negative, > max, float) fall back to 0 without losing model/tasks
@@ -690,5 +693,217 @@ describe("group names", () => {
 		const text = groupNameRequest([{ cwd: "/w/pipaya/", title: "Fix login", purpose: "auth work" }, { cwd: "/w/wiki", title: "Docs", purpose: "" }]);
 		expect(text).toContain("1. folder: pipaya; title: Fix login; role: auth work");
 		expect(text).toContain("2. folder: wiki; title: Docs\n");
+	});
+});
+
+describe("follow-up suggestions", () => {
+	test("parseFollowUpSuggestions extracts, cleans, deduplicates, and caps suggestions", () => {
+		expect(
+			parseFollowUpSuggestions('```json\n{"suggestions": ["1. 테스트 실행해 줘", "- 엣지 케이스 확인", "테스트 실행해 줘", "  ", "?", "네 번째는 잘림"]}\n```'),
+		).toEqual(["테스트 실행해 줘", "엣지 케이스 확인", "네 번째는 잘림"]);
+		expect(parseFollowUpSuggestions('["Run tests", "Add docs"]')).toEqual(["Run tests", "Add docs"]);
+		expect(parseFollowUpSuggestions('{"suggestions": []}')).toEqual([]);
+		expect(parseFollowUpSuggestions("no json here")).toEqual([]);
+		expect(parseFollowUpSuggestions('{"suggestions": [null, 42, ""]}')).toEqual([]);
+		const long = "a".repeat(150);
+		const parsed = parseFollowUpSuggestions(JSON.stringify({ suggestions: [long] }));
+		expect(parsed).toHaveLength(1);
+		expect(parsed[0]!.length).toBeLessThanOrEqual(120);
+		expect(parsed[0]!.endsWith("…")).toBe(true);
+	});
+
+	test("followUpRequest clips long replies keeping head and tail, and omits empty user text", () => {
+		const longReply = `${"H".repeat(2000)}${"M".repeat(1000)}${"T".repeat(1500)}`;
+		const req = followUpRequest({ userPrompt: "How does it work?", assistantReply: longReply });
+		expect(req).toContain("<user_message>\nHow does it work?\n</user_message>");
+		expect(req).toContain("<assistant_reply>\n");
+		expect(req).toContain("\n…\n");
+		expect(req).toContain("HHH");
+		expect(req).toContain("TTT");
+		expect(followUpRequest({ userPrompt: "   ", assistantReply: "Done." })).not.toContain("<user_message>");
+	});
+
+	test("toggle controls follow-up suggestion generation, event publishing, status hydration, and clearing", async () => {
+		// Off by default -> no follow-up suggestion call
+		await api("PUT", "/system-model", {
+			model: { provider: "echo", model: LIGHT.id },
+			tasks: { sessionTitle: false, sessionPurpose: false, sessionName: false, groupName: false, followUpSuggestions: false },
+		});
+		const id = await newSession();
+		const events: { type: string; data: Record<string, unknown> }[] = [];
+		const unsub = app.bus.subscribe((e) => {
+			if (e.sessionId === id && e.type === "follow_up_suggestions") events.push({ type: e.type, data: e.data as Record<string, unknown> });
+		}, id);
+		try {
+			upstream.requests.length = 0;
+			await api("POST", `/sessions/${id}/messages`, { text: '{"suggestions": ["테스트 돌려줘", "PR 만들어줘"]}' });
+			await settle();
+			expect(upstream.requests.filter((r) => r.body.model === LIGHT.id)).toHaveLength(0);
+			expect(events).toHaveLength(0);
+			expect((await api("GET", `/sessions/${id}`)).json.status.followUpSuggestions).toBeUndefined();
+
+			// Turn followUpSuggestions on -> completed user turn generates suggestions
+			await api("PUT", "/system-model", {
+				model: { provider: "echo", model: LIGHT.id },
+				tasks: { followUpSuggestions: true },
+			});
+			upstream.requests.length = 0;
+			// Echo upstream returns the prompt verbatim, so embed a valid suggestions JSON inside the user message.
+			await api("POST", `/sessions/${id}/messages`, { text: 'Summary please {"suggestions": ["테스트 실행해 줘", "문서도 업데이트해 줘"]}' });
+			await settle();
+			expect(upstream.requests.filter((r) => r.body.model === LIGHT.id)).toHaveLength(1);
+			expect(events).toHaveLength(1);
+			expect(events[0]!.data.suggestions).toEqual(["테스트 실행해 줘", "문서도 업데이트해 줘"]);
+			expect(typeof events[0]!.data.afterSeq).toBe("number");
+			expect((await api("GET", `/sessions/${id}`)).json.status.followUpSuggestions).toEqual(["테스트 실행해 줘", "문서도 업데이트해 줘"]);
+
+			// Turning followUpSuggestions off immediately clears cached suggestions and notifies clients
+			await api("PUT", "/system-model", {
+				model: { provider: "echo", model: LIGHT.id },
+				tasks: { followUpSuggestions: false },
+			});
+			expect((await api("GET", `/sessions/${id}`)).json.status.followUpSuggestions).toBeUndefined();
+			expect(events).toHaveLength(2);
+			expect(events[1]!.data).toEqual({ afterSeq: -1, suggestions: [] });
+
+			// Re-enable and verify non-user (peer) turns do not generate suggestions
+			await api("PUT", "/system-model", {
+				model: { provider: "echo", model: LIGHT.id },
+				tasks: { followUpSuggestions: true },
+			});
+			upstream.requests.length = 0;
+			await app.sessions.send(id, { text: '{"suggestions": ["Should not run"]}', origin: "peer" });
+			await settle();
+			expect(upstream.requests.filter((r) => r.body.model === LIGHT.id)).toHaveLength(0);
+			expect((await api("GET", `/sessions/${id}`)).json.status.followUpSuggestions).toBeUndefined();
+		} finally {
+			unsub();
+			await api("PUT", "/system-model", {
+				model: null,
+				tasks: DEFAULT_SYSTEM_MODEL_TASKS(),
+			});
+		}
+	});
+
+	test("SessionSuggester discards stale in-flight suggestions when a new message arrives or session is deleted", async () => {
+		const unitDir = mkdtempSync(join(tmpdir(), "pipaya-suggester-unit-"));
+		const db = openDb(join(unitDir, "db.sqlite"));
+		try {
+			const store = new SessionStore(db);
+			const modelObj = { id: LIGHT.id, provider: "echo", api: "openai-completions", reasoning: false };
+			let callStartedResolve!: () => void;
+			let callStarted = new Promise<void>((r) => { callStartedResolve = r; });
+			let resolveCall!: (text: string) => void;
+			const registry = {
+				models: {
+					getModel: (p: string, m: string) => (p === "echo" && m === LIGHT.id ? modelObj : undefined),
+					checkAuth: async () => true,
+					completeSimple: (_m: unknown, _ctx: unknown, opts: { signal?: AbortSignal }) => {
+						callStartedResolve();
+						return new Promise((resolve, reject) => {
+							opts.signal?.addEventListener("abort", () => reject(new Error("aborted")), { once: true });
+							resolveCall = (text: string) =>
+								resolve({ role: "assistant", content: [{ type: "text", text }], stopReason: "stop", timestamp: Date.now() });
+						});
+					},
+				},
+			};
+			const systemModel = new SystemModelSettings(db, registry as never);
+			systemModel.set({
+				model: { provider: "echo", model: LIGHT.id },
+				tasks: { sessionTitle: false, sessionPurpose: false, sessionName: false, groupName: false, followUpSuggestions: true },
+			});
+			const published: { id: string; afterSeq: number; suggestions: string[] }[] = [];
+			let idle = true;
+			const suggester = new SessionSuggester({
+				store,
+				registry: registry as never,
+				systemModel,
+				isClosing: () => false,
+				isSessionIdle: () => idle,
+				hasPendingQuestions: () => false,
+				publish: (id, payload) => published.push({ id, ...payload }),
+			});
+
+			const makeSession = (id: string, name: string) => {
+				const now = Date.now();
+				store.create({
+					id,
+					title: "Test",
+					name,
+					purpose: "",
+					cwd: unitDir,
+					provider: "echo",
+					model: ECHO_MODEL.id,
+					thinkingLevel: "off",
+					systemPrompt: "",
+					tools: [],
+					parentId: null,
+					closed: false,
+					createdAt: now,
+					updatedAt: now,
+				});
+				return id;
+			};
+			const assistantMsg = (text: string, timestamp: number) => ({
+				role: "assistant" as const,
+				content: [{ type: "text" as const, text }],
+				api: "openai-completions",
+				provider: "echo",
+				model: ECHO_MODEL.id,
+				usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } },
+				stopReason: "stop" as const,
+				timestamp,
+			});
+
+			// Case 1: New message appended before completion -> stale result discarded
+			const s1 = makeSession("sug-1", "S1");
+			store.appendMessage(s1, 0, { role: "user", content: "Explain caching", timestamp: 1 });
+			store.appendMessage(s1, 1, assistantMsg("Caching stores hot results.", 2));
+			const job1 = suggester.generate(s1, 1);
+			expect(job1).toBeDefined();
+			await callStarted;
+			// New user message arrives before the model answers
+			store.appendMessage(s1, 2, { role: "user", content: "Next question", timestamp: 3 });
+			resolveCall('{"suggestions": ["Stale suggestion"]}');
+			await job1;
+			expect(published).toHaveLength(0);
+			expect(suggester.get(s1, 1)).toEqual([]);
+			expect(suggester.get(s1, 2)).toEqual([]);
+
+			// Case 2: Session deleted while in flight -> never publishes
+			callStarted = new Promise<void>((r) => { callStartedResolve = r; });
+			const s2 = makeSession("sug-2", "S2");
+			store.appendMessage(s2, 0, { role: "user", content: "Hello", timestamp: 1 });
+			store.appendMessage(s2, 1, assistantMsg("Hi there!", 2));
+			const job2 = suggester.generate(s2, 1);
+			await callStarted;
+			store.delete(s2);
+			resolveCall('{"suggestions": ["After delete"]}');
+			await job2;
+			expect(published).toHaveLength(0);
+
+			// Case 3: Normal idle completion caches & publishes, and clear() aborts/notifies
+			callStarted = new Promise<void>((r) => { callStartedResolve = r; });
+			idle = true;
+			const s3 = makeSession("sug-3", "S3");
+			store.appendMessage(s3, 0, { role: "user", content: "Write tests", timestamp: 1 });
+			store.appendMessage(s3, 1, assistantMsg("Tests written.", 2));
+			const job3 = suggester.generate(s3, 1);
+			await callStarted;
+			resolveCall('{"suggestions": ["Run them now", "Check coverage"]}');
+			await job3;
+			expect(published).toEqual([{ id: s3, afterSeq: 1, suggestions: ["Run them now", "Check coverage"] }]);
+			expect(suggester.get(s3, 1)).toEqual(["Run them now", "Check coverage"]);
+			expect(suggester.get(s3, 2)).toEqual([]);
+
+			suggester.clear(s3, { notify: true });
+			expect(suggester.get(s3, 1)).toEqual([]);
+			expect(published).toHaveLength(2);
+			expect(published[1]).toEqual({ id: s3, afterSeq: -1, suggestions: [] });
+		} finally {
+			db.close();
+			rmSync(unitDir, { recursive: true, force: true });
+		}
 	});
 });

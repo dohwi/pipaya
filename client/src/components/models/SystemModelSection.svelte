@@ -13,6 +13,7 @@
 		sessionPurpose: true,
 		sessionName: false,
 		groupName: true,
+		followUpSuggestions: false,
 	};
 	const REFRESH_PRESETS = [0, 5, 10, 20] as const;
 
@@ -30,10 +31,17 @@
 	);
 	const settings = $derived(setting.settings);
 	const supportsTasks = $derived(settings?.tasks !== undefined);
+	const supportsFollowUp = $derived(settings?.tasks !== undefined && "followUpSuggestions" in settings.tasks);
 	const supportsRefresh = $derived(settings?.refreshEvery !== undefined);
 	const tasks = $derived<SystemModelTasks>({ ...FALLBACK_TASKS, ...(settings?.tasks ?? {}) });
 	const refreshEvery = $derived(settings?.refreshEvery ?? 0);
-	const anyTask = $derived(tasks.sessionTitle || tasks.sessionPurpose || tasks.sessionName || tasks.groupName);
+	const anyTask = $derived(
+		tasks.sessionTitle ||
+			tasks.sessionPurpose ||
+			tasks.sessionName ||
+			tasks.groupName ||
+			(supportsFollowUp && Boolean(tasks.followUpSuggestions)),
+	);
 	const canRefresh = $derived(Boolean(settings?.model) && (tasks.sessionTitle || tasks.sessionPurpose));
 	const refreshOptions = $derived.by(() => {
 		const values: number[] = [...REFRESH_PRESETS];
@@ -55,7 +63,16 @@
 
 	const saveSettings = (next: { model: SystemModelSettings["model"]; tasks?: SystemModelTasks; refreshEvery?: number }) => {
 		const body: SystemModelSettings = { model: next.model };
-		if (supportsTasks) body.tasks = next.tasks ?? tasks;
+		if (supportsTasks) {
+			const src = next.tasks ?? tasks;
+			body.tasks = {
+				sessionTitle: src.sessionTitle,
+				sessionPurpose: src.sessionPurpose,
+				sessionName: src.sessionName,
+				groupName: src.groupName,
+				...(supportsFollowUp ? { followUpSuggestions: Boolean(src.followUpSuggestions) } : {}),
+			};
+		}
 		if (supportsRefresh) body.refreshEvery = next.refreshEvery ?? refreshEvery;
 		void setting.save(body);
 	};
@@ -113,6 +130,11 @@
 				<SettingRow label={t("그룹 이름")} hint={t("분할 창 그룹을 만들 때 어울리는 이름을 짓습니다")} dim={!s.model}>
 					<Switch checked={tasks.groupName} label={t("그룹 이름")} disabled={setting.busy || !s.model} onchange={(on) => toggleTask("groupName", on)} />
 				</SettingRow>
+				{#if supportsFollowUp}
+					<SettingRow label={t("다음 질문 추천")} hint={t("답변 아래에 이어서 물어볼 만한 후속 질문 2~3개를 제안합니다")} dim={!s.model}>
+						<Switch checked={Boolean(tasks.followUpSuggestions)} label={t("다음 질문 추천")} disabled={setting.busy || !s.model} onchange={(on) => toggleTask("followUpSuggestions", on)} />
+					</SettingRow>
+				{/if}
 			</div>
 		{/if}
 		{#if supportsRefresh}
