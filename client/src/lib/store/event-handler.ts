@@ -293,6 +293,7 @@ export function handleOpenServerEvent(ctx: OpenEventContext, e: PipayaEvent): vo
     if (e.type === "run_finished" || e.type === "compaction_finished") {
       ctx.refreshUsage(chat);
       void chat.refreshContext();
+      if (e.type === "run_finished") void chat.loadCheckpoints();
     }
     if (e.type === "session_updated") void chat.refreshContext();
     if (e.type === "compaction_finished" || e.type === "compaction_failed") ctx.flushHeld(chat);

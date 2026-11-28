@@ -251,6 +251,53 @@ export const ForkBody = Type.Object({
 	title: Type.Optional(Type.String({ maxLength: 200 })),
 });
 
+export const RewindMode = Type.Union([Type.Literal("files_only"), Type.Literal("files_and_chat")]);
+
+export const CheckpointTurnFile = Type.Object({
+	relPath: Type.String(),
+	action: Type.Union([Type.Literal("restore"), Type.Literal("delete"), Type.Literal("skip")]),
+	skippedReason: Type.Optional(Nullable(Type.String())),
+});
+
+export const CheckpointTurnSummary = Type.Object({
+	turnSeq: Type.Integer(),
+	fileCount: Type.Integer(),
+	createdAt: Type.Integer(),
+	files: Type.Array(CheckpointTurnFile),
+});
+
+export const CheckpointList = Type.Object({
+	turns: Type.Array(CheckpointTurnSummary),
+});
+
+export const RewindBody = Type.Object({
+	turnSeq: Type.Integer({ minimum: 0, description: "Rewind workspace files (and optionally chat) to the state before this user message seq" }),
+	mode: Type.Optional(RewindMode),
+	dryRun: Type.Optional(Type.Boolean({ description: "Preview affected files and conflicts without modifying disk or chat" })),
+	force: Type.Optional(Type.Boolean({ description: "Overwrite files even when external modifications are detected" })),
+});
+
+export const RewindFileItem = Type.Object({
+	path: Type.String(),
+	action: Type.Union([Type.Literal("restore"), Type.Literal("delete"), Type.Literal("skip")]),
+	conflict: Type.Boolean(),
+	conflictReason: Type.Optional(Nullable(Type.Union([Type.Literal("modified"), Type.Literal("deleted")]))),
+	skippedReason: Type.Optional(Nullable(Type.String())),
+});
+
+export const RewindResult = Type.Object({
+	applied: Type.Boolean(),
+	dryRun: Type.Boolean(),
+	mode: RewindMode,
+	turnSeq: Type.Integer(),
+	files: Type.Array(RewindFileItem),
+	conflicts: Type.Array(Type.String()),
+	restored: Type.Array(Type.String()),
+	deleted: Type.Array(Type.String()),
+	skipped: Type.Array(Type.Object({ path: Type.String(), reason: Type.String() })),
+	truncatedFromSeq: Nullable(Type.Integer()),
+});
+
 // ── Messages ────────────────────────────────────────────────────────────────
 
 export const CancelQueuedBody = Type.Object({
@@ -675,6 +722,18 @@ export const EVENTS: EventDef[] = [
 		data: Type.Object({
 			afterSeq: Type.Integer(),
 			suggestions: Type.Array(Type.String()),
+		}),
+	},
+	{
+		type: "session_rewound",
+		persisted: true,
+		description: "Workspace files (and optionally chat messages) were rewound to before `turnSeq`",
+		data: Type.Object({
+			turnSeq: Type.Integer(),
+			mode: RewindMode,
+			restored: Type.Array(Type.String()),
+			deleted: Type.Array(Type.String()),
+			truncatedFromSeq: Nullable(Type.Integer()),
 		}),
 	},
 ];

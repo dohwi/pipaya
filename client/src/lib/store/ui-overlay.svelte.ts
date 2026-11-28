@@ -36,9 +36,18 @@ export interface ViewerState {
 
 export type SettingsTargetTab = SettingsTabId | SettingsSectionAlias;
 
+export interface RewindDialogTarget {
+  serverId: string;
+  sessionId: string;
+  turnSeq: number;
+  userText: string;
+}
+
 export class UiOverlayState {
   /** Add-server / edit-server dialog: `null` = closed, `"new"` = add, otherwise the id being edited. */
   serverForm = $state<string | "new" | null>(null);
+  /** Turn file-rewind confirmation dialog target (`null` = closed). */
+  rewindDialog = $state<RewindDialogTarget | null>(null);
   /** The tab overview (the folder's tabs as a grid of cards, behind the tab count button) is open. */
   tabOverview = $state(false);
   /** The server whose conversation list (close / delete) is open, or null. */

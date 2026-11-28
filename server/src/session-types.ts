@@ -88,6 +88,8 @@ export interface RecallCandidate {
 export interface Live {
 	agent: Agent;
 	nextSeq: number;
+	/** Sequence number of the latest persisted user message (turn anchor for file checkpoints). */
+	currentTurnSeq?: number;
 	running: boolean;
 	runStartedAt: number;
 	/** Who the current run is for. */

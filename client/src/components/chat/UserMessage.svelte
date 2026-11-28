@@ -62,6 +62,9 @@
 	const scheduled = $derived(!!item.scheduled && !header);
 	const headed = $derived(!!header || scheduled);
 	const shown = $derived(splitQuote(header ? header.body : item.text));
+	const checkpoint = $derived(
+		!pane.readonly && session && item.seq !== null ? app.chatOf(session.id)?.checkpoints[item.seq] : undefined,
+	);
 	const copied = new CopyFlag();
 	onDestroy(() => copied.dispose());
 	let expanded = $state(false);
@@ -183,6 +186,9 @@
 		{/if}
 		{#if !pane.readonly && item.seq !== null && session && item.text}
 			<IconButton icon="fork" label={t("여기서 분기해 다시 쓰기")} tip size="sm" onclick={() => app.branchEdit(session.id, item.seq!, item.text)} />
+		{/if}
+		{#if checkpoint && session && item.seq !== null}
+			<IconButton icon="undo" label={t("파일 되돌리기")} tip size="sm" disabled={working} onclick={() => app.openRewind(session.id, item.seq!, item.text)} />
 		{/if}
 		{#if item.ts || elapsed}
 			<span class="meta">

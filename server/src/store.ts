@@ -135,6 +135,8 @@ export class SessionStore {
 	private stmtReplaceMessage: Statement;
 	private stmtDeleteLastMessage: Statement;
 	private stmtDeleteMessagesFrom: Statement;
+	private stmtDeleteCompactionsFrom: Statement;
+	private stmtLastUserSeq: Statement;
 	private stmtNextSeq: Statement;
 	private stmtMessagesTail: Statement;
 	private stmtMessagesPrevUser: Statement;
@@ -162,6 +164,8 @@ export class SessionStore {
 		this.stmtReplaceMessage = db.query("UPDATE messages SET role = $role, data = $data WHERE session_id = $sid AND seq = $seq");
 		this.stmtDeleteLastMessage = db.query("DELETE FROM messages WHERE session_id = $sid AND seq = (SELECT MAX(seq) FROM messages WHERE session_id = $sid)");
 		this.stmtDeleteMessagesFrom = db.query("DELETE FROM messages WHERE session_id = $sid AND seq >= $fromSeq");
+		this.stmtDeleteCompactionsFrom = db.query("DELETE FROM session_compactions WHERE session_id = $sid AND upto_seq >= $fromSeq");
+		this.stmtLastUserSeq = db.query("SELECT MAX(seq) AS s FROM messages WHERE session_id = $sid AND role = 'user'");
 		this.stmtNextSeq = db.query("SELECT COALESCE(MAX(seq), -1) + 1 AS n FROM messages WHERE session_id = $sid");
 		this.stmtMessagesTail = db.query("SELECT seq, role, data, created_at FROM messages WHERE session_id = $sid AND seq > $after AND seq < $before ORDER BY seq DESC LIMIT $n");
 		this.stmtMessagesPrevUser = db.query("SELECT MAX(seq) AS s FROM messages WHERE session_id = $sid AND role = 'user' AND seq > $after AND seq < $first");
@@ -432,8 +436,27 @@ export class SessionStore {
 		this.stmtDeleteLastMessage.run({ sid: sessionId });
 	}
 
+	get database(): Database {
+		return this.db;
+	}
+
 	deleteMessagesFrom(sessionId: string, fromSeq: number): void {
 		this.stmtDeleteMessagesFrom.run({ sid: sessionId, fromSeq });
+	}
+
+	/** Transactionally truncate messages and compactions from `fromSeq` onwards (used by `files_and_chat` rewind). */
+	truncateFrom(sessionId: string, fromSeq: number): void {
+		const tx = this.db.transaction(() => {
+			this.stmtDeleteMessagesFrom.run({ sid: sessionId, fromSeq });
+			this.stmtDeleteCompactionsFrom.run({ sid: sessionId, fromSeq });
+			this.stmtTouch.run({ id: sessionId, t: Date.now() });
+		});
+		tx();
+	}
+
+	lastUserSeq(sessionId: string): number | undefined {
+		const row = this.stmtLastUserSeq.get({ sid: sessionId }) as { s: number | null } | null;
+		return row && typeof row.s === "number" ? row.s : undefined;
 	}
 
 	nextSeq(sessionId: string): number {

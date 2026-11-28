@@ -51,6 +51,7 @@ import { runPromptTemplate } from "./templates.ts";
 
 import { DEFAULT_DELEGATE_POLICY, type DelegatePolicyValue } from "./configuration.ts";
 import { DEFAULT_SYSTEM_PROMPT, FORCE_STOP_MS, IDLE_EVICT_MS, MAX_REPEATED_CALLS, MAX_RUN_TURNS, promptKey, SHUTDOWN_STOP_MS, type CompactionOutcome, type CreateSessionInput, type Deferred, type Live, type PromptMode, type RecallCandidate, type RunOrigin, type SessionStatus } from "./session-types.ts";
+import { FileCheckpoints, type CheckpointTurnSummary, type PendingCapture, type RewindFileItem, type RewindMode } from "./file-checkpoints.ts";
 import { agentQueue, GOAL_NOTE, interruptedAssistantMessage, interruptedToolResult, noteBlock, queuedIn, queuedText, rewriteShutdownToolText, SCHEDULE_NOTE, sentText, slimAssistantEvent, unresolvedToolCalls, withoutNotes, type Waiting } from "./session-helpers.ts";
 export { DEFAULT_SYSTEM_PROMPT } from "./session-types.ts";
 export { GOAL_OPEN, NOTE_OPEN, noteBlock, SCHEDULE_OPEN } from "./session-helpers.ts";
@@ -78,6 +79,10 @@ export class SessionManager {
 	/** Accepted sends keyed by `sessionId\0clientRequestId` so retries after a lost ACK do not duplicate prompts. */
 	private recentSends = new Map<string, { accepted: PromptMode; at: number }>();
 	private inflightSends = new Map<string, Promise<{ accepted: PromptMode }>>();
+	/** Active sendInner() count per session so rewind cannot race an in-flight prompt setup. */
+	private activeSends = new Map<string, number>();
+	/** Sessions currently executing a file rewind (refuses concurrent rewind/send/compact/workdir/delete). */
+	private rewinding = new Set<string>();
 	/** Background title/role generation, follow-up suggestions, and git worktree operations. */
 	private describer: SessionDescriber;
 	private suggester: SessionSuggester;
@@ -91,6 +96,8 @@ export class SessionManager {
 	private sweeper: ReturnType<typeof setInterval>;
 	/** Names, messages between sessions and `@name` hints. */
 	readonly peers: PeerService;
+	/** Turn-level workspace file checkpoints for safe rewind. */
+	readonly checkpoints: FileCheckpoints;
 	/** Session ids of every group, wired by the app once the group manager exists. */
 	private groupSource: () => GroupRef[] = () => [];
 	/** Per-session deferred MCP tools loaded via `mcp_search`, in stable load order (survives idle eviction, cleared on delete). */
@@ -137,6 +144,7 @@ export class SessionManager {
 	) {
 		this.sweeper = setInterval(() => this.evictIdle(), 5 * 60_000);
 		this.sweeper.unref?.();
+		this.checkpoints = new FileCheckpoints(store.database);
 		this.describer = new SessionDescriber({
 			store,
 			registry,
@@ -534,6 +542,7 @@ export class SessionManager {
 	async compact(id: string, instructions?: string, reason: "manual" | "threshold" = "manual"): Promise<CompactionOutcome> {
 		const record = this.get(id);
 		if (record.closed) throw conflict("session is closed; resume it first (PATCH closed=false)");
+		if (this.rewinding.has(id)) throw conflict("cannot compact while the session is rewinding");
 		const live = this.ensureLive(record);
 		if (live.compacting) throw conflict("this session is already being compacted");
 		if (live.running && reason === "manual") throw conflict("the session is working; compact after it finishes");
@@ -786,6 +795,7 @@ export class SessionManager {
 
 	delete(id: string): void {
 		this.get(id);
+		if (this.rewinding.has(id)) throw conflict("cannot delete while the session is rewinding");
 		const live = this.live.get(id);
 		if (live) {
 			live.compacting?.abort();
@@ -835,6 +845,96 @@ export class SessionManager {
 		this.bus.publish(copy.id, "session_forked", { from: id, atSeq: atSeq ?? null, messages: copied });
 		this.ext?.notify("session_fork", { sessionId: copy.id, from: id }, copy.id);
 		return this.get(copy.id);
+	}
+
+	/** List turns in `id` that have recorded workspace file checkpoints. */
+	listCheckpoints(id: string): CheckpointTurnSummary[] {
+		this.get(id);
+		return this.checkpoints.listTurns(id);
+	}
+
+	/**
+	 * Preview (`dryRun: true`) or execute a rewind of workspace files (and optionally chat history)
+	 * to the state immediately before user turn `turnSeq`. Refused with 409 while the session is busy.
+	 */
+	async rewind(
+		id: string,
+		opts: { turnSeq: number; mode?: RewindMode; dryRun?: boolean; force?: boolean },
+	): Promise<{
+		applied: boolean;
+		dryRun: boolean;
+		mode: RewindMode;
+		turnSeq: number;
+		files: RewindFileItem[];
+		conflicts: string[];
+		restored: string[];
+		deleted: string[];
+		skipped: { path: string; reason: string }[];
+		truncatedFromSeq: number | null;
+	}> {
+		const rec = this.get(id);
+		const liveNow = this.live.get(id);
+		if (
+			this.rewinding.has(id) ||
+			this.isRunning(id) ||
+			(this.activeSends.get(id) ?? 0) > 0 ||
+			(this.questions?.list(id).length ?? 0) > 0 ||
+			liveNow?.compacting ||
+			liveNow?.pendingPrompt ||
+			(liveNow?.deferred?.length ?? 0) > 0
+		) {
+			throw conflict("cannot rewind while the session is busy");
+		}
+		if (!Number.isInteger(opts.turnSeq) || opts.turnSeq < 0) {
+			throw badRequest("turnSeq must be a non-negative integer");
+		}
+		this.rewinding.add(id);
+		try {
+			const result = await this.checkpoints.rewind(id, opts.turnSeq, workDirOf(rec), { ...opts, deferCleanup: true });
+			let truncatedFromSeq: number | null = null;
+			if (result.applied) {
+				const live = this.live.get(id);
+				if (live) {
+					for (const p of result.touchedPaths) live.readTracker.delete(p);
+				}
+				const commitTx = this.store.database.transaction(() => {
+					this.checkpoints.deleteFromTurn(id, opts.turnSeq);
+					if (result.mode === "files_and_chat") {
+						this.store.truncateFrom(id, opts.turnSeq);
+						truncatedFromSeq = opts.turnSeq;
+					}
+				});
+				commitTx();
+				if (result.mode === "files_and_chat" && live) {
+					live.unsubscribe();
+					this.live.delete(id);
+				}
+				if (result.touchedPaths.length > 0) {
+					this.bus.publish(id, "workspace_changed", { tool: "rewind" }, { ephemeral: true });
+				}
+				this.bus.publish(id, "session_rewound", {
+					turnSeq: result.turnSeq,
+					mode: result.mode,
+					restored: result.restored,
+					deleted: result.deleted,
+					truncatedFromSeq,
+				});
+			}
+			return {
+				applied: result.applied,
+				dryRun: result.dryRun,
+				mode: result.mode,
+				turnSeq: result.turnSeq,
+				files: result.files,
+				conflicts: result.conflicts,
+				restored: result.restored,
+				deleted: result.deleted,
+				skipped: result.skipped,
+				truncatedFromSeq,
+			};
+		} finally {
+			this.rewinding.delete(id);
+		}
 	}
 
 	// ── Running ─────────────────────────────────────────────────────────────
@@ -894,6 +994,22 @@ export class SessionManager {
 		input: { text: string; images?: ImageContent[]; files?: { name: string; data: string }[]; mode?: PromptMode | "auto"; busyMode?: "steer" | "follow_up"; origin?: RunOrigin; command?: { name: "compact"; instructions?: string } },
 	): Promise<{ accepted: "prompt" | "steer" | "follow_up" }> {
 		if (record.closed) throw conflict("session is closed; resume it first (PATCH closed=false)");
+		if (this.rewinding.has(id)) throw conflict("cannot send messages while the session is rewinding");
+		this.activeSends.set(id, (this.activeSends.get(id) ?? 0) + 1);
+		try {
+			return await this.sendInnerBody(id, record, input);
+		} finally {
+			const n = (this.activeSends.get(id) ?? 1) - 1;
+			if (n <= 0) this.activeSends.delete(id);
+			else this.activeSends.set(id, n);
+		}
+	}
+
+	private async sendInnerBody(
+		id: string,
+		record: SessionRecord,
+		input: { text: string; images?: ImageContent[]; files?: { name: string; data: string }[]; mode?: PromptMode | "auto"; busyMode?: "steer" | "follow_up"; origin?: RunOrigin; command?: { name: "compact"; instructions?: string } },
+	): Promise<{ accepted: "prompt" | "steer" | "follow_up" }> {
 		this.assertChatModel(record.provider, record.model);
 		const requestedMode = input.mode ?? "prompt";
 		const isAuto = requestedMode === "auto";
@@ -1789,6 +1905,7 @@ export class SessionManager {
 		const live: Live = {
 			agent,
 			nextSeq: this.store.nextSeq(record.id),
+			currentTurnSeq: this.store.lastUserSeq(record.id),
 			running: false,
 			runStartedAt: 0,
 			origin: "user",
@@ -1893,6 +2010,17 @@ export class SessionManager {
 				readTracker: readTracker ?? this.live.get(sessionId)?.readTracker,
 				spillDir: this.spillDir(sessionId),
 				bgBash: this.bgBash.forSession(sessionId),
+				fileCheckpoint: {
+					beforeWrite: (file) => {
+						const rec = this.store.get(sessionId);
+						if (!rec) return Promise.resolve(null);
+						const turnSeq = this.live.get(sessionId)?.currentTurnSeq ?? this.store.lastUserSeq(sessionId);
+						return this.checkpoints.beforeWrite(sessionId, turnSeq, workDirOf(rec), file);
+					},
+					afterWrite: (token, content) => {
+						this.checkpoints.afterWrite(token as PendingCapture, content);
+					},
+				},
 			} : { bgBash: null }),
 			delegate: (_toolCallId, input, signal, progress) => this.delegate(sessionId, input, signal, progress),
 			delegateRoles: () => this.delegatePolicy().roles,
@@ -2311,6 +2439,9 @@ export class SessionManager {
 					}
 				}
 				const seq = live.nextSeq++;
+				if (event.message.role === "user") {
+					live.currentTurnSeq = seq;
+				}
 				if (live.recallCandidate && event.message === live.recallCandidate.message) {
 					live.recallCandidate.userSeq = seq;
 				}
@@ -2375,6 +2506,7 @@ export class SessionManager {
 	 * `workdir` tool and the user (PATCH workDir).
 	 */
 	moveWorkdir(id: string, target: string | null, by: "agent" | "user"): { record: SessionRecord; note: string } {
+		if (this.rewinding.has(id)) throw conflict("cannot change working directory while the session is rewinding");
 		return this.workdirOps.move(id, target, by);
 	}
 

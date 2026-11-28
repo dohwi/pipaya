@@ -103,6 +103,11 @@ export interface ToolContext {
 	};
 	/** Per-session background bash job manager (`bash` with `background`/`backgroundOnTimeout`, and `bash_job`). `null` disables background jobs (e.g. subagents). */
 	bgBash?: BackgroundBashOps | null;
+	/** Turn-level file checkpoint hooks invoked inside `write`/`edit` per-path locks. */
+	fileCheckpoint?: {
+		beforeWrite(file: string): Promise<unknown>;
+		afterWrite(token: unknown, content: string): void | Promise<void>;
+	};
 }
 
 /** One question, or several asked together (`items`; `question`/`options` describe the first). */
@@ -830,8 +835,15 @@ const writeTool: ToolDef = {
 			async execute(_id, params) {
 				const file = safePath(curCwd(), params.path);
 				return withPathLock(realWithTail(file), async () => {
+					let snap: unknown = null;
+					if (ctx.fileCheckpoint) {
+						try { snap = await ctx.fileCheckpoint.beforeWrite(file); } catch { snap = null; }
+					}
 					await mkdir(dirname(file), { recursive: true });
 					await atomicWriteFile(file, params.content);
+					if (snap && ctx.fileCheckpoint) {
+						try { await ctx.fileCheckpoint.afterWrite(snap, params.content); } catch { /* checkpoint persistence must not fail a completed write */ }
+					}
 					const info = await stat(file);
 					tracker.set(canonicalPath(file), { mtimeMs: info.mtimeMs, size: info.size });
 					const bytes = Buffer.byteLength(params.content, "utf8");
@@ -1267,7 +1279,14 @@ const editTool: ToolDef = {
 						matchKind = res.matchKind;
 					}
 
+					let snap: unknown = null;
+					if (ctx.fileCheckpoint) {
+						try { snap = await ctx.fileCheckpoint.beforeWrite(file); } catch { snap = null; }
+					}
 					await atomicWriteFile(file, cur);
+					if (snap && ctx.fileCheckpoint) {
+						try { await ctx.fileCheckpoint.afterWrite(snap, cur); } catch { /* checkpoint persistence must not fail a completed edit */ }
+					}
 					const nextInfo = await stat(file);
 					tracker.set(canonicalPath(file), { mtimeMs: nextInfo.mtimeMs, size: nextInfo.size });
 
