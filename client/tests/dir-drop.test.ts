@@ -175,17 +175,19 @@ describe("applyDirDrop", () => {
 			"/r": repo("/r", "/r", "main"),
 			"/r-wt": repo("/r", "/r-wt", "feat"),
 			"/notes": null,
+			"/other": null,
 		};
 		const init: ProjectOverrides = { projects: [{ id: "p1", name: "P1", dirs: ["/notes", "/r-wt"] }] };
-		const { blocks, over } = runDrop([dir("/notes"), dir("/r-wt"), dir("/r")], repos, init, "/r-wt", { id: "dir:/r", place: "after" });
+		// `/r` inherits P1 automatically, so pulling `/r-wt` outside targets `/other` (outside the project)
+		const { blocks, over } = runDrop([dir("/notes"), dir("/r-wt"), dir("/r"), dir("/other")], repos, init, "/r-wt", { id: "dir:/other", place: "after" });
 		expect(over.projects).toEqual([]);
 		expect(over.ungrouped).toContain("/r-wt");
-		expect(shape(blocks)).toEqual(["/notes", "/r", "/r-wt"]);
+		expect(shape(blocks)).toEqual(["/notes", "/r", "/other", "/r-wt"]);
 
 		// Pulling the non-git folder out instead dissolves p1 and lets /r-wt return to its git project with /r
-		const r2 = runDrop([dir("/notes"), dir("/r-wt"), dir("/r")], repos, init, "/notes", { id: "dir:/r", place: "after" });
+		const r2 = runDrop([dir("/notes"), dir("/r-wt"), dir("/r"), dir("/other")], repos, init, "/notes", { id: "dir:/other", place: "after" });
 		expect(r2.over).toEqual({ projects: [], ungrouped: [] });
-		expect(shape(r2.blocks)).toEqual(["G:/r[/r,/r-wt]", "/notes"]);
+		expect(shape(r2.blocks)).toEqual(["G:/r[/r,/r-wt]", "/other", "/notes"]);
 
 		// leaveToStandalone on a 2-folder manual project of same-repo worktrees dissolves it and marks the leaving folder ungrouped
 		const sameRepo: ProjectOverrides = { projects: [{ id: "p2", name: "P2", dirs: ["/r", "/r-wt"] }] };
@@ -250,5 +252,47 @@ describe("applyDirDrop", () => {
 		expect(shape(afterRes.blocks)).toEqual(["M:manual:p1[/b,/a]", "/z", "/x"]);
 		const beforeRes = runDrop([dir("/a"), dir("/x"), dir("/b"), dir("/z")], {}, init, "/z", { id: "project:manual:p1", place: "before" });
 		expect(shape(beforeRes.blocks)).toEqual(["/z", "M:manual:p1[/b,/a]", "/x"]);
+	});
+
+	test("inherited worktrees in a manual project can be pulled out, reordered, and used as drop slots", () => {
+		const repos: RepoMap = {
+			"/w/logo": null,
+			"/w/studio": repo("/w/studio", "/w/studio", "main"),
+			"/w/studio-wt": repo("/w/studio", "/w/studio-wt", "feat/mfa"),
+			"/w/extra": null,
+		};
+		const init: ProjectOverrides = { projects: [{ id: "dg", name: "duckgul", dirs: ["/w/logo", "/w/studio"] }] };
+
+		// Pulling an inherited worktree out marks it ungrouped without dissolving the underlying manual project
+		const pulled = runDrop([dir("/w/logo"), dir("/w/studio-wt"), dir("/w/extra")], repos, init, "/w/studio-wt", { id: "dir:/w/extra", place: "after" });
+		expect(pulled.over.projects).toEqual(init.projects);
+		expect(pulled.over.ungrouped).toEqual(["/w/studio-wt"]);
+		expect(shape(pulled.blocks)).toEqual(["M:manual:dg[/w/logo]", "/w/extra", "/w/studio-wt"]);
+
+		// Reordering an inherited worktree inside the manual project persists its new order
+		const reordered = runDrop([dir("/w/logo"), dir("/w/studio-wt")], repos, init, "/w/studio-wt", { id: "dir:/w/logo", place: "before" });
+		expect(reordered.over.projects).toEqual([{ id: "dg", name: "duckgul", dirs: ["/w/studio-wt", "/w/logo", "/w/studio"] }]);
+		expect(shape(reordered.blocks)).toEqual(["M:manual:dg[/w/studio-wt,/w/logo]"]);
+
+		// Dropping an external folder before an inherited worktree inserts it right before that worktree
+		const inserted = runDrop([dir("/w/logo"), dir("/w/studio-wt"), dir("/w/extra")], repos, init, "/w/extra", { id: "dir:/w/studio-wt", place: "before" });
+		expect(shape(inserted.blocks)).toEqual(["M:manual:dg[/w/logo,/w/extra,/w/studio-wt]"]);
+
+		// Pulling a stored git repo folder out of a 3-dir manual project that still holds a sibling worktree marks it ungrouped so it doesn't re-inherit
+		const three: ProjectOverrides = { projects: [{ id: "dg", name: "duckgul", dirs: ["/w/logo", "/w/studio", "/w/studio-wt"] }] };
+		const pulledMain = runDrop([dir("/w/logo"), dir("/w/studio"), dir("/w/studio-wt"), dir("/w/extra")], repos, three, "/w/studio", { id: "dir:/w/extra", place: "after" });
+		expect(pulledMain.over.projects).toEqual([{ id: "dg", name: "duckgul", dirs: ["/w/logo", "/w/studio-wt"] }]);
+		expect(pulledMain.over.ungrouped).toEqual(["/w/studio"]);
+		expect(shape(pulledMain.blocks)).toEqual(["M:manual:dg[/w/logo,/w/studio-wt]", "/w/extra", "/w/studio"]);
+
+		// Context-menu leave (`leaveToStandalone` directly) on an inherited worktree keeps the manual project intact and marks only the worktree ungrouped
+		const ctxBlocks = projectBlocks([dir("/w/logo"), dir("/w/studio-wt")], repos, init);
+		const ctxProj = ctxBlocks[0]!;
+		expect(ctxProj.kind).toBe("project");
+		if (ctxProj.kind === "project") {
+			const next = leaveToStandalone(init, "/w/studio-wt", ctxProj, ctxBlocks, repos);
+			expect(next).toEqual({ projects: init.projects, ungrouped: ["/w/studio-wt"] });
+			expect(shape(projectBlocks([dir("/w/logo"), dir("/w/studio-wt")], repos, next))).toEqual(["M:manual:dg[/w/logo]", "/w/studio-wt"]);
+		}
 	});
 });

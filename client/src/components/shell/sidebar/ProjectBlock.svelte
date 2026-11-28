@@ -25,8 +25,16 @@
 	const key = $derived(projectKey(n.server.id, root));
 	const folded = $derived(sb.isFolded(key));
 	const manual = $derived(isManualRoot(root));
+	const manualDirs = $derived(manual ? (app.sidebar.overrides(n.server.id).projects?.find((p) => `manual:${p.id}` === root)?.dirs ?? []) : []);
+	/** Keep a symlinked main checkout's user-facing path when available, falling back to canonical `root`. */
+	const gitDisplayRoot = $derived.by(() => {
+		if (manual) return root;
+		const first = dirs[0];
+		const info = first ? n.repos[first.path] : null;
+		return first && info?.main && first.path === info.top ? first.path : root;
+	});
 	const name = $derived(sb.projectName(n, root));
-	const above = $derived(manual ? "" : parentPath(root, n.home, name));
+	const above = $derived(manual ? "" : parentPath(gitDisplayRoot, n.home, name));
 	/** Another git project on this server shares the same header name (`shortName`): keep a distinguishing parent visible */
 	const peerAboves = $derived.by(() => {
 		if (manual) return [];
@@ -40,8 +48,12 @@
 	});
 	const twin = $derived(peerAboves.length > 0);
 	const twinHints = $derived(twin && above ? twinParentCandidates(above, peerAboves) : []);
-	/** Where "+" starts: the repository's main checkout, or a hand-made project's first folder */
-	const home = $derived(manual ? (dirs[0]?.path ?? n.root ?? ".") : root);
+	/** Where "+" starts: the repository's main checkout, or a hand-made project's first explicit folder */
+	const home = $derived(
+		manual
+			? (dirs.find((d) => manualDirs.includes(d.path))?.path ?? manualDirs[0] ?? dirs[0]?.path ?? n.root ?? ".")
+			: gitDisplayRoot,
+	);
 	const workdir = $derived(asWorkdir(home, n.root));
 	const total = $derived(dirs.reduce((k, d) => k + dirPaneCount(d), 0));
 	const pstate = $derived(mostUrgent(dirs.flatMap((d) => d.tabs.flatMap((x) => tabPanes(x))).map((id) => sb.stateOfId(n, id))));

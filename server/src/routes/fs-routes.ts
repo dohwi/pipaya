@@ -34,6 +34,7 @@ const RepoInfo = Type.Object({
 	root: Type.String({ description: "The repository's main working tree: one value for the main checkout and all its worktrees" }),
 	top: Type.String({ description: "The working tree holding the folder (the main checkout or a worktree)" }),
 	branch: Type.Union([Type.String(), Type.Null()], { description: "null when HEAD is detached" }),
+	main: Type.Optional(Type.Boolean({ description: "True for the repository's main checkout; false for linked worktrees" })),
 });
 export const ReposResult = Type.Object({
 	repos: Type.Record(Type.String(), Type.Union([RepoInfo, Type.Null()]), { description: "Per asked folder; null outside a repository" }),

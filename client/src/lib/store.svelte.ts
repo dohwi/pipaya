@@ -1307,7 +1307,11 @@ class AppStore {
           void this.attach(l, warm);
         },
         shape: (l) => this.sidebarShape(l.id),
-        extraPaths: (l) => this.sidebar.pinned[l.id] ?? [],
+        extraPaths: (l) => {
+          const pinned = this.sidebar.pinned[l.id] ?? [];
+          const manual = (this.sidebar.projects[l.id] ?? []).flatMap((p) => p.dirs);
+          return manual.length ? [...new Set([...pinned, ...manual])] : pinned;
+        },
       });
       next[s.id] = link;
       changed = true;

@@ -141,9 +141,13 @@ export interface WorkTarget {
 export function workTargets(cwd: string, allowed: (dir: string) => boolean = () => true): WorkTarget[] {
 	const own = repoOf(cwd);
 	if (!own) return [];
+	const ownRealTop = real(own.top);
 	return worktreesOf(own.root)
-		.filter((w) => w.path === own.top || allowed(w.path))
-		.map((w) => ({ path: w.path, branch: w.branch, home: real(w.path) === real(own.top) }))
+		.map((w) => {
+			const home = real(w.path) === ownRealTop;
+			return { path: home ? own.top : w.path, branch: w.branch, home };
+		})
+		.filter((w) => w.home || allowed(w.path))
 		.sort((a, b) => Number(b.home) - Number(a.home));
 }
 

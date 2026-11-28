@@ -37,7 +37,7 @@
 	import { registerRenamePlace } from "../../lib/rename-places";
 	import { DragMarks } from "../../lib/drag-marks.svelte";
 	import { dirPaneCount, workDir, type DirBlock, type Tab } from "../../lib/nav";
-	import { cleanManualProjects, dissolveProject, flattenBlocks, isManualRoot, leaveProject, projectKey, type SidebarBlock } from "../../lib/projects";
+	import { cleanManualProjects, dissolveProject, flattenBlocks, isManualRoot, projectKey, type SidebarBlock } from "../../lib/projects";
 	import { dirKey, connectionState, edgeOf, headMenuEntries, leafName, newKey, newMenuEntries, orderServers, projectMenuEntries, rowMenuEntries, shortName, targetId, type RowActions } from "../../lib/sidebar-model";
 	import type { Group, Session } from "../../lib/types";
 	import { isTerminalId, platformName } from "../../lib/terminal";
@@ -454,7 +454,6 @@
 		// a folder folds by its own list (they start folded); a server keeps the shared one
 		const dir = path !== null;
 		const proj = dir ? projectOf(n, path) : null;
-		const storedManual = dir && !proj ? cleanManualProjects(app.sidebar.overrides(n.server.id).projects ?? []).find((m) => m.dirs.includes(path)) : null;
 		const inProject = !!proj;
 		const items = headMenuEntries(platformName(n.platform), dir ? isDirFolded(key, inProject) : isFolded(key), {
 			chat: () => app.openIn(n.server.id, { workdir }),
@@ -467,9 +466,7 @@
 			joinProject: path !== null && n.current ? () => pickProject(n, path) : undefined,
 			leaveProject: proj
 				? () => app.sidebar.setOverrides(n.server.id, leaveToStandalone(app.sidebar.overrides(n.server.id), path!, proj, n.blocks, n.repos))
-				: storedManual
-					? () => app.sidebar.setOverrides(n.server.id, leaveProject(app.sidebar.overrides(n.server.id), path!, false))
-					: undefined,
+				: undefined,
 		});
 		trackAnchor(null);
 		rowMenu?.openAt(pt, id, items);
@@ -587,7 +584,7 @@
 		shortLabel,
 	});
 	$effect(() => { void app.configTick; void app.serverExtensionsTick; void extensionUpdates.refresh(Object.fromEntries(Object.entries(app.links).map(([id, l]) => [id, l?.api]))); });
-	// Clear the project strip if its project dissolves or collapses below two visible folders, so it never re-engages unasked later.
+	// Clear the project strip if its project dissolves or has no visible folders, so it never re-engages unasked later.
 	$effect(() => {
 		const p = app.tabProject;
 		if (!p) return;

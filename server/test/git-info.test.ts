@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { buildApp, type App } from "../src/app.ts";
@@ -42,20 +42,28 @@ afterAll(async () => {
 
 describe("repoOf", () => {
 	test("the main checkout and its worktree name the same root, each with its own branch", () => {
-		expect(repoOf(main, "/nowhere")).toEqual({ root: main, top: main, branch: "main" });
-		expect(repoOf(wt, "/nowhere")).toEqual({ root: main, top: wt, branch: "feat/x" });
+		expect(repoOf(main, "/nowhere")).toEqual({ root: main, top: main, branch: "main", main: true });
+		expect(repoOf(wt, "/nowhere")).toEqual({ root: main, top: wt, branch: "feat/x", main: false });
 		expect(branchOf(wt)).toBe("feat/x");
 	});
 	test("a folder inside the repository belongs to it", () => {
-		expect(repoOf(join(main, "client/src"), "/nowhere")).toEqual({ root: main, top: main, branch: "main" });
+		expect(repoOf(join(main, "client/src"), "/nowhere")).toEqual({ root: main, top: main, branch: "main", main: true });
 	});
 	test("a submodule is its own repository; a detached HEAD has no branch", () => {
-		expect(repoOf(sub, "/nowhere")).toEqual({ root: sub, top: sub, branch: null });
+		expect(repoOf(sub, "/nowhere")).toEqual({ root: sub, top: sub, branch: null, main: true });
 	});
 	test("outside a repository, and a repository at home, are not repositories", () => {
 		expect(repoOf(plain, "/nowhere")).toBeNull();
 		expect(repoOf(main, main)).toBeNull();
 		expect(repoOf(join(dir, "missing"), "/nowhere")).toBeNull();
+	});
+	test("a main checkout and linked worktree accessed through a symlink resolve to the same canonical root", () => {
+		const linkRoot = join(dir, "ws-link");
+		symlinkSync(dir, linkRoot);
+		const viaLinkMain = join(linkRoot, "app");
+		const viaLinkWt = join(linkRoot, "app-x");
+		expect(repoOf(viaLinkMain, "/nowhere")).toEqual({ root: main, top: viaLinkMain, branch: "main", main: true });
+		expect(repoOf(viaLinkWt, "/nowhere")).toEqual({ root: main, top: viaLinkWt, branch: "feat/x", main: false });
 	});
 });
 
@@ -67,8 +75,8 @@ describe("POST /fs/repos", () => {
 	test("answers per folder", async () => {
 		const r = await post({ paths: [main, wt, plain, "relative/path", "/"] });
 		expect(r.status).toBe(200);
-		expect(r.json.repos[main]).toEqual({ root: main, top: main, branch: "main" });
-		expect(r.json.repos[wt]).toEqual({ root: main, top: wt, branch: "feat/x" });
+		expect(r.json.repos[main]).toEqual({ root: main, top: main, branch: "main", main: true });
+		expect(r.json.repos[wt]).toEqual({ root: main, top: wt, branch: "feat/x", main: false });
 		expect(r.json.repos[plain]).toBeNull();
 		expect(r.json.repos["relative/path"]).toBeNull();
 		expect(r.json.repos["/"]).toBeNull();
