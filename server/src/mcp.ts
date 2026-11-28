@@ -22,9 +22,15 @@ const MAX_TOOLS_PER_SERVER = 200;
 const MAX_CACHED_TOOLS_JSON_CHARS = 512_000;
 const CACHED_TOOL_NAME_RE = /^mcp_[a-zA-Z0-9_-]{1,60}$/;
 export const MAX_TOTAL_MCP_TOOLS = 128;
+/** When active MCP tools exceed this count, sessions expose `mcp_search` instead of injecting every MCP tool schema upfront. */
+export const MCP_DEFERRED_THRESHOLD = 15;
+export const MCP_SEARCH_TOOL = "mcp_search";
 export const MAX_MCP_IMAGE_RAW_BYTES = 10 * 1024 * 1024;
 const MAX_STDERR_CHARS = 2000;
 const MAX_ERROR_CHARS = 1000;
+const MAX_SEARCH_SUMMARY_CHARS = 120;
+const DEFAULT_SEARCH_LIMIT = 20;
+const DEFAULT_BROWSE_LIMIT = 50;
 
 const Strings = Type.Record(Type.String({ minLength: 1, maxLength: 200 }), Type.String({ maxLength: 4000 }), { maxProperties: 50 });
 const PatchStrings = Type.Record(
@@ -94,6 +100,63 @@ export function buildMcpStdioEnv(
 
 type Status = "off" | "connecting" | "ready" | "error";
 interface RemoteTool { name: string; tool: string; description: string; schema: Record<string, unknown> }
+export interface McpCatalogEntry {
+	name: string;
+	server: string;
+	tool: string;
+	description: string;
+	fullDescription: string;
+	schema: Record<string, unknown>;
+}
+export interface McpSearchSessionHooks {
+	getLoaded(): ReadonlySet<string>;
+	load(names: readonly string[]): { loaded: string[]; alreadyLoaded: string[] };
+}
+export interface McpSearchResult {
+	entries: McpCatalogEntry[];
+	totalMatched: number;
+	totalTools: number;
+	servers: { name: string; count: number }[];
+	unknownServer?: string;
+}
+
+const McpSearchParams = Type.Object({
+	query: Type.Optional(Type.String({
+		maxLength: 200,
+		description: "Case-insensitive keyword(s) matched against tool name, server name, or description. Omit (with no load args) to browse a compact summary of available MCP tools.",
+	})),
+	server: Type.Optional(Type.String({
+		maxLength: 64,
+		description: "Filter search results to a single MCP server name (case-insensitive).",
+	})),
+	limit: Type.Optional(Type.Integer({
+		minimum: 1,
+		maximum: 100,
+		description: "Maximum number of search results to return (default 20 for filtered search, 50 for full browse; max 100).",
+	})),
+	load: Type.Optional(Type.Array(Type.String({ minLength: 1, maxLength: 100 }), {
+		maxItems: 50,
+		description: "Exact exposed MCP tool names (e.g. `mcp_search_web_search`) to load into this session. Loaded tools become callable starting on the next step.",
+	})),
+	loadServer: Type.Optional(Type.String({
+		maxLength: 64,
+		description: "Load all active tools from this MCP server (case-insensitive server name) into this session.",
+	})),
+}, { additionalProperties: false });
+
+function summarizeCatalogServers(catalog: readonly McpCatalogEntry[]): { name: string; count: number }[] {
+	const counts = new Map<string, number>();
+	for (const entry of catalog) {
+		counts.set(entry.server, (counts.get(entry.server) ?? 0) + 1);
+	}
+	return [...counts.entries()].map(([name, count]) => ({ name, count }));
+}
+
+function oneLineSummary(text: string): string {
+	const line = text.replace(/\r?\n[\s\S]*/, "").trim();
+	if (line.length <= MAX_SEARCH_SUMMARY_CHARS) return line;
+	return `${line.slice(0, MAX_SEARCH_SUMMARY_CHARS - 1)}…`;
+}
 interface Conn {
 	status: Status;
 	error?: string;
@@ -663,9 +726,9 @@ export class McpManager {
 		return conn;
 	}
 
-	/** Tools of the connected servers, in deterministic config/sorted order, capped globally at MAX_TOTAL_MCP_TOOLS. */
-	toolDefs(): Record<string, ToolDef> {
-		const defs: Record<string, ToolDef> = {};
+	/** Active MCP tools in deterministic config/sorted order, capped globally at MAX_TOTAL_MCP_TOOLS. Never spawns lazy stdio servers. */
+	private resolveCatalog(): McpCatalogEntry[] {
+		const entries: McpCatalogEntry[] = [];
 		const orderedNames: string[] = [];
 		const seen = new Set<string>();
 		for (const c of this.config()) {
@@ -677,40 +740,281 @@ export class McpManager {
 		for (const name of [...this.conns.keys()].sort()) {
 			if (!seen.has(name)) orderedNames.push(name);
 		}
-		let total = 0;
 		const usedNames = new Set<string>();
 		for (const server of orderedNames) {
 			const conn = this.conns.get(server);
 			if (!conn || conn.status !== "ready") continue;
 			for (const t of conn.tools) {
-				if (total >= MAX_TOTAL_MCP_TOOLS) return defs;
-				total++;
+				if (entries.length >= MAX_TOTAL_MCP_TOOLS) return entries;
 				let exposedName = t.name;
 				for (let i = 2; usedNames.has(exposedName); i++) {
 					const suffix = `_${i}`;
 					exposedName = `${t.name.slice(0, 64 - suffix.length)}${suffix}`;
 				}
 				usedNames.add(exposedName);
-				const description = `[MCP: ${server}] ${t.description || t.tool}`.slice(0, 2000);
-				defs[exposedName] = {
+				const description = t.description || t.tool;
+				const fullDescription = `[MCP: ${server}] ${description}`.slice(0, 2000);
+				entries.push({
 					name: exposedName,
+					server,
+					tool: t.tool,
 					description,
-					create: () => ({
-						name: exposedName,
-						label: `${server}: ${t.tool}`,
-						description,
-						parameters: t.schema as any,
-						execute: (_id, params, signal) => this.call(server, t.tool, params as Record<string, unknown>, signal),
-					}) as AgentTool<any>,
-				};
+					fullDescription,
+					schema: t.schema,
+				});
 			}
+		}
+		return entries;
+	}
+
+	/** Tools of the connected servers, in deterministic config/sorted order, capped globally at MAX_TOTAL_MCP_TOOLS. */
+	toolDefs(): Record<string, ToolDef> {
+		const defs: Record<string, ToolDef> = {};
+		for (const e of this.resolveCatalog()) {
+			defs[e.name] = {
+				name: e.name,
+				description: e.fullDescription,
+				create: () => ({
+					name: e.name,
+					label: `${e.server}: ${e.tool}`,
+					description: e.fullDescription,
+					parameters: e.schema as any,
+					execute: (_id, params, signal) => this.call(e.server, e.tool, params as Record<string, unknown>, signal),
+				}) as AgentTool<any>,
+			};
 		}
 		return defs;
 	}
 
 	/** Every MCP tool is offered to every session while its server is connected. */
 	toolNames(): string[] {
-		return Object.keys(this.toolDefs());
+		return this.resolveCatalog().map((e) => e.name);
+	}
+
+	/** True when active MCP tools exceed MCP_DEFERRED_THRESHOLD and sessions should use on-demand loading via `mcp_search`. */
+	isDeferred(): boolean {
+		return this.resolveCatalog().length > MCP_DEFERRED_THRESHOLD;
+	}
+
+	/**
+	 * Removes tool names from `loaded` that are permanently gone (server removed/disabled, or server is `ready` and no
+	 * longer exposes the tool due to allowTools/denyTools/update). Tools of enabled servers currently in `connecting` or
+	 * transient `error` state are preserved so they return automatically on recovery.
+	 */
+	pruneStaleLoadedTools(loaded: Set<string>): void {
+		if (!loaded.size) return;
+		const readyNames = new Set(this.toolNames());
+		const transientPrefixes: string[] = [];
+		for (const c of this.config()) {
+			if (!c.enabled) continue;
+			const status = this.conns.get(c.name)?.status ?? "connecting";
+			if (status === "connecting" || status === "error") {
+				transientPrefixes.push(`mcp_${clean(c.name)}_`);
+			}
+		}
+		for (const name of loaded) {
+			if (readyNames.has(name)) continue;
+			if (transientPrefixes.some((p) => name.startsWith(p))) continue;
+			loaded.delete(name);
+		}
+	}
+
+	/** Search cached/active MCP tool metadata without spawning lazy stdio processes. */
+	searchCatalog(opts?: { query?: string; server?: string; limit?: number }): McpSearchResult {
+		const catalog = this.resolveCatalog();
+		const servers = summarizeCatalogServers(catalog);
+		const serverFilter = opts?.server?.trim() ?? "";
+		const queryText = opts?.query?.trim() ?? "";
+		let pool = catalog;
+		let unknownServer: string | undefined;
+		if (serverFilter) {
+			const lower = serverFilter.toLowerCase();
+			pool = catalog.filter((e) => e.server.toLowerCase() === lower);
+			if (pool.length === 0 && !servers.some((s) => s.name.toLowerCase() === lower)) {
+				unknownServer = serverFilter;
+			}
+		}
+		let matched: McpCatalogEntry[];
+		if (queryText) {
+			const lowerQuery = queryText.toLowerCase();
+			const tokens = lowerQuery.split(/\s+/).filter(Boolean);
+			const ranked: { entry: McpCatalogEntry; tier: number; idx: number }[] = [];
+			for (let idx = 0; idx < pool.length; idx++) {
+				const entry = pool[idx]!;
+				const nameLower = entry.name.toLowerCase();
+				const toolLower = entry.tool.toLowerCase();
+				const identity = `${nameLower} ${entry.server.toLowerCase()} ${toolLower}`;
+				const haystack = `${identity} ${entry.description.toLowerCase()}`;
+				if (!tokens.every((tok) => haystack.includes(tok))) continue;
+				const tier = (nameLower === lowerQuery || toolLower === lowerQuery)
+					? 0
+					: tokens.every((tok) => identity.includes(tok))
+						? 1
+						: 2;
+				ranked.push({ entry, tier, idx });
+			}
+			ranked.sort((a, b) => (a.tier - b.tier) || (a.idx - b.idx));
+			matched = ranked.map((r) => r.entry);
+		} else {
+			matched = pool;
+		}
+		const defaultLimit = queryText || serverFilter ? DEFAULT_SEARCH_LIMIT : DEFAULT_BROWSE_LIMIT;
+		const rawLimit = opts?.limit;
+		const limit = typeof rawLimit === "number" && Number.isInteger(rawLimit)
+			? Math.max(1, Math.min(100, rawLimit))
+			: defaultLimit;
+		return {
+			entries: matched.slice(0, limit),
+			totalMatched: matched.length,
+			totalTools: catalog.length,
+			servers,
+			...(unknownServer ? { unknownServer } : {}),
+		};
+	}
+
+	/** Lightweight meta-tool for searching and loading deferred MCP tools into a single session. */
+	searchToolDef(hooks: McpSearchSessionHooks): ToolDef {
+		const initialCatalog = this.resolveCatalog();
+		const initialServers = summarizeCatalogServers(initialCatalog);
+		const serverSummary = initialServers.map((s) => `${s.name} (${s.count})`).join(", ");
+		const description = [
+			`Search and load deferred MCP tools into this session (${initialCatalog.length} active tools across ${initialServers.length} server(s): ${serverSummary}).`,
+			"Full JSON schemas for MCP tools are not loaded upfront to keep context small.",
+			"- Pass `query` (keyword) and/or `server` to find matching tools. Omit both to browse a compact summary of available MCP tools.",
+			"- Pass `load` (exact `mcp_<server>_<tool>` names) and/or `loadServer` (server name) to attach their full schemas to this session; loaded tools become callable starting on the next step.",
+			"You can search and load in one call or separately. Loaded tools stay available for the rest of this session.",
+		].join("\n");
+
+		return {
+			name: MCP_SEARCH_TOOL,
+			description,
+			create: () => ({
+				name: MCP_SEARCH_TOOL,
+				label: "Search MCP tools",
+				description,
+				parameters: McpSearchParams,
+				execute: async (_id, rawParams) => {
+					const params = (rawParams ?? {}) as Static<typeof McpSearchParams>;
+					const catalog = this.resolveCatalog();
+					const byLowerName = new Map(catalog.map((e) => [e.name.toLowerCase(), e.name]));
+					const serverListText = summarizeCatalogServers(catalog).map((s) => `${s.name} (${s.count})`).join(", ") || "none";
+
+					const hasLoadIntent = params.load !== undefined || params.loadServer !== undefined;
+					const hasSearchIntent = params.query !== undefined || params.server !== undefined || !hasLoadIntent;
+
+					const toLoad = new Set<string>();
+					const notFoundSet = new Set<string>();
+					if (Array.isArray(params.load)) {
+						for (const raw of params.load) {
+							if (typeof raw !== "string") {
+								notFoundSet.add(String(raw));
+								continue;
+							}
+							const trimmed = raw.trim();
+							const canonical = trimmed ? byLowerName.get(trimmed.toLowerCase()) : undefined;
+							if (canonical) toLoad.add(canonical);
+							else notFoundSet.add(trimmed || raw);
+						}
+					}
+					if (params.loadServer !== undefined) {
+						const target = typeof params.loadServer === "string" ? params.loadServer.trim() : "";
+						const lower = target.toLowerCase();
+						const serverTools = target ? catalog.filter((e) => e.server.toLowerCase() === lower) : [];
+						if (serverTools.length === 0) {
+							notFoundSet.add(`server:${target || "(empty)"}`);
+						} else {
+							for (const e of serverTools) toLoad.add(e.name);
+						}
+					}
+
+					const { loaded, alreadyLoaded } = hasLoadIntent
+						? hooks.load([...toLoad])
+						: { loaded: [] as string[], alreadyLoaded: [] as string[] };
+					const notFound = [...notFoundSet];
+
+					const sections: string[] = [];
+					let matchedCount: number | undefined;
+
+					if (hasLoadIntent) {
+						const loadLines: string[] = [];
+						if (loaded.length) {
+							loadLines.push(`Loaded ${loaded.length} MCP tool(s) into this session (callable from the next step): ${loaded.join(", ")}`);
+						}
+						if (alreadyLoaded.length) {
+							loadLines.push(`Already loaded in this session: ${alreadyLoaded.join(", ")}`);
+						}
+						if (notFound.length) {
+							loadLines.push(`Not found: ${notFound.join(", ")} (available servers: ${serverListText})`);
+						}
+						if (!loadLines.length) {
+							loadLines.push(
+								toLoad.size > 0
+									? "MCP tool loading is not available in preview mode."
+									: `No MCP tools were loaded (empty load list). Available servers: ${serverListText}`,
+							);
+						}
+						sections.push(loadLines.join("\n"));
+					}
+
+					if (hasSearchIntent) {
+						const res = this.searchCatalog({ query: params.query, server: params.server, limit: params.limit });
+						matchedCount = res.totalMatched;
+						const currentlyLoaded = hooks.getLoaded();
+						const availText = res.servers.map((s) => `${s.name} (${s.count})`).join(", ") || "none";
+						if (res.unknownServer) {
+							sections.push(`No ready MCP server named "${res.unknownServer}". Available servers: ${availText}`);
+						} else if (res.entries.length === 0) {
+							const qPart = params.query?.trim() ? ` query "${params.query.trim()}"` : "";
+							const sPart = params.server?.trim() ? ` on server "${params.server.trim()}"` : "";
+							sections.push(`No MCP tools matched${qPart}${sPart}. Available servers: ${availText}`);
+						} else {
+							const isBrowse = !params.query?.trim() && !params.server?.trim();
+							const lines: string[] = [
+								`MCP tools (${res.totalMatched} matching / ${res.totalTools} total; servers: ${availText}):`,
+							];
+							if (isBrowse) {
+								const grouped = new Map<string, McpCatalogEntry[]>();
+								for (const entry of res.entries) {
+									let list = grouped.get(entry.server);
+									if (!list) {
+										list = [];
+										grouped.set(entry.server, list);
+									}
+									list.push(entry);
+								}
+								for (const [server, list] of grouped) {
+									lines.push(`\n[${server}]`);
+									for (const e of list) {
+										const mark = currentlyLoaded.has(e.name) ? " [loaded]" : "";
+										lines.push(`- ${e.name}: ${oneLineSummary(e.description)}${mark}`);
+									}
+								}
+							} else {
+								for (const e of res.entries) {
+									const mark = currentlyLoaded.has(e.name) ? " [loaded]" : "";
+									lines.push(`- ${e.name} [${e.server}]: ${oneLineSummary(e.description)}${mark}`);
+								}
+							}
+							if (res.totalMatched > res.entries.length) {
+								lines.push(`\nShowing ${res.entries.length} of ${res.totalMatched} matching tools. Narrow with \`query\`, \`server\`, or a higher \`limit\`.`);
+							}
+							sections.push(lines.join("\n"));
+						}
+					}
+
+					return {
+						content: [{ type: "text", text: sections.join("\n\n") }],
+						details: {
+							loaded,
+							alreadyLoaded,
+							notFound,
+							...(matchedCount !== undefined ? { matched: matchedCount } : {}),
+							totalTools: catalog.length,
+						},
+					};
+				},
+			}) as AgentTool<any>,
+		};
 	}
 
 	private async reconnectHttp(server: string, stale: Conn, originalError: unknown, signal?: AbortSignal): Promise<Conn> {
