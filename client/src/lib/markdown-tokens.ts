@@ -187,12 +187,14 @@ function buildMentionNode(
 		btn.dataset.mentionId = target.id;
 		if (isClosed) btn.dataset.mentionClosed = "1";
 		if (target.kind === "session" && target.server) btn.dataset.mentionServer = target.server;
-		btn.title =
+		btn.setAttribute(
+			"aria-label",
 			target.kind === "group"
 				? labels.openGroup(text)
 				: isClosed
 					? (labels.openClosedSession ?? labels.openSession)(text)
-					: labels.openSession(text);
+					: labels.openSession(text),
+		);
 		el = btn;
 	}
 	const span = doc.createElement("span");

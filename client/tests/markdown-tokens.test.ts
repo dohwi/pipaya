@@ -109,11 +109,11 @@ describe("decorateMarkdownTokens + patchHtml", () => {
 		});
 
 		const mentions = [...host.querySelectorAll<HTMLButtonElement>("button.wd-mention")];
-		expect(mentions.map((b) => [b.textContent, b.dataset.mentionKind, b.dataset.mentionId, b.title])).toEqual([
-			["@서아", "session", "s1", "Open @서아 chat"],
-			["@front-team", "group", "g1", "Open @front-team group"],
-			["@민수", "session", "s2", "Open @민수 chat"],
-			["@서아", "session", "s1", "Open @서아 chat"],
+		expect(mentions.map((b) => [b.textContent, b.dataset.mentionKind, b.dataset.mentionId, b.getAttribute("aria-label"), b.hasAttribute("title")])).toEqual([
+			["@서아", "session", "s1", "Open @서아 chat", false],
+			["@front-team", "group", "g1", "Open @front-team group", false],
+			["@민수", "session", "s2", "Open @민수 chat", false],
+			["@서아", "session", "s1", "Open @서아 chat", false],
 		]);
 
 		const skills = [...host.querySelectorAll<HTMLButtonElement>("button.wd-skill")];
@@ -143,9 +143,9 @@ describe("decorateMarkdownTokens + patchHtml", () => {
 			decorate: (frag) => decorateMarkdownTokens(frag, { index, skills: true, labels }),
 		});
 		const mentions = [...host.querySelectorAll<HTMLButtonElement>("button.wd-mention")];
-		expect(mentions.map((b) => [b.textContent, b.dataset.mentionKind, b.dataset.mentionId, b.title])).toEqual([
-			["@서아", "session", "s1", "Open @서아 chat"],
-			["@FRONT-TEAM", "group", "g1", "Open @FRONT-TEAM group"],
+		expect(mentions.map((b) => [b.textContent, b.dataset.mentionKind, b.dataset.mentionId, b.getAttribute("aria-label"), b.hasAttribute("title")])).toEqual([
+			["@서아", "session", "s1", "Open @서아 chat", false],
+			["@FRONT-TEAM", "group", "g1", "Open @FRONT-TEAM group", false],
 		]);
 		expect(host.querySelectorAll("button.wd-skill")).toHaveLength(0);
 		expect(host.querySelectorAll("pre button")).toHaveLength(0);
@@ -315,9 +315,9 @@ describe("decorateMarkdownTokens + patchHtml", () => {
 				}),
 		});
 		const btns = [...host.querySelectorAll<HTMLButtonElement>("button.wd-mention")];
-		expect(btns.map((b) => [b.textContent, b.className, b.dataset.mentionClosed, b.dataset.mentionServer, b.title])).toEqual([
-			["@소민", "wd-mention wd-closed", "1", undefined, "Closed @소민"],
-			["@desktop/민석", "wd-mention", undefined, "srv-desk", "Open @desktop/민석 chat"],
+		expect(btns.map((b) => [b.textContent, b.className, b.dataset.mentionClosed, b.dataset.mentionServer, b.getAttribute("aria-label"), b.hasAttribute("title")])).toEqual([
+			["@소민", "wd-mention wd-closed", "1", undefined, "Closed @소민", false],
+			["@desktop/민석", "wd-mention", undefined, "srv-desk", "Open @desktop/민석 chat", false],
 		]);
 	});
 });
