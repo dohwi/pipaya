@@ -26,6 +26,7 @@
 	import ExtensionMount from "../extensions/ExtensionMount.svelte";
 	import { released } from "../../lib/pointer";
 	import { splitModelRef } from "../../lib/model-name";
+	import { resolveSessionOpen } from "../../lib/ux-prefs";
 
 	/**
 	 * The graph view: every saved server's open chats as columns (server → provider → model → chat → subagent), the lines
@@ -294,7 +295,7 @@
 	});
 
 	/** Reduced motion: no sparks (SMIL, which CSS cannot stop), cards and the view go straight to their place. */
-	let motion = $state(typeof matchMedia !== "function" || !matchMedia("(prefers-reduced-motion: reduce)").matches);
+	const motion = $derived(!app.prefs.isReducedMotion);
 
 	// ---- view: pan and zoom ----
 	let view = $state({ k: 1, x: 24, y: 24 });
@@ -616,9 +617,21 @@
 	const peek = (server: string, session: string) => void app.peekChat(server, session);
 	/** The server, provider, model or subagent card whose details are open. */
 	let detail = $state<string | null>(null);
-	/** A click (or Enter) on a card: a chat opens its quick look, any other card its details. */
-	function openCard(c: Card) {
-		if (c.kind === "session") peek(c.server, c.session!.id);
+	/** Open a session from the graph canvas or GraphDetail according to `prefs.graphClick` (inverted when `mod` is held). */
+	function openSessionFromGraph(server: string, sessionId: string, mod: boolean) {
+		const closed = Boolean(app.sessionAny(sessionId, server)?.closed);
+		if (resolveSessionOpen(app.prefs.graphClick, mod, { closed }) === "open") {
+			app.graphFrom = null;
+			app.graphOpen = false;
+			app.closePeek();
+			void app.openAnyOn(server, sessionId);
+		} else {
+			peek(server, sessionId);
+		}
+	}
+	/** A click (or Enter) on a card: a chat follows `prefs.graphClick` (inverted by `mod`), any other card opens its details. */
+	function openCard(c: Card, mod = false) {
+		if (c.kind === "session") openSessionFromGraph(c.server, c.session!.id, mod);
 		else detail = c.id;
 	}
 	/** card: the one being moved (mouse or pen only); tapped: the one under the pointer, which a click selects */
@@ -715,9 +728,8 @@
 		const c = d.tapped ? graph.cards.get(d.tapped) : undefined;
 		selected = c?.id ?? null;
 		if (!c) return;
-		// a click opens the chat's dialog (or the card's details) at once, no wait for a second click; Ctrl/⌘ + click goes to the chat
-		if (c.kind === "session" && goKey(e)) app.openIn(c.server, { session: c.session!.id });
-		else openCard(c);
+		// a click opens the chat per `prefs.graphClick` (Ctrl/⌘ + click does the opposite); other cards open details
+		openCard(c, goKey(e));
 	}
 	function arrange() {
 		pins = {};
@@ -732,19 +744,11 @@
 			selected = null;
 		} else if (e.key === "Enter" && c) {
 			e.preventDefault();
-			if (c.kind === "session" && e.shiftKey) app.openIn(c.server, { session: c.session!.id });
-			else openCard(c);
+			openCard(c, e.shiftKey);
 		} else if (e.key === "f") refit();
 		else if (e.key === "+" || e.key === "=") zoomBy(ZOOM_STEP);
 		else if (e.key === "-") zoomBy(1 / ZOOM_STEP);
 	}
-
-	onMount(() => {
-		const q = matchMedia("(prefers-reduced-motion: reduce)");
-		const on = () => (motion = !q.matches);
-		q.addEventListener("change", on);
-		return () => q.removeEventListener("change", on);
-	});
 
 	// ---- focus: the cards a pointer is about stand out, the rest steps back ----
 	const focus = $derived(hover && !dragging && graph.cards.has(hover) ? related(graph, hover) : null);
@@ -816,8 +820,12 @@
 			t("서브에이전트 위임 {n}회", { n: runs }),
 		].join(" · ");
 	});
-	/** On a chat card: what a click does, and the modifier that goes to the chat instead. */
-	const openHint = t("클릭: 빠른 보기 · {key}+클릭: 대화로 이동", { key: isMac ? "⌘" : "Ctrl" });
+	/** On a chat card: what a click does, and the modifier that performs the opposite action. */
+	const openHint = $derived(
+		app.prefs.graphClick === "open"
+			? t("클릭: 대화로 이동 · {key}+클릭: 빠른 보기", { key: isMac ? "⌘" : "Ctrl" })
+			: t("클릭: 빠른 보기 · {key}+클릭: 대화로 이동", { key: isMac ? "⌘" : "Ctrl" }),
+	);
 	const detailHint = t("클릭: 자세히 보기");
 	const keyHint = $derived(app.prefs.bindings.openGraph ? ` (${formatCombo(app.prefs.bindings.openGraph)})` : "");
 </script>
@@ -1029,7 +1037,7 @@
 		{graph}
 		id={detail}
 		onpick={(id) => { detail = id; selected = id; }}
-		onpeek={(server, session) => { detail = null; peek(server, session); }}
+		onopen={(server, session, mod) => { detail = null; openSessionFromGraph(server, session, mod); }}
 		onclose={() => (detail = null)}
 	/>
 {/if}
@@ -1683,6 +1691,23 @@
 		.doing > :global(.ic) {
 			animation: none;
 		}
+	}
+	:global(html[data-reduced-motion="true"]) .edges path,
+	:global(html[data-reduced-motion="true"]) .edges g,
+	:global(html[data-reduced-motion="true"]) .split,
+	:global(html[data-reduced-motion="true"]) .card {
+		transition: none;
+	}
+	:global(html[data-reduced-motion="true"]) .card.working {
+		animation: none;
+		background:
+			linear-gradient(var(--bg), var(--bg)) padding-box,
+			linear-gradient(color-mix(in srgb, var(--ring) 70%, var(--border-strong)), color-mix(in srgb, var(--ring) 70%, var(--border-strong))) border-box;
+	}
+	:global(html[data-reduced-motion="true"]) .card.asking,
+	:global(html[data-reduced-motion="true"]) .run .lead,
+	:global(html[data-reduced-motion="true"]) .doing > :global(.ic) {
+		animation: none;
 	}
 	/* touch: the 44px hit box fills the 4px gap edge to edge (height stays 44px) without covering a neighbour */
 	@media (pointer: coarse) {

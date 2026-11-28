@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { Ime } from "../src/lib/composer/ime";
-import { edgeNavKey, enterPlan, hangulCommit, historyKey, lastPromptOf, menuAria, sentPrompts } from "../src/lib/composer/input-keys";
+import { edgeNavKey, enterPlan, hangulCommit, historyKey, lastPromptOf, menuAria, sentPrompts, shouldDeferEnter } from "../src/lib/composer/input-keys";
 
 const plan = (o: Partial<Parameters<typeof enterPlan>[0]> = {}) => enterPlan({ running: false, combo: "Enter", queueCombo: "Alt+Enter", shift: false, isCommand: false, ...o });
 
@@ -26,6 +26,39 @@ describe("enterPlan", () => {
 	});
 	test("the queue shortcut wins over a command while running", () => {
 		expect(plan({ running: true, combo: "Alt+Enter", isCommand: true })).toBe("queue");
+	});
+	test("runningEnter='queue' swaps primary and alternate mid-run actions", () => {
+		expect(plan({ running: true, runningEnter: "queue" })).toBe("queue");
+		expect(plan({ running: true, combo: "Alt+Enter", runningEnter: "queue" })).toBe("steer");
+		expect(plan({ running: false, runningEnter: "queue" })).toBe("send");
+		expect(plan({ running: true, isCommand: true, runningEnter: "queue" })).toBe("command");
+		expect(plan({ running: true, shift: true, runningEnter: "queue" })).toBe("newline");
+	});
+	test("sendKey='mod-enter' inserts newline on plain Enter and sends/steers/queues on Mod+Enter", () => {
+		expect(plan({ sendKey: "mod-enter", combo: "Enter" })).toBe("newline");
+		expect(plan({ sendKey: "mod-enter", combo: "Enter", running: true })).toBe("newline");
+		expect(plan({ sendKey: "mod-enter", combo: "Enter", isCommand: true })).toBe("newline");
+		expect(plan({ sendKey: "mod-enter", combo: "Shift+Enter", shift: true })).toBe("newline");
+		expect(plan({ sendKey: "mod-enter", combo: "Mod+Enter" })).toBe("send");
+		expect(plan({ sendKey: "mod-enter", combo: "Mod+Enter", isCommand: true })).toBe("command");
+		expect(plan({ sendKey: "mod-enter", combo: "Mod+Enter", running: true })).toBe("steer");
+		expect(plan({ sendKey: "mod-enter", combo: "Mod+Enter", running: true, runningEnter: "queue" })).toBe("queue");
+		expect(plan({ sendKey: "mod-enter", combo: "Alt+Enter", running: true })).toBe("queue");
+		expect(plan({ sendKey: "mod-enter", combo: "Alt+Enter", running: true, runningEnter: "queue" })).toBe("steer");
+		expect(plan({ sendKey: "mod-enter", combo: "Alt+Enter", running: false })).toBe("newline");
+		// If queueCombo collides with Mod+Enter, Mod+Enter stays the primary send/running action.
+		expect(plan({ sendKey: "mod-enter", combo: "Mod+Enter", queueCombo: "Mod+Enter", running: true })).toBe("steer");
+	});
+});
+
+describe("shouldDeferEnter", () => {
+	test("defers non-shift Enter in enter mode, and only Mod+Enter or active queueCombo in mod-enter mode", () => {
+		expect(shouldDeferEnter({ running: false, combo: "Enter", queueCombo: "Alt+Enter", shift: false, sendKey: "enter" })).toBe(true);
+		expect(shouldDeferEnter({ running: false, combo: "Shift+Enter", queueCombo: "Alt+Enter", shift: true, sendKey: "enter" })).toBe(false);
+		expect(shouldDeferEnter({ running: false, combo: "Enter", queueCombo: "Alt+Enter", shift: false, sendKey: "mod-enter" })).toBe(false);
+		expect(shouldDeferEnter({ running: false, combo: "Mod+Enter", queueCombo: "Alt+Enter", shift: false, sendKey: "mod-enter" })).toBe(true);
+		expect(shouldDeferEnter({ running: true, combo: "Alt+Enter", queueCombo: "Alt+Enter", shift: false, sendKey: "mod-enter" })).toBe(true);
+		expect(shouldDeferEnter({ running: false, combo: "Alt+Enter", queueCombo: "Alt+Enter", shift: false, sendKey: "mod-enter" })).toBe(false);
 	});
 });
 

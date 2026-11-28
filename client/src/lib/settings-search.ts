@@ -50,6 +50,13 @@ export const SETTINGS_ITEMS: { tab: SettingsTabId; sub?: string; label: string; 
 	{ tab: "general", label: msg("테마"), words: "theme dark light 다크 라이트 어둡게 밝게" }, // i18n-ok: search words in either language
 	{ tab: "general", label: msg("화면 배율"), words: "zoom scale size 배율 확대 축소 크기" }, // i18n-ok: search words in either language
 	{ tab: "general", label: msg("작업 내역 펼쳐 두기"), words: "tool calls work expand collapse verbose ctrl+o 도구 호출 작업 내역 펼치기 접기 자세히" }, // i18n-ok: search words in either language
+	{ tab: "general", label: msg("동작 줄이기"), words: "reduced motion animation spark transition 동작 줄이기 애니메이션 모션 효과" }, // i18n-ok: search words in either language
+	{ tab: "general", label: msg("@멘션 클릭"), words: "mention tag chip modal peek quick open click 멘션 태그 클릭 모달 미리보기 빠른보기 바로이동" }, // i18n-ok: search words in either language
+	{ tab: "general", label: msg("그래프에서 세션 클릭"), words: "graph view session card modal peek quick open click 그래프 뷰 세션 카드 클릭 모달 미리보기 빠른보기 바로이동" }, // i18n-ok: search words in either language
+	{ tab: "general", label: msg("완료 알림 클릭"), words: "toast notice done failed modal peek quick open click 완료 실패 알림 토스트 클릭 모달 미리보기 바로이동" }, // i18n-ok: search words in either language
+	{ tab: "general", label: msg("멘션 미리 보기 카드"), words: "mention hover tooltip preview card 멘션 호버 툴팁 미리보기 미리 보기 카드" }, // i18n-ok: search words in either language
+	{ tab: "general", label: msg("보내기 키"), words: "send key enter ctrl+enter cmd+enter newline composer 보내기 키 엔터 줄바꿈 입력" }, // i18n-ok: search words in either language
+	{ tab: "general", label: msg("실행 중 보내기"), words: "running enter steer queue followup follow-up alt+enter 실행 중 작업 중 엔터 보내기 끼워 넣기 대기열 팔로우업" }, // i18n-ok: search words in either language
 	{ tab: "general", label: msg("길게 눌러 바로 대기열에 넣기"), words: "mobile touch hold long press queue followup follow-up steer send menu 모바일 터치 길게 꾹 대기열 팔로우업 끼워 넣기 전송 선택창" }, // i18n-ok: search words in either language
 	{ tab: "general", label: msg("알림음"), words: "sound volume notification voice recording 소리 볼륨 크기 알림 음성 녹음" }, // i18n-ok: search words in either language
 	{ tab: "general", label: msg("터미널"), words: "terminal font size 글꼴 폰트 글자 크기 maple mono" }, // i18n-ok: search words in either language

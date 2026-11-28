@@ -19,6 +19,7 @@
 <script lang="ts">
 	import { schedule, unschedule } from "../../lib/frame";
 	import { buzz } from "../../lib/press-menu";
+	import { app } from "../../lib/store.svelte";
 	/**
 	 * The empty-state background: the blueprint grid, plus a soft light that follows the pointer and
 	 * brings the grid up around it. Pure decoration — pointer-events none, off for touch and reduced motion.
@@ -94,7 +95,7 @@
 	$effect(() => {
 		const el = host;
 		const parent = el?.closest<HTMLElement>(".pane") ?? el?.parentElement;
-		if (!el || !parent || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+		if (!el || !parent || app.prefs.isReducedMotion) return;
 		const wave = (x: number, y: number, dur: number) => {
 			const r = el.getBoundingClientRect();
 			const far = Math.hypot(Math.max(x, r.width - x), Math.max(y, r.height - y));
@@ -170,7 +171,7 @@
 	$effect(() => {
 		const el = host;
 		if (!el) return;
-		if (!matchMedia("(hover: hover) and (pointer: fine)").matches || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+		if (!matchMedia("(hover: hover) and (pointer: fine)").matches || app.prefs.isReducedMotion) return;
 
 		const parent = el.closest<HTMLElement>(".pane") ?? el.parentElement;
 		if (!parent) return;

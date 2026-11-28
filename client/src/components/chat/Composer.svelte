@@ -13,7 +13,7 @@
 	import { abortable } from "../../lib/abortable";
 	import { DebouncedList } from "../../lib/debounced-list.svelte";
 	import { newHistory, stepHistory } from "../../lib/prompt-history";
-	import { enterPlan, historyKey, lastPromptOf, menuAria, sentPrompts as sentPromptsOf } from "../../lib/composer/input-keys";
+	import { enterPlan, historyKey, lastPromptOf, menuAria, sentPrompts as sentPromptsOf, shouldDeferEnter } from "../../lib/composer/input-keys";
 	import { Ime } from "../../lib/composer/ime";
 	import { fileRows, folderRows, mentionRows, menuKey, menuKindOf, menuOpen, optionRows, PROMPT_PREFIX, slashRows, slashScopeOf } from "../../lib/slash-menu";
 	import { htmlImages, pastedMessage, shiftImageTokens } from "../../lib/rich-copy";
@@ -290,20 +290,28 @@
 		voiceEnter = true;
 	});
 
-	// A transcript landed in an input that has no focus: a bare Enter anywhere (nothing else focused) sends it, as if the
-	// input were focused. Any other key, typing or focusing the input ends this.
+	// A transcript landed in an input that has no focus: pressing the configured send key anywhere (nothing else focused)
+	// sends it, as if the input were focused. Any other key, typing or focusing the input ends this.
 	let voiceEnter = false;
 	function onWindowKey(e: KeyboardEvent) {
 		if (!voiceEnter) return;
-		const plain = e.key === "Enter" && !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey && !e.isComposing && !e.repeat;
+		const wantMod = app.prefs.sendKey === "mod-enter";
+		const match =
+			e.key === "Enter" &&
+			(wantMod ? e.ctrlKey || e.metaKey : !e.ctrlKey && !e.metaKey) &&
+			!e.altKey &&
+			!e.shiftKey &&
+			!e.isComposing &&
+			!e.repeat;
 		const t = e.target as HTMLElement | null;
 		const free = !t || t === document.body || !t.closest("input,textarea,select,button,a,summary,[contenteditable],[role=dialog],[role=menu],[role=tab],dialog");
-		if (!plain || e.defaultPrevented || !pane.focused || !free || isTouch() || !hasInput) {
-			if (!["Shift", "Control", "Alt", "Meta"].includes(e.key)) voiceEnter = false;
+		if (!match || e.defaultPrevented || !pane.focused || !free || isTouch() || !hasInput) {
+			const bareEnterInModMode = wantMod && e.key === "Enter" && !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey;
+			if (!bareEnterInModMode && !["Shift", "Control", "Alt", "Meta"].includes(e.key)) voiceEnter = false;
 			return;
 		}
 		voiceEnter = false;
-		enterAction(e, buildCombo({ mod: false, alt: false, shift: false }, [keyName(e.code)]));
+		enterAction(e, buildCombo({ mod: wantMod, alt: false, shift: false }, [keyName(e.code)]));
 	}
 
 	// The Reply button on a message hands it over once.
@@ -690,10 +698,36 @@
 		const tick = app.queueSendTick;
 		if (tick === lastQueueTick) return;
 		lastQueueTick = tick;
-		if (pane.focused && running) void untrack(() => during("queue"));
+		if (pane.focused && running) {
+			const kind = app.prefs.runningEnter === "queue" ? "steer" : "queue";
+			void untrack(() => during(kind));
+		}
 	});
-	const queueKey = $derived(formatCombo(app.prefs.bindings.queueMessage ?? ""));
-	const runningHint = $derived(queueKey ? t("작업 중 · Enter 끼워 넣기 / {key} 대기열 · / 명령", { key: queueKey }) : t("작업 중 · Enter 끼워 넣기 · / 명령"));
+	const sendKeyLabel = $derived(app.prefs.sendKey === "mod-enter" ? formatCombo("Mod+Enter") : "Enter");
+	const rawQueueCombo = $derived(app.prefs.bindings.queueMessage ?? "");
+	const altComboUsable = $derived(
+		Boolean(rawQueueCombo) &&
+			rawQueueCombo !== "Enter" &&
+			!(app.prefs.sendKey === "mod-enter" && rawQueueCombo === "Mod+Enter"),
+	);
+	const altRunKey = $derived(altComboUsable ? formatCombo(rawQueueCombo) : "");
+	const steerKey = $derived(app.prefs.runningEnter === "queue" ? altRunKey : sendKeyLabel);
+	const queueKey = $derived(app.prefs.runningEnter === "queue" ? sendKeyLabel : altRunKey);
+	const runningHint = $derived.by(() => {
+		if (app.prefs.runningEnter === "queue") {
+			return altRunKey
+				? t("작업 중 · {sendKey} 대기열 / {altKey} 끼워 넣기 · / 명령", { sendKey: sendKeyLabel, altKey: altRunKey })
+				: t("작업 중 · {sendKey} 대기열 · / 명령", { sendKey: sendKeyLabel });
+		}
+		if (app.prefs.sendKey === "mod-enter") {
+			return altRunKey
+				? t("작업 중 · {sendKey} 끼워 넣기 / {altKey} 대기열 · / 명령", { sendKey: sendKeyLabel, altKey: altRunKey })
+				: t("작업 중 · {sendKey} 끼워 넣기 · / 명령", { sendKey: sendKeyLabel });
+		}
+		return altRunKey
+			? t("작업 중 · Enter 끼워 넣기 / {key} 대기열 · / 명령", { key: altRunKey })
+			: t("작업 중 · Enter 끼워 넣기 · / 명령");
+	});
 
 	// ── Up/Down in the input walks back through the prompts already sent in this conversation ──
 	const sentPrompts = $derived(sentPromptsOf(chat?.items));
@@ -755,8 +789,10 @@
 		const combo = buildCombo({ mod: e.ctrlKey || e.metaKey, alt: e.altKey, shift: e.shiftKey }, [keyName(e.code)]);
 		if (ime.composing || e.isComposing) {
 			// IME (Korean etc.): this Enter only commits the last syllable. Remember it and send once the composition ends,
-			// so the user does not have to press Enter twice.
-			if (!e.shiftKey) ime.deferEnter(combo);
+			// so the user does not have to press Enter twice (skipping combinations that only insert a newline).
+			if (shouldDeferEnter({ running, combo, queueCombo: app.prefs.bindings.queueMessage, shift: e.shiftKey, sendKey: app.prefs.sendKey })) {
+				ime.deferEnter(combo);
+			}
 			return;
 		}
 		enterAction(e, combo);
@@ -771,7 +807,15 @@
 
 	function enterAction(e: KeyboardEvent | null, combo: string) {
 		const parsed = parseSlash(text);
-		const plan = enterPlan({ running, combo, queueCombo: app.prefs.bindings.queueMessage, shift: !!e?.shiftKey, isCommand: !!parsed });
+		const plan = enterPlan({
+			running,
+			combo,
+			queueCombo: app.prefs.bindings.queueMessage,
+			shift: e ? e.shiftKey : combo.split("+").includes("Shift"),
+			isCommand: !!parsed,
+			sendKey: app.prefs.sendKey,
+			runningEnter: app.prefs.runningEnter,
+		});
 		if (plan === "newline") return;
 		e?.preventDefault();
 		if (plan === "queue") void during("queue");
@@ -1012,6 +1056,8 @@
 				onsend={submit}
 				onqueue={() => during("queue")}
 				{queueKey}
+				{steerKey}
+				sendKey={sendKeyLabel}
 				onsteer={() => during("steer")}
 				onstop={() => app.abort(pane.id)}
 				folded={voice.visible && !hasInput}

@@ -1125,6 +1125,9 @@ kbd {
 		animation: none;
 	}
 }
+html[data-reduced-motion="true"] .spin {
+	animation: none;
+}
 .spinner {
 	width: 14px;
 	height: 14px;
@@ -1617,6 +1620,22 @@ html.page-hidden *::after {
 		animation-iteration-count: 1 !important;
 		transition-duration: 0.01ms !important;
 	}
+}
+html[data-reduced-motion="true"] .ripple,
+html[data-reduced-motion="true"] .skeleton-bar::after {
+	display: none;
+}
+html[data-reduced-motion="true"] .shimmer {
+	animation: none;
+	color: var(--sh-base);
+	background-image: none;
+}
+html[data-reduced-motion="true"] *,
+html[data-reduced-motion="true"] *::before,
+html[data-reduced-motion="true"] *::after {
+	animation-duration: 0.01ms !important;
+	animation-iteration-count: 1 !important;
+	transition-duration: 0.01ms !important;
 }
 
 /* A session is being carried (lib/dnd.svelte.ts): no text selection, no stray cursors, no pull-to-refresh or overscroll */

@@ -73,6 +73,10 @@
 	});
 
 	$effect(() => {
+		if (!app.prefs.mentionHover && active) hideMentionHover();
+	});
+
+	$effect(() => {
 		if (!active) return;
 		const dismiss = () => hideMentionHover();
 		const onKey = (e: KeyboardEvent) => {
@@ -92,7 +96,7 @@
 	});
 </script>
 
-{#if active && (sessionInfo || groupInfo)}
+{#if active && app.prefs.mentionHover && (sessionInfo || groupInfo)}
 	<div
 		class="mhover"
 		class:above={pos.above}
@@ -125,6 +129,8 @@
 			<div class="hint">
 				{#if s.closed}
 					{t("클릭: 기록 보기 · {mod}+클릭: 다시 열기 · 우클릭: 메뉴", { mod })}
+				{:else if app.prefs.mentionClick === "open"}
+					{t("클릭: 이동 · {mod}+클릭: 미리 보기 · 우클릭: 메뉴", { mod })}
 				{:else}
 					{t("클릭: 미리 보기 · {mod}+클릭: 이동 · 우클릭: 메뉴", { mod })}
 				{/if}

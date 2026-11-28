@@ -154,14 +154,13 @@
 			if (msg && msg.scrollHeight > msg.clientHeight + 1) pinned = true;
 		}
 	}
-	function onNoticeClick(n: Notice) {
+	function onNoticeClick(n: Notice, e: MouseEvent) {
 		if (ordered.length > 1 && !expanded) {
 			pinned = true;
 			return;
 		}
 		app.feedback.dismissNotice(n.id);
-		if (n.server && n.server !== app.serverId) app.openIn(n.server, { session: n.sid });
-		else void app.openSession(n.sid);
+		app.openNoticeSession(n.sid, n.server, e.ctrlKey || e.metaKey);
 	}
 	function noticeTitle(n: Notice): string {
 		return (n.server ? app.links[n.server]?.sessionById.get(n.sid) : app.session(n.sid))?.title ?? t("대화");
@@ -240,7 +239,7 @@
 					{:else}
 						{@const notice = entry.item}
 						<div class="inner notice-inner" use:measureCard={notice.id}>
-							<button type="button" class="go wide" onclick={() => onNoticeClick(notice)}>
+							<button type="button" class="go wide" onclick={(e) => onNoticeClick(notice, e)}>
 								<span class="badge-ic" aria-hidden="true">
 									<AgentBadge id={notice.sid} state={notice.tone} size={18} server={notice.server} />
 								</span>

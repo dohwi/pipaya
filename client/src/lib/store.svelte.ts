@@ -44,6 +44,7 @@ import { fetchLocalePacks } from "./locale-sync";
 import { configureUiEnv } from "./ui-env.svelte";
 import { groupNameFor } from "./group-name";
 import { buildMentionIndex, planMentionAction, type MentionIndex, type MentionTarget, type PeekTarget, type RemoteMentionSource } from "./peers";
+import { resolveSessionOpen } from "./ux-prefs";
 import { activityOf, mostUrgent, type Activity } from "./activity";
 import { parseConfiguration, type ConfigurationDocument } from "./extensions/configuration";
 import { rehydrateSettingsFromDurable } from "./durable-storage";
@@ -353,10 +354,11 @@ class AppStore {
 
   /**
    * Open the session or group named by a mention chip, closing the queue modal if it was opened from there.
-   * Normal clicks on a session open the quick-look modal over the current chat (or switch the graph's quick look);
-   * `direct` (`Ctrl`/`⌘`+click) navigates straight to that session (resuming closed ones and switching server if needed).
+   * Callers from click handlers pass `{ mod: e.ctrlKey || e.metaKey }` so the user's `prefs.mentionClick` setting
+   * controls plain clicks while `Ctrl`/`⌘`+click triggers the opposite behavior (closed sessions stay read-only on
+   * plain clicks). Menu actions pass explicit `{ direct: true | false }` to override the preference.
    */
-  openMention(target: MentionTarget, opts: { direct?: boolean } = {}) {
+  openMention(target: MentionTarget, opts: { direct?: boolean; mod?: boolean } = {}) {
     if (this.queueDialog) this.queueDialog = null;
     const targetServer = target.kind === "session" ? (target.server ?? this.serverId) : this.serverId;
     const targetSession = target.kind === "session" && targetServer ? this.sessionAny(target.id, targetServer) : undefined;
@@ -364,8 +366,13 @@ class AppStore {
       target.kind === "session" && targetSession
         ? { ...target, closed: targetSession.closed }
         : target;
+    const direct =
+      opts.direct !== undefined
+        ? opts.direct
+        : resolvedTarget.kind === "session" &&
+          resolveSessionOpen(this.prefs.mentionClick, Boolean(opts.mod), { closed: resolvedTarget.closed }) === "open";
     const action = planMentionAction(resolvedTarget, {
-      direct: opts.direct,
+      direct,
       graphOpen: this.graphOpen,
       serverId: this.serverId,
       graphPeek: this.graphPeek,
@@ -416,6 +423,27 @@ class AppStore {
         return;
       }
     }
+  }
+
+  /**
+   * Open a session from a done/failed toast notice according to `prefs.noticeClick` (inverted when `mod` is held).
+   * Peek mode reuses `openMention(..., { direct: false })` so graph view, split groups, and remote/closed sessions
+   * all follow the same quick-modal rules without mounting a duplicate live pane. If the session isn't loaded locally
+   * yet (e.g., an unloaded remote server), fall through to direct navigation instead of dropping the click.
+   */
+  openNoticeSession(sessionId: string, server?: string, mod = false) {
+    const targetServer = server ?? this.serverId;
+    const s = targetServer ? this.sessionAny(sessionId, targetServer) : undefined;
+    const mode = resolveSessionOpen(this.prefs.noticeClick, mod, { closed: s?.closed });
+    if (mode === "peek" && s) {
+      this.openMention(
+        { kind: "session", id: sessionId, ...(server ? { server } : {}), ...(s.closed ? { closed: true } : {}) },
+        { direct: false },
+      );
+      return;
+    }
+    if (server && server !== this.serverId) void this.openAnyOn(server, sessionId);
+    else void this.openAny(sessionId);
   }
   /** Terminals open on the server (shells on its own OS), and what it supports; null support = not known (yet) */
   get terminals(): TerminalInfo[] {

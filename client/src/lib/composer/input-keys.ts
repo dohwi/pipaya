@@ -1,3 +1,5 @@
+import type { RunningEnterMode, SendKeyMode } from "../ux-prefs";
+
 /**
  * Pure decisions the composer's textarea makes about keys and its own history. No runes, no DOM: the component reads
  * the event and the state, asks here, and acts on the answer.
@@ -56,14 +58,61 @@ export function edgeNavKey(
 export type EnterPlan = "queue" | "newline" | "command" | "steer" | "send";
 
 /**
- * Mid-run: plain Enter steers; the user's queue shortcut (Alt+Enter by default) queues for afterwards. Shift+Enter is a
- * newline. A known slash command runs locally even mid-run (/stop, ...); unrecognized `/...` inputs send as text.
+ * Decide what an Enter press in the composer should do given the user's send-key and mid-run preferences:
+ *  - `sendKey === "enter"` (default): `Enter` sends (or steers/queues while running per `runningEnter`), `Shift+Enter`
+ *    inserts a newline, and `queueCombo` (e.g. `Alt+Enter`) performs the opposite mid-run action (queue vs steer).
+ *  - `sendKey === "mod-enter"`: `Ctrl/⌘+Enter` (`Mod+Enter`) sends (or steers/queues while running), plain `Enter` and
+ *    `Shift+Enter` insert a newline, and a distinct `queueCombo` performs the opposite mid-run action.
+ *  - A known slash command runs locally even mid-run (`/stop`, ...); unrecognized `/...` inputs send as text.
  */
-export function enterPlan(s: { running: boolean; combo: string; queueCombo: string | undefined; shift: boolean; isCommand: boolean }): EnterPlan {
-	if (s.running && s.combo !== "Enter" && s.combo === s.queueCombo) return "queue";
+export function enterPlan(s: {
+	running: boolean;
+	combo: string;
+	queueCombo: string | undefined;
+	shift: boolean;
+	isCommand: boolean;
+	sendKey?: SendKeyMode;
+	runningEnter?: RunningEnterMode;
+}): EnterPlan {
+	const sendKey = s.sendKey ?? "enter";
+	const runningEnter = s.runningEnter ?? "steer";
+	const primaryRun: EnterPlan = runningEnter === "queue" ? "queue" : "steer";
+	const altRun: EnterPlan = runningEnter === "queue" ? "steer" : "queue";
+
+	if (sendKey === "mod-enter") {
+		if (s.running && s.queueCombo && s.combo !== "Mod+Enter" && s.combo === s.queueCombo) {
+			return altRun;
+		}
+		if (s.combo === "Mod+Enter") {
+			if (s.isCommand) return "command";
+			return s.running ? primaryRun : "send";
+		}
+		return "newline";
+	}
+
+	if (s.running && s.queueCombo && s.combo !== "Enter" && s.combo === s.queueCombo) return altRun;
 	if (s.shift) return "newline";
 	if (s.isCommand) return "command";
-	return s.running ? "steer" : "send";
+	return s.running ? primaryRun : "send";
+}
+
+/**
+ * Whether an Enter pressed mid-IME composition should be deferred to run right after Hangul commits.
+ * Never defers combinations that only insert a newline (e.g. Shift+Enter, or plain Enter in `mod-enter` mode).
+ */
+export function shouldDeferEnter(s: {
+	running: boolean;
+	combo: string;
+	queueCombo: string | undefined;
+	shift: boolean;
+	sendKey?: SendKeyMode;
+}): boolean {
+	if (s.shift) return false;
+	if ((s.sendKey ?? "enter") === "mod-enter") {
+		if (s.combo === "Mod+Enter") return true;
+		return Boolean(s.running && s.queueCombo && s.combo !== "Enter" && s.combo === s.queueCombo);
+	}
+	return true;
 }
 
 type Item = { kind: string; text?: string; goal?: boolean };

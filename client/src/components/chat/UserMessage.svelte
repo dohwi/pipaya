@@ -56,7 +56,7 @@
 	const openHeaderTarget = (e: MouseEvent) => {
 		if (!headerTarget) return;
 		hideMentionHover();
-		app.openMention(headerTarget, { direct: e.ctrlKey || e.metaKey });
+		app.openMention(headerTarget, { mod: e.ctrlKey || e.metaKey });
 	};
 	/** A prompt a scheduled task sent: the bubble is labelled "예약" like a message from another session is labelled with its sender. */
 	const scheduled = $derived(!!item.scheduled && !header);
@@ -134,7 +134,7 @@
 					<button
 						type="button"
 						class="header-link"
-						aria-label={headerTarget.kind === "group" ? t("{name} 그룹 열기", { name: header.from }) : headerTarget.closed ? t("{name} 닫힌 대화 보기", { name: header.from }) : t("{name} 대화 미리 보기", { name: header.from })}
+						aria-label={headerTarget.kind === "group" ? t("{name} 그룹 열기", { name: header.from }) : headerTarget.closed ? t("{name} 닫힌 대화 보기", { name: header.from }) : app.prefs.mentionClick === "open" ? t("{name} 대화 열기", { name: header.from }) : t("{name} 대화 미리 보기", { name: header.from })}
 						onclick={openHeaderTarget}
 						oncontextmenu={(e) => openMentionMenu(e, headerTarget, { label: header.from, currentSessionId: session?.id })}
 						onpointerenter={(e) => { if (e.pointerType === "mouse") showMentionHover(e.currentTarget, headerTarget, header.from); }}

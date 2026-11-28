@@ -27,7 +27,7 @@
 	const openHeadTarget = (e: MouseEvent) => {
 		if (!headTarget) return;
 		hideMentionHover();
-		app.openMention(headTarget, { direct: e.ctrlKey || e.metaKey });
+		app.openMention(headTarget, { mod: e.ctrlKey || e.metaKey });
 	};
 </script>
 
@@ -39,7 +39,7 @@
 				<button
 					type="button"
 					class="from-link"
-					aria-label={headTarget.kind === "group" ? t("{name} 그룹 열기", { name: head.from }) : headTarget.closed ? t("{name} 닫힌 대화 보기", { name: head.from }) : t("{name} 대화 미리 보기", { name: head.from })}
+					aria-label={headTarget.kind === "group" ? t("{name} 그룹 열기", { name: head.from }) : headTarget.closed ? t("{name} 닫힌 대화 보기", { name: head.from }) : app.prefs.mentionClick === "open" ? t("{name} 대화 열기", { name: head.from }) : t("{name} 대화 미리 보기", { name: head.from })}
 					onclick={openHeadTarget}
 					oncontextmenu={(e) => openMentionMenu(e, headTarget, { label: head.from })}
 					onpointerenter={(e) => { if (e.pointerType === "mouse") showMentionHover(e.currentTarget, headTarget, head.from); }}
