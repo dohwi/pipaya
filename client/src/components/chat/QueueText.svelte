@@ -39,7 +39,7 @@
 				<button
 					type="button"
 					class="from-link"
-					title={headTarget.kind === "group" ? t("{name} 그룹 열기", { name: head.from }) : headTarget.closed ? t("{name} 닫힌 대화 보기", { name: head.from }) : t("{name} 대화 미리 보기", { name: head.from })}
+					aria-label={headTarget.kind === "group" ? t("{name} 그룹 열기", { name: head.from }) : headTarget.closed ? t("{name} 닫힌 대화 보기", { name: head.from }) : t("{name} 대화 미리 보기", { name: head.from })}
 					onclick={openHeadTarget}
 					oncontextmenu={(e) => openMentionMenu(e, headTarget, { label: head.from })}
 					onpointerenter={(e) => { if (e.pointerType === "mouse") showMentionHover(e.currentTarget, headTarget, head.from); }}

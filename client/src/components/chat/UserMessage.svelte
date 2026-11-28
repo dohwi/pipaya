@@ -134,7 +134,7 @@
 					<button
 						type="button"
 						class="header-link"
-						title={headerTarget.kind === "group" ? t("{name} 그룹 열기", { name: header.from }) : headerTarget.closed ? t("{name} 닫힌 대화 보기", { name: header.from }) : t("{name} 대화 미리 보기", { name: header.from })}
+						aria-label={headerTarget.kind === "group" ? t("{name} 그룹 열기", { name: header.from }) : headerTarget.closed ? t("{name} 닫힌 대화 보기", { name: header.from }) : t("{name} 대화 미리 보기", { name: header.from })}
 						onclick={openHeaderTarget}
 						oncontextmenu={(e) => openMentionMenu(e, headerTarget, { label: header.from, currentSessionId: session?.id })}
 						onpointerenter={(e) => { if (e.pointerType === "mouse") showMentionHover(e.currentTarget, headerTarget, header.from); }}
