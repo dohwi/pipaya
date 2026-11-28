@@ -17,7 +17,7 @@ import type { EventBus } from "./events.ts";
 import { checkServiceTier, modelDefaultTier, modelDefaultLevel, reasoningOption, type ModelRegistry } from "./models.ts";
 import { streamAtTier } from "./served-tier.ts";
 import type { ServiceTier } from "./openrouter-catalog.ts";
-import { attachTouchedFiles, contextTokens, effectiveContextTokens, estimateTokens, KEEP_RECENT_TOKENS, pickCut, SUMMARY_MAX_TOKENS, SUMMARY_SYSTEM, summaryMessage, summaryRequest, thresholdFor, type CompactionSettings } from "./compaction.ts";
+import { attachTouchedFiles, completeSummaryWithShrinkRetry, contextTokens, effectiveContextTokens, estimateTokens, KEEP_RECENT_TOKENS, pickCut, SUMMARY_MAX_TOKENS, summaryMessage, thresholdFor, type CompactionSettings } from "./compaction.ts";
 import { THINKING_LEVELS, type DelegateCall, type SessionPatch, type SessionRecord, type SessionStore, type ThinkingLevel } from "./store.ts";
 import type { McpManager } from "./mcp.ts";
 import { ALWAYS_TOOLS, buildTools, DEFAULT_TOOLS, DELEGATE_TOOL, isInside, modelList, PEER_TOOLS, TOOL_DEFS, WORKDIR_TOOL, type ReadTrackEntry, type ToolContext, type ToolDef } from "./tools.ts";
@@ -485,18 +485,32 @@ export class SessionManager {
 		try {
 			const toSummarizeMessages = toSummarize.map((m) => m.message);
 			const summaryOptions = { maxTokens: SUMMARY_MAX_TOKENS, signal: controller.signal, ...reasoningOption(target.thinkingLevel, model) };
-			const summaryContext = { systemPrompt: SUMMARY_SYSTEM, messages: [{ role: "user" as const, content: summaryRequest(stored.summary, toSummarizeMessages, instructions, undefined, model.contextWindow), timestamp: Date.now() }] };
-			const reply = custom !== undefined ? ({ stopReason: "stop", content: [{ type: "text", text: custom }], usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { total: 0 } } } as unknown as Awaited<ReturnType<typeof this.registry.models.completeSimple>>) : await completeWithUpstreamRetry(
-				(ctx) => this.registry.models.completeSimple(model, ctx, summaryOptions),
-				summaryContext,
-				COMPLETION_RETRY,
-				controller.signal,
-				(attempt, maxRetries, delayMs, errorMessage) => {
-					console.warn(`[compaction] session=${id} retry ${attempt}/${maxRetries} in ${delayMs}ms: ${retryReason(errorMessage) || errorMessage || "upstream error"}`);
-				},
-			);
-			if (reply.stopReason === "aborted") throw Object.assign(new Error("compaction cancelled"), { aborted: true });
+			const reply = custom !== undefined
+				? ({ stopReason: "stop", content: [{ type: "text", text: custom }], usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { total: 0 } } } as unknown as Awaited<ReturnType<typeof this.registry.models.completeSimple>>)
+				: await completeSummaryWithShrinkRetry(
+					(summaryContext) => completeWithUpstreamRetry(
+						(ctx) => this.registry.models.completeSimple(model, ctx, summaryOptions),
+						summaryContext,
+						COMPLETION_RETRY,
+						controller.signal,
+						(attempt, maxRetries, delayMs, errorMessage) => {
+							console.warn(`[compaction] session=${id} retry ${attempt}/${maxRetries} in ${delayMs}ms: ${retryReason(errorMessage) || errorMessage || "upstream error"}`);
+						},
+					),
+					{
+						previousSummary: stored.summary,
+						messages: toSummarizeMessages,
+						instructions,
+						contextWindow: model.contextWindow,
+						signal: controller.signal,
+						onShrinkRetry: ({ attempt, maxRetries, reason: shrinkReason, previousChars, nextChars }) => {
+							console.warn(`[compaction] session=${id} shrink retry ${attempt}/${maxRetries} (${shrinkReason}): ${previousChars} -> ${nextChars} chars`);
+						},
+					},
+				);
+			if (reply.stopReason === "aborted" || controller.signal.aborted) throw Object.assign(new Error("compaction cancelled"), { aborted: true });
 			if (reply.stopReason === "error") throw new Error(reply.errorMessage || "the summary model failed");
+			if (reply.stopReason === "length") throw new Error("the summary was truncated at the output token limit");
 			const rawSummary = reply.content.flatMap((c) => (c.type === "text" ? [c.text] : [])).join("").trim();
 			if (!rawSummary) throw new Error("the summary model returned nothing");
 			const summary = attachTouchedFiles(rawSummary, toSummarizeMessages, stored.summary);

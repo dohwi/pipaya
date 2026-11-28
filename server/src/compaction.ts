@@ -1,5 +1,6 @@
 import type { Database } from "bun:sqlite";
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
+import { isContextOverflow, type AssistantMessage, type Context } from "@earendil-works/pi-ai";
 import Type, { type Static } from "typebox";
 import Value from "typebox/value";
 import { badRequest } from "./errors.ts";
@@ -9,6 +10,12 @@ import { ModelChoice, type ModelChoiceValue } from "./model-choice.ts";
 /** Recent history kept verbatim by a compaction. */
 export const KEEP_RECENT_TOKENS = 20_000;
 export const SUMMARY_MAX_TOKENS = 4096;
+/** Minimum transcript character budget during shrink-and-retry compaction recovery. */
+export const MIN_SUMMARY_BUDGET_CHARS = 2_000;
+/** Maximum shrink-and-retry attempts after the initial compaction summary call. */
+export const MAX_SUMMARY_SHRINK_RETRIES = 3;
+/** Fraction of the current effective transcript length kept on each shrink retry. */
+export const SUMMARY_SHRINK_FACTOR = 0.5;
 /** Characters of a single tool result / argument blob shown to the summarizer. */
 const CLIP = 2000;
 
@@ -180,8 +187,33 @@ export const SUMMARY_REQUEST_TEMPLATE = [
 	"Write the summary now.",
 ].join("\n");
 
+export const CONCISE_SUMMARY_INSTRUCTION =
+	"The previous summary attempt was truncated at the output token limit. Be significantly more concise: keep only core goals, decisions, touched file paths, errors/fixes, and open next steps.";
+
 export function summaryBudgetChars(contextWindow?: number): number {
 	return contextWindow ? Math.min(400_000, Math.max(24_000, Math.floor(contextWindow * 0.65 * 4))) : 400_000;
+}
+
+function buildSummaryPrompt(
+	previous: string | null,
+	fullTranscript: string,
+	limit: number,
+	instructions?: string,
+	concise = false,
+): { prompt: string; usedChars: number } {
+	const safeLimit = Math.max(0, Math.floor(limit));
+	const usedChars = Math.min(fullTranscript.length, safeLimit);
+	const body = fullTranscript.length > safeLimit
+		? `[earlier part omitted]\n${fullTranscript.slice(fullTranscript.length - safeLimit)}`
+		: fullTranscript;
+	const prompt = [
+		previous ? `Summary so far (earlier compaction):\n${previous}\n\nNew conversation since then:` : "Conversation to summarize:",
+		body,
+		instructions?.trim() ? `\nExtra instructions from the user: ${instructions.trim()}` : "",
+		concise ? `\n${CONCISE_SUMMARY_INSTRUCTION}` : "",
+		"\nWrite the summary now.",
+	].join("\n");
+	return { prompt, usedChars };
 }
 
 export function summaryRequest(
@@ -192,14 +224,139 @@ export function summaryRequest(
 	contextWindow?: number,
 ): string {
 	const limit = maxChars ?? summaryBudgetChars(contextWindow);
-	let body = transcript(messages);
-	if (body.length > limit) body = `[earlier part omitted]\n${body.slice(body.length - limit)}`;
-	return [
-		previous ? `Summary so far (earlier compaction):\n${previous}\n\nNew conversation since then:` : "Conversation to summarize:",
-		body,
-		instructions?.trim() ? `\nExtra instructions from the user: ${instructions.trim()}` : "",
-		"\nWrite the summary now.",
-	].join("\n");
+	return buildSummaryPrompt(previous, transcript(messages), limit, instructions, false).prompt;
+}
+
+/**
+ * Computes the next smaller transcript character budget after a context-overflow or output-length failure.
+ * Returns `null` when the transcript cannot shrink further (already at or below `minChars`).
+ */
+export function nextSummaryBudget(
+	usedChars: number,
+	minChars = MIN_SUMMARY_BUDGET_CHARS,
+	factor = SUMMARY_SHRINK_FACTOR,
+): number | null {
+	const floor = Math.max(1, Math.floor(minChars));
+	if (usedChars <= floor || !Number.isFinite(factor) || factor <= 0 || factor >= 1) return null;
+	const next = Math.max(floor, Math.floor(usedChars * factor));
+	return next < usedChars ? next : null;
+}
+
+export type SummaryShrinkReason = "context_overflow" | "output_length";
+
+export interface CompleteSummaryOptions {
+	previousSummary: string | null;
+	messages: AgentMessage[];
+	instructions?: string;
+	contextWindow?: number;
+	initialBudgetChars?: number;
+	minBudgetChars?: number;
+	maxRetries?: number;
+	shrinkFactor?: number;
+	signal?: AbortSignal;
+	onShrinkRetry?: (info: {
+		attempt: number;
+		maxRetries: number;
+		reason: SummaryShrinkReason;
+		previousChars: number;
+		nextChars: number;
+	}) => void;
+}
+
+function isThrownContextOverflow(err: unknown, contextWindow?: number): boolean {
+	const errorMessage = err instanceof Error ? err.message : String(err);
+	const probe = { role: "assistant", stopReason: "error", errorMessage } as AssistantMessage;
+	return isContextOverflow(probe, contextWindow);
+}
+
+/**
+ * Runs a compaction summary completion and automatically shrinks the input transcript budget and retries when
+ * the model rejects the request with a context overflow or truncates the summary at the output token limit
+ * (`stopReason === "length"`). Only the transcript body is shrunk (`previousSummary` and user instructions are
+ * preserved intact). Stops immediately when aborted, when the transcript cannot shrink further, or once
+ * `maxRetries` shrink attempts have been exhausted.
+ */
+export async function completeSummaryWithShrinkRetry(
+	complete: (ctx: Context) => Promise<AssistantMessage>,
+	opts: CompleteSummaryOptions,
+): Promise<AssistantMessage> {
+	const fullTranscript = transcript(opts.messages);
+	const minBudget = opts.minBudgetChars ?? MIN_SUMMARY_BUDGET_CHARS;
+	const maxRetries = opts.maxRetries ?? MAX_SUMMARY_SHRINK_RETRIES;
+	const shrinkFactor = opts.shrinkFactor ?? SUMMARY_SHRINK_FACTOR;
+	let budget = opts.initialBudgetChars ?? summaryBudgetChars(opts.contextWindow);
+	let concise = false;
+
+	for (let attempt = 0; ; attempt++) {
+		if (opts.signal?.aborted) {
+			throw Object.assign(new Error("compaction cancelled"), { aborted: true });
+		}
+		const { prompt, usedChars } = buildSummaryPrompt(
+			opts.previousSummary,
+			fullTranscript,
+			budget,
+			opts.instructions,
+			concise,
+		);
+		const ctx: Context = {
+			systemPrompt: SUMMARY_SYSTEM,
+			messages: [{ role: "user", content: prompt, timestamp: Date.now() }],
+		};
+
+		let reply: AssistantMessage | undefined;
+		let thrown: unknown;
+		let shrinkReason: SummaryShrinkReason | null = null;
+
+		try {
+			reply = await complete(ctx);
+		} catch (e) {
+			if (opts.signal?.aborted || (e as { aborted?: boolean } | null)?.aborted === true) {
+				throw e;
+			}
+			if (isThrownContextOverflow(e, opts.contextWindow)) {
+				thrown = e;
+				shrinkReason = "context_overflow";
+			} else {
+				throw e;
+			}
+		}
+
+		if (reply) {
+			if (reply.stopReason === "aborted" || opts.signal?.aborted) {
+				return reply;
+			}
+			// Check overflow before length so length-stop overflows (e.g. filled context + zero output) are classified as context_overflow.
+			if ((reply.stopReason === "error" || reply.stopReason === "length") && isContextOverflow(reply, opts.contextWindow)) {
+				shrinkReason = "context_overflow";
+			} else if (reply.stopReason === "length") {
+				shrinkReason = "output_length";
+			} else {
+				return reply;
+			}
+		}
+
+		if (attempt >= maxRetries) {
+			if (thrown !== undefined) throw thrown;
+			return reply!;
+		}
+		const nextBudget = nextSummaryBudget(usedChars, minBudget, shrinkFactor);
+		if (nextBudget === null) {
+			if (thrown !== undefined) throw thrown;
+			return reply!;
+		}
+
+		if (shrinkReason === "output_length") {
+			concise = true;
+		}
+		opts.onShrinkRetry?.({
+			attempt: attempt + 1,
+			maxRetries,
+			reason: shrinkReason!,
+			previousChars: usedChars,
+			nextChars: nextBudget,
+		});
+		budget = nextBudget;
+	}
 }
 
 export interface TouchedFiles {
