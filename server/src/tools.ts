@@ -12,6 +12,17 @@ import type { ManageAction, ManageArgs, PeerCreateInput } from "./peers.ts";
 import { goalTool, type GoalOps } from "./goal-tool.ts";
 import { mcpTool, type McpOps } from "./mcp-tool.ts";
 import { scheduleTool, type ScheduleOps } from "./schedule-tool.ts";
+import {
+	BG_BASH_JOB_TOOL,
+	BG_RING_BUFFER_BYTES,
+	bashJobTool,
+	cancelProcessStreams,
+	KILL_GRACE_MS,
+	OutputRingBuffer,
+	terminateProcess,
+	type BackgroundBashOps,
+	type BgJobSnapshot,
+} from "./bg-bash.ts";
 import { LEFT_TO_AGENT } from "./questions.ts";
 import { THINKING_LEVELS, type ThinkingLevel } from "./shared/thinking.ts";
 import { formatSpilledOutput, spillText, truncateHeadBytes, truncateTailBytes } from "./spill.ts";
@@ -29,8 +40,6 @@ const MAX_GLOB_DEFAULT = 200;
 const MAX_GLOB_LIMIT = 500;
 const MAX_CAPTURE_BYTES = 10 * 1024 * 1024;
 const DEFAULT_BASH_TIMEOUT_S = 120;
-const KILL_TERM_GRACE_MS = 500;
-const KILL_GRACE_MS = 2000;
 
 export interface ReadTrackEntry {
 	mtimeMs: number;
@@ -92,6 +101,8 @@ export interface ToolContext {
 		show(): string;
 		move(path: string | null): string;
 	};
+	/** Per-session background bash job manager (`bash` with `background`/`backgroundOnTimeout`, and `bash_job`). `null` disables background jobs (e.g. subagents). */
+	bgBash?: BackgroundBashOps | null;
 }
 
 /** One question, or several asked together (`items`; `question`/`options` describe the first). */
@@ -321,15 +332,20 @@ const CHILD_ENV_ALLOW = new Set([
 	"SYSTEMROOT", "COMSPEC", "PATHEXT", "USERPROFILE", "APPDATA", "LOCALAPPDATA", "TEMP", "TMP",
 ]);
 const CHILD_ENV_ALLOW_PREFIXES = ["LC_", "XDG_", "MISE_"];
+const CHILD_ENV_SECRET_SUFFIXES = ["_TOKEN", "_SECRET", "_KEY", "_PASSWORD", "_AUTH"];
 
 export function buildChildEnv(source: Record<string, string | undefined> = process.env): Record<string, string> {
 	const extra = new Set(
-		(source.PIPAYA_BASH_ENV ?? "").split(",").map((s) => s.trim()).filter((s) => s && !s.startsWith("PIPAYA_")),
+		(source.PIPAYA_BASH_ENV ?? "").split(",").map((s) => s.trim()).filter((s) => s && !s.toUpperCase().startsWith("PIPAYA_")),
 	);
 	const env: Record<string, string> = {};
 	for (const [k, v] of Object.entries(source)) {
-		if (v === undefined || k.startsWith("PIPAYA_")) continue;
-		if (CHILD_ENV_ALLOW.has(k) || extra.has(k) || CHILD_ENV_ALLOW_PREFIXES.some((p) => k.startsWith(p))) env[k] = v;
+		const upper = k.toUpperCase();
+		if (v === undefined || upper.startsWith("PIPAYA_")) continue;
+		const prefixAllowed =
+			CHILD_ENV_ALLOW_PREFIXES.some((p) => k.startsWith(p)) &&
+			!CHILD_ENV_SECRET_SUFFIXES.some((s) => upper.endsWith(s));
+		if (CHILD_ENV_ALLOW.has(k) || extra.has(k) || prefixAllowed) env[k] = v;
 	}
 	return env;
 }
@@ -341,6 +357,9 @@ interface ProcResult {
 	exitCode: number | null;
 	timedOut: boolean;
 	aborted: boolean;
+	adopted?: BgJobSnapshot;
+	adoptedNextOffset?: number;
+	adoptError?: string;
 }
 
 interface SplitProcResult {
@@ -351,120 +370,161 @@ interface SplitProcResult {
 	aborted: boolean;
 }
 
-/** Send SIGTERM to process group on POSIX, poll up to 500ms, then escalate to SIGKILL. */
-function terminateProcess(proc: ReturnType<typeof Bun.spawn>, grouped: boolean, exited: () => boolean): void {
-	if (!grouped) {
-		// No process groups on Windows: taskkill /T takes the whole tree down.
-		try {
-			Bun.spawn(["taskkill", "/T", "/F", "/PID", String(proc.pid)], { stdout: "ignore", stderr: "ignore", stdin: "ignore" });
-		} catch (e) {
-			process.stderr.write(`taskkill failed for ${proc.pid}: ${(e as Error).message}\n`);
-		}
-		try { proc.kill("SIGKILL"); } catch {}
-		return;
-	}
-
-	const groupAlive = () => {
-		try {
-			process.kill(-proc.pid, 0);
-			return true;
-		} catch (e) {
-			return (e as NodeJS.ErrnoException).code !== "ESRCH";
-		}
-	};
-
-	try {
-		process.kill(-proc.pid, "SIGTERM");
-	} catch (e) {
-		if ((e as NodeJS.ErrnoException).code !== "ESRCH") {
-			process.stderr.write(`could not SIGTERM process group ${proc.pid}: ${(e as Error).message}\n`);
-		}
-		return;
-	}
-
-	const deadline = Date.now() + KILL_TERM_GRACE_MS;
-	const poll = setInterval(() => {
-		if (!groupAlive() || (exited() && !groupAlive())) {
-			clearInterval(poll);
-			return;
-		}
-		if (Date.now() >= deadline) {
-			clearInterval(poll);
-			try {
-				process.kill(-proc.pid, "SIGKILL");
-			} catch (e) {
-				if ((e as NodeJS.ErrnoException).code !== "ESRCH") {
-					process.stderr.write(`could not kill process group ${proc.pid}: ${(e as Error).message}\n`);
-				}
-			}
-			try { proc.kill("SIGKILL"); } catch {}
-		}
-	}, 50);
-	poll.unref?.();
-}
-
 async function runProcess(
 	cmd: string[],
-	opts: { cwd: string; timeoutMs: number; signal?: AbortSignal; maxCaptureBytes?: number; onChunk?: (tail: string) => void },
+	opts: {
+		cwd: string;
+		timeoutMs: number;
+		signal?: AbortSignal;
+		maxCaptureBytes?: number;
+		onChunk?: (tail: string) => void;
+		onTimeoutAdopt?: (input: {
+			startedAt: number;
+			proc: ReturnType<typeof Bun.spawn>;
+			grouped: boolean;
+			ring: OutputRingBuffer;
+			onDone: Promise<number | null>;
+		}) => { snapshot: BgJobSnapshot; notifyOutput: () => void };
+	},
 ): Promise<ProcResult> {
 	// POSIX: run in its own session (Bun calls setsid(); the pid stays the group id) so a kill reaches grandchildren too, not just
 	// the shell. This needs no `setsid` binary, which macOS does not ship.
 	const grouped = process.platform !== "win32";
+	const startedAt = Date.now();
 	const proc = Bun.spawn(cmd, { cwd: opts.cwd, stdout: "pipe", stderr: "pipe", stdin: "ignore", env: childEnv(), detached: grouped });
 	let timedOut = false;
 	let aborted = false;
-	let killedAt = 0;
+	let killRequested = false;
 	let hasExited = false;
+	let adoptError: string | undefined;
+	void proc.exited.then(() => {
+		hasExited = true;
+	});
+	let adoptedNotify: (() => void) | null = null;
+	let giveUpTimer: ReturnType<typeof setTimeout> | undefined;
+	let resolveGiveUp: (() => void) | null = null;
+	const gaveUp = new Promise<null>((res) => {
+		resolveGiveUp = () => res(null);
+	});
+	const ring = opts.onTimeoutAdopt ? new OutputRingBuffer(BG_RING_BUFFER_BYTES) : null;
 	const maxCap = opts.maxCaptureBytes ?? MAX_OUTPUT_BYTES * 2;
 	const kill = () => {
-		if (killedAt) return;
-		killedAt = Date.now();
+		if (killRequested) return;
+		killRequested = true;
 		terminateProcess(proc, grouped, () => hasExited);
+		if (!giveUpTimer && resolveGiveUp) {
+			giveUpTimer = setTimeout(() => {
+				giveUpTimer = undefined;
+				resolveGiveUp?.();
+			}, KILL_GRACE_MS);
+			giveUpTimer.unref?.();
+		}
 	};
+
+	let output = "";
+	let lastEmit = 0;
+	const pump = async (stream: ReadableStream<Uint8Array>) => {
+		const decoder = new TextDecoder();
+		try {
+			for await (const chunk of stream) {
+				const decoded = decoder.decode(chunk, { stream: true });
+				if (!decoded) continue;
+				if (ring) ring.append(decoded);
+				if (adoptedNotify) {
+					adoptedNotify();
+					continue;
+				}
+				output += decoded;
+				// Bound memory: keep ~maxCap while running.
+				if (output.length > maxCap) output = output.slice(-maxCap);
+				const now = Date.now();
+				if (opts.onChunk && now - lastEmit > 150) {
+					lastEmit = now;
+					opts.onChunk(truncateTail(output).text);
+				}
+			}
+			const tail = decoder.decode();
+			if (tail) {
+				if (ring) ring.append(tail);
+				if (adoptedNotify) {
+					adoptedNotify();
+				} else {
+					output += tail;
+					if (output.length > maxCap) output = output.slice(-maxCap);
+				}
+			}
+		} catch {
+			// Ignore stream cancellation errors after kill.
+		}
+	};
+
+	const drained = Promise.all([pump(proc.stdout), pump(proc.stderr)]).then(async () => {
+		const code = await proc.exited;
+		hasExited = true;
+		return code;
+	});
+
+	let resolveAdopted: ((snapshot: BgJobSnapshot) => void) | null = null;
+	const adoptedPromise = opts.onTimeoutAdopt
+		? new Promise<BgJobSnapshot>((res) => {
+			resolveAdopted = res;
+		})
+		: null;
+
 	const timer = setTimeout(() => {
 		timedOut = true;
+		if (opts.onTimeoutAdopt && ring && !aborted && !hasExited) {
+			try {
+				const { snapshot, notifyOutput } = opts.onTimeoutAdopt({ startedAt, proc, grouped, ring, onDone: drained });
+				adoptedNotify = notifyOutput;
+				resolveAdopted?.(snapshot);
+				return;
+			} catch (e) {
+				// Fall through to normal timeout kill + drain/give-up so streams are cancelled and partial output is preserved.
+				adoptError = e instanceof Error ? e.message : String(e);
+			}
+		}
 		kill();
 	}, opts.timeoutMs);
+
 	const onAbort = () => {
+		if (adoptedNotify) return;
 		aborted = true;
 		kill();
 	};
 	if (opts.signal?.aborted) onAbort();
 	opts.signal?.addEventListener("abort", onAbort, { once: true });
 
-	let output = "";
-	let lastEmit = 0;
-	const pump = async (stream: ReadableStream<Uint8Array>) => {
-		const decoder = new TextDecoder();
-		for await (const chunk of stream) {
-			output += decoder.decode(chunk, { stream: true });
-			// Bound memory: keep ~maxCap while running.
-			if (output.length > maxCap) output = output.slice(-maxCap);
-			const now = Date.now();
-			if (opts.onChunk && now - lastEmit > 150) {
-				lastEmit = now;
-				opts.onChunk(truncateTail(output).text);
-			}
-		}
-		output += decoder.decode();
-	};
 	try {
-		const drained = Promise.all([pump(proc.stdout), pump(proc.stderr)]).then(async () => {
-			const code = await proc.exited;
-			hasExited = true;
-			return code;
-		});
 		// After a kill, never wait on the pipes for long: a leaked descendant could hold them open forever.
-		const gaveUp = new Promise<null>((res) => {
-			const poll = setInterval(() => {
-				if (killedAt && Date.now() - killedAt > KILL_GRACE_MS) { clearInterval(poll); res(null); }
-			}, 100);
-			void drained.finally(() => clearInterval(poll));
-		});
-		const exitCode = await Promise.race([drained, gaveUp]);
-		return { output, exitCode: exitCode ?? -1, timedOut, aborted };
+		const winner = await Promise.race([
+			drained.then((code) => ({ kind: "exit" as const, code })),
+			gaveUp.then(() => ({ kind: "giveup" as const, code: null })),
+			...(adoptedPromise ? [adoptedPromise.then((snapshot) => ({ kind: "adopted" as const, snapshot }))] : []),
+		]);
+		if (winner.kind === "adopted") {
+			const snap = ring ? ring.read() : null;
+			const captured = snap ? snap.output : output;
+			const nextOffset = snap ? snap.nextOffset : Buffer.byteLength(output, "utf8");
+			output = "";
+			return {
+				output: captured,
+				exitCode: null,
+				timedOut: true,
+				aborted: false,
+				adopted: winner.snapshot,
+				adoptedNextOffset: nextOffset,
+			};
+		}
+		if (winner.kind === "giveup") {
+			cancelProcessStreams(proc);
+		}
+		return { output, exitCode: winner.code ?? -1, timedOut, aborted, ...(adoptError ? { adoptError } : {}) };
 	} finally {
 		clearTimeout(timer);
+		if (giveUpTimer) clearTimeout(giveUpTimer);
+		giveUpTimer = undefined;
+		resolveGiveUp = null;
 		opts.signal?.removeEventListener("abort", onAbort);
 	}
 }
@@ -1542,7 +1602,7 @@ const globTool: ToolDef = {
 };
 
 const commandShell = pickCommandShell();
-const BASH_DESCRIPTION = `Run a shell command in the working directory. Output is capped at 50KB (tail kept). Default timeout ${DEFAULT_BASH_TIMEOUT_S}s.${shellNote(commandShell)}`;
+const BASH_DESCRIPTION = `Run a shell command in the working directory. Output is capped at 50KB (tail kept). Default timeout ${DEFAULT_BASH_TIMEOUT_S}s. Set \`background: true\` to start a long-running command immediately and manage it with \`${BG_BASH_JOB_TOOL}\`, or \`backgroundOnTimeout: true\` to keep running in the background if timeout is reached.${shellNote(commandShell)}`;
 
 const bashTool: ToolDef = {
 	name: "bash",
@@ -1556,16 +1616,62 @@ const bashTool: ToolDef = {
 			parameters: Type.Object({
 				command: Type.String(),
 				timeout: Type.Optional(Type.Integer({ minimum: 1, maximum: 1800, description: "Timeout in seconds" })),
+				background: Type.Optional(Type.Boolean({ description: `Run in the background and return a jobId immediately; use ${BG_BASH_JOB_TOOL} to read output, wait, or stop` })),
+				backgroundOnTimeout: Type.Optional(Type.Boolean({ description: "If true, transition to a background job instead of killing the command when timeout is reached" })),
 			}),
 			executionMode: "sequential",
 			async execute(_id, params, signal, onUpdate) {
+				if (params.background) {
+					const bg = ctx.bgBash;
+					if (!bg) throw new Error("Background bash jobs are not available in this context");
+					const job = bg.start({ command: params.command, cwd: curCwd(), env: childEnv() });
+					return text(
+						`Started background job ${job.jobId} (pid=${job.pid}, status=${job.status}).\nUse ${BG_BASH_JOB_TOOL}(action="output"|"wait"|"stop", id="${job.jobId}") to inspect or stop it.`,
+						{
+							jobId: job.jobId,
+							pid: job.pid,
+							status: job.status,
+							command: job.command,
+							background: true,
+						},
+					);
+				}
+
+				const bg = ctx.bgBash;
+				if (params.backgroundOnTimeout && !bg) {
+					throw new Error("Background bash jobs are not available in this context");
+				}
+
+				const timeoutS = params.timeout ?? DEFAULT_BASH_TIMEOUT_S;
+				const cwdNow = curCwd();
 				const res = await runProcess(commandArgv(commandShell, params.command), {
-					cwd: curCwd(),
-					timeoutMs: (params.timeout ?? DEFAULT_BASH_TIMEOUT_S) * 1000,
+					cwd: cwdNow,
+					timeoutMs: timeoutS * 1000,
 					signal,
 					maxCaptureBytes: ctx.spillDir ? MAX_CAPTURE_BYTES : MAX_OUTPUT_BYTES * 2,
 					onChunk: (tail) => onUpdate?.(text(tail, { running: true })),
+					...(params.backgroundOnTimeout && bg
+						? {
+							onTimeoutAdopt: (input) => bg.adopt({ command: params.command, cwd: cwdNow, ...input }),
+						}
+						: {}),
 				});
+
+				if (res.adopted) {
+					const t = truncateTail(res.output);
+					const header = `Command reached ${timeoutS}s timeout and was moved to background job ${res.adopted.jobId} (pid=${res.adopted.pid}, status=${res.adopted.status}).\nUse ${BG_BASH_JOB_TOOL}(action="output"|"wait"|"stop", id="${res.adopted.jobId}") to inspect or stop it.`;
+					const body = t.text ? `${header}\n\n${t.text}` : header;
+					return text(body, {
+						jobId: res.adopted.jobId,
+						pid: res.adopted.pid,
+						status: res.adopted.status,
+						command: params.command,
+						timedOut: true,
+						timedOutToBackground: true,
+						nextOffset: res.adoptedNextOffset ?? res.adopted.totalBytes,
+						truncated: t.truncated,
+					});
+				}
 
 				let out: string;
 				let truncated = false;
@@ -1589,7 +1695,10 @@ const bashTool: ToolDef = {
 					...(spillPath ? { spillPath } : {}),
 				};
 				if (res.aborted) throw new Error(`Command aborted\n${out}`);
-				if (res.timedOut) throw new Error(`Command timed out after ${params.timeout ?? DEFAULT_BASH_TIMEOUT_S}s\n${out}`);
+				if (res.timedOut) {
+					const reason = res.adoptError ? ` (could not move to background: ${res.adoptError})` : "";
+					throw new Error(`Command timed out after ${timeoutS}s${reason}\n${out}`);
+				}
 				if (res.exitCode !== 0) {
 					return { ...text(`${out}\n[exit code ${res.exitCode}]`, details), isError: true };
 				}
@@ -1856,7 +1965,7 @@ export const PEER_TOOLS = PEER_DEFS.map((t) => t.name);
 export const ALWAYS_TOOLS = [WORKDIR_TOOL];
 
 export const TOOL_DEFS: Record<string, ToolDef> = Object.fromEntries(
-	[readTool, writeTool, editTool, lsTool, grepTool, globTool, bashTool, askUserTool, ...PEER_DEFS, delegateTool, scheduleTool, goalTool, mcpTool, workdirTool].map((t) => [t.name, t]),
+	[readTool, writeTool, editTool, lsTool, grepTool, globTool, bashTool, bashJobTool, askUserTool, ...PEER_DEFS, delegateTool, scheduleTool, goalTool, mcpTool, workdirTool].map((t) => [t.name, t]),
 );
 export const DEFAULT_TOOLS = Object.keys(TOOL_DEFS);
 
@@ -1864,5 +1973,8 @@ export const DEFAULT_TOOLS = Object.keys(TOOL_DEFS);
 /** `defs` lets server extensions add or replace tools; the built-in set is the default. */
 export function buildTools(names: string[], cwd: string, readRoots: string[] = [], ctx: ToolContext = {}, defs: Record<string, ToolDef> = TOOL_DEFS): AgentTool<any>[] {
 	const effectiveCtx: ToolContext = ctx.readTracker ? ctx : { ...ctx, readTracker: new Map<string, ReadTrackEntry>() };
-	return names.flatMap((n) => (defs[n] ? [defs[n].create(cwd, readRoots, effectiveCtx)] : []));
+	return names.flatMap((n) => {
+		if (n === BG_BASH_JOB_TOOL && !effectiveCtx.bgBash) return [];
+		return defs[n] ? [defs[n].create(cwd, readRoots, effectiveCtx)] : [];
+	});
 }
