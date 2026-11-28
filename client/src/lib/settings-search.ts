@@ -58,6 +58,7 @@ export const SETTINGS_ITEMS: { tab: SettingsTabId; sub?: string; label: string; 
 	{ tab: "keys", label: msg("입력창 기본 편집 단축키 우선"), words: "shortcut input terminal native cursor arrow cmd ctrl edit line start end 입력창 터미널 기본 편집 커서 화살표 단축키 네이티브 줄 처음 끝" }, // i18n-ok: search words in either language
 	{ tab: "info", sub: "devices", label: msg("접속 기기"), words: "device phone qr pair mobile 기기 폰 모바일 페어링 연결 링크" }, // i18n-ok: search words in either language
 	{ tab: "models", label: msg("모델 연결"), words: "model provider key api 모델 연결 키 프로바이더" }, // i18n-ok: search words in either language
+	{ tab: "models", label: msg("시스템 모델"), words: "system model title purpose session name group handle 시스템 모델 대화 제목 역할 세션 이름 그룹 이름 코드네임" }, // i18n-ok: search words in either language
 	{ tab: "models", label: msg("폴백 모델"), words: "fallback retry zero output model 폴백 모델 대체 우회 재시도 무응답" }, // i18n-ok: search words in either language
 	{ tab: "models", label: msg("이미지 모델"), words: "image model picture draw generate 이미지 모델 그림 생성" }, // i18n-ok: search words in either language
 	{ tab: "tools", label: msg("에이전트 도구"), words: "tools agent permission 도구 에이전트" }, // i18n-ok: search words in either language

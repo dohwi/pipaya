@@ -1,10 +1,10 @@
 import type { FastifyInstance } from "fastify";
 import type { EventBus } from "../events.ts";
 import { errors } from "../schemas.ts";
-import { DEFAULT_SYSTEM_MODEL, SystemModelResult, SystemModelSchema, type SystemModelSettings } from "../system-model.ts";
+import { DEFAULT_SYSTEM_MODEL, SystemModelBody, SystemModelResult, type SystemModelSettings } from "../system-model.ts";
 import type { TypeBoxProvider } from "../typebox-provider.ts";
 
-/** The light model that writes session titles and roles (null = off). */
+/** The light model that runs background jobs (session title, role, @name, group name; null = off). */
 export function registerSystemModelRoutes(server: FastifyInstance, settings: SystemModelSettings, bus: EventBus, onChange: () => void = () => {}): void {
 	const app = server.withTypeProvider<TypeBoxProvider>();
 	const view = () => ({ settings: settings.get(), defaults: DEFAULT_SYSTEM_MODEL() });
@@ -13,11 +13,21 @@ export function registerSystemModelRoutes(server: FastifyInstance, settings: Sys
 		handler: async () => view(),
 	});
 	app.put("/system-model", {
-		schema: { body: SystemModelSchema, response: { 200: SystemModelResult, ...errors(400, 401) } },
+		schema: { body: SystemModelBody, response: { 200: SystemModelResult, ...errors(400, 401) } },
 		handler: async (req) => {
-			settings.set(req.body);
+			const prev = settings.get();
+			const next = settings.set(req.body);
 			bus.publish(null, "configuration_updated", { scope: "system-model" });
-			onChange(); // sessions that already talked get their role now, not only on their next message
+			const modelChanged =
+				prev.model?.provider !== next.model?.provider ||
+				prev.model?.model !== next.model?.model ||
+				prev.model?.thinkingLevel !== next.model?.thinkingLevel;
+			const backfillTaskEnabled =
+				(!prev.tasks.sessionTitle && next.tasks.sessionTitle) ||
+				(!prev.tasks.sessionPurpose && next.tasks.sessionPurpose);
+			if (next.model && (modelChanged || backfillTaskEnabled)) {
+				onChange(); // sessions that already talked get their title/role now, not only on their next message
+			}
 			return view();
 		},
 	});

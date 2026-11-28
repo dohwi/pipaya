@@ -1,46 +1,82 @@
+import { codenamePrefixOf } from "./member-names.ts";
 import { reasoningOption, type ModelRegistry } from "./models.ts";
-import type { SessionPatch, SessionStore } from "./store.ts";
-import { autoTitle, DESCRIBE_MAX_TOKENS, DESCRIBE_SYSTEM, describeRequest, parseDescription, type SystemModelSettings } from "./system-model.ts";
+import type { SessionPatch, SessionRecord, SessionStore } from "./store.ts";
+import {
+	autoTitle,
+	DESCRIBE_MAX_TOKENS,
+	describeRequest,
+	describeSystemPrompt,
+	parseDescription,
+	uniqueSessionName,
+	type DescribeFields,
+	type SystemModelSettings,
+	type SystemModelTasks,
+} from "./system-model.ts";
 import { COMPLETION_RETRY, completeWithUpstreamRetry } from "./upstream-retry.ts";
 
-/** A failed title/role call is not retried for this long, so a broken system model is not hit on every message. */
+/** A failed describe call is not retried for this long, so a broken system model is not hit on every message. */
 export const DESCRIBE_RETRY_MS = 10 * 60_000;
 
 export interface SessionDescriberDeps {
 	store: SessionStore;
 	registry: ModelRegistry;
 	systemModel?: SystemModelSettings;
+	takenNames?: () => Set<string>;
 	isClosing: () => boolean;
 	updateSession: (id: string, patch: SessionPatch) => unknown;
 }
 
+interface DoneFlags {
+	sessionTitle?: boolean;
+	sessionPurpose?: boolean;
+	sessionName?: boolean;
+}
+
+const isAutomaticTitle = (record: SessionRecord, firstText: string, shortTitle?: string): boolean =>
+	record.title === "New session" || record.title === autoTitle(firstText) || (shortTitle !== undefined && record.title === shortTitle);
+
 /**
- * Background title and purpose generator using the configured system model.
- * Keeps in-flight requests deduplicated per session and applies backoff after failures.
+ * Background title, purpose, and `@name` generator using the configured system model.
+ * Respects per-task toggles, keeps in-flight requests deduplicated per session, and applies backoff after failures.
  */
 export class SessionDescriber {
 	private describing = new Map<string, AbortController>();
 	private failedAt = new Map<string, number>();
+	private done = new Map<string, DoneFlags>();
 	private pending = new Set<Promise<void>>();
 	private backfilling = false;
+	private backfillAgain = false;
 
 	constructor(private deps: SessionDescriberDeps) {}
 
+	private needed(record: SessionRecord, tasks: SystemModelTasks, firstText: string, allowName: boolean, shortTitle?: string, origin?: string): DescribeFields {
+		const prev = this.done.get(record.id);
+		return {
+			title: tasks.sessionTitle && !prev?.sessionTitle && isAutomaticTitle(record, firstText, shortTitle),
+			purpose: tasks.sessionPurpose && !prev?.sessionPurpose && !record.purpose,
+			name: allowName && tasks.sessionName && !prev?.sessionName && !record.parentId && origin !== "peer" && codenamePrefixOf(record.name) !== null,
+		};
+	}
+
 	/**
-	 * In the background, has the system model write a short title and the session's role, while the role is still
-	 * empty: on the first message, and on a later one for sessions that started before a system model was set. The
-	 * title is only replaced while it is still the automatic one, so a name the user gave is kept. Never fails the
-	 * message: without a usable model, or when the call fails, the session keeps what it has.
+	 * In the background, asks the system model for whichever enabled fields (title, purpose, `@name`) this session still
+	 * needs. User-set titles and manually renamed `@name` handles are never overwritten; `@name` generation runs only on
+	 * a new top-level non-peer session's first message so existing `@A1` references stay stable. Never fails the message.
 	 */
-	describe(id: string, first: string | undefined, latest: string, shortTitle?: string): Promise<void> | undefined {
+	describe(id: string, first: string | undefined, latest: string, shortTitle?: string, origin?: string, options?: { backfill?: boolean }): Promise<void> | undefined {
 		const target = this.deps.systemModel?.resolve();
-		if (!target || this.deps.isClosing() || this.describing.has(id)) return;
+		const tasks = this.deps.systemModel?.get().tasks;
+		if (!target || !tasks || this.deps.isClosing() || this.describing.has(id)) return;
 		const record = this.deps.store.get(id);
-		if (!record || record.purpose) return;
+		if (!record) return;
 		if (Date.now() - (this.failedAt.get(id) ?? 0) < DESCRIBE_RETRY_MS) return;
 		const firstText = first ?? this.firstUserText(id) ?? latest;
 		if (!firstText.trim()) return;
+		const allowName = !options?.backfill && first !== undefined;
+		const want = this.needed(record, tasks, firstText, allowName, shortTitle, origin);
+		if (!want.title && !want.purpose && !want.name) return;
 
+		const initialName = record.name;
 		const controller = new AbortController();
 		this.describing.set(id, controller);
 		const job = (async () => {
@@ -49,7 +85,7 @@ export class SessionDescriber {
 				if (!model || !(await this.deps.registry.models.checkAuth(target.provider))) throw new Error("system model unavailable");
 				const describeOpts = { maxTokens: DESCRIBE_MAX_TOKENS, signal: controller.signal, ...reasoningOption(target.thinkingLevel, model) };
 				const describeCtx = {
-					systemPrompt: DESCRIBE_SYSTEM,
+					systemPrompt: describeSystemPrompt(want),
 					messages: [{ role: "user" as const, content: describeRequest(record.cwd, firstText, first === undefined ? latest : undefined), timestamp: Date.now() }],
 				};
 				const reply = await completeWithUpstreamRetry(
@@ -61,15 +97,56 @@ export class SessionDescriber {
 				if (controller.signal.aborted) return;
 				if (reply.stopReason === "error" || reply.stopReason === "aborted") throw new Error(reply.errorMessage || reply.stopReason);
 				const found = parseDescription(reply.content.flatMap((c) => (c.type === "text" ? [c.text] : [])).join(""));
-				if (!found) throw new Error("the system model gave no title");
+				if (!found) throw new Error("the system model gave no description");
+
+				const usable =
+					(want.title && Boolean(found.title)) ||
+					(want.purpose && Boolean(found.purpose || (want.title && found.title))) ||
+					(want.name && Boolean(found.name));
+				if (!usable) throw new Error("the system model omitted requested fields");
+
+				if (!this.deps.systemModel?.resolve()) return;
 				const now = this.deps.store.get(id);
-				if (!now || now.purpose) return;
-				// Only a title that is still the automatic one is replaced; one the user gave is kept.
-				const automatic = now.title === "New session" || now.title === autoTitle(firstText) || now.title === shortTitle;
-				const patch: SessionPatch = { purpose: found.purpose || found.title };
-				if (found.title && automatic) patch.title = found.title;
+				const liveTasks = this.deps.systemModel.get().tasks;
+				if (!now) return;
+
+				const patch: SessionPatch = {};
+				const prevDone = this.done.get(id) ?? {};
+				if (want.title && liveTasks.sessionTitle) {
+					if (!isAutomaticTitle(now, firstText, shortTitle)) {
+						prevDone.sessionTitle = true;
+					} else if (found.title) {
+						patch.title = found.title;
+						prevDone.sessionTitle = true;
+					}
+				}
+				if (want.purpose && liveTasks.sessionPurpose) {
+					if (now.purpose) {
+						prevDone.sessionPurpose = true;
+					} else {
+						const purpose = found.purpose || (want.title ? found.title : "");
+						if (purpose) {
+							patch.purpose = purpose;
+							prevDone.sessionPurpose = true;
+						}
+					}
+				}
+				if (want.name && liveTasks.sessionName) {
+					if (now.parentId || origin === "peer" || now.name !== initialName || codenamePrefixOf(now.name) === null) {
+						prevDone.sessionName = true;
+					} else if (found.name) {
+						const taken = this.deps.takenNames?.() ?? this.deps.store.allNames();
+						const nextName = uniqueSessionName(found.name, taken);
+						if (nextName) {
+							patch.name = nextName;
+							prevDone.sessionName = true;
+						}
+					}
+				}
+				if (prevDone.sessionTitle || prevDone.sessionPurpose || prevDone.sessionName) this.done.set(id, prevDone);
+
 				this.failedAt.delete(id);
-				this.deps.updateSession(id, patch);
+				if (Object.keys(patch).length > 0) this.deps.updateSession(id, patch);
 			} catch {
 				if (!controller.signal.aborted) this.failedAt.set(id, Date.now());
 			} finally {
@@ -81,21 +158,38 @@ export class SessionDescriber {
 		return job;
 	}
 
-	/** Gives a role to the active sessions that have talked but have none yet (after a system model is set, and at start). */
+	/** Backfills active sessions that have talked and still need title or purpose (`@name` is only set on new sessions). */
 	describeAll(): void {
-		if (!this.deps.systemModel?.resolve() || this.backfilling) return;
+		const settings = this.deps.systemModel?.get();
+		if (!this.deps.systemModel?.resolve() || !settings) return;
+		const { sessionTitle, sessionPurpose } = settings.tasks;
+		if (!sessionTitle && !sessionPurpose) return;
+		this.failedAt.clear();
+		if (this.backfilling) {
+			this.backfillAgain = true;
+			return;
+		}
 		this.backfilling = true;
 		const job = (async () => {
 			try {
 				// One at a time: a server with many sessions must not fire them all at the model at once.
 				for (const r of this.deps.store.list({ limit: 200, closed: false })) {
 					if (!this.deps.systemModel?.resolve()) return;
-					if (r.purpose || this.deps.store.nextSeq(r.id) === 0) continue;
+					const t = this.deps.systemModel.get().tasks;
+					if (!t.sessionTitle && !t.sessionPurpose) return;
+					if (this.deps.store.nextSeq(r.id) === 0) continue;
 					const first = this.firstUserText(r.id);
-					if (first) await this.describe(r.id, first, first);
+					if (!first) continue;
+					await this.describe(r.id, first, first, undefined, undefined, { backfill: true });
 				}
 			} finally {
 				this.backfilling = false;
+				if (this.backfillAgain && !this.deps.isClosing()) {
+					this.backfillAgain = false;
+					this.describeAll();
+				} else {
+					this.backfillAgain = false;
+				}
 			}
 		})();
 		this.pending.add(job);
@@ -112,6 +206,7 @@ export class SessionDescriber {
 
 	clear(id: string): void {
 		this.failedAt.delete(id);
+		this.done.delete(id);
 	}
 
 	pruneFailed(now: number): void {

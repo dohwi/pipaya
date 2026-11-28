@@ -55,9 +55,21 @@ export interface ImageModelSettings {
 	model: { provider: string; model: string } | null;
 }
 export interface ImageModelSettingsInfo { settings: ImageModelSettings; defaults: ImageModelSettings }
+export interface SystemModelTasks {
+	/** Replace the truncated first-message title with a short generated title */
+	sessionTitle: boolean;
+	/** Write a short session role/purpose shown in @mentions and peer briefs */
+	sessionPurpose: boolean;
+	/** Replace a new top-level session's codename (@A1) with a topic-based @name handle */
+	sessionName: boolean;
+	/** Suggest a descriptive name for a newly created split-window group */
+	groupName: boolean;
+}
 export interface SystemModelSettings {
-	/** The light model that writes session titles and roles; null = off */
+	/** The light model that runs background system tasks; null = off */
 	model: ModelChoice | null;
+	/** Per-task toggles (may be absent on older servers) */
+	tasks?: SystemModelTasks;
 }
 export interface SystemModelSettingsInfo { settings: SystemModelSettings; defaults: SystemModelSettings }
 export interface FallbackModelSettings {
