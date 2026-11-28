@@ -56,6 +56,7 @@
 	import ExtensionFloating from "./components/extensions/ExtensionFloating.svelte";
 	import CloseConfirm from "./components/shell/CloseConfirm.svelte";
 	import SessionCloseConfirm from "./components/shell/SessionCloseConfirm.svelte";
+	import RewindDialog from "./components/chat/RewindDialog.svelte";
 	import { guardWindowClose } from "./lib/window-close";
 	import { createAttention } from "./lib/attention";
 	import { summarize } from "./lib/activity";
@@ -604,6 +605,7 @@
 <ExtensionApproval />
 <ExtensionDialog />
 <SessionCloseConfirm />
+<RewindDialog />
 <CloseConfirm />
 
 <style>

@@ -380,6 +380,25 @@ export const MIGRATIONS: (string | ((db: Database) => void))[] = [
 		purpose_auto    INTEGER NOT NULL DEFAULT 0,
 		last_user_count INTEGER NOT NULL DEFAULT 0
 	);`,
+	// Turn-level file snapshots captured before agent write/edit mutations for safe rewind.
+	`CREATE TABLE IF NOT EXISTS file_checkpoints (
+		id             INTEGER PRIMARY KEY AUTOINCREMENT,
+		session_id     TEXT    NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+		turn_seq       INTEGER NOT NULL,
+		path           TEXT    NOT NULL,
+		rel_path       TEXT    NOT NULL,
+		existed        INTEGER NOT NULL,
+		before_content BLOB,
+		before_hash    TEXT,
+		before_mode    INTEGER,
+		after_hash     TEXT,
+		size_bytes     INTEGER NOT NULL DEFAULT 0,
+		skipped_reason TEXT,
+		created_at     INTEGER NOT NULL,
+		UNIQUE(session_id, turn_seq, path)
+	);
+	CREATE INDEX IF NOT EXISTS idx_file_checkpoints_session_turn
+		ON file_checkpoints(session_id, turn_seq);`,
 ];
 
 /** Cap WAL file size after checkpointing (64 MiB) so a burst delete never leaves a multi-hundred-MB -wal behind. */

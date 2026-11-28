@@ -3,6 +3,7 @@ import type { ExtensionSaveResult, StoredExtensionSettings } from "./extensions/
 import type { DelegateRun } from "./graph";
 import type { CatalogInfo, CompactionSettings, CompactionSettingsInfo, DefaultModelSelection, FallbackModelSettings, FallbackModelSettingsInfo, ImageModelSettings, ImageModelSettingsInfo, RetentionInfo, RetentionSettings, Goal, GoalInput, GoalPatch, Schedule, ScheduleInput, SchedulePatch, SystemModelSettings, SystemModelSettingsInfo,
 	AgentMessage,
+	CheckpointTurnSummary,
 	Question,
 	ActivityInfo,
 	ConfigurationInfo,
@@ -22,6 +23,8 @@ import type { CatalogInfo, CompactionSettings, CompactionSettingsInfo, DefaultMo
 	CustomProviderInput,
 	ModelSelection,
 	PipayaEvent,
+	RewindMode,
+	RewindResult,
 	ModelInfo,
 	ProviderInfo,
 	SendMode,
@@ -658,6 +661,10 @@ export class Api {
 	deleteSessions = (ids: string[]) => this.req<{ deleted: string[]; skipped: string[] }>("POST", "/sessions/delete", { ids }, undefined, 60_000);
 	forkSession = (id: string, atSeq?: number, title?: string) =>
 		this.req<Session>("POST", `/sessions/${id}/fork`, { atSeq, title });
+	sessionCheckpoints = (id: string) =>
+		this.req<{ turns: CheckpointTurnSummary[] }>("GET", `/sessions/${encodeURIComponent(id)}/checkpoints`);
+	rewindSession = (id: string, body: { turnSeq: number; mode?: RewindMode; dryRun?: boolean; force?: boolean }) =>
+		this.req<RewindResult>("POST", `/sessions/${encodeURIComponent(id)}/rewind`, body);
 	usage = (id: string) => this.req<Usage>("GET", `/sessions/${id}/usage`);
 
 	messages = (id: string, after?: number) =>

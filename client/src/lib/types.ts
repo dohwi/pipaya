@@ -882,3 +882,39 @@ export type AssistantBlock =
 	| { type: "text"; text: string }
 	| { type: "thinking"; text: string; done: boolean }
 	| { type: "tool"; id: string; name: string; args: Record<string, unknown> };
+
+export type RewindMode = "files_only" | "files_and_chat";
+
+export interface CheckpointTurnFile {
+	relPath: string;
+	action: "restore" | "delete" | "skip";
+	skippedReason?: string | null;
+}
+
+export interface CheckpointTurnSummary {
+	turnSeq: number;
+	fileCount: number;
+	createdAt: number;
+	files: CheckpointTurnFile[];
+}
+
+export interface RewindFileItem {
+	path: string;
+	action: "restore" | "delete" | "skip";
+	conflict: boolean;
+	conflictReason?: "modified" | "deleted" | null;
+	skippedReason?: string | null;
+}
+
+export interface RewindResult {
+	applied: boolean;
+	dryRun: boolean;
+	mode: RewindMode;
+	turnSeq: number;
+	files: RewindFileItem[];
+	conflicts: string[];
+	restored: string[];
+	deleted: string[];
+	skipped: { path: string; reason: string }[];
+	truncatedFromSeq: number | null;
+}

@@ -53,7 +53,7 @@ import { Preferences } from "./prefs.svelte";
 import { ServerPrefs, serverPrefKeys } from "./server-prefs.svelte";
 import { Feedback, type Toast } from "./feedback.svelte";
 import { watchWake } from "./store/wake";
-import { UiOverlayState, type ViewerImage, type ViewerState, type SettingsTargetTab } from "./store/ui-overlay.svelte";
+import { UiOverlayState, type RewindDialogTarget, type ViewerImage, type ViewerState, type SettingsTargetTab } from "./store/ui-overlay.svelte";
 import { applyDraftPatch, resolveDraftFallback, shouldAdoptServerDefault, startingTierOf } from "./store/draft-model";
 import { canAddToGroup, findSessionNeighbour, stripSessionFromGroups } from "./store/groups-ops";
 import { parseAppBackup } from "./store/configuration-ops";
@@ -73,6 +73,8 @@ import type {
   ImageBlock,
   ModelInfo,
   ProviderInfo,
+  RewindMode,
+  RewindResult,
   SendMode,
   Session,
   ToolInfo,
@@ -128,6 +130,8 @@ class AppStore {
   /** Add-server / edit-server dialog: `null` = closed, `"new"` = add, otherwise the id being edited. */
   get serverForm(): string | "new" | null { return this.ui.serverForm; }
   set serverForm(v: string | "new" | null) { this.ui.serverForm = v; }
+  get rewindDialog(): RewindDialogTarget | null { return this.ui.rewindDialog; }
+  set rewindDialog(v: RewindDialogTarget | null) { this.ui.rewindDialog = v; }
   /** Every saved server, kept live (lists, models, activity) by its own event stream; the open one is only the one in view. */
   links = $state<Record<string, ServerLink>>({});
   /** The link of the server in view. */
@@ -3430,6 +3434,66 @@ class AppStore {
   async branchEdit(id: string, seq: number, text: string) {
     const ok = seq > 0 ? await this.fork(id, seq - 1) : (this.newChat(), true);
     if (ok) this.prefill = text;
+  }
+
+  /** Open the file-checkpoint rewind dialog for user turn `turnSeq`. */
+  openRewind(sessionId: string, turnSeq: number, userText: string): void {
+    const serverId = this.serverId;
+    if (!serverId) return;
+    this.ui.rewindDialog = { serverId, sessionId, turnSeq, userText };
+  }
+
+  closeRewind(): void {
+    this.ui.rewindDialog = null;
+  }
+
+  /** Dry-run preview of files & external conflicts for rewinding before `turnSeq`. */
+  async previewRewind(serverId: string, sessionId: string, turnSeq: number): Promise<RewindResult> {
+    const link = this.links[serverId];
+    if (!link) throw new Error(t("서버에 연결할 수 없습니다"));
+    return link.api.rewindSession(sessionId, { turnSeq, dryRun: true });
+  }
+
+  /** Execute workspace file rewind (optionally truncating chat from `turnSeq` and prefilling its text). */
+  async executeRewind(
+    serverId: string,
+    sessionId: string,
+    turnSeq: number,
+    mode: RewindMode,
+    force: boolean,
+    userText: string,
+  ): Promise<RewindResult | null> {
+    const link = this.links[serverId];
+    if (!link) return null;
+    try {
+      const res = await link.api.rewindSession(sessionId, { turnSeq, mode, force });
+      if (this.links[serverId] !== link) return res;
+      if (res.applied) {
+        const chat = this.serverId === serverId ? this.chats[sessionId] : undefined;
+        if (chat) {
+          if (typeof res.truncatedFromSeq === "number") chat.rollbackToSeq(res.truncatedFromSeq);
+          void chat.loadCheckpoints();
+        }
+        if (mode === "files_and_chat" && userText && this.serverId === serverId && this.activeId === sessionId) {
+          this.prefill = userText;
+        }
+        const count = res.restored.length + res.deleted.length;
+        const msg =
+          mode === "files_and_chat"
+            ? count > 0
+              ? t("대화와 파일 {n}개를 되돌렸습니다", { n: count })
+              : t("대화를 되돌렸습니다")
+            : count > 0
+              ? t("파일 {n}개를 되돌렸습니다", { n: count })
+              : t("변경된 파일이 없습니다");
+        this.toast(msg, "ok", this.serverId === serverId ? sessionId : null);
+      }
+      return res;
+    } catch (e) {
+      this.probeIfNetwork(link, e);
+      this.fail(e, t("파일을 되돌리지 못했습니다"), this.serverId === serverId ? sessionId : null);
+      return null;
+    }
   }
 
   /**

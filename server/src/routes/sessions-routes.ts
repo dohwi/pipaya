@@ -193,6 +193,14 @@ export function registerSessionRoutes(server: FastifyInstance, deps: SessionRout
 		schema: { params: S.IdParams, body: S.ForkBody, response: { 201: S.Session, ...S.errors(400, 401, 404) } },
 		handler: async (req, reply) => reply.status(201).send(await sessions.fork(req.params.id, req.body.atSeq, req.body.title)),
 	});
+	app.get("/sessions/:id/checkpoints", {
+		schema: { params: S.IdParams, response: { 200: S.CheckpointList, ...S.errors(401, 404) } },
+		handler: async (req) => ({ turns: sessions.listCheckpoints(req.params.id) }),
+	});
+	app.post("/sessions/:id/rewind", {
+		schema: { params: S.IdParams, body: S.RewindBody, response: { 200: S.RewindResult, ...S.errors(400, 401, 404, 409) } },
+		handler: async (req) => sessions.rewind(req.params.id, req.body),
+	});
 
 	app.post("/sessions/:id/messages", {
 		bodyLimit: imageBodyLimit, // a route option, not part of `schema`
