@@ -2314,4 +2314,8 @@ export const en: Record<string, string> = {
 	"입력창에 글자가 있거나 터미널에서 작업할 때 Ctrl+←/→, Ctrl+Backspace 등 기본 커서·삭제 단축키를 유지합니다. 비어 있는 입력창이나 입력창 밖에서는 지정한 단축키가 동작합니다": "Keep native cursor and delete shortcuts (Ctrl+←/→, Ctrl+Backspace, etc.) in non-empty inputs and terminals. Your custom shortcuts still run in empty inputs or outside inputs",
 	"입력창에 글자가 있거나 터미널에서 작업할 때는 기본 커서·삭제 단축키가 우선합니다": "Native cursor and delete shortcuts take priority in non-empty inputs and terminals",
 	"입력창에 글자가 있을 때는 기본 커서·삭제 단축키가 우선합니다": "Native cursor and delete shortcuts take priority when an input has text",
+	"동작": "Behavior",
+	"길게 눌러 바로 대기열에 넣기": "Hold to queue directly",
+	"모바일에서 작업 중일 때 전송 버튼을 길게 누르면 선택 창 없이 바로 대기열에 넣습니다. 끄면 끼워 넣기·대기열 선택 창이 열립니다": "On touch devices, holding the send button while working queues immediately without opening the menu. Turn off to show the steer/queue menu",
+	"끼워 넣기 버튼을 길게 누르면 바로 대기열에 넣습니다": "Hold the steer button to queue directly",
 };

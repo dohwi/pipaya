@@ -50,6 +50,7 @@ export const SETTINGS_ITEMS: { tab: SettingsTabId; sub?: string; label: string; 
 	{ tab: "general", label: msg("테마"), words: "theme dark light 다크 라이트 어둡게 밝게" }, // i18n-ok: search words in either language
 	{ tab: "general", label: msg("화면 배율"), words: "zoom scale size 배율 확대 축소 크기" }, // i18n-ok: search words in either language
 	{ tab: "general", label: msg("작업 내역 펼쳐 두기"), words: "tool calls work expand collapse verbose ctrl+o 도구 호출 작업 내역 펼치기 접기 자세히" }, // i18n-ok: search words in either language
+	{ tab: "general", label: msg("길게 눌러 바로 대기열에 넣기"), words: "mobile touch hold long press queue followup follow-up steer send menu 모바일 터치 길게 꾹 대기열 팔로우업 끼워 넣기 전송 선택창" }, // i18n-ok: search words in either language
 	{ tab: "general", label: msg("알림음"), words: "sound volume notification voice recording 소리 볼륨 크기 알림 음성 녹음" }, // i18n-ok: search words in either language
 	{ tab: "general", label: msg("터미널"), words: "terminal font size 글꼴 폰트 글자 크기 maple mono" }, // i18n-ok: search words in either language
 	{ tab: "general", label: msg("앱 단축키 우선"), words: "terminal shortcut priority keybinding 터미널 단축키 우선 먹히지" }, // i18n-ok: search words in either language

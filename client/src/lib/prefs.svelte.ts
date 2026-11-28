@@ -11,6 +11,7 @@ import { K, read, write } from "./persist";
 import { applyUiScale, clampScale, stepScale } from "./ui-scale";
 import { DEFAULT_FOOTER, moveFooterItem, sanitizeFooter, type FooterItemId, type FooterPrefs } from "./footer-prefs";
 import { DEFAULT_TERMINAL, sanitizeTerminal, type TerminalPrefs } from "./terminal-prefs";
+import { parseHoldToQueue } from "./send-hold";
 
 export type ThemePref = "system" | "dark" | "light";
 
@@ -65,6 +66,8 @@ export class Preferences {
   footer = $state<FooterPrefs>(sanitizeFooter(read<unknown>(K.footer, null)));
   /** Work boxes (the tool calls of a reply) show every step open instead of one summary line. */
   expandWork = $state(read<boolean>(K.expandWork, false) === true);
+  /** Touch: holding the send button while running queues directly instead of opening the steer/queue chooser. */
+  holdToQueue = $state(parseHoldToQueue(read<unknown>(K.holdToQueue, false)));
   /** Prefer OS text-editing shortcuts (e.g. ⌘←/→ line jump) inside focused text inputs over custom app shortcuts. */
   nativeInputKeys = $state(read<unknown>(K.nativeInputKeys, true) !== false);
   /** The shortcut editor is capturing keys: global shortcuts stand down. */
@@ -88,6 +91,7 @@ export class Preferences {
     this.terminal = sanitizeTerminal(read<unknown>(K.terminal, null));
     this.footer = sanitizeFooter(read<unknown>(K.footer, null));
     this.expandWork = read<boolean>(K.expandWork, false) === true;
+    this.holdToQueue = parseHoldToQueue(read<unknown>(K.holdToQueue, false));
     this.nativeInputKeys = read<unknown>(K.nativeInputKeys, true) !== false;
     this.uiScale = clampScale(read<unknown>(K.uiScale, 100));
     applyUiScale(this.uiScale);
@@ -170,6 +174,13 @@ export class Preferences {
   setExpandWork(on: boolean) {
     this.expandWork = on;
     write(K.expandWork, on);
+  }
+
+  /* ---------- touch send ---------- */
+
+  setHoldToQueue(on: boolean) {
+    this.holdToQueue = on;
+    write(K.holdToQueue, on);
   }
 
   /* ---------- terminal ---------- */

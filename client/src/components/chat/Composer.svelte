@@ -1015,6 +1015,7 @@
 				onsteer={() => during("steer")}
 				onstop={() => app.abort(pane.id)}
 				folded={voice.visible && !hasInput}
+				holdToQueue={app.prefs.holdToQueue}
 			/>
 			</ExtensionPart>
 		</div>

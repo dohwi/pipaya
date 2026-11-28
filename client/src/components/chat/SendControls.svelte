@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { t } from "../../lib/i18n";
 	import { hintOnce } from "../../lib/touch-hints";
+	import { createSendHoldController } from "../../lib/send-hold";
 	import { chipIn, chipOut, surfaceIn, surfaceOut } from "../../lib/motion";
 	import Icon from "../ui/Icon.svelte";
 	import Spinner from "../ui/Spinner.svelte";
@@ -25,6 +26,7 @@
 		onsteer,
 		onstop,
 		folded = false,
+		holdToQueue = false,
 	}: {
 		compacting: boolean;
 		running: boolean;
@@ -39,41 +41,51 @@
 		onsteer: () => void;
 		onstop: () => void;
 		folded?: boolean;
+		/** Touch: hold the running send button to queue directly instead of opening the steer/queue chooser. */
+		holdToQueue?: boolean;
 	} = $props();
 
 	const mode = $derived(compacting ? "compacting" : running ? "running" : "idle");
 	const fold = $derived(folded && mode === "idle");
 
-	// Touch: tap = steer, long-press = choose steer / queue. The queue circle is hidden there (see CSS).
+	// Touch: tap = steer, long-press = open steer/queue chooser (or queue directly when `holdToQueue` is on). The queue circle is hidden there (see CSS).
 	let menu = $state(false);
 	let menuEl = $state<HTMLDivElement | null>(null);
 	let steerBtn = $state<HTMLButtonElement | null>(null);
-	let timer: ReturnType<typeof setTimeout> | undefined;
-	let longPressed = false;
 	const coarse = () => typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches;
+	const hold = createSendHoldController({
+		canHold: () => coarse() && mode === "running" && hasInput && online && !sending,
+		holdToQueue: () => holdToQueue,
+		vibrate: () => navigator.vibrate?.(10),
+		onOpenMenu: () => {
+			menu = true;
+		},
+		onDirectQueue: () => {
+			menu = false;
+			onqueue();
+		},
+		onSteer: () => {
+			onsteer();
+			// touch: the queue choice hides behind a long press, which nothing on screen shows; say it once
+			if (coarse()) {
+				hintOnce(
+					"steer-hold",
+					holdToQueue
+						? t("끼워 넣기 버튼을 길게 누르면 바로 대기열에 넣습니다")
+						: t("끼워 넣기 버튼을 길게 누르면 대기열에 넣을 수도 있습니다"),
+				);
+			}
+		},
+	});
 
 	function pressStart() {
-		longPressed = false;
-		if (!coarse() || !hasInput) return;
-		clearTimeout(timer);
-		timer = setTimeout(() => {
-			longPressed = true;
-			menu = true;
-			navigator.vibrate?.(10);
-		}, 380);
+		hold.start();
 	}
 	function pressEnd() {
-		clearTimeout(timer);
+		hold.cancel();
 	}
 	function steerClick(e: MouseEvent) {
-		if (longPressed) {
-			longPressed = false;
-			e.preventDefault();
-			return;
-		}
-		onsteer();
-		// touch: the queue choice hides behind a long press, which nothing on screen shows; say it once
-		if (coarse()) hintOnce("steer-hold", t("끼워 넣기 버튼을 길게 누르면 대기열에 넣을 수도 있습니다"));
+		hold.handleClick(() => e.preventDefault());
 	}
 	function closeMenu(returnFocus = false) {
 		menu = false;
@@ -124,8 +136,14 @@
 		};
 	});
 	$effect(() => {
-		if (mode !== "running" || !hasInput) menu = false;
+		if (mode !== "running" || !hasInput || !online || sending) {
+			hold.cancel();
+			menu = false;
+		} else if (holdToQueue) {
+			menu = false;
+		}
 	});
+	$effect(() => () => hold.reset());
 </script>
 
 <div class="sc" class:folded={fold}>
@@ -162,8 +180,8 @@
 							bind:this={steerBtn}
 							class="mode primary tap"
 							disabled={!online || sending}
-							aria-haspopup="menu"
-							aria-expanded={menu}
+							aria-haspopup={holdToQueue ? undefined : "menu"}
+							aria-expanded={holdToQueue ? undefined : menu}
 							onpointerdown={pressStart}
 							onpointerup={pressEnd}
 							onpointerleave={pressEnd}
