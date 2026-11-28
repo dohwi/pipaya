@@ -2,6 +2,9 @@
 // Independent sessions take the next free letter prefix (`A1`, `B1`, `C1`, ...); sessions spawned or forked from
 // another session stay in the parent's prefix (`A2`, `A3`, ...).
 
+/** A session `@name` handle must stay a single readable mention token (1–30 letters, digits, `_` or `-`). */
+export const SESSION_NAME_RE = /^[\p{L}\p{N}_-]{1,30}$/u;
+
 /** Confusion-free uppercase letters (`I` and `O` excluded to avoid `1` / `0` ambiguity). */
 export const CODENAME_LETTERS = "ABCDEFGHJKLMNPQRSTUVWXYZ";
 

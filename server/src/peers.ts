@@ -1,7 +1,7 @@
 import { conflict, notFound } from "./errors.ts";
 import { branchOf } from "./git-info.ts";
 import { workDirOf } from "./work-tree.ts";
-import { groupHandle, mentioned, nameKey, nextMemberName, sameName } from "./member-names.ts";
+import { groupHandle, mentioned, nameKey, nextMemberName, sameName, SESSION_NAME_RE } from "./member-names.ts";
 import type { QuestionAnswer, QuestionRequest } from "./questions.ts";
 import type { RunOrigin } from "./session-types.ts";
 import type { SessionPatch, SessionRecord, SessionStore, ThinkingLevel } from "./store.ts";
@@ -53,9 +53,6 @@ export interface PeerCreateInput {
 
 export type ManageAction = "close" | "resume" | "delete" | "cancel_queued" | "rename" | "set";
 export interface ManageArgs { mode?: "steer" | "follow_up"; text?: string; newName?: string; purpose?: string; provider?: string; model?: string; thinkingLevel?: ThinkingLevel }
-
-/** A new name must stay readable as an @mention. */
-const NAME_RE = /^[\p{L}\p{N}_-]{1,30}$/u;
 
 const oneLine = (s: string, max: number) => {
 	const flat = s.replace(/\s+/g, " ").trim();
@@ -419,7 +416,7 @@ export class PeerService {
 			}
 			case "rename": {
 				const to = (a.newName ?? "").replace(/^@/, "");
-				if (!NAME_RE.test(to)) throw conflict("the new name must be 1-30 letters, digits, - or _");
+				if (!SESSION_NAME_RE.test(to)) throw conflict("the new name must be 1-30 letters, digits, - or _");
 				if (!sameName(to, peer.name) && this.taken().has(nameKey(to))) throw conflict(`@${to} is already taken by a session or a group`);
 				this.host.rename(peer.id, to);
 				return `Renamed @${peer.name} to @${to}.`;

@@ -134,6 +134,7 @@ export class SessionManager {
 			store,
 			registry,
 			systemModel,
+			takenNames: () => this.peers.taken(),
 			isClosing: () => this.closing,
 			updateSession: (id, patch) => this.update(id, patch),
 		});
@@ -842,7 +843,7 @@ export class SessionManager {
 		const first = this.store.nextSeq(id) === 0;
 		const shortTitle = autoTitle(inputTitle ?? input.text);
 		if (record.title === "New session" && first && origin !== "goal") this.update(id, { title: shortTitle });
-		if (origin !== "goal") this.describer.describe(id, first ? input.text : undefined, input.text, shortTitle);
+		if (origin !== "goal") this.describer.describe(id, first ? input.text : undefined, input.text, shortTitle, origin);
 		this.run(id, live, "prompt", origin, async () => {
 			await this.autoCompact(id);
 			live.runSystem = undefined;

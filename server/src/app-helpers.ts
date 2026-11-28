@@ -71,7 +71,7 @@ export function autoNameGroup(
 	rec: GroupRecord,
 	deps: { systemModel: SystemModelSettings; store: SessionStore; groups: GroupManager },
 ): void {
-	if (!deps.systemModel.resolve()) return;
+	if (!deps.systemModel.resolveFor("groupName")) return;
 	const members = panesOf(rec.layout).flatMap((id) => {
 		const r = deps.store.get(id);
 		return r ? [{ cwd: r.cwd, title: r.title, purpose: r.purpose }] : [];
@@ -79,7 +79,7 @@ export function autoNameGroup(
 	if (!members.length) return;
 	void (async () => {
 		const name = parseGroupName((await deps.systemModel.complete(GROUP_NAME_SYSTEM, groupNameRequest(members), 60)) ?? "");
-		if (!name || name === rec.name) return;
+		if (!name || name === rec.name || !deps.systemModel.resolveFor("groupName")) return;
 		try {
 			if (deps.groups.get(rec.id).name === rec.name) deps.groups.update(rec.id, { name });
 		} catch {
